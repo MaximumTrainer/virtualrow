@@ -1,0 +1,2 @@
+# Deprecated: This workflow was replaced by playwright-e2e-clean.yml. Removed per request to avoid CI duplication.
+# Please refer to .github/workflows/playwright-e2e-clean.yml for the active workflow.

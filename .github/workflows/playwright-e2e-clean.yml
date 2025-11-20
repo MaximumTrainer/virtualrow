@@ -1,0 +1,61 @@
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+          cache: 'npm'
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+      - name: Ensure Playwright browsers installed
+        run: npm run pretest:e2e
+      - name: Start simulator server
+        run: |
+          npm run start:sim & echo $! > /tmp/sim.pid
+          # Wait for simulator to be ready
+          npx wait-on http://localhost:9002
+      - name: Run tests (unit + e2e)
+        env:
+          CI: true
+        run: npm run test && npm run test:e2e
+        timeout-minutes: 30
+      - name: Upload Playwright artifacts (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+            test-results/**/trace.zip
+            test-results/**/video
+            test-results/**/screenshot
+      - name: Cleanup simulator
+        if: always()
+        run: |
+          if [ -f /tmp/sim.pid ]; then
+            kill -9 $(cat /tmp/sim.pid) || true
+            rm -f /tmp/sim.pid || true
+          fi
+          ps aux | grep -E "sim-server|start:sim" || true

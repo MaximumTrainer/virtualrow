@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`HeartRateChart > renders chart placeholder and matches snapshot 1`] = `
+<div
+  class="hr-chart-wrapper"
+  style="height: 140px;"
+>
+  <div
+    data="[object Object]"
+    data-testid="chart"
+    options="[object Object]"
+    plugins="[object Object]"
+  >
+    Chart
+  </div>
+</div>
+`;
