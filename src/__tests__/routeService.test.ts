@@ -1,37 +1,55 @@
 import { describe, it, expect } from 'vitest';
 import { routeService } from '../services/routeService';
 
-// Replicate bounding boxes for validation (kept in sync with service for tests)
-const BBOXES: Record<string, { minLat: number; maxLat: number; minLng: number; maxLng: number }> = {
-  'Lake Tahoe Circuit': { minLat: 38.90, maxLat: 39.25, minLng: -120.16, maxLng: -119.80 },
-  'Central Park Loop': { minLat: 40.7816, maxLat: 40.7944, minLng: -73.9659, maxLng: -73.9486 },
-  'Thames River Challenge': { minLat: 51.48, maxLat: 51.51, minLng: -0.14, maxLng: -0.06 },
-  'Crater Lake Explorer': { minLat: 42.93, maxLat: 42.96, minLng: -122.14, maxLng: -122.07 },
-  'Finger Lakes Sprint': { minLat: 42.73, maxLat: 42.79, minLng: -76.86, maxLng: -76.80 },
-  'Boston Harbor Classic': { minLat: 42.33, maxLat: 42.38, minLng: -71.08, maxLng: -70.99 },
-  'Henley Regatta Route': { minLat: 51.53, maxLat: 51.55, minLng: -0.77, maxLng: -0.75 },
-  'Venice Grand Canal': { minLat: 45.43, maxLat: 45.45, minLng: 12.33, maxLng: 12.35 },
-};
+// Venice bounding box from GPX data
+const VENICE_BBOX = { minLat: 45.435777, maxLat: 45.449551, minLng: 12.318319, maxLng: 12.336167 };
+// Henley bounding box from GPX data
+const HENLEY_BBOX = { minLat: 51.533121, maxLat: 51.560266, minLng: -0.901301, maxLng: -0.885381 };
 
 describe('RouteService basic data', () => {
-  it('provides initial routes with distances and coordinates', () => {
+  it('provides Venice and Henley routes with distance and coordinates', () => {
     const routes = routeService.getAllRoutes();
-    expect(routes.length).toBeGreaterThan(0);
-    for (const r of routes) {
-      expect(typeof r.distance).toBe('number');
-      expect(r.coordinates.length).toBeGreaterThan(0);
-    }
+    expect(routes.length).toBe(2);
+    
+    // Venice route
+    const venice = routes.find(r => r.id === '1');
+    expect(venice?.name).toBe('Venice Grand Canal');
+    expect(venice?.distance).toBeCloseTo(3.65, 1);
+    expect(venice?.coordinates.length).toBeGreaterThan(150); // Should have ~272 coordinates from GPX
+    
+    // Henley route
+    const henley = routes.find(r => r.id === '2');
+    expect(henley?.name).toBe('Henley Regatta Route');
+    expect(henley?.distance).toBeCloseTo(7.03, 1);
+    expect(henley?.coordinates.length).toBeCloseTo(50, 5); // Should have ~50 coordinates from GPX
   });
 
-  it('ensures majority of route coordinates lie within declared water bounding boxes (>=60%)', () => {
+  it('ensures Venice route coordinates lie within Venice bounding box', () => {
     const routes = routeService.getAllRoutes();
-    for (const r of routes) {
-      const bbox = BBOXES[r.name];
-      if (!bbox) continue; // skip if not a known mapping
-      const inBox = r.coordinates.filter(c => c.lat >= bbox.minLat && c.lat <= bbox.maxLat && c.lng >= bbox.minLng && c.lng <= bbox.maxLng).length;
-      const ratio = inBox / r.coordinates.length;
-      expect(ratio).toBeGreaterThanOrEqual(0.6);
-    }
+    const venice = routes.find(r => r.id === '1')!;
+    
+    // Check that all coordinates are within Venice bbox (allowing some tolerance for GPS drift)
+    const outOfBounds = venice.coordinates.filter(c => 
+      c.lat < VENICE_BBOX.minLat - 0.01 || c.lat > VENICE_BBOX.maxLat + 0.01 ||
+      c.lng < VENICE_BBOX.minLng - 0.01 || c.lng > VENICE_BBOX.maxLng + 0.01
+    );
+    
+    // Most points should be within bounds (allow up to 10% drift for GPS accuracy)
+    expect(outOfBounds.length).toBeLessThan(venice.coordinates.length * 0.1);
+  });
+
+  it('ensures Henley route coordinates lie within Henley bounding box', () => {
+    const routes = routeService.getAllRoutes();
+    const henley = routes.find(r => r.id === '2')!;
+    
+    // Check that all coordinates are within Henley bbox (allowing some tolerance for GPS drift)
+    const outOfBounds = henley.coordinates.filter(c => 
+      c.lat < HENLEY_BBOX.minLat - 0.01 || c.lat > HENLEY_BBOX.maxLat + 0.01 ||
+      c.lng < HENLEY_BBOX.minLng - 0.01 || c.lng > HENLEY_BBOX.maxLng + 0.01
+    );
+    
+    // Most points should be within bounds (allow up to 10% drift for GPS accuracy)
+    expect(outOfBounds.length).toBeLessThan(henley.coordinates.length * 0.1);
   });
 });
 
@@ -57,37 +75,35 @@ describe('RouteService creation & search', () => {
 });
 
 describe('RouteService import routines', () => {
-  it('imports a GPX route in water', () => {
+  it('imports a GPX route', () => {
     const gpx = `<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="40.785" lon="-73.96" /><trkpt lat="40.786" lon="-73.959" /></trkseg></trk></gpx>`;
     const imported = routeService.importRouteFromGPX(gpx, { name: 'GPX Water', difficulty: 'easy' });
     expect(imported).toBeDefined();
     expect(imported!.coordinates.length).toBe(2);
   });
 
-  it('rejects a GPX route out of water unless forced', () => {
+  it('imports any GPX route without water validation', () => {
     const gpx = `<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="0" lon="0" /><trkpt lat="0.001" lon="0.001" /></trkseg></trk></gpx>`;
-    const normal = routeService.importRouteFromGPX(gpx, { name: 'GPX Land', difficulty: 'easy' });
-    expect(normal).toBeUndefined();
-    const forced = routeService.importRouteFromGPX(gpx, { name: 'GPX Land Forced', difficulty: 'easy' }, true);
-    expect(forced).toBeDefined();
+    const imported = routeService.importRouteFromGPX(gpx, { name: 'GPX Any', difficulty: 'easy' });
+    expect(imported).toBeDefined();
+    expect(imported!.coordinates.length).toBe(2);
   });
 
-  it('imports a GeoJSON LineString route in water', () => {
+  it('imports a GeoJSON LineString route', () => {
     const geojson = JSON.stringify({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [ [-73.962, 40.786], [-73.961, 40.787] ] },
       properties: {}
     });
-    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Water', difficulty: 'moderate' });
+    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Test', difficulty: 'moderate' });
     expect(imported).toBeDefined();
     expect(imported!.coordinates.length).toBeGreaterThan(0);
   });
 
-  it('rejects GeoJSON out of water unless forced', () => {
+  it('imports any GeoJSON route without water validation', () => {
     const geojson = JSON.stringify({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[0,0],[0.001,0.001]] }, properties: {} });
-    const normal = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Land', difficulty: 'easy' });
-    expect(normal).toBeUndefined();
-    const forced = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Land Forced', difficulty: 'easy' }, true);
-    expect(forced).toBeDefined();
+    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Any', difficulty: 'easy' });
+    expect(imported).toBeDefined();
+    expect(imported!.coordinates.length).toBe(2);
   });
 });

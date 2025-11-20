@@ -6,8 +6,8 @@ describe('App component', () => {
   it('renders title, routes list, and heart rate panel', () => {
     render(<App />);
     expect(screen.getByRole('heading', { name: /VirtualRow/i })).toBeInTheDocument();
-    // Check at least one known route appears (allow multiple matches)
-    const matches = screen.getAllByText(/Lake Tahoe Circuit/i);
+    // Check Venice Grand Canal route appears (allow multiple matches)
+    const matches = screen.getAllByText(/Venice Grand Canal/i);
     expect(matches.length).toBeGreaterThan(0);
     // Import panel elements
     expect(screen.getByText(/Import Route/i)).toBeInTheDocument();
