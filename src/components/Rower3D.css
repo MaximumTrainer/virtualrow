@@ -3,10 +3,16 @@
   height: 100%;
 }
 
-/* canvas default fills container */
+/* canvas default fills container but doesn't block clicks in non-workout views */
 .rower3d-canvas-container canvas {
   width: 100% !important;
   height: 100% !important;
+  pointer-events: none;
+}
+
+/* In fullscreen workout view, enable canvas pointer events */
+.workout-view-fullscreen .rower3d-canvas-container canvas {
+  pointer-events: auto;
 }
 
 /* mini metrics overlay if needed (we already added separate CSS) */
