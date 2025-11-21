@@ -38,7 +38,7 @@ jobs:
       - name: Run tests (unit + e2e)
         env:
           CI: true
-        run: npm run test && npm run test:e2e
+        run: npm run test && npm run test:e2e:ci
         timeout-minutes: 30
       - name: Upload Playwright artifacts (always)
         if: always()
