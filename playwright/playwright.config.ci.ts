@@ -23,11 +23,11 @@ export default defineConfig({
     actionTimeout: 5 * 1000,
     // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
     launchOptions: {
-      // NOTE: swiftshader enables software GL rendering in headless mode. The
-      // `--enable-unsafe-swiftshader` flag is required for some Chromium builds
-      // when automatic fallback is deprecated. This is only intended for CI
-      // or test environments and may have lower security guarantees.
-      args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-gpu']
+      // NOTE: SwiftShader enables software GL rendering in headless mode.
+      // `--enable-unsafe-swiftshader` is required for newer Chromium versions
+      // where automatic SwiftShader fallback was changed. This flag bypasses
+      // GPU sandbox restrictions and should only be used in CI/test environments.
+      args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
     },
     // Diagnostics and artifacts for debugging flaky tests in CI
     screenshot: 'only-on-failure',
