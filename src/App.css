@@ -688,3 +688,132 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Fullscreen workout view with overlays */
+.workout-view-fullscreen {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  z-index: 1000;
+  background: #000;
+}
+
+.fullscreen-3d-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Overlay text styles matching the image */
+.overlay-bottom-left {
+  position: absolute;
+  bottom: 32px;
+  left: 32px;
+  z-index: 100;
+}
+
+.overlay-bottom-center {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  gap: 32px;
+  align-items: baseline;
+}
+
+.overlay-bottom-right {
+  position: absolute;
+  bottom: 32px;
+  right: 32px;
+  z-index: 100;
+  text-align: right;
+}
+
+.overlay-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.overlay-metric-inline {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.overlay-label {
+  font-size: 14px;
+  color: #ef4444;
+  font-weight: 700;
+  text-transform: lowercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.overlay-label-small {
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
+  text-transform: lowercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.overlay-value {
+  font-size: 18px;
+  color: #ef4444;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.overlay-value-large {
+  font-size: 48px;
+  color: #ef4444;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.overlay-mini-map {
+  width: 200px;
+  height: 150px;
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-overlay-end {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+  padding: 12px 24px;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.btn-overlay-end:hover {
+  background: rgba(220, 38, 38, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.btn-overlay-end:active {
+  transform: translateY(0);
+}

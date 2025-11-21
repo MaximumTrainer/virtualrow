@@ -355,76 +355,70 @@ function App() {
           )}
 
           {currentView === 'workout' && isWorkoutActive && currentSession && (
-            <div className="view-container workout-view">
-              <div className="workout-header">
-                <h2>Active Workout</h2>
-                <p className="route-name">{currentSession.routeName}</p>
-              </div>
-
-              {/* 3D scene takes the main view, while we overlay route map and metrics */}
-              <div className="map-container three-map-container">
-                <Rower3D route={selectedRoute!} paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} distanceMeters={pm5Data?.distance} isPlaying={isWorkoutActive} cadence={pm5Data?.cadence} performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'} />
-                <div className="overlay-map">
-                  <RouteMap route={selectedRoute!} onRouteSelected={handleRouteSelect} highlightMode={true} />
+            <div className="view-container workout-view-fullscreen">
+              {/* Fullscreen 3D scene with overlays */}
+              <div className="fullscreen-3d-container">
+                <Rower3D 
+                  route={selectedRoute!} 
+                  paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
+                  distanceMeters={pm5Data?.distance} 
+                  isPlaying={isWorkoutActive} 
+                  cadence={pm5Data?.cadence} 
+                  performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'} 
+                />
+                
+                {/* Bottom left: Heart rate */}
+                <div className="overlay-bottom-left">
+                  <div className="overlay-metric">
+                    <span className="overlay-label">Heart rate</span>
+                    {heartRateSamples.length > 0 && (
+                      <span className="overlay-value-large">{heartRateSamples[heartRateSamples.length - 1].bpm}</span>
+                    )}
+                  </div>
                 </div>
-                <MiniMetrics pm5Data={pm5Data} heartRate={heartRateSamples.length > 0 ? heartRateSamples[heartRateSamples.length - 1].bpm : null} />
-              </div>
 
-              {pm5Data && (
-                <div className="workout-metrics">
-                  <div className="metric-card">
-                    <span className="metric-title">Pace</span>
-                    <span className="metric-large">
-                      {(pm5Data.pace / 100).toFixed(1)}
-                    </span>
-                    <span className="metric-unit">s/500m</span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-title">Distance</span>
-                    <span className="metric-large">
-                      {(pm5Data.distance / 1000).toFixed(2)}
-                    </span>
-                    <span className="metric-unit">km</span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-title">Time</span>
-                    <span className="metric-large">
-                      {formatTime(pm5Data.elapsedTime)}
-                    </span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-title">Power</span>
-                    <span className="metric-large">
-                      {pm5Data.power || 0}
-                    </span>
-                    <span className="metric-unit">W</span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-title">Cadence</span>
-                    <span className="metric-large">
-                      {pm5Data.cadence || 0}
-                    </span>
-                    <span className="metric-unit">spm</span>
-                  </div>
-                  {heartRateSamples.length > 0 && (
-                    <div className="metric-card">
-                      <span className="metric-title">Heart Rate</span>
-                      <span className="metric-large">{heartRateSamples[heartRateSamples.length - 1].bpm}</span>
-                      <span className="metric-unit">bpm</span>
-                    </div>
+                {/* Bottom center: Time / metrics */}
+                <div className="overlay-bottom-center">
+                  {pm5Data && (
+                    <>
+                      <div className="overlay-metric-inline">
+                        <span className="overlay-label">time:</span>
+                        <span className="overlay-value">{formatTime(pm5Data.elapsedTime)}</span>
+                      </div>
+                      <div className="overlay-metric-inline">
+                        <span className="overlay-label">pace:</span>
+                        <span className="overlay-value">{(pm5Data.pace / 100).toFixed(1)}</span>
+                      </div>
+                      <div className="overlay-metric-inline">
+                        <span className="overlay-label">distance:</span>
+                        <span className="overlay-value">{(pm5Data.distance / 1000).toFixed(2)} km</span>
+                      </div>
+                    </>
                   )}
                 </div>
-              )}
-              {heartRateSamples.length > 0 && (
-                <div className="hr-chart-section">
-                  <h3>Heart Rate Trend</h3>
-                  <HeartRateChart samples={heartRateSamples} />
-                </div>
-              )}
 
-              <button className="btn btn-end-workout" onClick={handleEndWorkout}>
-                ⏹ End Workout
-              </button>
+                {/* Bottom right: Position on route */}
+                <div className="overlay-bottom-right">
+                  <div className="overlay-metric">
+                    <span className="overlay-label">position on route</span>
+                    {pm5Data && selectedRoute && (
+                      <>
+                        <span className="overlay-value">{(pm5Data.distance / 1000).toFixed(2)} / {selectedRoute.distance} km</span>
+                        <span className="overlay-label-small">(top down view)</span>
+                      </>
+                    )}
+                  </div>
+                  {/* Small map overlay */}
+                  <div className="overlay-mini-map">
+                    <RouteMap route={selectedRoute!} onRouteSelected={handleRouteSelect} highlightMode={true} />
+                  </div>
+                </div>
+
+                {/* End workout button - top right */}
+                <button className="btn-overlay-end" onClick={handleEndWorkout}>
+                  ⏹ End Workout
+                </button>
+              </div>
             </div>
           )}
 

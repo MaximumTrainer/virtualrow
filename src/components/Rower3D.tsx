@@ -50,6 +50,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   const leftOarRef = useRef<Mesh | null>(null);
   const rightOarRef = useRef<Mesh | null>(null);
   const progressRef = useRef<number>(0);
+  const posRef = useRef<Vector3>(new Vector3(0, 0, 0));
+  const yawRef = useRef<number>(0);
 
   const { camera, gl } = useThree();
   // dynamic pixel ratio and simple performance adaptation
@@ -125,23 +127,26 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       progressRef.current += (targetProgress - progressRef.current) * Math.min(1, delta * 5);
     }
 
-    // Update position from curve
+    // Get position and tangent from curve
     const pos = curve.getPointAt(progressRef.current);
     const tangent = curve.getTangentAt(progressRef.current).normalize();
-    boatRef.current.position.set(pos.x, pos.y, pos.z);
+    
     // Compute orientation from tangent (boat yaw)
     const yaw = Math.atan2(tangent.z, tangent.x);
-    boatRef.current.rotation.set(0, -yaw, 0);
+    
+    // Store in refs for use in render
+    posRef.current.copy(pos);
+    yawRef.current = yaw;
+    
+    // Keep boat stationary at a fixed position (upper portion of screen)
+    // The boat stays at origin, rotated to face forward
+    boatRef.current.position.set(0, 0, 1.5); // Position boat forward/up in view
+    boatRef.current.rotation.set(0, -yaw + Math.PI, 0); // Face forward along route
 
-    // Move camera to follow behind the boat slightly above
-    const camOffset = new Vector3(-3, 2, 0);
-    // rotate offset by boat yaw
-    const cos = Math.cos(-yaw);
-    const sin = Math.sin(-yaw);
-    const rotatedX = camOffset.x * cos - camOffset.z * sin;
-    const rotatedZ = camOffset.x * sin + camOffset.z * cos;
-    camera.position.set(pos.x + rotatedX, pos.y + camOffset.y, pos.z + rotatedZ);
-    camera.lookAt(pos.x, pos.y, pos.z);
+    // Fixed camera position - behind and above the boat, looking forward
+    // This creates the illusion that the boat is moving forward while the world moves back
+    camera.position.set(0, 3.5, 4.5); // Behind and elevated
+    camera.lookAt(0, 0, 0); // Look toward boat position
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -230,15 +235,17 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       {/* ambient light */}
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 5, 5]} intensity={0.6} />
-      {/* water plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
+      {/* water plane - moves backward with route to create illusion of movement */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-posRef.current.x, -0.05, -posRef.current.z]}>
         <planeGeometry args={[500, 500, 8, 8]} />
         <meshStandardMaterial color={'#a7f3d0'} metalness={0.1} roughness={0.8} />
       </mesh>
 
-      {/* Add route line */}
+      {/* Route line - moves backward to create illusion of forward movement */}
       {curve && (
-        <Line points={curve.getPoints(200)} color={'#eab308'} lineWidth={3} />
+        <group position={[-posRef.current.x, -posRef.current.y, -posRef.current.z]} rotation={[0, yawRef.current - Math.PI, 0]}>
+          <Line points={curve.getPoints(200)} color={'#eab308'} lineWidth={3} />
+        </group>
       )}
 
       {/* boat + oars */}
