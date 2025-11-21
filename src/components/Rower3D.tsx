@@ -143,19 +143,50 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     camera.position.set(pos.x + rotatedX, pos.y + camOffset.y, pos.z + rotatedZ);
     camera.lookAt(pos.x, pos.y, pos.z);
 
-    // Oar animation: animate based on cadence (strokes per minute) or fallback to pace/cadence mapping
+    // Oar animation: simulate realistic rowing stroke cycle
+    // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
     const strokesPerMinute = cadence ?? (paceSPer500 ? Math.min(60, Math.round(500 / (paceSPer500 || 100) * 0.25)) : 30);
     const freqHz = strokesPerMinute / 60;
-    const oarAngle = Math.sin(performance.now() * 0.001 * freqHz * Math.PI * 2) * 0.7; // +-0.7 radians swing
-    if (leftOarRef.current) leftOarRef.current.rotation.set(0, 0, oarAngle);
-    if (rightOarRef.current) rightOarRef.current.rotation.set(0, 0, -oarAngle);
+    const cycleTime = performance.now() * 0.001 * freqHz; // cycles per second
+    const phase = (cycleTime % 1) * Math.PI * 2; // 0 to 2π for one complete stroke
+    
+    // Rowing stroke motion mapping:
+    // - Catch (0°): Oars forward in water, blade vertical
+    // - Drive (0° to 90°): Pull through water, blade stays vertical
+    // - Finish (90°): Oars back, blade exits water
+    // - Recovery (90° to 360°): Oars return forward through air, blade feathered (horizontal)
+    
+    // Blade angle (rotation around shaft) - vertical in water, horizontal in air
+    const bladeFeather = phase < Math.PI ? 0 : Math.PI / 2; // Flat during recovery
+    
+    // Oar sweep angle (forward/back motion)
+    // Forward position (catch): ~60° forward from perpendicular
+    // Back position (finish): ~30° back from perpendicular
+    // Use smooth sinusoidal motion weighted toward the drive
+    let oarSweep;
+    if (phase < Math.PI * 0.4) {
+      // Drive phase (faster, more power) - 40% of cycle
+      oarSweep = Math.cos(phase / 0.4 * Math.PI / 2) * 1.0 - 0.5; // 0.5 to -0.5 radians
+    } else {
+      // Recovery phase (slower return) - 60% of cycle
+      const recoveryPhase = (phase - Math.PI * 0.4) / (Math.PI * 1.6);
+      oarSweep = -0.5 + recoveryPhase * 1.0; // -0.5 back to 0.5
+    }
+    
+    // Left oar rotates opposite to right (sculling)
+    if (leftOarRef.current) {
+      leftOarRef.current.rotation.set(bladeFeather, 0, oarSweep);
+    }
+    if (rightOarRef.current) {
+      rightOarRef.current.rotation.set(-bladeFeather, 0, -oarSweep);
+    }
 
     // Expose oar angle for e2e testing
     try { // safe window access check
       // @ts-ignore
       if ((window as any).__PLAYWRIGHT_TESTING) {
         // @ts-ignore
-        (window as any).__ROWER3D_OAR_ANGLE = oarAngle;
+        (window as any).__ROWER3D_OAR_ANGLE = oarSweep;
       }
     } catch (e) {}
 
@@ -212,29 +243,54 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
       {/* boat + oars */}
       <group ref={boatRef} position={[0, 0, 0]}>
-        {/* Attempt to render a glTF model if present (in Suspense) else fallback to procedural box */}
+        {/* Attempt to render a glTF model if present (in Suspense) else fallback to procedural scull */}
         {performanceMode !== 'low' ? (
           <Suspense fallback={null}>
             <GLTFBoat />
           </Suspense>
         ) : (
-          <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[1.2, 0.25, 0.5]} />
-            <meshStandardMaterial color={'#2b6cb0'} />
-          </mesh>
+          <>
+            {/* Procedural racing scull hull - narrow yellow boat */}
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.2, 0.1, 2.8]} />
+              <meshStandardMaterial color={'#f5d742'} metalness={0.3} roughness={0.5} />
+            </mesh>
+            {/* Rower figure - red torso */}
+            <mesh position={[0, 0.3, 0]}>
+              <boxGeometry args={[0.24, 0.4, 0.3]} />
+              <meshStandardMaterial color={'#cc3311'} />
+            </mesh>
+            {/* Rower head */}
+            <mesh position={[0, 0.6, 0.05]}>
+              <boxGeometry args={[0.16, 0.2, 0.1]} />
+              <meshStandardMaterial color={'#cc3311'} />
+            </mesh>
+          </>
         )}
-        {/* left oar pivot */}
-        <group position={[-0.7, -0.03, 0]}>
-          <mesh ref={leftOarRef} position={[0, 0, 0.9]}>
-            <boxGeometry args={[0.08, 0.02, 1.8]} />
-            <meshStandardMaterial color={'#6b7280'} />
+        {/* left oar pivot - positioned to side of boat */}
+        <group position={[-0.35, 0.1, 0]}>
+          <mesh ref={leftOarRef} position={[0, 0.1, 0.6]}>
+            {/* Long oar shaft with blade */}
+            <boxGeometry args={[0.04, 0.03, 1.5]} />
+            <meshStandardMaterial color={'#4a3520'} />
+          </mesh>
+          {/* Oar blade */}
+          <mesh ref={leftOarRef} position={[0, 0.1, 1.2]}>
+            <boxGeometry args={[0.16, 0.05, 0.35]} />
+            <meshStandardMaterial color={'#4a3520'} />
           </mesh>
         </group>
-        {/* right oar pivot */}
-        <group position={[0.7, -0.03, 0]}>
-          <mesh ref={rightOarRef} position={[0, 0, 0.9]}>
-            <boxGeometry args={[0.08, 0.02, 1.8]} />
-            <meshStandardMaterial color={'#6b7280'} />
+        {/* right oar pivot - positioned to side of boat */}
+        <group position={[0.35, 0.1, 0]}>
+          <mesh ref={rightOarRef} position={[0, 0.1, 0.6]}>
+            {/* Long oar shaft with blade */}
+            <boxGeometry args={[0.04, 0.03, 1.5]} />
+            <meshStandardMaterial color={'#4a3520'} />
+          </mesh>
+          {/* Oar blade */}
+          <mesh ref={rightOarRef} position={[0, 0.1, 1.2]}>
+            <boxGeometry args={[0.16, 0.05, 0.35]} />
+            <meshStandardMaterial color={'#4a3520'} />
           </mesh>
         </group>
       </group>
