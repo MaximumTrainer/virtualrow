@@ -153,9 +153,9 @@ function App() {
       try {
         let newRoute: WaterRoute | undefined = undefined;
         if (extension === 'gpx') {
-          newRoute = routeService.importRouteFromGPX(content, { name: importName, difficulty: importDifficulty, location: importLocation }, importForce);
+          newRoute = routeService.importRouteFromGPX(content, { name: importName, difficulty: importDifficulty, location: importLocation });
         } else if (extension === 'geojson' || extension === 'json') {
-          newRoute = routeService.importRouteFromGeoJSON(content, { name: importName, difficulty: importDifficulty, location: importLocation }, importForce);
+          newRoute = routeService.importRouteFromGeoJSON(content, { name: importName, difficulty: importDifficulty, location: importLocation });
         } else {
           setImportMessage('Unsupported file type. Use .gpx or .geojson');
           return;
