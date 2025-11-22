@@ -4,9 +4,7 @@ import { BluetoothDevice } from './components/BluetoothDevice';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import HeartRateMonitor from './components/HeartRateMonitor';
-import HeartRateChart from './components/HeartRateChart';
 import Rower3D from './components/Rower3D';
-import MiniMetrics from './components/MiniMetrics';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import './App.css';
 
@@ -20,12 +18,6 @@ function App() {
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importName, setImportName] = useState('Imported Route');
-  const [importDifficulty, setImportDifficulty] = useState<'easy' | 'moderate' | 'hard'>('moderate');
-  const [importLocation, setImportLocation] = useState('Imported');
-  const [importForce, setImportForce] = useState(false);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const allRoutes = routeService.getAllRoutes();
@@ -131,53 +123,7 @@ function App() {
     setPM5Connected(false);
   }, []);
 
-  const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    setImportFile(f);
-    if (f && !importName) setImportName(f.name.replace(/\.[^/.]+$/, ''));
-    setImportMessage(null);
-  };
-
   const stats = workoutService.getStats();
-
-  const handleImportRoute = async () => {
-    setImportMessage(null);
-    if (!importFile) {
-      setImportMessage('No file selected');
-      return;
-    }
-    const extension = importFile.name.split('.').pop()?.toLowerCase();
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const content = reader.result as string;
-      try {
-        let newRoute: WaterRoute | undefined = undefined;
-        if (extension === 'gpx') {
-          newRoute = routeService.importRouteFromGPX(content, { name: importName, difficulty: importDifficulty, location: importLocation });
-        } else if (extension === 'geojson' || extension === 'json') {
-          newRoute = routeService.importRouteFromGeoJSON(content, { name: importName, difficulty: importDifficulty, location: importLocation });
-        } else {
-          setImportMessage('Unsupported file type. Use .gpx or .geojson');
-          return;
-        }
-
-        if (!newRoute) {
-          setImportMessage('Route not accepted: data may not be in water. Toggle "Force" to import anyway.');
-          return;
-        }
-
-        // refresh
-        const allRoutes = routeService.getAllRoutes();
-        setRoutes(allRoutes);
-        setSelectedRoute(newRoute);
-        setImportMessage('Route imported successfully');
-        setImportFile(null);
-      } catch (e) {
-        setImportMessage('Failed to import: ' + (e as Error).message);
-      }
-    };
-    reader.readAsText(importFile);
-  };
 
   return (
     <div className="app-container">
@@ -263,23 +209,6 @@ function App() {
                 <span className="value">{formatDuration(stats.totalTime)}</span>
               </div>
             </div>
-          </div>
-          <div className="import-panel">
-            <h3 className="panel-title">Import Route</h3>
-            <input type="file" accept=".gpx,.geojson,.json" onChange={handleFilePicked} />
-            <input type="text" className="input" value={importName} onChange={(e) => setImportName(e.target.value)} placeholder="Route Name" />
-            <input type="text" className="input" value={importLocation} onChange={(e) => setImportLocation(e.target.value)} placeholder="Location" />
-            <select value={importDifficulty} onChange={(e) => setImportDifficulty(e.target.value as any)} className="input">
-              <option value="easy">Easy</option>
-              <option value="moderate">Moderate</option>
-              <option value="hard">Hard</option>
-            </select>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input type="checkbox" id="force" checked={importForce} onChange={(e) => setImportForce(e.target.checked)} />
-              <label htmlFor="force">Force import (allow routes not detected as water)</label>
-            </div>
-            <button className="btn" onClick={handleImportRoute}>Import</button>
-            {importMessage && (<div className="import-message">{importMessage}</div>)}
           </div>
         </aside>
 
