@@ -65,17 +65,20 @@ export async function removeHighlight(
   selector: string
 ): Promise<void> {
   const locator = page.locator(selector).first();
-  await locator.evaluate((element) => {
-    if (element instanceof HTMLElement) {
-      const originalOutline = element.getAttribute('data-original-outline') || '';
-      const originalBoxShadow = element.getAttribute('data-original-box-shadow') || '';
-      
-      element.style.outline = originalOutline;
-      element.style.boxShadow = originalBoxShadow;
-      element.removeAttribute('data-original-outline');
-      element.removeAttribute('data-original-box-shadow');
-    }
-  });
+  const count = await locator.count();
+  if (count > 0) {
+    await locator.evaluate((element) => {
+      if (element instanceof HTMLElement) {
+        const originalOutline = element.getAttribute('data-original-outline') || '';
+        const originalBoxShadow = element.getAttribute('data-original-box-shadow') || '';
+        
+        element.style.outline = originalOutline;
+        element.style.boxShadow = originalBoxShadow;
+        element.removeAttribute('data-original-outline');
+        element.removeAttribute('data-original-box-shadow');
+      }
+    });
+  }
 }
 
 /**
@@ -197,51 +200,54 @@ export async function annotateElement(
   position: 'top' | 'bottom' | 'left' | 'right' = 'top'
 ): Promise<void> {
   const locator = page.locator(selector).first();
-  await locator.evaluate(
-    (element, { text, pos }) => {
-      const annotation = document.createElement('div');
-      annotation.className = 'playwright-annotation';
-      annotation.style.cssText = `
-        position: absolute;
-        background: rgba(0, 120, 255, 0.9);
-        color: white;
-        padding: 5px 10px;
-        border-radius: 3px;
-        font-size: 12px;
-        font-family: sans-serif;
-        z-index: 999998;
-        pointer-events: none;
-        white-space: nowrap;
-      `;
-      annotation.textContent = text;
+  const count = await locator.count();
+  if (count > 0) {
+    await locator.evaluate(
+      (element, { text, pos }) => {
+        const annotation = document.createElement('div');
+        annotation.className = 'playwright-annotation';
+        annotation.style.cssText = `
+          position: absolute;
+          background: rgba(0, 120, 255, 0.9);
+          color: white;
+          padding: 5px 10px;
+          border-radius: 3px;
+          font-size: 12px;
+          font-family: sans-serif;
+          z-index: 999998;
+          pointer-events: none;
+          white-space: nowrap;
+        `;
+        annotation.textContent = text;
 
-      const rect = element.getBoundingClientRect();
-      const scrollX = window.scrollX;
-      const scrollY = window.scrollY;
+        const rect = element.getBoundingClientRect();
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
 
-      switch (pos) {
-        case 'top':
-          annotation.style.left = `${rect.left + scrollX}px`;
-          annotation.style.top = `${rect.top + scrollY - 30}px`;
-          break;
-        case 'bottom':
-          annotation.style.left = `${rect.left + scrollX}px`;
-          annotation.style.top = `${rect.bottom + scrollY + 5}px`;
-          break;
-        case 'left':
-          annotation.style.left = `${rect.left + scrollX - 100}px`;
-          annotation.style.top = `${rect.top + scrollY}px`;
-          break;
-        case 'right':
-          annotation.style.left = `${rect.right + scrollX + 5}px`;
-          annotation.style.top = `${rect.top + scrollY}px`;
-          break;
-      }
+        switch (pos) {
+          case 'top':
+            annotation.style.left = `${rect.left + scrollX}px`;
+            annotation.style.top = `${rect.top + scrollY - 30}px`;
+            break;
+          case 'bottom':
+            annotation.style.left = `${rect.left + scrollX}px`;
+            annotation.style.top = `${rect.bottom + scrollY + 5}px`;
+            break;
+          case 'left':
+            annotation.style.left = `${rect.left + scrollX - 100}px`;
+            annotation.style.top = `${rect.top + scrollY}px`;
+            break;
+          case 'right':
+            annotation.style.left = `${rect.right + scrollX + 5}px`;
+            annotation.style.top = `${rect.top + scrollY}px`;
+            break;
+        }
 
-      document.body.appendChild(annotation);
-    },
-    { text: label, pos: position }
-  );
+        document.body.appendChild(annotation);
+      },
+      { text: label, pos: position }
+    );
+  }
 }
 
 /**

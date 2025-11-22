@@ -63,7 +63,7 @@ export async function stepWithEvidence(
   page: Page,
   action: () => Promise<void>
 ): Promise<void> {
-  await test.step(stepName, async () => {
+  await base.step(stepName, async () => {
     // Capture before state
     await captureTestEvidence(page, testInfo, `step-${stepName}-before`);
     
