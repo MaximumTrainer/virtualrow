@@ -3,6 +3,7 @@ import * as child_process from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
+import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations } from '../utils/screenshot-helper';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.js');
@@ -47,7 +48,7 @@ test.describe('Simulated e2e route playback', () => {
     await stopSimServer();
   });
 
-  test('plays a single route with PM5 & HR simulators and persists HR aggregates', async ({ page }: { page: Page }) => {
+  test('plays a single route with PM5 & HR simulators and persists HR aggregates', async ({ page }, testInfo) => {
     page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
     page.on('pageerror', (err) => console.log('PAGE ERROR:', err.message));
     // inject mock Bluetooth script so that requestDevice returns simulated characteristics bound to the WS server
@@ -55,9 +56,14 @@ test.describe('Simulated e2e route playback', () => {
     await page.addInitScript({ content: initScript });
 
     await page.goto('/');
+    // Capture initial page load
+    await captureTestEvidence(page, testInfo, '01-initial-page-load');
 
     // Connect PM5
     await page.waitForSelector('button:has-text("Connect PM5")');
+    await annotateElement(page, 'button:has-text("Connect PM5")', 'PM5 Connect Button', 'bottom');
+    await captureTestEvidence(page, testInfo, '02-before-pm5-connect');
+    await clearAnnotations(page);
     await page.click('button:has-text("Connect PM5")');
     // Wait until PM5 shows connected status for the 'Concept2 PM5' device
       let pm5Connected = false;
@@ -70,9 +76,16 @@ test.describe('Simulated e2e route playback', () => {
         return !!(status && String(status.textContent).includes('Connected'));
       }, { timeout: 5000 });
       pm5Connected = true;
+      // Capture PM5 connected state
+      await highlightElement(page, '.device-status', 'green');
+      await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
+      await captureTestEvidence(page, testInfo, '03-pm5-connected');
+      await clearAnnotations(page);
     } catch (e) {
       pm5Connected = false;
       console.warn('PM5 did not connect within timeout; proceeding with fallback start');
+      // Capture error state
+      await captureErrorEvidence(page, testInfo, 'PM5 connection timeout - using fallback', '.device-status');
       // fallback: start session directly if PM5 couldn't be connected
       await page.evaluate(() => {
         const svc = (window as any).__workoutService;
@@ -85,17 +98,29 @@ test.describe('Simulated e2e route playback', () => {
 
     // Connect HR Monitor
     await page.waitForSelector('button:has-text("Connect HR Monitor")');
+    await annotateElement(page, 'button:has-text("Connect HR Monitor")', 'HR Monitor Connect Button', 'bottom');
+    await captureTestEvidence(page, testInfo, '04-before-hr-connect');
+    await clearAnnotations(page);
     await page.click('button:has-text("Connect HR Monitor")');
     // Wait until HR Monitor shows connected status
     await page.waitForFunction(() => {
       const el = document.querySelector('.hr-status-row');
       return el && String(el.textContent).includes('Connected');
     });
+    // Capture HR connected state
+    await highlightElement(page, '.hr-status-row', 'green');
+    await annotateElement(page, '.hr-status-row', 'HR Monitor Connected', 'right');
+    await captureTestEvidence(page, testInfo, '05-hr-connected');
+    await clearAnnotations(page);
 
     // Select Central Park Loop (only if PM5 connected, otherwise fallback already started a session)
     if (pm5Connected) {
       await page.waitForSelector('.route-item:has-text("Central Park Loop")', { timeout: 10000 });
+      await annotateElement(page, '.route-item:has-text("Central Park Loop")', 'Selecting Route', 'right');
+      await captureTestEvidence(page, testInfo, '06-before-route-selection');
+      await clearAnnotations(page);
       await page.click('.route-item:has-text("Central Park Loop")');
+      await captureTestEvidence(page, testInfo, '07-after-route-selection');
     }
 
     // Start Workout
@@ -103,9 +128,14 @@ test.describe('Simulated e2e route playback', () => {
     if (pm5Connected) {
       const startBtn = page.locator('.btn-start-workout');
       await startBtn.waitFor({ timeout: 5000 });
-      if (await startBtn.isEnabled()) await startBtn.click();
-      else {
+      if (await startBtn.isEnabled()) {
+        await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
+        await captureTestEvidence(page, testInfo, '08-before-workout-start');
+        await clearAnnotations(page);
+        await startBtn.click();
+      } else {
         // fallback to starting session
+        await captureErrorEvidence(page, testInfo, 'Start button disabled - using fallback', '.btn-start-workout');
         await page.evaluate(() => {
           const svc = (window as any).__workoutService;
           if (svc && svc.startSession) {
@@ -152,15 +182,25 @@ test.describe('Simulated e2e route playback', () => {
       const last = sessions[sessions.length - 1];
       return !!(last.heartRateSamples && last.heartRateSamples.length > 0);
     }, { timeout: 10000 });
+    
+    // Capture workout in progress
+    await captureTestEvidence(page, testInfo, '09-workout-in-progress');
 
     // Validate 3D view and overlays: canvas exists, mini map overlay and mini metrics present
     let canvasHandle = null;
     try {
       canvasHandle = await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 10000, state: 'attached' });
+      // Annotate 3D canvas for screenshot
+      await annotateElement(page, '.rower3d-canvas-container canvas', '3D View Canvas', 'top');
+      await captureTestEvidence(page, testInfo, '10-3d-canvas-visible');
+      await clearAnnotations(page);
     } catch (e) {
       // fallback - check for window hook or fallback marker
       const hasPos = await page.evaluate(() => !!(window as any).__ROWER3D_POS);
       const hasMarker = !!(await page.$('.rower3d-fallback-marker'));
+      if (!hasPos && !hasMarker) {
+        await captureErrorEvidence(page, testInfo, '3D canvas not found', '.rower3d-canvas-container');
+      }
       expect(hasPos || hasMarker).toBeTruthy();
     }
     try {
@@ -257,6 +297,11 @@ test.describe('Simulated e2e route playback', () => {
       return !!m && (m as HTMLElement).style.display !== 'none';
     });
     expect(markerVisible).toBeTruthy();
+    // Capture WebGL context lost state
+    await highlightElement(page, '.rower3d-fallback-marker', 'orange');
+    await annotateElement(page, '.rower3d-fallback-marker', 'WebGL Context Lost', 'bottom');
+    await captureTestEvidence(page, testInfo, '11-webgl-context-lost');
+    await clearAnnotations(page);
     // Restore context
     await page.evaluate(() => {
       const canvas = document.querySelector('.rower3d-canvas-container canvas');
@@ -295,30 +340,41 @@ test.describe('Simulated e2e route playback', () => {
     expect(last.heartRateAvg).toBeGreaterThan(0);
     expect(last.heartRateMax).toBeGreaterThan(0);
     console.log('session hr avg/max', last.heartRateAvg, last.heartRateMax);
+    // Capture final test completion state
+    await captureTestEvidence(page, testInfo, '12-test-completed-successfully');
     // Confirm we have a saved session that includes avg/max HR
   });
 
-  test('plays multiple routes sequentially with different HR profiles', async ({ page }: { page: Page }) => {
+  test('plays multiple routes sequentially with different HR profiles', async ({ page }, testInfo) => {
     page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
     page.on('pageerror', (err) => console.log('PAGE ERROR:', err.message));
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
     await page.goto('/');
+    // Capture initial page load
+    await captureTestEvidence(page, testInfo, '01-multi-route-initial-load');
     // Connect PM5 and HR
     await page.click('button:has-text("Connect PM5")');
     await page.click('button:has-text("Connect HR Monitor")');
+    await captureTestEvidence(page, testInfo, '02-multi-route-devices-connecting');
 
     // Select first route and start (only if visible)
     if (await page.$('.route-item:has-text("Lake Tahoe Circuit")')) {
+      await annotateElement(page, '.route-item:has-text("Lake Tahoe Circuit")', 'First Route', 'right');
+      await captureTestEvidence(page, testInfo, '03-selecting-first-route');
+      await clearAnnotations(page);
       await page.click('.route-item:has-text("Lake Tahoe Circuit")');
     }
     await page.waitForSelector('.btn-start-workout');
     try {
       const startBtn = page.locator('.btn-start-workout');
       await startBtn.waitFor({ timeout: 5000 });
-      if (await startBtn.isEnabled()) await startBtn.click();
-      else {
+      if (await startBtn.isEnabled()) {
+        await captureTestEvidence(page, testInfo, '04-starting-first-workout');
+        await startBtn.click();
+      } else {
         // fallback: start session
+        await captureErrorEvidence(page, testInfo, 'Start button disabled for first route', '.btn-start-workout');
         await page.evaluate(() => {
           const svc = (window as any).__workoutService;
           if (svc && svc.startSession) {
@@ -394,6 +450,9 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForTimeout(300);
     const laterProgress1 = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
     expect(laterProgress1).toBeGreaterThanOrEqual(initialProgress1);
+    
+    // Capture first route in progress
+    await captureTestEvidence(page, testInfo, '05-first-route-in-progress');
 
     // Visual snapshot for the 3D scene during the first route
     try {
@@ -409,6 +468,9 @@ test.describe('Simulated e2e route playback', () => {
 
     // Select second route and start (only if visible)
     if (await page.$('.route-item:has-text("Venice Grand Canal")')) {
+      await annotateElement(page, '.route-item:has-text("Venice Grand Canal")', 'Second Route', 'right');
+      await captureTestEvidence(page, testInfo, '06-selecting-second-route');
+      await clearAnnotations(page);
       await page.click('.route-item:has-text("Venice Grand Canal")');
     }
     // Start second route
@@ -416,9 +478,11 @@ test.describe('Simulated e2e route playback', () => {
     try {
       await startBtn2.waitFor({ timeout: 5000 });
       if (await startBtn2.isEnabled()) {
+        await captureTestEvidence(page, testInfo, '07-starting-second-workout');
         await startBtn2.click();
       } else {
         // fallback: start session
+        await captureErrorEvidence(page, testInfo, 'Start button disabled for second route', '.btn-start-workout');
         await page.evaluate(() => { const svc = (window as any).__workoutService; if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3'); });
         await page.click('button:has-text("⏱️ Workout")');
       }
@@ -471,5 +535,7 @@ test.describe('Simulated e2e route playback', () => {
     const csv = await page.evaluate(() => (window as any).__workoutService.exportSessionsAsCSV());
     expect(csv).toContain('Avg HR');
     expect(csv).toContain('Max HR');
+    // Capture final multi-route test completion
+    await captureTestEvidence(page, testInfo, '08-multi-route-test-completed');
   });
 });
