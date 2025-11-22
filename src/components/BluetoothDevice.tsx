@@ -115,7 +115,7 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
           <div className="metric">
             <span className="metric-label">Pace</span>
             <span className="metric-value">
-              {(pm5Data.pace / 100).toFixed(1)}
+              {pm5Data.pace ? (pm5Data.pace / 100).toFixed(1) : '--'}
             </span>
             <span className="metric-unit">s/500m</span>
           </div>

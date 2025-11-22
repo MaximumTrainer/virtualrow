@@ -1,0 +1,205 @@
+.workout-progress-display {
+  background: white;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.progress-header h3 {
+  margin: 0;
+  color: #1a73e8;
+  font-size: 18px;
+}
+
+.overall-progress {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1a73e8;
+}
+
+.current-segment {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.segment-info {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.segment-type {
+  padding: 6px 12px;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.segment-details {
+  flex: 1;
+}
+
+.segment-description {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.target-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.target-item {
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.segment-progress-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.segment-progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.segment-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #666;
+}
+
+.target-indicator {
+  padding: 10px 15px;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.target-indicator.on-target {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #4caf50;
+}
+
+.target-indicator.off-target {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ff9800;
+}
+
+.upcoming-segments {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 15px;
+}
+
+.upcoming-segments h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.segments-timeline {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.timeline-segment {
+  min-width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.timeline-segment:hover {
+  opacity: 0.8 !important;
+}
+
+.timeline-segment.active {
+  border: 2px solid #1a73e8;
+  box-shadow: 0 0 8px rgba(26, 115, 232, 0.5);
+}
+
+.timeline-segment.completed {
+  opacity: 0.5;
+}
+
+.current-marker {
+  color: white;
+  font-size: 16px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@media (max-width: 768px) {
+  .workout-progress-display {
+    padding: 12px;
+  }
+
+  .progress-header h3 {
+    font-size: 16px;
+  }
+
+  .overall-progress {
+    font-size: 20px;
+  }
+
+  .segment-info {
+    flex-direction: column;
+  }
+
+  .target-info {
+    font-size: 11px;
+  }
+
+  .segments-timeline {
+    height: 25px;
+  }
+}

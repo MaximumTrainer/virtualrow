@@ -823,3 +823,34 @@ body {
 .btn-overlay-end:active {
   transform: translateY(0);
 }
+
+/* Workout Progress Overlay */
+.workout-progress-overlay {
+  position: absolute;
+  top: 80px;
+  left: 24px;
+  z-index: 100;
+  max-width: 400px;
+  opacity: 0.95;
+}
+
+/* Selected Workout Info */
+.selected-workout-info {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f0f7ff;
+  border: 2px solid #1a73e8;
+  border-radius: 8px;
+}
+
+.selected-workout-info h4 {
+  margin: 0 0 8px 0;
+  color: #1a73e8;
+  font-size: 14px;
+}
+
+.selected-workout-info p {
+  margin: 0;
+  color: #333;
+  font-weight: 500;
+}
