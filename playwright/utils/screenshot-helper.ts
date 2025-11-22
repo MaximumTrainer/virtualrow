@@ -36,9 +36,9 @@ export async function highlightElement(
   selector: string,
   color: string = 'red'
 ): Promise<void> {
-  await page.evaluate(
-    ({ sel, highlightColor }) => {
-      const element = document.querySelector(sel);
+  const locator = page.locator(selector).first();
+  await locator.evaluate(
+    (element, highlightColor) => {
       if (element instanceof HTMLElement) {
         // Store original styles
         const originalOutline = element.style.outline;
@@ -51,7 +51,7 @@ export async function highlightElement(
         element.setAttribute('data-original-box-shadow', originalBoxShadow);
       }
     },
-    { sel: selector, highlightColor: color }
+    color
   );
 }
 
@@ -64,8 +64,8 @@ export async function removeHighlight(
   page: Page,
   selector: string
 ): Promise<void> {
-  await page.evaluate((sel) => {
-    const element = document.querySelector(sel);
+  const locator = page.locator(selector).first();
+  await locator.evaluate((element) => {
     if (element instanceof HTMLElement) {
       const originalOutline = element.getAttribute('data-original-outline') || '';
       const originalBoxShadow = element.getAttribute('data-original-box-shadow') || '';
@@ -75,7 +75,7 @@ export async function removeHighlight(
       element.removeAttribute('data-original-outline');
       element.removeAttribute('data-original-box-shadow');
     }
-  }, selector);
+  });
 }
 
 /**
@@ -95,8 +95,8 @@ export async function captureErrorEvidence(
   try {
     // Highlight the error element if selector is provided
     if (errorSelector) {
-      const elementExists = await page.locator(errorSelector).count() > 0;
-      if (elementExists) {
+      const elementCount = await page.locator(errorSelector).count();
+      if (elementCount > 0) {
         await highlightElement(page, errorSelector, 'red');
       }
     }
@@ -142,7 +142,10 @@ export async function captureErrorEvidence(
     });
 
     if (errorSelector) {
-      await removeHighlight(page, errorSelector);
+      const elementCount = await page.locator(errorSelector).count();
+      if (elementCount > 0) {
+        await removeHighlight(page, errorSelector);
+      }
     }
   } catch (e) {
     // If screenshot capture fails, log but don't throw
@@ -186,53 +189,51 @@ export async function annotateElement(
   label: string,
   position: 'top' | 'bottom' | 'left' | 'right' = 'top'
 ): Promise<void> {
-  await page.evaluate(
-    ({ sel, text, pos }) => {
-      const element = document.querySelector(sel);
-      if (element) {
-        const annotation = document.createElement('div');
-        annotation.className = 'playwright-annotation';
-        annotation.style.cssText = `
-          position: absolute;
-          background: rgba(0, 120, 255, 0.9);
-          color: white;
-          padding: 5px 10px;
-          border-radius: 3px;
-          font-size: 12px;
-          font-family: sans-serif;
-          z-index: 999998;
-          pointer-events: none;
-          white-space: nowrap;
-        `;
-        annotation.textContent = text;
+  const locator = page.locator(selector).first();
+  await locator.evaluate(
+    (element, { text, pos }) => {
+      const annotation = document.createElement('div');
+      annotation.className = 'playwright-annotation';
+      annotation.style.cssText = `
+        position: absolute;
+        background: rgba(0, 120, 255, 0.9);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-family: sans-serif;
+        z-index: 999998;
+        pointer-events: none;
+        white-space: nowrap;
+      `;
+      annotation.textContent = text;
 
-        const rect = element.getBoundingClientRect();
-        const scrollX = window.scrollX;
-        const scrollY = window.scrollY;
+      const rect = element.getBoundingClientRect();
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
 
-        switch (pos) {
-          case 'top':
-            annotation.style.left = `${rect.left + scrollX}px`;
-            annotation.style.top = `${rect.top + scrollY - 30}px`;
-            break;
-          case 'bottom':
-            annotation.style.left = `${rect.left + scrollX}px`;
-            annotation.style.top = `${rect.bottom + scrollY + 5}px`;
-            break;
-          case 'left':
-            annotation.style.left = `${rect.left + scrollX - 100}px`;
-            annotation.style.top = `${rect.top + scrollY}px`;
-            break;
-          case 'right':
-            annotation.style.left = `${rect.right + scrollX + 5}px`;
-            annotation.style.top = `${rect.top + scrollY}px`;
-            break;
-        }
-
-        document.body.appendChild(annotation);
+      switch (pos) {
+        case 'top':
+          annotation.style.left = `${rect.left + scrollX}px`;
+          annotation.style.top = `${rect.top + scrollY - 30}px`;
+          break;
+        case 'bottom':
+          annotation.style.left = `${rect.left + scrollX}px`;
+          annotation.style.top = `${rect.bottom + scrollY + 5}px`;
+          break;
+        case 'left':
+          annotation.style.left = `${rect.left + scrollX - 100}px`;
+          annotation.style.top = `${rect.top + scrollY}px`;
+          break;
+        case 'right':
+          annotation.style.left = `${rect.right + scrollX + 5}px`;
+          annotation.style.top = `${rect.top + scrollY}px`;
+          break;
       }
+
+      document.body.appendChild(annotation);
     },
-    { sel: selector, text: label, pos: position }
+    { text: label, pos: position }
   );
 }
 
