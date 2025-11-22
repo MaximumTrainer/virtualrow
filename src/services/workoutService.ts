@@ -1,10 +1,10 @@
-import type { WorkoutSession, Split, PM5Data, HeartRateSample } from '../types/index';
+import type { WorkoutSession, Split, PM5Data, HeartRateSample, WorkoutProgress } from '../types/index';
 
 export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
 
-  startSession(routeId: string, routeName: string): WorkoutSession {
+  startSession(routeId: string, routeName: string, structuredWorkoutId?: string): WorkoutSession {
     const session: WorkoutSession = {
       id: Date.now().toString(),
       routeId,
@@ -17,6 +17,7 @@ export class WorkoutService {
       splits: [],
       isActive: true,
       heartRateSamples: [],
+      structuredWorkoutId,
     };
 
     this.currentSession = session;
@@ -101,6 +102,12 @@ export class WorkoutService {
       };
       this.currentSession.splits.push(split);
     }
+  }
+
+  // Update workout progress for structured workouts
+  updateWorkoutProgress(progress: WorkoutProgress): void {
+    if (!this.currentSession) return;
+    this.currentSession.workoutProgress = progress;
   }
 
   // Update heart rate stats independently (for external HR monitor or PM5 provided HR)

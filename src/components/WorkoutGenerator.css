@@ -1,0 +1,232 @@
+.workout-generator {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.workout-generator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.workout-generator-header h2 {
+  margin: 0;
+  color: #1a73e8;
+}
+
+.import-button {
+  padding: 8px 16px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.import-button:hover {
+  background: #1557b0;
+}
+
+.import-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.import-dialog {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.import-dialog h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.import-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  color: #555;
+}
+
+.import-form input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.import-form input:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.import-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.import-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.import-actions button:first-child {
+  background: #1a73e8;
+  color: white;
+}
+
+.import-actions button:first-child:hover:not(:disabled) {
+  background: #1557b0;
+}
+
+.import-actions button:first-child:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.import-actions button:last-child {
+  background: #f1f3f4;
+  color: #333;
+}
+
+.import-actions button:last-child:hover {
+  background: #e8eaed;
+}
+
+.workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.workout-card {
+  padding: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.workout-card:hover {
+  border-color: #1a73e8;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.2);
+}
+
+.workout-card.selected {
+  border-color: #1a73e8;
+  background: #f0f7ff;
+}
+
+.workout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.workout-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.workout-type {
+  padding: 4px 8px;
+  background: #e8f0fe;
+  color: #1a73e8;
+  border-radius: 4px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.workout-description {
+  margin: 10px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.workout-stats {
+  display: flex;
+  gap: 15px;
+  margin: 10px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.workout-source {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+.workout-segments-preview {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin-top: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segment-bar {
+  min-width: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.segment-bar:hover {
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .workout-generator {
+    padding: 15px;
+  }
+
+  .workout-generator-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .import-button {
+    width: 100%;
+  }
+
+  .workout-stats {
+    flex-direction: column;
+    gap: 5px;
+  }
+}

@@ -42,6 +42,8 @@ export interface WorkoutSession {
   heartRateMax?: number; // persisted max bpm at end of session
   splits: Split[];
   isActive: boolean;
+  structuredWorkoutId?: string; // Optional link to a structured workout
+  workoutProgress?: WorkoutProgress; // Progress through structured workout (if applicable)
 }
 
 // Individual split data (500m segments typical for rowing)
@@ -127,4 +129,50 @@ export interface RouteFormData {
   coordinates: Coordinate[];
   tags: string[];
   imageUrl?: string;
+}
+
+// Structured workout with intervals (like intervals.icu)
+export interface StructuredWorkout {
+  id: string;
+  name: string;
+  description: string;
+  type: 'intervals' | 'steady-state' | 'pyramid' | 'custom';
+  segments: WorkoutSegment[];
+  totalDuration: number; // in seconds
+  totalDistance?: number; // in meters (optional)
+  targetMetric: 'pace' | 'power' | 'heartRate' | 'distance' | 'time';
+  createdAt: Date;
+  source?: 'intervals.icu' | 'manual' | 'imported';
+  externalId?: string; // For intervals.icu integration
+}
+
+// Individual segment/interval in a structured workout
+export interface WorkoutSegment {
+  id: string;
+  order: number;
+  type: 'warmup' | 'work' | 'rest' | 'cooldown' | 'interval';
+  duration?: number; // in seconds (null for distance-based)
+  distance?: number; // in meters (null for time-based)
+  targetPaceMin?: number; // min pace in seconds per 500m
+  targetPaceMax?: number; // max pace in seconds per 500m
+  targetPower?: number; // in watts
+  targetHeartRateMin?: number; // in bpm
+  targetHeartRateMax?: number; // in bpm
+  intensity?: 'recovery' | 'zone1' | 'zone2' | 'zone3' | 'zone4' | 'zone5' | 'max';
+  cadence?: number; // target strokes per minute
+  repeat?: number; // number of repetitions
+  description?: string;
+}
+
+// Workout progress tracking during active structured workout
+export interface WorkoutProgress {
+  workoutId: string;
+  currentSegmentIndex: number;
+  currentSegment: WorkoutSegment;
+  segmentElapsedTime: number; // seconds into current segment
+  segmentProgress: number; // percentage (0-100)
+  totalElapsedTime: number; // seconds into entire workout
+  totalProgress: number; // percentage (0-100)
+  isOnTarget: boolean; // whether user is meeting target metrics
+  deviationPercent?: number; // how far off target (positive = too fast, negative = too slow)
 }
