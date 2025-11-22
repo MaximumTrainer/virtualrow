@@ -18,8 +18,8 @@ export default defineConfig({
       // or test environments and may have lower security guarantees.
       args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-gpu']
     },
-    // Diagnostics and artifacts for debugging flaky tests in CI
-    screenshot: 'only-on-failure',
+    // Capture screenshots as test evidence - both on failure and success
+    screenshot: 'on',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },

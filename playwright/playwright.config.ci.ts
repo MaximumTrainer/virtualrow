@@ -29,8 +29,8 @@ export default defineConfig({
       // GPU sandbox restrictions and should only be used in CI/test environments.
       args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
     },
-    // Diagnostics and artifacts for debugging flaky tests in CI
-    screenshot: 'only-on-failure',
+    // Capture screenshots as test evidence - both on failure and success
+    screenshot: 'on',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },
