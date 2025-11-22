@@ -58,7 +58,7 @@ export interface Split {
 
 // PM5 device data
 export interface PM5Data {
-  pace: number; // seconds per 500m
+  pace?: number; // seconds per 500m (optional, may not always be available)
   distance: number; // in meters
   elapsedTime: number; // in milliseconds
   power?: number; // watts

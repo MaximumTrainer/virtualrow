@@ -375,7 +375,7 @@ function App() {
                       </div>
                       <div className="overlay-metric-inline">
                         <span className="overlay-label">pace:</span>
-                        <span className="overlay-value">{(pm5Data.pace / 100).toFixed(1)}</span>
+                        <span className="overlay-value">{pm5Data.pace ? (pm5Data.pace / 100).toFixed(1) : '--'}</span>
                       </div>
                       <div className="overlay-metric-inline">
                         <span className="overlay-label">distance:</span>

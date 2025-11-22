@@ -33,16 +33,16 @@ export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgres
   const segment = progress.currentSegment;
   const targetInfo = [];
 
-  if (segment.targetPaceMin && segment.targetPaceMax) {
+  if (segment.targetPaceMin !== undefined && segment.targetPaceMax !== undefined) {
     targetInfo.push(`Pace: ${segment.targetPaceMin}-${segment.targetPaceMax}s/500m`);
   }
-  if (segment.targetPower) {
+  if (segment.targetPower !== undefined) {
     targetInfo.push(`Power: ${segment.targetPower}W`);
   }
-  if (segment.targetHeartRateMin && segment.targetHeartRateMax) {
+  if (segment.targetHeartRateMin !== undefined && segment.targetHeartRateMax !== undefined) {
     targetInfo.push(`HR: ${segment.targetHeartRateMin}-${segment.targetHeartRateMax}bpm`);
   }
-  if (segment.cadence) {
+  if (segment.cadence !== undefined) {
     targetInfo.push(`Cadence: ${segment.cadence}spm`);
   }
 
