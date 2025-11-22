@@ -48,7 +48,7 @@ virtualrow/
 ### 🎯 Core Features Implemented
 
 #### 1. **Water Route Management**
-- ✅ 5 sample water routes with full details
+- ✅ 4 real-world water routes with full details from GPX data
 - ✅ Route browsing with filtering
 - ✅ Distance calculations (Haversine formula)
 - ✅ Difficulty levels (Easy, Moderate, Hard)
@@ -91,25 +91,25 @@ virtualrow/
 
 ### 🌐 Available Water Routes
 
-1. **Lake Tahoe Circuit** (28.5 km, Hard)
-   - Alpine mountain lake with scenic views
-   - Elevation gain: 420m, Est. time: 180 min
+1. **Venice Grand Canal** (3.65 km, Moderate)
+   - Authentic Venetian rowing route through historic canals
+   - Elevation gain: 0m (sea level), Est. time: 63 min
+   - Parsed from actual GPS data recorded in Venice, Italy
 
-2. **Central Park Loop** (2.4 km, Easy)
-   - NYC urban water route (Reservoir)
-   - Perfect for beginners, Est. time: 30 min
+2. **Henley Regatta Route** (7.03 km, Hard)
+   - Famous Thames River rowing course, home of Henley Royal Regatta
+   - Elevation gain: 0m (river), Est. time: 121 min
+   - Parsed from actual GPS data on the River Thames, UK
 
-3. **Thames River Challenge** (12.8 km, Moderate)
-   - Historic London river route
-   - Tidal considerations, Est. time: 90 min
+3. **Charles River Boston** (11.07 km, Hard)
+   - World-famous Head of the Charles Regatta course
+   - Elevation gain: 0m (river), Est. time: 190 min
+   - Boston University to Herter Park, parsed from GPS data
 
-4. **Crater Lake Explorer** (7.7 km, Moderate)
-   - Deep volcanic crater lake in Oregon
-   - High altitude, Est. time: 60 min
-
-5. **Finger Lakes Sprint** (8.2 km, Hard)
-   - Fast-paced training route on Seneca Lake
-   - Flat and fast, Est. time: 55 min
+4. **Lake Bled Circuit** (6.24 km, Moderate)
+   - Stunning alpine lake with medieval castle and mountain views
+   - Elevation gain: 0m (lake), Est. time: 107 min
+   - Complete circuit of Lake Bled, Slovenia from GPS data
 
 ### 🚀 Running the Application
 

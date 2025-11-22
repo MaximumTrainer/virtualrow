@@ -103,7 +103,7 @@ virtualrow/
 
 #### routeService.ts (~300 lines)
 - Route CRUD operations
-- Mock route initialization (5 routes)
+- Mock route initialization (4 routes from real GPX data)
 - Filtering and search functionality
 - Distance calculation (Haversine formula)
 - Route statistics computation

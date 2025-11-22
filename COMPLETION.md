@@ -49,7 +49,7 @@ Your **VirtualRow** application has been successfully created, configured, and i
 App is already running at: http://localhost:5173/
 
 ### 2. **Explore Features**
-- **Routes Tab**: Browse 5 scenic water routes
+- **Routes Tab**: Browse 4 scenic water routes from real GPX data
 - **Workout Tab**: Active workout monitoring
 - **History Tab**: Past workouts and statistics
 
@@ -105,7 +105,7 @@ Styling:         CSS (scoped components)
 | **Type Definitions** | 2 |
 | **CSS Files** | 6 |
 | **Documentation Pages** | 7 |
-| **Water Routes** | 5 |
+| **Water Routes** | 4 |
 | **Bundle Size** | 373 KB |
 | **Gzipped Size** | 112 KB |
 | **Dev Server** | ✅ Running |
@@ -168,7 +168,7 @@ npm run build
 ## ✨ Features Implemented
 
 ### ✅ Route Management
-- Browse 5 scenic water routes
+- Browse 4 scenic water routes from real GPS data
 - Filter by difficulty and distance
 - Interactive map visualization
 - Detailed route information

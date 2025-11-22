@@ -173,14 +173,13 @@ Connections only terminate when:
 
 ## Available Routes
 
-Included sample routes:
-1. **Lake Tahoe Circuit** - 28.5 km, Alpine mountain lake
-2. **Central Park Loop** - 2.4 km, NYC urban water route
-3. **Thames River Challenge** - 12.8 km, Historic London river
-4. **Crater Lake Explorer** - 7.7 km, Volcanic crater lake
-5. **Finger Lakes Sprint** - 8.2 km, High-performance lake training
+Included routes from real GPX data:
+1. **Venice Grand Canal** - 3.65 km, Moderate - Historic Venetian canals
+2. **Henley Regatta Route** - 7.03 km, Hard - Famous Thames River regatta course
+3. **Charles River Boston** - 11.07 km, Hard - World-famous Head of the Charles course
+4. **Lake Bled Circuit** - 6.24 km, Moderate - Stunning alpine lake in Slovenia
 
-Add your own routes through the application interface!
+All routes parsed from actual GPS data recorded at these locations!
 
 ## Development
 
@@ -229,7 +228,7 @@ npm test -- --coverage
 ```
 
 **Test Coverage:**
-- ✅ 7 test suites, 19 tests
+- ✅ 7 test suites, 20 tests
 - Services: `bluetoothService`, `heartRateBluetoothService`, `routeService`, `workoutService`
 - Components: `App`, `HeartRateChart`, `HeartRateMonitor`
 

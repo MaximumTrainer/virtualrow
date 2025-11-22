@@ -15,12 +15,12 @@ npm run dev
 ## First Run Walkthrough
 
 ### 1. **Browse Water Routes** (Routes Tab)
-- View 5 pre-loaded scenic water routes
+- View 4 pre-loaded scenic water routes from real GPS data
 - Each route shows:
   - Interactive map with route path
   - Distance and estimated time
-  - Difficulty level (Easy/Moderate/Hard)
-  - Terrain and location info
+  - Difficulty level (Moderate/Hard)
+  - Location and description
 - Click on any route card to select it
 
 ### 2. **Connect Your Concept2 PM5** (Device Panel)
@@ -151,35 +151,33 @@ npm run dev
 
 ## Water Routes Reference
 
-### 🏔️ Lake Tahoe Circuit
-- Distance: 28.5 km
-- Difficulty: Hard
-- Time: ~180 minutes
-- Best for: Long-distance training
-
-### 🏙️ Central Park Loop
-- Distance: 2.4 km
-- Difficulty: Easy
-- Time: ~30 minutes
-- Best for: Warm-up/cool-down
-
-### 🌉 Thames River Challenge
-- Distance: 12.8 km
+### 🚣 Venice Grand Canal
+- Distance: 3.65 km
 - Difficulty: Moderate
-- Time: ~90 minutes
-- Best for: Steady-state workouts
+- Time: ~63 minutes
+- Location: Venice, Italy
+- Best for: Scenic warm-up rows
 
-### 🌋 Crater Lake Explorer
-- Distance: 7.7 km
-- Difficulty: Moderate
-- Time: ~60 minutes
-- Best for: Recovery rows
-
-### ⚡ Finger Lakes Sprint
-- Distance: 8.2 km
+### 🏆 Henley Regatta Route
+- Distance: 7.03 km
 - Difficulty: Hard
-- Time: ~55 minutes
-- Best for: High-intensity intervals
+- Time: ~121 minutes
+- Location: Henley-on-Thames, UK
+- Best for: Historic regatta training
+
+### 🇺🇸 Charles River Boston
+- Distance: 11.07 km
+- Difficulty: Hard
+- Time: ~190 minutes
+- Location: Boston, MA, USA
+- Best for: Long-distance endurance (Head of the Charles course)
+
+### 🏔️ Lake Bled Circuit
+- Distance: 6.24 km
+- Difficulty: Moderate
+- Time: ~107 minutes
+- Location: Bled, Slovenia
+- Best for: Alpine scenery and steady-state workouts
 
 ## Keyboard Shortcuts
 

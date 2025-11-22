@@ -13,7 +13,7 @@ A **Concept2 PM5 Indoor Rower Fitness Application** with virtual water route map
 ### Core Capabilities
 
 1. **📍 Water Route Mapping**
-   - 5 pre-loaded scenic routes (lakes, rivers)
+   - 4 pre-loaded scenic routes from real GPX data (canals, rivers, lakes)
    - Interactive Leaflet maps with satellite overlay
    - Route filtering by difficulty and distance
    - Route search functionality
@@ -115,7 +115,7 @@ npm run dev
 
 ### First Time Setup
 
-1. **View Routes** - Browse the 5 pre-loaded water routes
+1. **View Routes** - Browse the 4 pre-loaded water routes from real GPS data
 2. **Connect PM5** - Click "Connect PM5" button
 3. **Select Route** - Choose your preferred water route
 4. **Start Workout** - Click "Start Workout"

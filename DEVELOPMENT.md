@@ -493,7 +493,7 @@ src/__tests__/
 - Component tests use `@testing-library/react`
 
 **Test Coverage:**
-- ✅ 19 tests across 7 test suites
+- ✅ 20 tests across 7 test suites
 - Services: Bluetooth (PM5 + HR), routes, workouts
 - Components: App, charts, monitors
 - All tests passing
@@ -527,7 +527,7 @@ npx playwright show-report playwright-report
 **Test Scenarios:**
 1. **Single Route Playback**
    - Connects simulated PM5 and heart rate devices
-   - Starts workout on Venice route
+   - Starts workout on Venice Grand Canal route
    - Validates metrics update in real-time
    - Checks 3D rowing animation responds to pace
    - Verifies heart rate aggregation (avg/max)
