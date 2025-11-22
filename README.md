@@ -11,6 +11,16 @@ VirtualRow is a web-based fitness application that lets you row on virtual water
 - Route information including distance, estimated time, elevation gain, and difficulty level
 - Create custom water routes for your community
 
+### 💪 Structured Workout Generator
+- **Interval-based training workouts** similar to Auuki for cycling training, but designed for rowing
+- Pre-built workout templates (pyramid intervals, steady state, etc.)
+- **Import workouts from intervals.icu** - integrate with your existing training plans
+- Real-time workout progress tracking with visual segment indicators
+- Target zones for pace, power, and heart rate
+- **Automatic pacing feedback** - visual indicators show when you're on/off target
+- **Dynamic speed adjustment** in 3D view based on workout intensity zones
+- Workout structure visualization with color-coded segments
+
 ### 🚣 Concept2 PM5 Bluetooth Integration
 - Connect directly to your Concept2 PM5 monitor via Web Bluetooth API
 - Uses the proven [pm5-base](https://github.com/ergarcade/pm5-base) library for robust PM5 protocol support
@@ -23,9 +33,11 @@ VirtualRow is a web-based fitness application that lets you row on virtual water
   - Heart rate (if available via ANT+)
   - Calories burned
 - Connection persists across route changes and UI navigation
+- **Adaptive workout control** - PM5 data used to track progress through structured workouts
 
 ### 📊 Workout Tracking
 - Record complete workout sessions linked to specific routes
+- Link sessions to structured workouts for detailed interval analysis
 - Automatic split tracking (every 500m)
 - Real-time performance graphs
 - Detailed workout history
@@ -36,6 +48,7 @@ VirtualRow is a web-based fitness application that lets you row on virtual water
 - Personal best tracking per route
 - Performance trends over time
 - Heart rate zones analysis
+- Workout compliance tracking (on/off target metrics)
 
 ## Getting Started
 
@@ -324,6 +337,68 @@ npm run start:sim
 
 Development note: This initial 3D experience is intentionally simple; you can replace the boat mesh with a more advanced model, add water shaders or post-processing, and tune the camera/physics for a more cinematic experience.
 
+## Using Structured Workouts
+
+VirtualRow now includes a powerful workout generator that lets you follow structured interval training programs, similar to Auuki for cycling but designed specifically for rowing.
+
+### Creating and Selecting Workouts
+
+1. **Navigate to the Workouts tab** - Click the "💪 Workouts" tab in the sidebar
+2. **Browse available workouts** - View pre-built workout templates including:
+   - Pyramid Intervals (warmup → intervals → cooldown)
+   - Steady State (consistent pace over distance)
+3. **Import from intervals.icu** - Click "Import from intervals.icu" to bring in your existing training plans:
+   - Enter your intervals.icu API key
+   - Provide your athlete ID
+   - Enter the workout ID you want to import
+4. **Select a workout** - Click on any workout card to select it for your next session
+
+### Starting a Structured Workout
+
+1. **Select a route** - Choose any water route from the Routes tab
+2. **Connect PM5** - Ensure your PM5 device is connected via Bluetooth
+3. **Start workout** - Click "Start Workout" (the selected structured workout will be automatically applied)
+4. **Follow the targets** - During your workout, you'll see:
+   - Current segment type (warmup, work, rest, cooldown)
+   - Target pace/power/heart rate zones
+   - Real-time feedback on whether you're on target
+   - Visual progress through the workout structure
+   - Color-coded intensity zones
+
+### Workout Progress Indicators
+
+During a structured workout, the app displays:
+- **Segment progress bar** - Shows completion of current interval
+- **Target compliance** - Green (✓ On Target) or Orange (↑/↓ Too Fast/Slow)
+- **Workout timeline** - Visual representation of all segments with current position
+- **Deviation percentage** - How far off target you are (if applicable)
+- **Segment targets** - Specific pace, power, and heart rate targets for each interval
+
+### intervals.icu Integration
+
+The intervals.icu integration allows you to:
+- Import structured workouts from your training plans
+- Use existing workout libraries
+- Maintain consistency between cycling/running/rowing training
+- Automatically parse workout steps with targets and intensities
+
+To get your intervals.icu API key:
+1. Log in to intervals.icu
+2. Go to Settings → API
+3. Generate a new API key
+4. Copy your Athlete ID from your profile
+
+### How PM5 Data Controls Workout Progress
+
+The app uses real-time PM5 data to:
+- **Track progress** through workout segments (time-based or distance-based)
+- **Evaluate compliance** with target metrics (pace, power, heart rate)
+- **Advance segments** automatically when targets are met
+- **Provide feedback** via visual indicators (on/off target)
+- **Adjust visualization** - 3D rowing speed reflects workout intensity zones
+
+This creates a dynamic, responsive training experience where the app adapts to your actual performance in real-time.
+
 ## Performance Metrics
 
 The app tracks:
@@ -340,15 +415,18 @@ The app tracks:
 
 ## Roadmap
 
+- [x] ~~Interval training programs~~ **COMPLETED** - Structured workout generator with intervals.icu integration
 - [ ] Multi-language support
 - [ ] Leaderboards and social features
-- [ ] Interval training programs
+- [ ] Enhanced intervals.icu integration (two-way sync, automatic workout scheduling)
 - [ ] ANT+ device support
-- [ ] Real-time audio guidance on routes
+- [ ] Real-time audio guidance on routes and workouts
 - [ ] Mobile app (React Native)
 - [ ] VR visualization support
 - [ ] Customizable route creation tools
 - [ ] Social workout sharing
+- [ ] Workout builder UI for creating custom interval workouts
+- [ ] TrainingPeaks integration
 
 ## Troubleshooting
 
