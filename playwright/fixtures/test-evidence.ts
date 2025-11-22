@@ -25,9 +25,8 @@ type TestFixtures = {
 
 export const test = base.extend<TestFixtures>({
   evidencePage: async ({ page }, use, testInfo) => {
-    // Capture initial page load
-    await page.goto(page.url());
-    await captureTestEvidence(page, testInfo, 'initial-page-load');
+    // Note: Initial page load screenshot is captured in the test itself
+    // after navigation to the actual test URL
     
     // Use the page
     await use(page);

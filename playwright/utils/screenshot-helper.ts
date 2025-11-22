@@ -101,10 +101,17 @@ export async function captureErrorEvidence(
       }
     }
 
+    // Generate unique overlay ID to avoid conflicts
+    const overlayId = `playwright-error-overlay-${Date.now()}`;
+    
     // Add error overlay to the page
-    await page.evaluate((desc) => {
+    await page.evaluate(({ desc, id }) => {
+      // Remove any existing error overlays first
+      const existingOverlays = document.querySelectorAll('[id^="playwright-error-overlay"]');
+      existingOverlays.forEach(overlay => overlay.remove());
+      
       const overlay = document.createElement('div');
-      overlay.id = 'playwright-error-overlay';
+      overlay.id = id;
       overlay.style.cssText = `
         position: fixed;
         top: 10px;
@@ -121,7 +128,7 @@ export async function captureErrorEvidence(
       `;
       overlay.textContent = `ERROR: ${desc}`;
       document.body.appendChild(overlay);
-    }, description);
+    }, { desc: description, id: overlayId });
 
     // Capture the screenshot
     const sanitizedDescription = description.replace(/[^a-z0-9]/gi, '-').toLowerCase();
@@ -134,12 +141,12 @@ export async function captureErrorEvidence(
     });
 
     // Clean up the overlay and highlight
-    await page.evaluate(() => {
-      const overlay = document.getElementById('playwright-error-overlay');
+    await page.evaluate((id) => {
+      const overlay = document.getElementById(id);
       if (overlay) {
         overlay.remove();
       }
-    });
+    }, overlayId);
 
     if (errorSelector) {
       const elementCount = await page.locator(errorSelector).count();
