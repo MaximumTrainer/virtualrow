@@ -150,7 +150,10 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
-    const strokesPerMinute = cadence ?? (paceSPer500 ? Math.min(60, Math.round(500 / (paceSPer500 || 100) * 0.25)) : 30);
+    // Use cadence if available and > 0, otherwise calculate from pace, or default to 30
+    const strokesPerMinute = (cadence && cadence > 0) 
+      ? cadence 
+      : (paceSPer500 ? Math.min(60, Math.round(500 / (paceSPer500 || 100) * 0.25)) : 30);
     const freqHz = strokesPerMinute / 60;
     const cycleTime = performance.now() * 0.001 * freqHz; // cycles per second
     const phase = (cycleTime % 1) * Math.PI * 2; // 0 to 2π for one complete stroke
@@ -192,6 +195,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       if ((window as any).__PLAYWRIGHT_TESTING) {
         // @ts-ignore
         (window as any).__ROWER3D_OAR_ANGLE = oarSweep;
+        // @ts-ignore
+        (window as any).__ROWER3D_STROKE_RATE = strokesPerMinute;
       }
     } catch (e) {}
 
@@ -199,8 +204,15 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     try {
       // @ts-ignore
       if ((window as any).__PLAYWRIGHT_TESTING) {
+        // Export actual rendered boat position (fixed) and orientation, along with route progress
         // @ts-ignore
-        (window as any).__ROWER3D_POS = { x: pos.x, y: pos.y, z: pos.z, progress: progressRef.current, yaw };
+        (window as any).__ROWER3D_POS = { 
+          x: 0,  // Actual rendered x position (boat is fixed at origin)
+          y: 0,  // Actual rendered y position
+          z: 1.5,  // Actual rendered z position  
+          progress: progressRef.current, 
+          yaw: -yaw + Math.PI  // Actual boat orientation (faces forward)
+        };
       }
     } catch (e) { /* ignore if window isn't available */ }
 

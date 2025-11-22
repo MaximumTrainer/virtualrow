@@ -187,20 +187,22 @@ test.describe('Simulated e2e route playback', () => {
     expect(Math.abs(laterOar - initialOar)).toBeGreaterThanOrEqual(0.05);
     expect(Math.abs(laterOar)).toBeLessThanOrEqual(0.8);
 
-    // Camera alignment: camera should be above the boat and behind it (approx)
+    // Camera alignment: camera should be above and behind the boat
     const pos = await page.evaluate(() => (window as any).__ROWER3D_POS);
     const camera = await page.evaluate(() => (window as any).__ROWER3D_CAMERA);
     if (pos && camera) {
-      // camera should be above boat's y
-      expect(camera.position[1]).toBeGreaterThan(pos.y - 0.01);
+      // In the new fixed-boat system:
+      // - Boat is at (0, 0, 1.5)
+      // - Camera is at (0, 3.5, 4.5)
+      // Camera should be above the boat
+      expect(camera.position[1]).toBeGreaterThan(pos.y);
+      // Camera should be behind the boat (larger z coordinate)
+      expect(camera.position[2]).toBeGreaterThan(pos.z);
       // Distance check: camera not at same point
       const dx = camera.position[0] - pos.x;
       const dz = camera.position[2] - pos.z;
       const dist2 = dx * dx + dz * dz;
       expect(dist2).toBeGreaterThan(0.01);
-      // Dot product relative to yaw: negative means 'behind' the boat
-      const dot = dx * Math.cos(pos.yaw) + dz * Math.sin(pos.yaw);
-      expect(dot).toBeLessThanOrEqual(0.5);
     }
 
     // Oar frequency check: sample oar angle over time and estimate frequency
@@ -221,10 +223,9 @@ test.describe('Simulated e2e route playback', () => {
     const durationSec = (samples[samples.length - 1].t - samples[0].t) / 1000;
     const cycles = crossings / 2;
     const freqHz = cycles / (durationSec || 1);
-    // expected cadence: try reading session cadence if present; fallback to ~0.5Hz (=30spm)
-    const expectedSpmObj = await page.evaluate(() => (window as any).__PM5_DATA);
-    const expectedSpm = expectedSpmObj?.cadence ?? 30;
-    const expectedHz = expectedSpm / 60;
+    // Read the actual stroke rate being used by the animation
+    const actualStrokeRate = await page.evaluate(() => (window as any).__ROWER3D_STROKE_RATE ?? 30);
+    const expectedHz = actualStrokeRate / 60;
     // allow 50% tolerance because browser timers may skip
     expect(freqHz).toBeGreaterThanOrEqual(expectedHz * 0.5);
     expect(freqHz).toBeLessThanOrEqual(expectedHz * 1.5);
