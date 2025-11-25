@@ -7,9 +7,9 @@ const VENICE_BBOX = { minLat: 45.435777, maxLat: 45.449551, minLng: 12.318319, m
 const HENLEY_BBOX = { minLat: 51.533121, maxLat: 51.560266, minLng: -0.901301, maxLng: -0.885381 };
 
 describe('RouteService basic data', () => {
-  it('provides Venice, Henley, Charles River, and Lake Bled routes with distance and coordinates', () => {
+  it('provides Venice, Henley, Charles River, Lake Bled, and River Thames routes with distance and coordinates', () => {
     const routes = routeService.getAllRoutes();
-    expect(routes.length).toBe(4);
+    expect(routes.length).toBe(5);
     
     // Venice route
     const venice = routes.find(r => r.id === '1');
@@ -34,6 +34,12 @@ describe('RouteService basic data', () => {
     expect(bled?.name).toBe('Lake Bled Circuit');
     expect(bled?.distance).toBeCloseTo(6.24, 1);
     expect(bled?.coordinates.length).toBeGreaterThan(1800); // Should have ~1830 coordinates from GPX
+    
+    // River Thames route
+    const thames = routes.find(r => r.id === '5');
+    expect(thames?.name).toBe('River Thames London');
+    expect(thames?.distance).toBeCloseTo(32.50, 1);
+    expect(thames?.coordinates.length).toBeGreaterThan(900); // Should have ~918 coordinates from GPX
   });
 
   it('ensures Venice route coordinates lie within Venice bounding box', () => {

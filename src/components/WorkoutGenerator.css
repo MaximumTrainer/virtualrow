@@ -185,6 +185,22 @@
   color: #666;
 }
 
+.workout-route-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 8px 0;
+}
+
+.workout-route-badge.flexible {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 .workout-source {
   font-size: 12px;
   color: #999;

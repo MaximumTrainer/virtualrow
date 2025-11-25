@@ -26,13 +26,13 @@ describe('HeartRateMonitor component', () => {
     act(() => (heartRateBluetoothService as any).emit('connected', {}));
 
     expect(await screen.findByText(/Connected/i)).toBeInTheDocument();
-    const dot = document.querySelector('.hr-status-dot');
-    expect(dot).toHaveClass('connected');
+    const statusElement = document.querySelector('.device-status');
+    expect(statusElement).toHaveClass('connected');
 
     // Emit disconnected
     act(() => (heartRateBluetoothService as any).emit('disconnected', {}));
     expect(await screen.findByText(/Disconnected/i)).toBeInTheDocument();
-    expect(dot).toHaveClass('disconnected');
+    expect(statusElement).toHaveClass('disconnected');
   });
 
   it('invokes onSample callback and updates metrics on heartRate event', async () => {
@@ -45,8 +45,10 @@ describe('HeartRateMonitor component', () => {
     expect(onSample).toHaveBeenCalled();
     expect(onSample.mock.calls[0][0]).toBe(84);
 
-    // Check UI updated
+    // Check UI updated - value and unit are now in separate divs
     expect(await screen.findByText(/Current/)).toBeInTheDocument();
-    expect(screen.getByText(/84 bpm/)).toBeInTheDocument();
+    expect(screen.getByText('84')).toBeInTheDocument();
+    const metricUnits = screen.getAllByText('bpm');
+    expect(metricUnits.length).toBeGreaterThan(0);
   });
 });

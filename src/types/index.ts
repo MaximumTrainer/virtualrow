@@ -144,6 +144,7 @@ export interface StructuredWorkout {
   createdAt: Date;
   source?: 'intervals.icu' | 'manual' | 'imported';
   externalId?: string; // For intervals.icu integration
+  routeId?: string; // Optional: specific route to use with this workout
 }
 
 // Individual segment/interval in a structured workout

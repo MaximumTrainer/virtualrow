@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
 import { workoutService } from '../services/workoutService';
+import './BluetoothDevice.css';
 
 interface HeartRateMonitorProps {
   onSample?: (bpm: number) => void;
@@ -52,25 +53,61 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample }) 
   };
 
   return (
-    <div className="hr-monitor-panel">
-      <h3 className="panel-title">Heart Rate</h3>
-      <div className="hr-status-row">
-        <span className={`hr-status-dot ${connected ? 'connected' : 'disconnected'}`}>●</span>
-        <span>{connected ? 'Connected' : 'Disconnected'}</span>
+    <div className="bluetooth-device-container">
+      <div className="device-header">
+        <div className="device-icon-container">
+          <svg
+            className={`device-icon ${connected ? 'connected' : 'disconnected'}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z" />
+          </svg>
+        </div>
+        <div className="device-info">
+          <h3 className="device-name">Heart Rate Monitor</h3>
+          <p className={`device-status ${connected ? 'connected' : 'disconnected'}`}>
+            {connected ? 'Connected' : 'Disconnected'}
+          </p>
+        </div>
       </div>
-      <div className="hr-metrics">
-        <div className="hr-metric"><span className="label">Current</span><span className="value">{current ?? '--'} bpm</span></div>
-        <div className="hr-metric"><span className="label">Avg</span><span className="value">{avg ?? '--'} bpm</span></div>
-        <div className="hr-metric"><span className="label">Max</span><span className="value">{max ?? '--'} bpm</span></div>
+
+      {error && (
+        <div className="error-message">
+          <span className="error-icon">⚠</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="metrics-grid">
+        <div className="metric">
+          <div className="metric-label">Current</div>
+          <div className="metric-value">{current ?? '--'}</div>
+          <div className="metric-unit">bpm</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Average</div>
+          <div className="metric-value">{avg ?? '--'}</div>
+          <div className="metric-unit">bpm</div>
+        </div>
+        <div className="metric">
+          <div className="metric-label">Max</div>
+          <div className="metric-value">{max ?? '--'}</div>
+          <div className="metric-unit">bpm</div>
+        </div>
       </div>
-      <div className="hr-actions">
+
+      <div className="device-actions">
         {!connected ? (
-          <button className="btn" onClick={connect}>Connect HR Monitor</button>
+          <button className="btn btn-connect" onClick={connect}>Connect HR Monitor</button>
         ) : (
-          <button className="btn" onClick={disconnect}>Disconnect</button>
+          <button className="btn btn-disconnect" onClick={disconnect}>Disconnect</button>
         )}
       </div>
-      {error && <div className="error-msg">{error}</div>}
     </div>
   );
 };

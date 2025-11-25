@@ -1,24 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
-import { WorkoutGenerator } from './components/WorkoutGenerator';
-import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
-import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import Rower3D from './components/Rower3D';
-import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
+import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import './App.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history' | 'workouts'>('routes');
+  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
-  const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
   const [currentSession, setCurrentSession] = useState<WorkoutSession | null>(null);
-  const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
   const [pm5Connected, setPM5Connected] = useState(false);
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
@@ -76,18 +71,11 @@ function App() {
 
     const session = workoutService.startSession(
       selectedRoute.id, 
-      selectedRoute.name,
-      selectedWorkout?.id
+      selectedRoute.name
     );
     setCurrentSession(session);
     setIsWorkoutActive(true);
     setCurrentView('workout');
-
-    // Start structured workout if selected
-    if (selectedWorkout) {
-      const progress = workoutGeneratorService.startWorkout(selectedWorkout.id);
-      setWorkoutProgress(progress);
-    }
   };
 
   const handleEndWorkout = () => {
@@ -95,10 +83,8 @@ function App() {
     if (completed) {
       setWorkoutHistory(workoutService.getAllSessions());
     }
-    workoutGeneratorService.endWorkout();
     setIsWorkoutActive(false);
     setCurrentSession(null);
-    setWorkoutProgress(null);
     setCurrentView('history');
   };
 
@@ -107,15 +93,6 @@ function App() {
     if (isWorkoutActive && currentSession) {
       workoutService.updateSessionWithPM5Data(data);
       
-      // Update structured workout progress
-      if (selectedWorkout) {
-        const progress = workoutGeneratorService.updateProgress(data);
-        if (progress) {
-          setWorkoutProgress(progress);
-          workoutService.updateWorkoutProgress(progress);
-        }
-      }
-      
       // If PM5 gives HR, ensure samples state updates from session source
       if (data.heartRate) {
         const updated = workoutService.getCurrentSession();
@@ -123,7 +100,7 @@ function App() {
       }
       setCurrentSession({ ...currentSession });
     }
-  }, [isWorkoutActive, currentSession, selectedWorkout]);
+  }, [isWorkoutActive, currentSession]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
@@ -169,12 +146,6 @@ function App() {
               onClick={() => setCurrentView('routes')}
             >
               <span className="tab-icon">🗺️</span> Routes
-            </button>
-            <button
-              className={`nav-tab ${currentView === 'workouts' ? 'active' : ''}`}
-              onClick={() => setCurrentView('workouts')}
-            >
-              <span className="tab-icon">💪</span> Workouts
             </button>
             <button
               className={`nav-tab ${currentView === 'workout' ? 'active' : ''}`}
@@ -289,13 +260,6 @@ function App() {
                   {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
                 </button>
 
-                {selectedWorkout && (
-                  <div className="selected-workout-info">
-                    <h4>Selected Workout:</h4>
-                    <p>{selectedWorkout.name}</p>
-                  </div>
-                )}
-
                 <div className="routes-list">
                   <h3>Other Routes</h3>
                   {routes.map((route) => (
@@ -323,27 +287,8 @@ function App() {
             </div>
           )}
 
-          {currentView === 'workouts' && (
-            <div className="view-container">
-              <WorkoutGenerator
-                onSelectWorkout={setSelectedWorkout}
-                selectedWorkout={selectedWorkout}
-              />
-            </div>
-          )}
-
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div className="view-container workout-view-fullscreen">
-              {/* Show workout progress if structured workout is active */}
-              {workoutProgress && selectedWorkout && (
-                <div className="workout-progress-overlay">
-                  <WorkoutProgressDisplay
-                    progress={workoutProgress}
-                    allSegments={workoutGeneratorService.expandSegments(selectedWorkout.segments)}
-                  />
-                </div>
-              )}
-              
               {/* Fullscreen 3D scene with overlays */}
               <div className="fullscreen-3d-container">
                 <Rower3D 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gpx xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
  <trk>
-  <name>EXR | Aerobic Capacity 4 in Race Of The Charles, Boston</name>
+  <name>Charles River Boston</name>
   <type>Rowing</type>
   <trkseg>
    <trkpt lat="42.3528990" lon="-71.1103980">

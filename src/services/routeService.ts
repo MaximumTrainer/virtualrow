@@ -3,6 +3,7 @@ import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
 // Import coordinate arrays from parsed GPX files
 import { charlesRiverCoordinates } from '../../scripts/charlesriver-coords';
 import { lakeBledCoordinates } from '../../scripts/lakebled-coords';
+import { riverThamesCoordinates } from '../../scripts/riverthames-coords';
 
 // Venice route coordinates parsed from GPX file
 const veniceCoordinates: Coordinate[] = [
@@ -23,7 +24,7 @@ export class RouteService {
   }
 
   private initializeMockRoutes(): void {
-    // Venice, Henley, Charles River, and Lake Bled routes from GPX data
+    // Venice, Henley, Charles River, Lake Bled, and River Thames routes from GPX data
     this.routes = [
       {
         id: '1',
@@ -76,6 +77,19 @@ export class RouteService {
         estimatedTime: Math.round((6.24 / 3.5) * 60), // ~107 minutes at average pace
         tags: ['lake', 'scenic', 'alpine', 'slovenia', 'europe', 'mountain', 'castle', 'competition', 'gpx-imported'],
         createdAt: new Date('2024-08-18'),
+      },
+      {
+        id: '5',
+        name: 'River Thames London',
+        description: 'Epic rowing journey through the heart of London along the River Thames. Experience iconic landmarks from Putney to Greenwich, passing Westminster, Tower Bridge, and the Thames Barrier.',
+        distance: 32.50, // Calculated from GPX data
+        difficulty: 'hard',
+        location: 'London, UK',
+        coordinates: riverThamesCoordinates,
+        elevationGain: 0, // River route
+        estimatedTime: Math.round((32.50 / 3.5) * 60), // ~557 minutes at average pace
+        tags: ['river', 'urban', 'london', 'uk', 'thames', 'landmarks', 'long-distance', 'gpx-imported'],
+        createdAt: new Date('2024-08-19'),
       },
     ];
   }

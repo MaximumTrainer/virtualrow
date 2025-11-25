@@ -152,6 +152,16 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
                 )}
                 <span>Segments: {workout.segments.length}</span>
               </div>
+              {workout.routeId && (
+                <div className="workout-route-badge">
+                  📍 {workout.routeId === '1' ? 'Venice' : workout.routeId === '2' ? 'Henley' : `Route ${workout.routeId}`}
+                </div>
+              )}
+              {!workout.routeId && (
+                <div className="workout-route-badge flexible">
+                  🗺️ Any Route / No Route
+                </div>
+              )}
               {workout.source && (
                 <span className="workout-source">Source: {workout.source}</span>
               )}

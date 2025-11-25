@@ -5,15 +5,6 @@
   xmlns:rgt="http://www.rgtcycling.com/XML/GpxExtensions/v1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1
   http://www.topografix.com/GPX/1/1/gpx.xsd">
-  <metadata>
-    <name>Smoothed with GPXmagic</name>
-    <author>
-      <link href="https://www.stepwiserefinement.co.uk">
-        <text>GPXmagic v3</text>
-        <type>text/html</type>
-      </link>
-    </author>
-  </metadata>
 <trk>  <name>Henley&#32;Rowing&#32;</name>
 <trkseg>
 <trkpt lat="51.533121097427276" lon="-0.8969430470461178"><ele>32.26277160644531</ele></trkpt>
