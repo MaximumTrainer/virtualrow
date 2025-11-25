@@ -53,17 +53,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   const overlayLayersRef = useRef<L.Layer[]>([]);
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const [mapInitialized, setMapInitialized] = useState(false);
-  // DEV/debug states
-  const [debugVisible, setDebugVisible] = useState(false);
-  const [tileStats, setTileStats] = useState({ loaded: 0, errors: 0, serverLabel: 'OpenStreetMap' });
   const tileErrorCountRef = useRef(0);
-  const tileLoadCountRef = useRef(0);
-  const tileServers = [
-    { key: 'osm', label: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
-    { key: 'osm-de', label: 'OpenStreetMap DE', url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png' },
-    { key: 'opentopo', label: 'OpenTopoMap', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png' },
-    { key: 'stamen', label: 'Stamen Terrain', url: 'https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg' },
-  ];
 
   // Initialize map on mount
   useEffect(() => {
@@ -96,13 +86,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   baseTileLayer.setZIndex(0);
     // Debug tile loading issues
     let fallbackTileServerUsed = false;
-    const onTileLoad = () => {
-      tileLoadCountRef.current++;
-      setTileStats((t) => ({ ...t, loaded: t.loaded + 1 }));
-    };
     const onTileError = () => {
       tileErrorCountRef.current++;
-      setTileStats((t) => ({ ...t, errors: t.errors + 1 }));
       if (import.meta.env.DEV) {
         console.warn('Leaflet tileerror count', tileErrorCountRef.current);
       }
@@ -112,14 +97,12 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         try {
           baseTileLayer.setUrl('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png');
           baseTileLayer.redraw();
-          setTileStats((t) => ({ ...t, serverLabel: 'OpenStreetMap DE' }));
           if (import.meta.env.DEV) console.warn('Switched to fallback OSM tile server');
         } catch (err) {
           if (import.meta.env.DEV) console.error('Fallback tile server switch failed', err);
         }
       }
     };
-    baseTileLayer.on('tileload', onTileLoad);
     baseTileLayer.on('tileerror', onTileError);
   baseTileLayerRef.current = baseTileLayer;
   // store reference in DOM element using dataset for safety if needed later
@@ -183,7 +166,6 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       }
       // remove tile events from the base layer
       try {
-        baseTileLayer.off('tileload', onTileLoad);
         baseTileLayer.off('tileerror', onTileError);
       } catch (e) {
         // ignore
@@ -263,38 +245,6 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   return (
     <div className={`route-map-container ${highlightMode ? 'highlight-mode' : ''}`}>
       <div ref={containerRef} className="route-map" />
-      {/* dev-only debug panel */}
-      {import.meta.env.DEV && (
-        <button className="dev-debug-toggle" onClick={() => setDebugVisible((v) => !v)} aria-label="Toggle map debug panel">🐞</button>
-      )}
-      {import.meta.env.DEV && debugVisible && (
-        <div className="dev-debug-panel" role="region" aria-label="Map Debug Panel">
-          <div className="dev-debug-row">
-            <strong>Tiles</strong>
-            <span>Loaded: {tileStats.loaded}</span>
-            <span>Errors: {tileStats.errors}</span>
-          </div>
-          <div className="dev-debug-row">
-            <strong>Tile Server</strong>
-            <span>{tileStats.serverLabel}</span>
-            <button className="btn" onClick={() => {
-              baseTileLayerRef.current?.redraw();
-            }}>Redraw</button>
-            <button className="btn" onClick={() => setTileStats({ loaded: 0, errors: 0, serverLabel: tileStats.serverLabel })}>Reset</button>
-          </div>
-          <div className="dev-debug-row tile-switch-row">
-            {tileServers.map((s) => (
-              <button key={s.key} className="btn btn-primary" onClick={() => {
-                if (baseTileLayerRef.current) {
-                  baseTileLayerRef.current.setUrl(s.url);
-                  baseTileLayerRef.current.redraw();
-                  setTileStats((t) => ({ ...t, serverLabel: s.label }));
-                }
-              }}>{s.label}</button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="route-info-overlay">
         <div className="route-info-card">
