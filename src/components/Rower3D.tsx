@@ -51,6 +51,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   const progressRef = useRef<number>(0);
   const posRef = useRef<Vector3>(new Vector3(0, 0, 0));
   const yawRef = useRef<number>(0);
+  const distanceTraveledRef = useRef<number>(0); // Track distance for scenery scrolling
   
   // Scenery refs - these need to be updated in useFrame to move with the world
   const waterRef = useRef<Mesh | null>(null);
@@ -115,6 +116,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
     if (isPlaying && speedMps > 0) {
       progressRef.current = Math.min(1, progressRef.current + progressPerSecond * delta);
+      // Track actual distance traveled for scenery scrolling (scaled for visual effect)
+      distanceTraveledRef.current += speedMps * delta * 0.01; // Scale factor for visual movement
     } else {
       // if not playing, smoothly follow targetProgress using damping
       progressRef.current += (targetProgress - progressRef.current) * Math.min(1, delta * 5);
@@ -124,17 +127,17 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     const pos = curve.getPointAt(progressRef.current);
     const tangent = curve.getTangentAt(progressRef.current).normalize();
     
-    // Compute orientation from tangent (boat yaw)
+    // Compute orientation from tangent (for world movement direction)
     const yaw = Math.atan2(tangent.z, tangent.x);
     
     // Store in refs for use in render
     posRef.current.copy(pos);
     yawRef.current = yaw;
     
-    // Keep boat stationary at a fixed position (upper portion of screen)
-    // The boat stays at origin, rotated to face forward
+    // Keep boat stationary at a fixed position and orientation
+    // The boat always faces forward (toward camera), the world moves around it
     boatRef.current.position.set(0, 0, 1.5); // Position boat forward/up in view
-    boatRef.current.rotation.set(0, -yaw + Math.PI, 0); // Face forward along route
+    boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
 
     // Fixed camera position - behind and above the boat, looking forward
     // This creates the illusion that the boat is moving forward while the world moves back
@@ -237,15 +240,17 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       }
     } catch (e) {}
     
-    // Update scenery position to move with the world (creates illusion boat is moving)
+    // Update scenery position to move backward (creates illusion boat is moving forward)
+    // Scenery scrolls in the -Z direction as the boat "moves forward"
+    const scrollZ = distanceTraveledRef.current;
     if (waterRef.current) {
-      waterRef.current.position.set(-posRef.current.x, -0.05, -posRef.current.z);
+      waterRef.current.position.set(0, -0.05, -scrollZ);
     }
     if (riverSceneryRef.current) {
-      riverSceneryRef.current.position.set(-posRef.current.x, 0, -posRef.current.z);
+      riverSceneryRef.current.position.set(0, 0, -scrollZ);
     }
     if (lakeSceneryRef.current) {
-      lakeSceneryRef.current.position.set(-posRef.current.x, 0, -posRef.current.z);
+      lakeSceneryRef.current.position.set(0, 0, -scrollZ);
     }
   });
 
