@@ -41,56 +41,6 @@
   max-width: 300px;
 }
 
-/* Dev debug panel */
-.dev-debug-panel {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 110;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 8px;
-  padding: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 220px;
-}
-
-.dev-debug-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.dev-debug-panel .tile-switch-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.dev-debug-toggle {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 120;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-.dev-debug-toggle:hover {
-  transform: translateY(-1px);
-}
-
 .route-info-card {
   background: white;
   border-radius: 8px;
