@@ -1,7 +1,6 @@
-import React, { useRef, useMemo, useEffect, Suspense } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { CatmullRomCurve3, Vector3, Mesh } from 'three';
-import { Line, useGLTF } from '@react-three/drei';
+import { CatmullRomCurve3, Vector3, Mesh, Group } from 'three';
 import { useThree } from '@react-three/fiber';
 import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
@@ -47,11 +46,16 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
           
   const boatRef = useRef<Mesh | null>(null);
-  const leftOarRef = useRef<Mesh | null>(null);
-  const rightOarRef = useRef<Mesh | null>(null);
+  const leftOarRef = useRef<Group | null>(null);
+  const rightOarRef = useRef<Group | null>(null);
   const progressRef = useRef<number>(0);
   const posRef = useRef<Vector3>(new Vector3(0, 0, 0));
   const yawRef = useRef<number>(0);
+  
+  // Scenery refs - these need to be updated in useFrame to move with the world
+  const waterRef = useRef<Mesh | null>(null);
+  const riverSceneryRef = useRef<Group | null>(null);
+  const lakeSceneryRef = useRef<Group | null>(null);
 
   const { camera, gl } = useThree();
   // dynamic pixel ratio and simple performance adaptation
@@ -100,17 +104,6 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     };
   }, [gl]);
 
-  // GLTF boat loader: optional. We'll try to load `public/models/boat.glb` in high perf.
-  // Render GLTF model component separately to avoid conditional hook usage
-  const GLTFBoat: React.FC = () => {
-    let model: any | null = null;
-    try {
-      model = useGLTF('/models/boat.glb');
-    } catch (e) {
-      model = null;
-    }
-    return model && model.scene ? <primitive object={model.scene} /> : null;
-  };
   useFrame((_, delta: number) => {
     if (!curve || !boatRef.current) return;
     // compute effective speed using pace if given; pace is seconds/500m -> m/s = 500/pace
@@ -174,19 +167,22 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     let oarSweep;
     if (phase < Math.PI * 0.4) {
       // Drive phase (faster, more power) - 40% of cycle
-      oarSweep = Math.cos(phase / 0.4 * Math.PI / 2) * 1.0 - 0.5; // 0.5 to -0.5 radians
+      oarSweep = Math.cos(phase / 0.4 * Math.PI / 2) * 0.6 - 0.3; // sweep forward/back
     } else {
       // Recovery phase (slower return) - 60% of cycle
       const recoveryPhase = (phase - Math.PI * 0.4) / (Math.PI * 1.6);
-      oarSweep = -0.5 + recoveryPhase * 1.0; // -0.5 back to 0.5
+      oarSweep = -0.3 + recoveryPhase * 0.6; // return to start
     }
     
-    // Left oar rotates opposite to right (sculling)
+    // Left and right oars rotate around Y-axis for forward/back sweep motion
+    // Blade feather rotates around Z-axis
     if (leftOarRef.current) {
-      leftOarRef.current.rotation.set(bladeFeather, 0, oarSweep);
+      // Left oar: rotate around Y for sweep, Z for feather
+      leftOarRef.current.rotation.set(0, oarSweep, bladeFeather);
     }
     if (rightOarRef.current) {
-      rightOarRef.current.rotation.set(-bladeFeather, 0, -oarSweep);
+      // Right oar: opposite Y rotation for symmetric sculling motion
+      rightOarRef.current.rotation.set(0, -oarSweep, -bladeFeather);
     }
 
     // Expose oar angle for e2e testing
@@ -240,76 +236,382 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         (window as any).__ROWER3D_CAMERA = { position: camera.position.toArray(), rotation: camera.rotation.toArray() };
       }
     } catch (e) {}
+    
+    // Update scenery position to move with the world (creates illusion boat is moving)
+    if (waterRef.current) {
+      waterRef.current.position.set(-posRef.current.x, -0.05, -posRef.current.z);
+    }
+    if (riverSceneryRef.current) {
+      riverSceneryRef.current.position.set(-posRef.current.x, 0, -posRef.current.z);
+    }
+    if (lakeSceneryRef.current) {
+      lakeSceneryRef.current.position.set(-posRef.current.x, 0, -posRef.current.z);
+    }
   });
+
+  // Determine route type for scenery - memoize to ensure consistent detection
+  const isLakeRoute = useMemo(() => {
+    return route.tags?.includes('lake') || route.tags?.includes('alpine') || false;
+  }, [route.tags]);
+  
+  const isRiverRoute = useMemo(() => {
+    return route.tags?.includes('river') || route.tags?.includes('canal') || false;
+  }, [route.tags]);
+
+  // Generate tree positions for river/canal routes - use seeded positions for consistency
+  const treePositions = useMemo(() => {
+    if (!isRiverRoute) return [];
+    const trees: Array<{ x: number; z: number; scale: number; side: 'left' | 'right' }> = [];
+    // Create trees along both banks with deterministic positions
+    let seed = 12345;
+    const seededRandom = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed / 0x7fffffff);
+    };
+    for (let z = -100; z < 100; z += 5) {
+      // Left bank trees
+      trees.push({
+        x: -8 - seededRandom() * 15,
+        z: z + seededRandom() * 2,
+        scale: 0.7 + seededRandom() * 0.6,
+        side: 'left'
+      });
+      // Right bank trees
+      trees.push({
+        x: 8 + seededRandom() * 15,
+        z: z + seededRandom() * 2,
+        scale: 0.7 + seededRandom() * 0.6,
+        side: 'right'
+      });
+    }
+    return trees;
+  }, [isRiverRoute]);
+
+  // Generate mountain positions for lake routes
+  const mountainPositions = useMemo(() => {
+    if (!isLakeRoute) return [];
+    const mountains: Array<{ x: number; z: number; scaleX: number; scaleY: number; rotation: number }> = [];
+    // Create mountains around the lake with deterministic positions
+    let seed = 54321;
+    const seededRandom = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed / 0x7fffffff);
+    };
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 6) {
+      const distance = 80 + seededRandom() * 40;
+      mountains.push({
+        x: Math.cos(angle) * distance,
+        z: Math.sin(angle) * distance,
+        scaleX: 15 + seededRandom() * 20,
+        scaleY: 8 + seededRandom() * 15,
+        rotation: angle + seededRandom() * 0.3
+      });
+    }
+    return mountains;
+  }, [isLakeRoute]);
 
   return (
     <>
       {/* ambient light */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.6} />
+      <ambientLight intensity={isLakeRoute ? 0.7 : 0.6} />
+      <directionalLight position={[5, 5, 5]} intensity={isLakeRoute ? 0.8 : 0.6} />
+      
+      {/* Sky color based on route type */}
+      {isLakeRoute && (
+        <mesh position={[0, 50, 0]}>
+          <sphereGeometry args={[200, 16, 16]} />
+          <meshBasicMaterial color={'#87CEEB'} side={2} />
+        </mesh>
+      )}
+      
       {/* water plane - moves backward with route to create illusion of movement */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-posRef.current.x, -0.05, -posRef.current.z]}>
+      <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
         <planeGeometry args={[500, 500, 8, 8]} />
-        <meshStandardMaterial color={'#a7f3d0'} metalness={0.1} roughness={0.8} />
+        <meshStandardMaterial 
+          color={isLakeRoute ? '#3b82c4' : '#4a9eda'} 
+          metalness={isLakeRoute ? 0.3 : 0.2} 
+          roughness={isLakeRoute ? 0.4 : 0.6} 
+        />
       </mesh>
 
-      {/* Route line - moves backward to create illusion of forward movement */}
-      {curve && (
-        <group position={[-posRef.current.x, -posRef.current.y, -posRef.current.z]} rotation={[0, yawRef.current - Math.PI, 0]}>
-          <Line points={curve.getPoints(200)} color={'#eab308'} lineWidth={3} />
+      {/* RIVER SCENERY - grass banks and trees */}
+      {isRiverRoute && (
+        <group ref={riverSceneryRef}>
+          {/* Left grass bank */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[-15, 0.01, 0]}
+          >
+            <planeGeometry args={[25, 500]} />
+            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+          </mesh>
+          {/* Right grass bank */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[15, 0.01, 0]}
+          >
+            <planeGeometry args={[25, 500]} />
+            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+          </mesh>
+          {/* Left bank edge (darker grass) */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[-4, 0.02, 0]}
+          >
+            <planeGeometry args={[3, 500]} />
+            <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+          </mesh>
+          {/* Right bank edge (darker grass) */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[4, 0.02, 0]}
+          >
+            <planeGeometry args={[3, 500]} />
+            <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+          </mesh>
+          
+          {/* Trees along the banks */}
+          {treePositions.map((tree, idx) => (
+            <group 
+              key={idx} 
+              position={[tree.x, 0, tree.z]}
+            >
+              {/* Tree trunk */}
+              <mesh position={[0, tree.scale * 1.2, 0]}>
+                <cylinderGeometry args={[0.15 * tree.scale, 0.25 * tree.scale, tree.scale * 2.4, 8]} />
+                <meshStandardMaterial color={'#8B4513'} roughness={0.9} />
+              </mesh>
+              {/* Tree foliage - layered cones for pine tree look */}
+              <mesh position={[0, tree.scale * 2.8, 0]}>
+                <coneGeometry args={[tree.scale * 1.5, tree.scale * 2.5, 8]} />
+                <meshStandardMaterial color={'#228B22'} roughness={0.8} />
+              </mesh>
+              <mesh position={[0, tree.scale * 3.8, 0]}>
+                <coneGeometry args={[tree.scale * 1.2, tree.scale * 2, 8]} />
+                <meshStandardMaterial color={'#2d8f2d'} roughness={0.8} />
+              </mesh>
+              <mesh position={[0, tree.scale * 4.6, 0]}>
+                <coneGeometry args={[tree.scale * 0.8, tree.scale * 1.5, 8]} />
+                <meshStandardMaterial color={'#32a032'} roughness={0.8} />
+              </mesh>
+            </group>
+          ))}
         </group>
       )}
 
+      {/* LAKE SCENERY - mountains around the lake */}
+      {isLakeRoute && (
+        <group ref={lakeSceneryRef}>
+          {/* Distant shore all around */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[0, -0.02, 0]}
+          >
+            <ringGeometry args={[60, 200, 32]} />
+            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+          </mesh>
+          
+          {/* Mountains around the lake */}
+          {mountainPositions.map((mtn, idx) => (
+            <group key={idx} position={[mtn.x, 0, mtn.z]} rotation={[0, mtn.rotation, 0]}>
+              {/* Main mountain peak */}
+              <mesh position={[0, mtn.scaleY / 2, 0]}>
+                <coneGeometry args={[mtn.scaleX, mtn.scaleY, 8]} />
+                <meshStandardMaterial color={'#6b7280'} roughness={0.9} />
+              </mesh>
+              {/* Snow cap */}
+              <mesh position={[0, mtn.scaleY * 0.75, 0]}>
+                <coneGeometry args={[mtn.scaleX * 0.4, mtn.scaleY * 0.35, 8]} />
+                <meshStandardMaterial color={'#f8fafc'} roughness={0.7} />
+              </mesh>
+              {/* Secondary peak */}
+              <mesh position={[mtn.scaleX * 0.5, mtn.scaleY * 0.3, mtn.scaleX * 0.2]}>
+                <coneGeometry args={[mtn.scaleX * 0.6, mtn.scaleY * 0.6, 6]} />
+                <meshStandardMaterial color={'#4b5563'} roughness={0.9} />
+              </mesh>
+              {/* Tree line at base */}
+              <mesh position={[0, 1.5, 0]}>
+                <cylinderGeometry args={[mtn.scaleX * 0.8, mtn.scaleX * 1.1, 3, 16]} />
+                <meshStandardMaterial color={'#166534'} roughness={0.9} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      )}
+
+      {/* Route line removed - now shown in top-right map overlay */}
+
       {/* boat + oars */}
       <group ref={boatRef} position={[0, 0, 0]}>
-        {/* Attempt to render a glTF model if present (in Suspense) else fallback to procedural scull */}
-        {performanceMode !== 'low' ? (
-          <Suspense fallback={null}>
-            <GLTFBoat />
-          </Suspense>
-        ) : (
-          <>
-            {/* Procedural racing scull hull - narrow yellow boat */}
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.2, 0.1, 2.8]} />
-              <meshStandardMaterial color={'#f5d742'} metalness={0.3} roughness={0.5} />
-            </mesh>
-            {/* Rower figure - red torso */}
-            <mesh position={[0, 0.3, 0]}>
-              <boxGeometry args={[0.24, 0.4, 0.3]} />
-              <meshStandardMaterial color={'#cc3311'} />
-            </mesh>
-            {/* Rower head */}
-            <mesh position={[0, 0.6, 0.05]}>
-              <boxGeometry args={[0.16, 0.2, 0.1]} />
-              <meshStandardMaterial color={'#cc3311'} />
-            </mesh>
-          </>
-        )}
-        {/* left oar pivot - positioned to side of boat */}
-        <group position={[-0.35, 0.1, 0]}>
-          <mesh ref={leftOarRef} position={[0, 0.1, 0.6]}>
-            {/* Long oar shaft with blade */}
-            <boxGeometry args={[0.04, 0.03, 1.5]} />
-            <meshStandardMaterial color={'#4a3520'} />
+        {/* Racing scull hull - sleek narrow boat shape */}
+        {/* Main hull body */}
+        <mesh position={[0, 0.02, 0]}>
+          <boxGeometry args={[0.32, 0.08, 4.0]} />
+          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
+        </mesh>
+        {/* Hull bottom curve simulation - center keel */}
+        <mesh position={[0, -0.02, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.18, 0.18, 3.8]} />
+          <meshStandardMaterial color={'#e8b732'} metalness={0.4} roughness={0.3} />
+        </mesh>
+        {/* Bow (front) - pointed */}
+        <mesh position={[0, 0.01, -2.1]} scale={[0.6, 0.5, 1]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.18, 0.6, 8]} />
+          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
+        </mesh>
+        {/* Stern (back) - tapered */}
+        <mesh position={[0, 0.01, 2.0]} scale={[0.5, 0.4, 0.8]} rotation={[-Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.2, 0.5, 8]} />
+          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
+        </mesh>
+        {/* Gunwales (side rails) - left */}
+        <mesh position={[-0.15, 0.08, 0]}>
+          <boxGeometry args={[0.03, 0.04, 3.6]} />
+          <meshStandardMaterial color={'#d4a832'} metalness={0.3} roughness={0.4} />
+        </mesh>
+        {/* Gunwales (side rails) - right */}
+        <mesh position={[0.15, 0.08, 0]}>
+          <boxGeometry args={[0.03, 0.04, 3.6]} />
+          <meshStandardMaterial color={'#d4a832'} metalness={0.3} roughness={0.4} />
+        </mesh>
+        {/* Seat (sliding) */}
+        <mesh position={[0, 0.12, 0.15]}>
+          <boxGeometry args={[0.28, 0.03, 0.25]} />
+          <meshStandardMaterial color={'#2a2a2a'} metalness={0.2} roughness={0.6} />
+        </mesh>
+        {/* Foot stretcher */}
+        <mesh position={[0, 0.06, -0.5]} rotation={[0.3, 0, 0]}>
+          <boxGeometry args={[0.26, 0.02, 0.18]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+        
+        {/* ROWER - more realistic human figure */}
+        {/* Pelvis/hips */}
+        <mesh position={[0, 0.18, 0.15]}>
+          <boxGeometry args={[0.28, 0.12, 0.2]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+        {/* Torso/chest */}
+        <mesh position={[0, 0.38, 0.1]}>
+          <boxGeometry args={[0.32, 0.28, 0.18]} />
+          <meshStandardMaterial color={'#2563eb'} />
+        </mesh>
+        {/* Shoulders */}
+        <mesh position={[0, 0.52, 0.08]}>
+          <boxGeometry args={[0.42, 0.1, 0.14]} />
+          <meshStandardMaterial color={'#2563eb'} />
+        </mesh>
+        {/* Neck */}
+        <mesh position={[0, 0.6, 0.08]}>
+          <cylinderGeometry args={[0.05, 0.06, 0.08, 12]} />
+          <meshStandardMaterial color={'#d4a574'} />
+        </mesh>
+        {/* Head */}
+        <mesh position={[0, 0.72, 0.08]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
+          <meshStandardMaterial color={'#d4a574'} />
+        </mesh>
+        {/* Hair/cap */}
+        <mesh position={[0, 0.78, 0.06]}>
+          <sphereGeometry args={[0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color={'#2a1a0a'} />
+        </mesh>
+        {/* Left upper arm */}
+        <mesh position={[-0.26, 0.48, 0.08]} rotation={[0, 0, 0.4]}>
+          <capsuleGeometry args={[0.04, 0.18, 8, 12]} />
+          <meshStandardMaterial color={'#2563eb'} />
+        </mesh>
+        {/* Right upper arm */}
+        <mesh position={[0.26, 0.48, 0.08]} rotation={[0, 0, -0.4]}>
+          <capsuleGeometry args={[0.04, 0.18, 8, 12]} />
+          <meshStandardMaterial color={'#2563eb'} />
+        </mesh>
+        {/* Left forearm */}
+        <mesh position={[-0.38, 0.38, 0.05]} rotation={[0, 0, 0.8]}>
+          <capsuleGeometry args={[0.035, 0.16, 8, 12]} />
+          <meshStandardMaterial color={'#d4a574'} />
+        </mesh>
+        {/* Right forearm */}
+        <mesh position={[0.38, 0.38, 0.05]} rotation={[0, 0, -0.8]}>
+          <capsuleGeometry args={[0.035, 0.16, 8, 12]} />
+          <meshStandardMaterial color={'#d4a574'} />
+        </mesh>
+        {/* Left thigh */}
+        <mesh position={[-0.1, 0.14, -0.1]} rotation={[1.2, 0, 0]}>
+          <capsuleGeometry args={[0.055, 0.28, 8, 12]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+        {/* Right thigh */}
+        <mesh position={[0.1, 0.14, -0.1]} rotation={[1.2, 0, 0]}>
+          <capsuleGeometry args={[0.055, 0.28, 8, 12]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+        {/* Left shin */}
+        <mesh position={[-0.1, 0.08, -0.38]} rotation={[0.3, 0, 0]}>
+          <capsuleGeometry args={[0.04, 0.24, 8, 12]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+        {/* Right shin */}
+        <mesh position={[0.1, 0.08, -0.38]} rotation={[0.3, 0, 0]}>
+          <capsuleGeometry args={[0.04, 0.24, 8, 12]} />
+          <meshStandardMaterial color={'#1a1a1a'} />
+        </mesh>
+
+        {/* LEFT OAR - realistic sculling oar */}
+        <group ref={leftOarRef} position={[-0.18, 0.12, 0.05]}>
+          {/* Oarlock/rigger attachment */}
+          <mesh position={[-0.08, 0.04, 0]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.06, 8]} />
+            <meshStandardMaterial color={'#666666'} metalness={0.8} roughness={0.2} />
           </mesh>
-          {/* Oar blade */}
-          <mesh ref={leftOarRef} position={[0, 0.1, 1.2]}>
-            <boxGeometry args={[0.16, 0.05, 0.35]} />
-            <meshStandardMaterial color={'#4a3520'} />
+          {/* Oar handle (inboard) */}
+          <mesh position={[0.15, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.022, 0.018, 0.4, 12]} />
+            <meshStandardMaterial color={'#8B4513'} roughness={0.7} />
+          </mesh>
+          {/* Oar shaft (outboard) */}
+          <mesh position={[-0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.018, 0.022, 1.4, 12]} />
+            <meshStandardMaterial color={'#654321'} roughness={0.5} />
+          </mesh>
+          {/* Oar blade - hatchet shape */}
+          <mesh position={[-1.5, 0, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.5, 0.015, 0.16]} />
+            <meshStandardMaterial color={'#1e40af'} metalness={0.1} roughness={0.3} />
+          </mesh>
+          {/* Blade spine */}
+          <mesh position={[-1.5, 0.012, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.48, 0.015, 0.03]} />
+            <meshStandardMaterial color={'#1e3a8a'} />
           </mesh>
         </group>
-        {/* right oar pivot - positioned to side of boat */}
-        <group position={[0.35, 0.1, 0]}>
-          <mesh ref={rightOarRef} position={[0, 0.1, 0.6]}>
-            {/* Long oar shaft with blade */}
-            <boxGeometry args={[0.04, 0.03, 1.5]} />
-            <meshStandardMaterial color={'#4a3520'} />
+
+        {/* RIGHT OAR - realistic sculling oar */}
+        <group ref={rightOarRef} position={[0.18, 0.12, 0.05]}>
+          {/* Oarlock/rigger attachment */}
+          <mesh position={[0.08, 0.04, 0]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.06, 8]} />
+            <meshStandardMaterial color={'#666666'} metalness={0.8} roughness={0.2} />
           </mesh>
-          {/* Oar blade */}
-          <mesh ref={rightOarRef} position={[0, 0.1, 1.2]}>
-            <boxGeometry args={[0.16, 0.05, 0.35]} />
-            <meshStandardMaterial color={'#4a3520'} />
+          {/* Oar handle (inboard) */}
+          <mesh position={[-0.15, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.022, 0.018, 0.4, 12]} />
+            <meshStandardMaterial color={'#8B4513'} roughness={0.7} />
+          </mesh>
+          {/* Oar shaft (outboard) */}
+          <mesh position={[0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.018, 0.022, 1.4, 12]} />
+            <meshStandardMaterial color={'#654321'} roughness={0.5} />
+          </mesh>
+          {/* Oar blade - hatchet shape */}
+          <mesh position={[1.5, 0, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.5, 0.015, 0.16]} />
+            <meshStandardMaterial color={'#1e40af'} metalness={0.1} roughness={0.3} />
+          </mesh>
+          {/* Blade spine */}
+          <mesh position={[1.5, 0.012, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.48, 0.015, 0.03]} />
+            <meshStandardMaterial color={'#1e3a8a'} />
           </mesh>
         </group>
       </group>

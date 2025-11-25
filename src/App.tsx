@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
+import { PM5Simulator } from './components/PM5Simulator';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import HeartRateMonitor from './components/HeartRateMonitor';
@@ -168,6 +169,11 @@ function App() {
               onDisconnected={handlePM5Disconnected}
               onDataReceived={handlePM5Data}
             />
+            <PM5Simulator
+              onConnected={handlePM5Connected}
+              onDisconnected={handlePM5Disconnected}
+              onDataReceived={handlePM5Data}
+            />
           </div>
           <div className="device-panel">
             <HeartRateMonitor onSample={handleHeartRateSample} />
@@ -330,27 +336,20 @@ function App() {
                   )}
                 </div>
 
-                {/* Bottom right: Position on route */}
-                <div className="overlay-bottom-right">
-                  <div className="overlay-metric">
-                    <span className="overlay-label">position on route</span>
-                    {pm5Data && selectedRoute && (
-                      <>
-                        <span className="overlay-value">{(pm5Data.distance / 1000).toFixed(2)} / {selectedRoute.distance} km</span>
-                        <span className="overlay-label-small">(top down view)</span>
-                      </>
-                    )}
-                  </div>
-                  {/* Small map overlay */}
+                {/* Top right: End workout button and route map */}
+                <div className="overlay-top-right-panel">
+                  <button className="btn-overlay-end" onClick={handleEndWorkout}>
+                    ⏹ End Workout
+                  </button>
                   <div className="overlay-mini-map">
-                    <RouteMap route={selectedRoute!} onRouteSelected={handleRouteSelect} highlightMode={true} />
+                    <RouteMap 
+                      route={selectedRoute!} 
+                      onRouteSelected={handleRouteSelect} 
+                      highlightMode={true}
+                      progressPercent={pm5Data && selectedRoute ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100) : 0}
+                    />
                   </div>
                 </div>
-
-                {/* End workout button - top right */}
-                <button className="btn-overlay-end" onClick={handleEndWorkout}>
-                  ⏹ End Workout
-                </button>
               </div>
             </div>
           )}

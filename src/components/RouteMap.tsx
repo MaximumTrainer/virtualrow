@@ -41,12 +41,14 @@ interface RouteMapProps {
   route: WaterRoute;
   onRouteSelected?: (route: WaterRoute) => void;
   highlightMode?: boolean;
+  progressPercent?: number; // 0-100, percentage of route completed
 }
 
 export const RouteMap: React.FC<RouteMapProps> = ({
   route,
   onRouteSelected,
   highlightMode,
+  progressPercent,
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -224,24 +226,71 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
     if (route.coordinates.length === 0) return;
 
-    // Draw route polyline
     const latlngs = route.coordinates.map((c) => [c.lat, c.lng] as L.LatLngTuple);
-    const polyline = L.polyline(latlngs, {
-      color: '#3b82f6',
-      weight: 4,
-      opacity: 0.8,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(map);
-    overlayLayersRef.current.push(polyline);
+    
+    // If progress is provided, split route into completed (red) and remaining (green)
+    if (progressPercent !== undefined && progressPercent > 0) {
+      const totalPoints = latlngs.length;
+      const splitIndex = Math.min(Math.floor((progressPercent / 100) * totalPoints), totalPoints - 1);
+      
+      // Completed portion (red) - from start to current position
+      if (splitIndex > 0) {
+        const completedLatLngs = latlngs.slice(0, splitIndex + 1);
+        const completedPolyline = L.polyline(completedLatLngs, {
+          color: '#ef4444', // Red for completed
+          weight: 5,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(map);
+        overlayLayersRef.current.push(completedPolyline);
+      }
+      
+      // Remaining portion (green) - from current position to end
+      if (splitIndex < totalPoints - 1) {
+        const remainingLatLngs = latlngs.slice(splitIndex);
+        const remainingPolyline = L.polyline(remainingLatLngs, {
+          color: '#22c55e', // Green for remaining
+          weight: 5,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(map);
+        overlayLayersRef.current.push(remainingPolyline);
+      }
+      
+      // Current position marker (yellow dot)
+      if (splitIndex > 0 && splitIndex < totalPoints) {
+        const currentPos = latlngs[splitIndex];
+        const positionMarker = L.circleMarker(currentPos, {
+          radius: 8,
+          fillColor: '#fbbf24',
+          color: '#ffffff',
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 1,
+        }).addTo(map);
+        overlayLayersRef.current.push(positionMarker);
+      }
+    } else {
+      // No progress - draw single blue polyline (default view)
+      const polyline = L.polyline(latlngs, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+      overlayLayersRef.current.push(polyline);
+    }
 
-    // Add start marker
+    // Add start marker (green)
     const startMarker = L.marker([route.coordinates[0].lat, route.coordinates[0].lng], { icon: StartIcon })
       .bindPopup(`<b>Start</b><br>${route.name}`)
       .addTo(map);
     overlayLayersRef.current.push(startMarker);
 
-    // Add end marker
+    // Add end marker (red)
     const lastCoord = route.coordinates[route.coordinates.length - 1];
     const endMarker = L.marker([lastCoord.lat, lastCoord.lng], { icon: EndIcon })
       .bindPopup(`<b>End</b><br>${route.name}`)
@@ -258,7 +307,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     if (import.meta.env.DEV) {
       console.debug('Route overlays ', overlayLayersRef.current.length);
     }
-  }, [route, mapInitialized]);
+  }, [route, mapInitialized, progressPercent]);
 
   return (
     <div className={`route-map-container ${highlightMode ? 'highlight-mode' : ''}`}>
@@ -297,6 +346,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       )}
 
       <div className="route-info-overlay">
+        {!highlightMode && (
         <div className="route-info-card">
           <h3>{route.name}</h3>
           <div className="route-stats">
@@ -325,6 +375,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

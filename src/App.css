@@ -788,20 +788,26 @@ body {
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
+.overlay-top-right-panel {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
 .overlay-mini-map {
-  width: 200px;
-  height: 150px;
-  margin-top: 12px;
+  width: 280px;
+  height: 200px;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .btn-overlay-end {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  z-index: 100;
   padding: 12px 24px;
   background: rgba(239, 68, 68, 0.9);
   color: white;
@@ -812,6 +818,7 @@ body {
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .btn-overlay-end:hover {
