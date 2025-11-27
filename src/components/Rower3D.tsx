@@ -13,11 +13,12 @@ interface Rower3DProps {
   isPlaying?: boolean;
   cadence?: number | null; // strokes per minute
   performanceMode?: 'auto' | 'high' | 'low';
+  intensityFactor?: number; // Speed adjustment factor from workout intensity (e.g., 0.6-1.2)
 }
 
 // Simple boat mesh is built in the scene below
 
-const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode }) => {
+const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode, intensityFactor }) => {
   // Convert latlng points into meters local coordinates
   const pointsLocal = useMemo(() => {
     if (!route || !route.coordinates || route.coordinates.length === 0) return [];
@@ -110,6 +111,11 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     // compute effective speed using pace if given; pace is seconds/500m -> m/s = 500/pace
     let speedMps = 0;
     if (paceSPer500 && paceSPer500 > 0) speedMps = 500 / paceSPer500; // m/s
+    
+    // Apply intensity factor from structured workout if provided
+    if (intensityFactor && intensityFactor > 0) {
+      speedMps *= intensityFactor;
+    }
 
     // convert to progress per second relative to route length
     const progressPerSecond = totalDistance > 0 ? (speedMps / totalDistance) : 0;
