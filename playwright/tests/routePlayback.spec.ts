@@ -204,7 +204,7 @@ test.describe('Simulated e2e route playback', () => {
       expect(hasPos || hasMarker).toBeTruthy();
     }
     try {
-      await page.waitForSelector('.overlay-map', { timeout: 10000, state: 'attached' });
+      await page.waitForSelector('.overlay-mini-map', { timeout: 10000, state: 'attached' });
     } catch (e) {
       console.warn('Overlay map not present; continuing with 3D checks');
     }
@@ -437,7 +437,7 @@ test.describe('Simulated e2e route playback', () => {
       expect(hasPos || hasMarker).toBeTruthy();
     }
     try {
-      await page.waitForSelector('.overlay-map', { timeout: 10000, state: 'attached' });
+      await page.waitForSelector('.overlay-mini-map', { timeout: 10000, state: 'attached' });
     } catch (e) {
       console.warn('Overlay map not present; continuing with 3D checks');
     }
