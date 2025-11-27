@@ -86,9 +86,14 @@
     requestDevice: async function (options) {
       console.log('mock-bluetooth requestDevice called', JSON.stringify(options));
       const services = options?.filters?.flatMap(f => f.services || []) || [];
+      // Determine device name based on requested services
+      // PM5 uses ce060000-43e5-11e4-916c-0800200c9a66, HR uses 0000180d-0000-1000-8000-00805f9b34fb
+      const isPM5 = services.some(s => String(s).includes('ce060000'));
+      const isHR = services.some(s => String(s).includes('180d'));
+      const deviceName = isPM5 ? 'Concept2 PM5' : (isHR ? 'Heart Rate Monitor' : 'SimulatorDevice');
       // Build a device that simulates the Web Bluetooth API minimal surface
       const device = {
-        name: 'SimulatorDevice',
+        name: deviceName,
         _listeners: new Map(),
         addEventListener: function (event, handler) {
           if (!this._listeners.has(event)) {
@@ -102,8 +107,10 @@
           if (idx >= 0) arr.splice(idx, 1);
         },
         gatt: {
+          connected: false,
           connect: async function () {
             console.log('mock gatt.connect called', options?.filters);
+            device.gatt.connected = true;
             const server = {
               connected: true,
               getPrimaryService: async (uuid) => {
@@ -120,6 +127,7 @@
               disconnect: function () {
                 console.log('mock gatt.disconnect called');
                 this.connected = false;
+                device.gatt.connected = false;
                 const handlers = device._listeners.get('gattserverdisconnected') || [];
                 handlers.slice().forEach((h) => { try { h(); } catch (_) { } });
               }
