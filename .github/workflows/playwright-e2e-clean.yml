@@ -34,11 +34,11 @@ jobs:
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
       - name: Ensure Playwright browsers installed
         run: npm run pretest:e2e
-      - name: Kill any lingering processes on test ports
+      - name: Clean up ports 9001 and 9002
         run: |
-          # Clean up any processes that might be using our ports
-          sudo lsof -ti:5173,9001,9002 | xargs kill -9 2>/dev/null || true
-          sleep 2
+          # Kill any processes bound to simulator ports to prevent EADDRINUSE errors
+          sudo lsof -ti :9001 | xargs -r sudo kill -9 || true
+          sudo lsof -ti :9002 | xargs -r sudo kill -9 || true
       - name: Start simulator server
         run: |
           npm run start:sim & echo $! > /tmp/sim.pid

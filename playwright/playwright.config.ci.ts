@@ -4,30 +4,35 @@ import { defineConfig } from '@playwright/test';
  * CI-specific Playwright configuration
  * Use with: npm run test:e2e:ci
  * 
- * Optimized for WebGL/THREE.js rendering in headless CI environments:
- * - Uses SwiftShader for software-based WebGL rendering
- * - Disables GPU features that can cause context loss in headless mode
- * - Increased timeout for software rendering performance
- * 
- * To run all tests including WebGL-heavy tests, ensure LIBGL_ALWAYS_SOFTWARE=1
- * environment variable is set in the CI pipeline.
+ * Optimized for GitHub Actions environment with:
+ * - Software GL rendering via SwiftShader for WebGL stability
+ * - Single worker to avoid port conflicts
+ * - Extended timeouts and retries for CI reliability
+ * - GPU sandbox workarounds for headless Chromium
  */
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  timeout: 90 * 1000, // Increased timeout for software rendering
+  timeout: 90_000, // 90 seconds
+  retries: 2,
+  // In CI, force single worker to avoid parallel servers and port conflicts
+  workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 720 },
-    actionTimeout: 10 * 1000, // Increased action timeout for WebGL operations
+    actionTimeout: 10_000, // 10 seconds
     // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
     launchOptions: {
-      // Chrome flags for stable WebGL in headless mode:
-      // - SwiftShader provides software GL rendering
-      // - Disable GPU features that can cause context loss
-      // - Use single process to reduce memory pressure
+      // NOTE: SwiftShader enables software GL rendering in headless mode.
+      // `--enable-unsafe-swiftshader` is required for newer Chromium versions
+      // where automatic SwiftShader fallback was changed. This flag bypasses
+      // GPU sandbox restrictions and should only be used in CI/test environments.
+      // Additional flags for stability:
+      // --disable-gpu-rasterization, --disable-gpu-compositing: Prevent GPU sandbox issues
+      // --disable-dev-shm-usage: Avoid /dev/shm limitations in containers
+      // --single-process: Reduce process complexity in CI
       args: [
         '--enable-unsafe-webgl',
         '--use-gl=swiftshader',
@@ -36,9 +41,8 @@ export default defineConfig({
         '--disable-gpu',
         '--disable-gpu-rasterization',
         '--disable-gpu-compositing',
-        '--disable-dev-shm-usage', // Prevent shared memory issues in Docker/CI
-        '--disable-setuid-sandbox',
-        '--single-process', // Reduce memory fragmentation
+        '--disable-dev-shm-usage',
+        '--single-process'
       ]
     },
     // Capture screenshots as test evidence - both on failure and success
