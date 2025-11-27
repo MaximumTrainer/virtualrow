@@ -269,6 +269,15 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     return route.tags?.includes('river') || route.tags?.includes('canal') || false;
   }, [route.tags]);
 
+  // Detect specific routes for location-specific landmarks
+  const isLakeBledRoute = useMemo(() => {
+    return route.name?.toLowerCase().includes('bled') || route.tags?.includes('slovenia') || false;
+  }, [route.name, route.tags]);
+
+  const isBostonRoute = useMemo(() => {
+    return route.name?.toLowerCase().includes('charles') || route.name?.toLowerCase().includes('boston') || route.tags?.includes('boston') || false;
+  }, [route.name, route.tags]);
+
   // Seeded random generator factory for consistent positions
   const createSeededRandom = (initialSeed: number) => {
     let seed = initialSeed;
@@ -566,6 +575,77 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     
     return { trees, vegetation, buildings };
   }, [isLakeRoute]);
+
+  // Generate Lake Bled specific landmarks - Bled Castle and Bled Island with Church
+  const lakeBledLandmarks = useMemo(() => {
+    if (!isLakeBledRoute) return null;
+    
+    return {
+      // Bled Castle - perched on a cliff on the north shore
+      castle: {
+        x: -50, // North shore
+        z: -60,
+        height: 12,
+        width: 15,
+        depth: 10
+      },
+      // Bled Island with the Church of the Assumption
+      island: {
+        x: 0, // Center of lake
+        z: -40,
+        churchHeight: 8,
+        stepsToChurch: true
+      },
+      // Julian Alps visible in the background
+      julianAlps: [
+        { x: -80, z: -120, scaleX: 30, scaleY: 25, rotation: 0 },
+        { x: 0, z: -140, scaleX: 35, scaleY: 30, rotation: 0.2 },
+        { x: 60, z: -130, scaleX: 28, scaleY: 22, rotation: -0.1 }
+      ]
+    };
+  }, [isLakeBledRoute]);
+
+  // Generate Charles River Boston specific landmarks - Harvard, MIT, Prudential, etc.
+  const bostonLandmarks = useMemo(() => {
+    if (!isBostonRoute) return null;
+    
+    return {
+      // Harvard University buildings on the left bank (Cambridge side)
+      harvard: {
+        x: -25,
+        z: -80,
+        towers: [
+          { x: -26, z: -75, height: 10, width: 4, hasSpire: true },
+          { x: -22, z: -85, height: 8, width: 5, hasSpire: false }
+        ]
+      },
+      // MIT dome and buildings on the Cambridge side
+      mit: {
+        dome: { x: -30, z: -150, radius: 4, height: 6 },
+        buildings: [
+          { x: -28, z: -145, height: 5, width: 8, depth: 4 },
+          { x: -32, z: -155, height: 6, width: 6, depth: 4 }
+        ]
+      },
+      // Boston skyline on the right bank
+      bostonSkyline: [
+        // Prudential Tower
+        { x: 35, z: -120, height: 20, width: 4, depth: 4, color: '#5c6370' },
+        // John Hancock Tower
+        { x: 40, z: -100, height: 22, width: 3.5, depth: 3.5, color: '#4a90a4' },
+        // Generic skyscrapers
+        { x: 32, z: -90, height: 12, width: 3, depth: 3, color: '#6b7280' },
+        { x: 38, z: -140, height: 14, width: 3.5, depth: 3.5, color: '#78716c' },
+        { x: 30, z: -160, height: 10, width: 4, depth: 4, color: '#64748b' }
+      ],
+      // Bridge structures along the Charles
+      bridges: [
+        { x: 0, z: -60, width: 40, height: 2, archCount: 5 },
+        { x: 0, z: -130, width: 40, height: 2.5, archCount: 7 },
+        { x: 0, z: -200, width: 40, height: 2, archCount: 4 }
+      ]
+    };
+  }, [isBostonRoute]);
 
   // Helper function to calculate perspective scale based on distance from camera
   // Objects further away appear smaller (camera is at z=3, looking forward toward negative Z)
@@ -1015,6 +1095,220 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
               </group>
             );
           })}
+        </group>
+      )}
+
+      {/* LAKE BLED SPECIFIC LANDMARKS */}
+      {isLakeBledRoute && lakeBledLandmarks && (
+        <group>
+          {/* Bled Castle on the cliff */}
+          <group position={[lakeBledLandmarks.castle.x, 0, lakeBledLandmarks.castle.z]}>
+            {/* Castle cliff/hill */}
+            <mesh position={[0, 4, 0]}>
+              <coneGeometry args={[8, 8, 8]} />
+              <meshStandardMaterial color={'#6b7280'} roughness={0.9} />
+            </mesh>
+            {/* Castle main building */}
+            <mesh position={[0, 10, 0]}>
+              <boxGeometry args={[lakeBledLandmarks.castle.width, lakeBledLandmarks.castle.height, lakeBledLandmarks.castle.depth]} />
+              <meshStandardMaterial color={'#d4c4a8'} roughness={0.8} />
+            </mesh>
+            {/* Castle tower */}
+            <mesh position={[-4, 13, 0]}>
+              <cylinderGeometry args={[2, 2.5, 10, 8]} />
+              <meshStandardMaterial color={'#c9b896'} roughness={0.8} />
+            </mesh>
+            {/* Tower roof */}
+            <mesh position={[-4, 19, 0]}>
+              <coneGeometry args={[3, 4, 8]} />
+              <meshStandardMaterial color={'#8b4513'} roughness={0.85} />
+            </mesh>
+            {/* Second tower */}
+            <mesh position={[5, 12, -2]}>
+              <cylinderGeometry args={[1.5, 2, 8, 8]} />
+              <meshStandardMaterial color={'#c9b896'} roughness={0.8} />
+            </mesh>
+            <mesh position={[5, 17, -2]}>
+              <coneGeometry args={[2.5, 3.5, 8]} />
+              <meshStandardMaterial color={'#8b4513'} roughness={0.85} />
+            </mesh>
+          </group>
+
+          {/* Bled Island with Church of the Assumption */}
+          <group position={[lakeBledLandmarks.island.x, 0, lakeBledLandmarks.island.z]}>
+            {/* Island base */}
+            <mesh position={[0, 0.5, 0]}>
+              <cylinderGeometry args={[6, 8, 1, 16]} />
+              <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+            </mesh>
+            {/* Island elevated area */}
+            <mesh position={[0, 1.5, 0]}>
+              <cylinderGeometry args={[4, 5, 2, 12]} />
+              <meshStandardMaterial color={'#3aa06a'} roughness={0.9} />
+            </mesh>
+            {/* Church main building */}
+            <mesh position={[0, 5, 0]}>
+              <boxGeometry args={[3, 6, 4]} />
+              <meshStandardMaterial color={'#f8fafc'} roughness={0.7} />
+            </mesh>
+            {/* Church bell tower */}
+            <mesh position={[0, 10, -1]}>
+              <boxGeometry args={[2, 6, 2]} />
+              <meshStandardMaterial color={'#f8fafc'} roughness={0.7} />
+            </mesh>
+            {/* Church spire */}
+            <mesh position={[0, 14, -1]}>
+              <coneGeometry args={[1.5, 4, 8]} />
+              <meshStandardMaterial color={'#374151'} roughness={0.6} />
+            </mesh>
+            {/* Church roof */}
+            <mesh position={[0, 8.5, 0]} rotation={[0, Math.PI / 4, 0]}>
+              <coneGeometry args={[3, 2, 4]} />
+              <meshStandardMaterial color={'#dc2626'} roughness={0.7} />
+            </mesh>
+            {/* Stairs (99 steps!) - simplified representation */}
+            {[0, 1, 2, 3, 4].map((i) => (
+              <mesh key={`step-${i}`} position={[4 + i * 0.8, 0.3 + i * 0.3, 0]}>
+                <boxGeometry args={[1, 0.3, 2]} />
+                <meshStandardMaterial color={'#9ca3af'} roughness={0.9} />
+              </mesh>
+            ))}
+          </group>
+
+          {/* Julian Alps in the background */}
+          {lakeBledLandmarks.julianAlps.map((alp, idx) => (
+            <group key={`julian-alp-${idx}`} position={[alp.x, 0, alp.z]} rotation={[0, alp.rotation, 0]}>
+              {/* Main peak */}
+              <mesh position={[0, alp.scaleY / 2, 0]}>
+                <coneGeometry args={[alp.scaleX, alp.scaleY, 8]} />
+                <meshStandardMaterial color={'#6b7280'} roughness={0.9} />
+              </mesh>
+              {/* Snow cap */}
+              <mesh position={[0, alp.scaleY * 0.85, 0]}>
+                <coneGeometry args={[alp.scaleX * 0.35, alp.scaleY * 0.25, 8]} />
+                <meshStandardMaterial color={'#f8fafc'} roughness={0.7} />
+              </mesh>
+              {/* Secondary peak */}
+              <mesh position={[alp.scaleX * 0.4, alp.scaleY * 0.25, alp.scaleX * 0.15]}>
+                <coneGeometry args={[alp.scaleX * 0.5, alp.scaleY * 0.5, 6]} />
+                <meshStandardMaterial color={'#4b5563'} roughness={0.9} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      )}
+
+      {/* CHARLES RIVER BOSTON SPECIFIC LANDMARKS */}
+      {isBostonRoute && bostonLandmarks && (
+        <group>
+          {/* Harvard University buildings */}
+          {bostonLandmarks.harvard.towers.map((tower, idx) => (
+            <group key={`harvard-${idx}`} position={[tower.x, 0, tower.z]}>
+              {/* Building base */}
+              <mesh position={[0, tower.height / 2, 0]}>
+                <boxGeometry args={[tower.width, tower.height, tower.width * 0.8]} />
+                <meshStandardMaterial color={'#8b0000'} roughness={0.8} />
+              </mesh>
+              {/* Spire if applicable */}
+              {tower.hasSpire && (
+                <mesh position={[0, tower.height + 2, 0]}>
+                  <coneGeometry args={[1.5, 4, 8]} />
+                  <meshStandardMaterial color={'#f8fafc'} roughness={0.6} />
+                </mesh>
+              )}
+              {/* Windows */}
+              {[0.3, 0.5, 0.7].map((yPos, i) => (
+                <mesh key={i} position={[tower.width / 2 + 0.01, tower.height * yPos, 0]}>
+                  <boxGeometry args={[0.1, 1, 0.8]} />
+                  <meshStandardMaterial color={'#fef3c7'} roughness={0.3} />
+                </mesh>
+              ))}
+            </group>
+          ))}
+
+          {/* MIT Dome */}
+          <group position={[bostonLandmarks.mit.dome.x, 0, bostonLandmarks.mit.dome.z]}>
+            {/* Building base */}
+            <mesh position={[0, 3, 0]}>
+              <boxGeometry args={[12, 6, 8]} />
+              <meshStandardMaterial color={'#d4c4a8'} roughness={0.8} />
+            </mesh>
+            {/* Columns (simplified) */}
+            {[-4, -2, 0, 2, 4].map((xPos, i) => (
+              <mesh key={`column-${i}`} position={[xPos, 3, 4.5]}>
+                <cylinderGeometry args={[0.3, 0.3, 5, 8]} />
+                <meshStandardMaterial color={'#f8fafc'} roughness={0.6} />
+              </mesh>
+            ))}
+            {/* Dome */}
+            <mesh position={[0, 8, 0]}>
+              <sphereGeometry args={[bostonLandmarks.mit.dome.radius, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+              <meshStandardMaterial color={'#9ca3af'} roughness={0.5} />
+            </mesh>
+          </group>
+
+          {/* MIT Buildings */}
+          {bostonLandmarks.mit.buildings.map((bldg, idx) => (
+            <mesh key={`mit-bldg-${idx}`} position={[bldg.x, bldg.height / 2, bldg.z]}>
+              <boxGeometry args={[bldg.width, bldg.height, bldg.depth]} />
+              <meshStandardMaterial color={'#d4c4a8'} roughness={0.8} />
+            </mesh>
+          ))}
+
+          {/* Boston Skyline */}
+          {bostonLandmarks.bostonSkyline.map((tower, idx) => (
+            <group key={`boston-tower-${idx}`} position={[tower.x, 0, tower.z]}>
+              {/* Main tower */}
+              <mesh position={[0, tower.height / 2, 0]}>
+                <boxGeometry args={[tower.width, tower.height, tower.depth]} />
+                <meshStandardMaterial color={tower.color} metalness={0.3} roughness={0.4} />
+              </mesh>
+              {/* Windows (vertical stripes) */}
+              {[-0.3, 0, 0.3].map((xOffset, i) => (
+                <mesh key={i} position={[tower.width / 2 + 0.01, tower.height / 2, xOffset * tower.depth]}>
+                  <boxGeometry args={[0.05, tower.height * 0.8, tower.depth * 0.15]} />
+                  <meshStandardMaterial color={'#94a3b8'} metalness={0.5} roughness={0.3} />
+                </mesh>
+              ))}
+              {/* Antenna/spire for taller buildings */}
+              {tower.height > 15 && (
+                <mesh position={[0, tower.height + 1.5, 0]}>
+                  <cylinderGeometry args={[0.1, 0.05, 3, 8]} />
+                  <meshStandardMaterial color={'#dc2626'} roughness={0.3} />
+                </mesh>
+              )}
+            </group>
+          ))}
+
+          {/* Bridges across the Charles */}
+          {bostonLandmarks.bridges.map((bridge, idx) => (
+            <group key={`bridge-${idx}`} position={[bridge.x, 0, bridge.z]}>
+              {/* Bridge deck */}
+              <mesh position={[0, bridge.height, 0]}>
+                <boxGeometry args={[bridge.width, 0.5, 3]} />
+                <meshStandardMaterial color={'#6b7280'} roughness={0.7} />
+              </mesh>
+              {/* Bridge arches */}
+              {Array.from({ length: bridge.archCount }, (_, i) => {
+                const archX = (i - (bridge.archCount - 1) / 2) * (bridge.width / bridge.archCount);
+                return (
+                  <mesh key={i} position={[archX, bridge.height / 2, 0]}>
+                    <cylinderGeometry args={[bridge.height * 0.6, bridge.height * 0.6, 2.5, 8, 1, false, 0, Math.PI]} />
+                    <meshStandardMaterial color={'#9ca3af'} roughness={0.7} />
+                  </mesh>
+                );
+              })}
+              {/* Bridge railings */}
+              <mesh position={[0, bridge.height + 0.4, 1.3]}>
+                <boxGeometry args={[bridge.width, 0.3, 0.1]} />
+                <meshStandardMaterial color={'#374151'} roughness={0.6} />
+              </mesh>
+              <mesh position={[0, bridge.height + 0.4, -1.3]}>
+                <boxGeometry args={[bridge.width, 0.3, 0.1]} />
+                <meshStandardMaterial color={'#374151'} roughness={0.6} />
+              </mesh>
+            </group>
+          ))}
         </group>
       )}
 
