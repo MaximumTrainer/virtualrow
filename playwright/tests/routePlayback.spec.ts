@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import * as child_process from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,36 +9,111 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.js');
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
+// Read ports from environment variables with defaults
+const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || '9001', 10);
+const SIM_HTTP_PORT = parseInt(process.env.SIM_HTTP_PORT || '9002', 10);
+
 let simProcess: child_process.ChildProcess;
 
+/**
+ * Attempt to kill any process listening on a specific port.
+ * This is best-effort and used when encountering EADDRINUSE.
+ */
+async function killPortProcess(port: number): Promise<void> {
+  return new Promise((resolve) => {
+    const kill = child_process.spawn('sh', ['-c', `lsof -ti :${port} | xargs -r kill -9`], {
+      stdio: 'ignore',
+    });
+    kill.on('close', () => resolve());
+    kill.on('error', () => resolve());
+    // Timeout after 2 seconds
+    setTimeout(() => resolve(), 2000);
+  });
+}
+
 async function ensureSimServerStarted() {
-  const httpPort = 9002;
+  const httpPort = SIM_HTTP_PORT;
   const maxRetries = 30;
   const url = `http://localhost:${httpPort}`;
   for (let i = 0; i < maxRetries; i++) {
     try {
       const res = await fetch(url);
       if (res.ok) return true;
-    } catch (e) {
+    } catch {
       await new Promise((r) => setTimeout(r, 200));
     }
   }
   throw new Error('Simulator server did not start in time');
 }
 
-async function startSimServer() {
+async function startSimServer(retryCount = 0): Promise<void> {
   const simPath = simServerPath.replace(/\.js$/, '.cjs');
-  simProcess = child_process.spawn('node', [simPath], {
-    env: { PORT: '9001', ...process.env },
-    stdio: 'inherit',
+  
+  return new Promise((resolve, reject) => {
+    simProcess = child_process.spawn('node', [simPath], {
+      env: { PORT: String(SIM_WS_PORT), ...process.env },
+      stdio: 'inherit',
+    });
+    
+    let errorOccurred = false;
+    
+    simProcess.on('error', async (err) => {
+      errorOccurred = true;
+      const errMsg = err.message || '';
+      // Handle EADDRINUSE with retry
+      if (errMsg.includes('EADDRINUSE') || errMsg.includes('address already in use')) {
+        if (retryCount < 2) {
+          console.log(`Port ${SIM_WS_PORT} or ${SIM_HTTP_PORT} in use, attempting to clean up and retry...`);
+          await killPortProcess(SIM_WS_PORT);
+          await killPortProcess(SIM_HTTP_PORT);
+          await new Promise((r) => setTimeout(r, 500));
+          try {
+            await startSimServer(retryCount + 1);
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        } else {
+          reject(new Error(`Failed to start sim server after ${retryCount + 1} attempts due to EADDRINUSE`));
+        }
+      } else {
+        reject(err);
+      }
+    });
+    
+    // Also handle spawn close event for EADDRINUSE that may appear in server logs
+    simProcess.on('close', (code) => {
+      if (code !== 0 && code !== null && !errorOccurred) {
+        // Server exited unexpectedly - could be port conflict
+        if (retryCount < 2) {
+          console.log(`Sim server exited with code ${code}, attempting to clean up ports and retry...`);
+          killPortProcess(SIM_WS_PORT)
+            .then(() => killPortProcess(SIM_HTTP_PORT))
+            .then(() => new Promise((r) => setTimeout(r, 500)))
+            .then(() => startSimServer(retryCount + 1))
+            .then(resolve)
+            .catch(reject);
+        }
+      }
+    });
+    
+    // Wait for server to be ready
+    ensureSimServerStarted()
+      .then(() => resolve())
+      .catch((err) => {
+        if (!errorOccurred) {
+          reject(err);
+        }
+      });
   });
-  await ensureSimServerStarted();
 }
 
 async function stopSimServer() {
   if (simProcess) simProcess.kill();
 }
 
+// Configure tests to run serially to avoid port conflicts
+test.describe.configure({ mode: 'serial' });
 
 test.describe('Simulated e2e route playback', () => {
   test.beforeAll(async () => {
