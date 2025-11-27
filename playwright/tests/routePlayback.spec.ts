@@ -18,10 +18,19 @@ let simProcess: child_process.ChildProcess;
 /**
  * Attempt to kill any process listening on a specific port.
  * This is best-effort and used when encountering EADDRINUSE.
+ * Uses SIGTERM first for graceful shutdown, then SIGKILL as fallback.
  */
 async function killPortProcess(port: number): Promise<void> {
   return new Promise((resolve) => {
-    const kill = child_process.spawn('sh', ['-c', `lsof -ti :${port} | xargs -r kill -9`], {
+    // First try graceful shutdown with SIGTERM, then SIGKILL
+    const kill = child_process.spawn('sh', ['-c', `
+      pids=$(lsof -ti :${port})
+      if [ -n "$pids" ]; then
+        kill -TERM $pids 2>/dev/null
+        sleep 0.5
+        kill -9 $pids 2>/dev/null || true
+      fi
+    `], {
       stdio: 'ignore',
     });
     kill.on('close', () => resolve());
@@ -46,6 +55,15 @@ async function ensureSimServerStarted() {
   throw new Error('Simulator server did not start in time');
 }
 
+/**
+ * Helper to clean up ports and wait before retry
+ */
+async function cleanupPortsAndWait(): Promise<void> {
+  await killPortProcess(SIM_WS_PORT);
+  await killPortProcess(SIM_HTTP_PORT);
+  await new Promise((r) => setTimeout(r, 500));
+}
+
 async function startSimServer(retryCount = 0): Promise<void> {
   const simPath = simServerPath.replace(/\.js$/, '.cjs');
   
@@ -64,10 +82,8 @@ async function startSimServer(retryCount = 0): Promise<void> {
       if (errMsg.includes('EADDRINUSE') || errMsg.includes('address already in use')) {
         if (retryCount < 2) {
           console.log(`Port ${SIM_WS_PORT} or ${SIM_HTTP_PORT} in use, attempting to clean up and retry...`);
-          await killPortProcess(SIM_WS_PORT);
-          await killPortProcess(SIM_HTTP_PORT);
-          await new Promise((r) => setTimeout(r, 500));
           try {
+            await cleanupPortsAndWait();
             await startSimServer(retryCount + 1);
             resolve();
           } catch (e) {
@@ -82,17 +98,18 @@ async function startSimServer(retryCount = 0): Promise<void> {
     });
     
     // Also handle spawn close event for EADDRINUSE that may appear in server logs
-    simProcess.on('close', (code) => {
+    simProcess.on('close', async (code) => {
       if (code !== 0 && code !== null && !errorOccurred) {
         // Server exited unexpectedly - could be port conflict
         if (retryCount < 2) {
           console.log(`Sim server exited with code ${code}, attempting to clean up ports and retry...`);
-          killPortProcess(SIM_WS_PORT)
-            .then(() => killPortProcess(SIM_HTTP_PORT))
-            .then(() => new Promise((r) => setTimeout(r, 500)))
-            .then(() => startSimServer(retryCount + 1))
-            .then(resolve)
-            .catch(reject);
+          try {
+            await cleanupPortsAndWait();
+            await startSimServer(retryCount + 1);
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
         }
       }
     });
