@@ -587,7 +587,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       
       {/* Sky dome - visible horizon for all routes */}
       <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[500, 32, 32]} />
+        <sphereGeometry args={[500, 16, 16]} />
         <meshBasicMaterial color={isLakeRoute ? '#87CEEB' : '#6eb5ff'} side={2} />
       </mesh>
       
@@ -599,7 +599,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       
       {/* water plane - moves backward with route to create illusion of movement */}
       <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <planeGeometry args={[500, 1000, 16, 16]} />
+        <planeGeometry args={[500, 1000, 8, 8]} />
         <meshStandardMaterial 
           color={isLakeRoute ? '#3b82c4' : '#4a9eda'} 
           metalness={isLakeRoute ? 0.3 : 0.2} 
