@@ -32,7 +32,6 @@ export default defineConfig({
       // Additional flags for stability:
       // --disable-gpu-rasterization, --disable-gpu-compositing: Prevent GPU sandbox issues
       // --disable-dev-shm-usage: Avoid /dev/shm limitations in containers
-      // --single-process: Reduce process complexity in CI
       args: [
         '--enable-unsafe-webgl',
         '--use-gl=swiftshader',
@@ -41,8 +40,7 @@ export default defineConfig({
         '--disable-gpu',
         '--disable-gpu-rasterization',
         '--disable-gpu-compositing',
-        '--disable-dev-shm-usage',
-        '--single-process'
+        '--disable-dev-shm-usage'
       ]
     },
     // Capture screenshots as test evidence - both on failure and success
