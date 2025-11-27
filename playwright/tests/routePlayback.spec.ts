@@ -632,11 +632,17 @@ test.describe('Simulated e2e route playback', () => {
         } else {
           // fallback: start session
           await captureErrorEvidence(page, testInfo, 'Start button disabled for second route', '.btn-start-workout');
-          await page.evaluate(() => { const svc = (window as any).__workoutService; if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3'); });
+          await page.evaluate(() => { 
+            const svc = (window as any).__workoutService; 
+            if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3'); 
+          });
         }
       } catch (e) {
         // fallback
-        await page.evaluate(() => { const svc = (window as any).__workoutService; if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3'); });
+        await page.evaluate(() => { 
+          const svc = (window as any).__workoutService; 
+          if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3'); 
+        });
       }
     } else {
       // PM5 not connected - start second session directly via fallback
