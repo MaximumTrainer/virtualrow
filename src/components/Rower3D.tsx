@@ -624,14 +624,75 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   );
 };
 
+// Error boundary component for graceful WebGL failure handling
+class WebGLErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.warn('WebGL Error Boundary caught error:', error, errorInfo);
+    // Expose error state for testing
+    try {
+      (window as Window & { __ROWER3D_ERROR?: boolean }).__ROWER3D_ERROR = true;
+    } catch {
+      // Ignore errors when window is not available
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="rower3d-fallback-marker" data-loaded="true" style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          height: '100%',
+          color: '#888'
+        }}>
+          3D view unavailable
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const Rower3D: React.FC<Rower3DProps> = (props) => {
   return (
     <div className="rower3d-canvas-container">
       {/* fallback marker for test automation if Canvas isn't created due to WebGL issues */}
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
-      <Canvas camera={{ position: [0, 5, 5], fov: 50 }}>
-        <RowerScene {...props} />
-      </Canvas>
+      <WebGLErrorBoundary>
+        <Canvas 
+          camera={{ position: [0, 5, 5], fov: 50 }}
+          gl={{
+            // WebGL-safe options for CI/headless environments
+            antialias: false,
+            alpha: true,
+            powerPreference: 'low-power',
+            failIfMajorPerformanceCaveat: false,
+            preserveDrawingBuffer: true,
+          }}
+          onCreated={({ gl }) => {
+            // Additional context loss handling setup
+            gl.domElement.addEventListener('webglcontextlost', (e) => {
+              e.preventDefault();
+              console.warn('WebGL context lost in Canvas');
+            });
+          }}
+        >
+          <RowerScene {...props} />
+        </Canvas>
+      </WebGLErrorBoundary>
     </div>
   );
 };

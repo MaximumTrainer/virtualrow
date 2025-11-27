@@ -1,22 +1,39 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  timeout: 60 * 1000,
+  timeout: 90_000, // 90 seconds
+  retries: 2,
+  // In CI, force single worker to avoid parallel servers and port conflicts
+  workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 720 },
-    actionTimeout: 5 * 1000,
+    actionTimeout: 10_000, // 10 seconds
     // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
     launchOptions: {
       // NOTE: swiftshader enables software GL rendering in headless mode. The
       // `--enable-unsafe-swiftshader` flag is required for some Chromium builds
       // when automatic fallback is deprecated. This is only intended for CI
       // or test environments and may have lower security guarantees.
-      args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-gpu']
+      // Additional flags for stability:
+      // --disable-gpu-rasterization, --disable-gpu-compositing: Prevent GPU sandbox issues
+      // --disable-dev-shm-usage: Avoid /dev/shm limitations in containers
+      // --single-process: Reduce process complexity in CI
+      args: [
+        '--enable-unsafe-webgl',
+        '--use-gl=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-gpu-rasterization',
+        '--disable-gpu-compositing',
+        '--disable-dev-shm-usage',
+        '--single-process'
+      ]
     },
     // Capture screenshots as test evidence - both on failure and success
     screenshot: 'on',

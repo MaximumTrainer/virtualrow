@@ -9,6 +9,9 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    env:
+      # Force software GL rendering for WebGL stability in headless Chromium
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -30,6 +33,11 @@ jobs:
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
       - name: Ensure Playwright browsers installed
         run: npm run pretest:e2e
+      - name: Clean up ports 9001 and 9002
+        run: |
+          # Kill any processes bound to simulator ports to prevent EADDRINUSE errors
+          sudo lsof -ti :9001 | xargs -r sudo kill -9 || true
+          sudo lsof -ti :9002 | xargs -r sudo kill -9 || true
       - name: Start simulator server
         run: |
           npm run start:sim & echo $! > /tmp/sim.pid
