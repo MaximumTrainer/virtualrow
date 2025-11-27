@@ -271,9 +271,11 @@ export const RouteMap: React.FC<RouteMapProps> = ({
             far: 1000
           }}
           gl={{ 
-            antialias: true,
+            antialias: false, // Disable for better performance in headless
             alpha: true,
-            powerPreference: 'default'
+            powerPreference: 'low-power', // More stable in CI environments
+            failIfMajorPerformanceCaveat: false, // Allow software rendering
+            preserveDrawingBuffer: true, // Helps prevent context loss
           }}
         >
           <RouteScene 

@@ -1,5 +1,11 @@
 import { defineConfig } from '@playwright/test';
 
+/**
+ * Local Playwright configuration
+ * Use with: npm run test:e2e
+ * 
+ * Optimized for WebGL/THREE.js rendering in headless local environments.
+ */
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
@@ -44,5 +50,6 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: false,
+    timeout: 60 * 1000,
   },
 });
