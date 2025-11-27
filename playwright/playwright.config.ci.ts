@@ -36,7 +36,6 @@ export default defineConfig({
         '--disable-gpu',
         '--disable-gpu-rasterization',
         '--disable-gpu-compositing',
-        '--disable-software-rasterizer',
         '--disable-dev-shm-usage', // Prevent shared memory issues in Docker/CI
         '--disable-setuid-sandbox',
         '--single-process', // Reduce memory fragmentation

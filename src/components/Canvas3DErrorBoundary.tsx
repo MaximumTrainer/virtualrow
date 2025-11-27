@@ -9,6 +9,20 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  webglAvailable: boolean;
+}
+
+/**
+ * Check if WebGL is available in the browser.
+ */
+function checkWebGLAvailability(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    return !!gl;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -19,10 +33,10 @@ interface State {
 export class Canvas3DErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, webglAvailable: true };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -43,6 +57,16 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
       // Ignore window access errors
     }
   }
+
+  handleRetry = (): void => {
+    // Check WebGL availability before attempting retry
+    const webglAvailable = checkWebGLAvailability();
+    if (webglAvailable) {
+      this.setState({ hasError: false, error: null, webglAvailable: true });
+    } else {
+      this.setState({ webglAvailable: false });
+    }
+  };
 
   render(): ReactNode {
     if (this.state.hasError) {
@@ -75,23 +99,27 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
             3D View Unavailable
           </h3>
           <p style={{ margin: 0, fontSize: '14px', color: '#a0a0a0' }}>
-            WebGL context lost. Your workout data is still being tracked.
+            {this.state.webglAvailable
+              ? 'WebGL context lost. Your workout data is still being tracked.'
+              : 'WebGL is not available. Your workout data is still being tracked.'}
           </p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            style={{
-              marginTop: '16px',
-              padding: '8px 16px',
-              backgroundColor: '#4a9eda',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            Retry 3D View
-          </button>
+          {this.state.webglAvailable && (
+            <button
+              onClick={this.handleRetry}
+              style={{
+                marginTop: '16px',
+                padding: '8px 16px',
+                backgroundColor: '#4a9eda',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              Retry 3D View
+            </button>
+          )}
         </div>
       );
     }
