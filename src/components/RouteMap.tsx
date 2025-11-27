@@ -3,7 +3,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
   CatmullRomCurve3, 
   Vector3, 
-  TubeGeometry
+  TubeGeometry,
+  DoubleSide
 } from 'three';
 import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
@@ -16,11 +17,17 @@ interface RouteMapProps {
   progressPercent?: number; // 0-100, percentage of route completed
 }
 
+// Props for the internal 3D scene component (subset of RouteMapProps)
+interface RouteSceneProps {
+  route: WaterRoute;
+  progressPercent?: number;
+}
+
 // Scale factor to convert real-world meters to scene units
 const SCALE_FACTOR = 0.0005;
 
 // Component for rendering the route line and markers in 3D
-const RouteScene: React.FC<RouteMapProps> = ({
+const RouteScene: React.FC<RouteSceneProps> = ({
   route,
   progressPercent,
 }) => {
@@ -141,7 +148,7 @@ const RouteScene: React.FC<RouteMapProps> = ({
       {/* Sky dome */}
       <mesh position={[bounds.center.x, 30, bounds.center.z]}>
         <sphereGeometry args={[100, 32, 32]} />
-        <meshBasicMaterial color={'#87CEEB'} side={2} />
+        <meshBasicMaterial color={'#87CEEB'} side={DoubleSide} />
       </mesh>
       
       {/* Water plane */}
