@@ -1,41 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
+import React, { useMemo, useRef } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { 
+  CatmullRomCurve3, 
+  Vector3, 
+  TubeGeometry
+} from 'three';
+import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
-
-// Fix Leaflet marker icons
-const DefaultIcon = L.icon({
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-const StartIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-const EndIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-// Set default icon for markers
-(L.Icon.Default.prototype as any)._getIconUrl = function() {
-  return DefaultIcon.options.iconUrl || '';
-};
 
 interface RouteMapProps {
   route: WaterRoute;
@@ -44,287 +16,296 @@ interface RouteMapProps {
   progressPercent?: number; // 0-100, percentage of route completed
 }
 
+// Scale factor to convert real-world meters to scene units
+const SCALE_FACTOR = 0.0005;
+
+// Component for rendering the route line and markers in 3D
+const RouteScene: React.FC<RouteMapProps> = ({
+  route,
+  progressPercent,
+}) => {
+  const { camera } = useThree();
+  
+  // Convert lat/lng coordinates to 3D positions
+  const routePoints = useMemo(() => {
+    if (!route || !route.coordinates || route.coordinates.length === 0) return [];
+    const originLat = route.coordinates[0].lat;
+    const originLng = route.coordinates[0].lng;
+    
+    return route.coordinates.map((c) => {
+      const p = latLngToMeters(c.lat, c.lng, originLat, originLng);
+      // Scale and convert: x = east/west, z = north/south, y = elevation (0 for water)
+      return new Vector3(p.x * SCALE_FACTOR, 0, -p.y * SCALE_FACTOR);
+    });
+  }, [route]);
+
+  // Create smooth curve from route points
+  const routeCurve = useMemo(() => {
+    if (routePoints.length < 2) return null;
+    return new CatmullRomCurve3(routePoints, false, 'centripetal', 0.5);
+  }, [routePoints]);
+
+  // Calculate bounds for camera positioning
+  const bounds = useMemo(() => {
+    if (routePoints.length === 0) return { center: new Vector3(0, 0, 0), size: 10 };
+    
+    let minX = Infinity, maxX = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    
+    for (const point of routePoints) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minZ = Math.min(minZ, point.z);
+      maxZ = Math.max(maxZ, point.z);
+    }
+    
+    const center = new Vector3(
+      (minX + maxX) / 2,
+      0,
+      (minZ + maxZ) / 2
+    );
+    const size = Math.max(maxX - minX, maxZ - minZ);
+    
+    return { center, size };
+  }, [routePoints]);
+
+  // Split progress index
+  const splitIndex = useMemo(() => {
+    if (progressPercent === undefined || progressPercent <= 0) return 0;
+    return Math.min(
+      Math.floor((progressPercent / 100) * routePoints.length),
+      routePoints.length - 1
+    );
+  }, [progressPercent, routePoints.length]);
+
+  // Refs for animated elements
+  const cameraInitialized = useRef(false);
+
+  // Set up camera on first render
+  useFrame(() => {
+    if (!cameraInitialized.current && bounds.size > 0) {
+      const distance = bounds.size * 1.5;
+      camera.position.set(
+        bounds.center.x,
+        distance,
+        bounds.center.z + distance * 0.3
+      );
+      camera.lookAt(bounds.center.x, 0, bounds.center.z);
+      cameraInitialized.current = true;
+    }
+  });
+
+  // Create geometries for completed and remaining portions
+  const completedGeometry = useMemo(() => {
+    if (!routeCurve || splitIndex <= 0) return null;
+    const completedPoints = routePoints.slice(0, splitIndex + 1);
+    if (completedPoints.length < 2) return null;
+    const completedCurve = new CatmullRomCurve3(completedPoints, false, 'centripetal', 0.5);
+    return new TubeGeometry(completedCurve, completedPoints.length * 4, 0.15, 8, false);
+  }, [routeCurve, routePoints, splitIndex]);
+
+  const remainingGeometry = useMemo(() => {
+    if (!routeCurve) return null;
+    if (progressPercent !== undefined && progressPercent > 0 && splitIndex < routePoints.length - 1) {
+      const remainingPoints = routePoints.slice(splitIndex);
+      if (remainingPoints.length < 2) return null;
+      const remainingCurve = new CatmullRomCurve3(remainingPoints, false, 'centripetal', 0.5);
+      return new TubeGeometry(remainingCurve, remainingPoints.length * 4, 0.15, 8, false);
+    }
+    // No progress - show full route in blue
+    return new TubeGeometry(routeCurve, routePoints.length * 4, 0.15, 8, false);
+  }, [routeCurve, routePoints, progressPercent, splitIndex]);
+
+  // Current position for marker
+  const currentPosition = useMemo(() => {
+    if (progressPercent === undefined || progressPercent <= 0 || splitIndex >= routePoints.length) {
+      return null;
+    }
+    return routePoints[splitIndex];
+  }, [progressPercent, splitIndex, routePoints]);
+
+  // Start and end positions
+  const startPosition = routePoints[0];
+  const endPosition = routePoints[routePoints.length - 1];
+
+  if (routePoints.length < 2) {
+    return null;
+  }
+
+  return (
+    <>
+      {/* Ambient light for even illumination */}
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 20, 10]} intensity={0.8} />
+      
+      {/* Sky dome */}
+      <mesh position={[bounds.center.x, 30, bounds.center.z]}>
+        <sphereGeometry args={[100, 32, 32]} />
+        <meshBasicMaterial color={'#87CEEB'} side={2} />
+      </mesh>
+      
+      {/* Water plane */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[bounds.center.x, -0.1, bounds.center.z]}
+      >
+        <planeGeometry args={[bounds.size * 3, bounds.size * 3, 32, 32]} />
+        <meshStandardMaterial 
+          color={'#4a90d9'} 
+          metalness={0.3} 
+          roughness={0.5}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+
+      {/* Land/shore around water */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[bounds.center.x, -0.15, bounds.center.z]}
+      >
+        <ringGeometry args={[bounds.size * 1.2, bounds.size * 3, 32]} />
+        <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+      </mesh>
+
+      {/* Completed portion of route (red) */}
+      {completedGeometry && progressPercent !== undefined && progressPercent > 0 && (
+        <mesh geometry={completedGeometry}>
+          <meshStandardMaterial 
+            color={'#ef4444'} 
+            metalness={0.2} 
+            roughness={0.6} 
+          />
+        </mesh>
+      )}
+
+      {/* Remaining/full route (green if progress, blue otherwise) */}
+      {remainingGeometry && (
+        <mesh geometry={remainingGeometry}>
+          <meshStandardMaterial 
+            color={progressPercent !== undefined && progressPercent > 0 ? '#22c55e' : '#3b82f6'} 
+            metalness={0.2} 
+            roughness={0.6} 
+          />
+        </mesh>
+      )}
+
+      {/* Current position marker (yellow) */}
+      {currentPosition && (
+        <mesh 
+          position={[currentPosition.x, 0.5, currentPosition.z]}
+        >
+          <sphereGeometry args={[0.3, 16, 16]} />
+          <meshStandardMaterial 
+            color={'#fbbf24'} 
+            emissive={'#f59e0b'}
+            emissiveIntensity={0.3}
+          />
+        </mesh>
+      )}
+
+      {/* Start marker (green) */}
+      {startPosition && (
+        <group position={[startPosition.x, 0, startPosition.z]}>
+          {/* Pin base */}
+          <mesh position={[0, 0.4, 0]}>
+            <cylinderGeometry args={[0.15, 0.25, 0.8, 8]} />
+            <meshStandardMaterial color={'#22c55e'} />
+          </mesh>
+          {/* Pin top */}
+          <mesh position={[0, 1.0, 0]}>
+            <sphereGeometry args={[0.3, 16, 16]} />
+            <meshStandardMaterial 
+              color={'#22c55e'} 
+              emissive={'#16a34a'}
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+        </group>
+      )}
+
+      {/* End marker (red) */}
+      {endPosition && (
+        <group position={[endPosition.x, 0, endPosition.z]}>
+          {/* Pin base */}
+          <mesh position={[0, 0.4, 0]}>
+            <cylinderGeometry args={[0.15, 0.25, 0.8, 8]} />
+            <meshStandardMaterial color={'#ef4444'} />
+          </mesh>
+          {/* Pin top */}
+          <mesh position={[0, 1.0, 0]}>
+            <sphereGeometry args={[0.3, 16, 16]} />
+            <meshStandardMaterial 
+              color={'#ef4444'} 
+              emissive={'#dc2626'}
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+        </group>
+      )}
+    </>
+  );
+};
+
 export const RouteMap: React.FC<RouteMapProps> = ({
   route,
   onRouteSelected,
   highlightMode,
   progressPercent,
 }) => {
-  const mapRef = useRef<L.Map | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const overlayLayersRef = useRef<L.Layer[]>([]);
-  const baseTileLayerRef = useRef<L.TileLayer | null>(null);
-  const [mapInitialized, setMapInitialized] = useState(false);
-  const tileErrorCountRef = useRef(0);
-
-  // Initialize map on mount
-  useEffect(() => {
-    if (mapRef.current || !containerRef.current) return;
-
-    // Calculate center from route coordinates
-    let center: [number, number] = [39.8283, -98.5795]; // USA center fallback
-    if (route.coordinates.length > 0) {
-      const avgLat = route.coordinates.reduce((sum, c) => sum + c.lat, 0) / route.coordinates.length;
-      const avgLng = route.coordinates.reduce((sum, c) => sum + c.lng, 0) / route.coordinates.length;
-      center = [avgLat, avgLng];
-    }
-
-    // Create map
-    const map = L.map(containerRef.current, {
-      center,
-      zoom: 8,
-      zoomControl: true,
-      attributionControl: true,
-    });
-
-    // Add base (tile) layer only once and keep reference
-  const baseTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c'],
-      tileSize: 256,
-  }).addTo(map);
-  // ensure the base tile layer stays below overlays
-  baseTileLayer.setZIndex(0);
-    // Debug tile loading issues
-    let fallbackTileServerUsed = false;
-    const onTileError = () => {
-      tileErrorCountRef.current++;
-      if (import.meta.env.DEV) {
-        console.warn('Leaflet tileerror count', tileErrorCountRef.current);
-      }
-      // Switch to fallback tile server after too many errors
-      if (tileErrorCountRef.current > 8 && !fallbackTileServerUsed) {
-        fallbackTileServerUsed = true;
-        try {
-          baseTileLayer.setUrl('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png');
-          baseTileLayer.redraw();
-          if (import.meta.env.DEV) console.warn('Switched to fallback OSM tile server');
-        } catch (err) {
-          if (import.meta.env.DEV) console.error('Fallback tile server switch failed', err);
-        }
-      }
-    };
-    baseTileLayer.on('tileerror', onTileError);
-  baseTileLayerRef.current = baseTileLayer;
-  // store reference in DOM element using dataset for safety if needed later
-  (containerRef.current as HTMLDivElement).dataset['baseTileLayerUrl'] = baseTileLayer.getTileUrl({ z: 0, x: 0, y: 0 } as any) || '';
-
-    mapRef.current = map;
-    setMapInitialized(true);
-    // When the map is ready, invalidate size (helpful in tabbed or hidden containers)
-    map.whenReady(() => {
-      // Use the ref to guard against the map having been removed by cleanup
-      if (mapRef.current) mapRef.current.invalidateSize();
-      setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, 120);
-      if (import.meta.env.DEV) {
-        setTimeout(() => {
-          const container = containerRef.current as HTMLDivElement | null;
-          if (container) {
-            const tiles = container.querySelectorAll('.leaflet-tile');
-            const urls = Array.from(tiles).map((t) => (t as HTMLImageElement).src);
-            const unique = new Set(urls);
-            console.debug('Leaflet tiles loaded', tiles.length, 'unique', unique.size);
-            if (tiles.length === 0) {
-              console.warn('No tiles found in container, check tile layer or CSS');
-            }
-          }
-        }, 700);
-      }
-    });
-
-    // ResizeObserver -> call invalidateSize when container changes size
-    const ro = new ResizeObserver(() => {
-      if (mapRef.current) {
-        // small timeout allows DOM to stabilize
-        setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, 50);
-      }
-    });
-
-  ro.observe(containerRef.current);
-
-    // IntersectionObserver -> detect when the map container becomes visible
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && mapRef.current) {
-          setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, 100);
-        }
-      });
-    });
-    io.observe(containerRef.current);
-
-    // Invalidate on moveend / zoomend to ensure tiles align after actions
-    const handleMoveEnd = () => {
-      if (mapRef.current) mapRef.current.invalidateSize();
-    };
-    map.on('moveend', handleMoveEnd);
-    map.on('zoomend', handleMoveEnd);
-
-    // Cleanup
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-      // remove tile events from the base layer
-      try {
-        baseTileLayer.off('tileerror', onTileError);
-      } catch (e) {
-        // ignore
-      }
-      ro.disconnect();
-      io.disconnect();
-      map.off('moveend', handleMoveEnd);
-      map.off('zoomend', handleMoveEnd);
-    };
-  }, []);
-
-  // Fallback: invalidate map size on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Update route when it changes
-  useEffect(() => {
-    if (!mapRef.current || !mapInitialized) return;
-
-    const map = mapRef.current;
-
-    // Remove previously added overlay layers only (polyline/markers added by previous route)
-    if (overlayLayersRef.current && overlayLayersRef.current.length > 0) {
-      overlayLayersRef.current.forEach((ol) => {
-        if (map.hasLayer(ol)) {
-          map.removeLayer(ol);
-        }
-      });
-      overlayLayersRef.current = [];
-    }
-
-    if (route.coordinates.length === 0) return;
-
-    const latlngs = route.coordinates.map((c) => [c.lat, c.lng] as L.LatLngTuple);
-    
-    // If progress is provided, split route into completed (red) and remaining (green)
-    if (progressPercent !== undefined && progressPercent > 0) {
-      const totalPoints = latlngs.length;
-      const splitIndex = Math.min(Math.floor((progressPercent / 100) * totalPoints), totalPoints - 1);
-      
-      // Completed portion (red) - from start to current position
-      if (splitIndex > 0) {
-        const completedLatLngs = latlngs.slice(0, splitIndex + 1);
-        const completedPolyline = L.polyline(completedLatLngs, {
-          color: '#ef4444', // Red for completed
-          weight: 5,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(map);
-        overlayLayersRef.current.push(completedPolyline);
-      }
-      
-      // Remaining portion (green) - from current position to end
-      if (splitIndex < totalPoints - 1) {
-        const remainingLatLngs = latlngs.slice(splitIndex);
-        const remainingPolyline = L.polyline(remainingLatLngs, {
-          color: '#22c55e', // Green for remaining
-          weight: 5,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(map);
-        overlayLayersRef.current.push(remainingPolyline);
-      }
-      
-      // Current position marker (yellow dot)
-      if (splitIndex > 0 && splitIndex < totalPoints) {
-        const currentPos = latlngs[splitIndex];
-        const positionMarker = L.circleMarker(currentPos, {
-          radius: 8,
-          fillColor: '#fbbf24',
-          color: '#ffffff',
-          weight: 3,
-          opacity: 1,
-          fillOpacity: 1,
-        }).addTo(map);
-        overlayLayersRef.current.push(positionMarker);
-      }
-    } else {
-      // No progress - draw single blue polyline (default view)
-      const polyline = L.polyline(latlngs, {
-        color: '#3b82f6',
-        weight: 4,
-        opacity: 0.8,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
-      overlayLayersRef.current.push(polyline);
-    }
-
-    // Add start marker (green)
-    const startMarker = L.marker([route.coordinates[0].lat, route.coordinates[0].lng], { icon: StartIcon })
-      .bindPopup(`<b>Start</b><br>${route.name}`)
-      .addTo(map);
-    overlayLayersRef.current.push(startMarker);
-
-    // Add end marker (red)
-    const lastCoord = route.coordinates[route.coordinates.length - 1];
-    const endMarker = L.marker([lastCoord.lat, lastCoord.lng], { icon: EndIcon })
-      .bindPopup(`<b>End</b><br>${route.name}`)
-      .addTo(map);
-    overlayLayersRef.current.push(endMarker);
-
-    // Fit bounds to route
-    const bounds = L.latLngBounds(latlngs);
-  map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
-  // After fitting bounds, call invalidateSize to avoid tile misplacement
-  setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, 120);
-    // Force tile redraw as a last step to avoid partial or out-of-order tiles in some browsers
-    setTimeout(() => baseTileLayerRef.current?.redraw(), 200);
-    if (import.meta.env.DEV) {
-      console.debug('Route overlays ', overlayLayersRef.current.length);
-    }
-  }, [route, mapInitialized, progressPercent]);
-
   return (
     <div className={`route-map-container ${highlightMode ? 'highlight-mode' : ''}`}>
-      <div ref={containerRef} className="route-map" />
+      <div className="route-map">
+        <Canvas 
+          camera={{ 
+            position: [0, 10, 10], 
+            fov: 50,
+            near: 0.1,
+            far: 1000
+          }}
+          gl={{ 
+            antialias: true,
+            alpha: true,
+            powerPreference: 'default'
+          }}
+        >
+          <RouteScene 
+            route={route} 
+            progressPercent={progressPercent}
+          />
+        </Canvas>
+      </div>
 
       <div className="route-info-overlay">
         {!highlightMode && (
-        <div className="route-info-card">
-          <h3>{route.name}</h3>
-          <div className="route-stats">
-            <div className="stat">
-              <span className="label">Distance</span>
-              <span className="value">{route.distance} km</span>
+          <div className="route-info-card">
+            <h3>{route.name}</h3>
+            <div className="route-stats">
+              <div className="stat">
+                <span className="label">Distance</span>
+                <span className="value">{route.distance} km</span>
+              </div>
+              <div className="stat">
+                <span className="label">Difficulty</span>
+                <span className={`badge badge-${route.difficulty}`}>
+                  {route.difficulty}
+                </span>
+              </div>
+              <div className="stat">
+                <span className="label">Est. Time</span>
+                <span className="value">{route.estimatedTime} min</span>
+              </div>
             </div>
-            <div className="stat">
-              <span className="label">Difficulty</span>
-              <span className={`badge badge-${route.difficulty}`}>
-                {route.difficulty}
-              </span>
-            </div>
-            <div className="stat">
-              <span className="label">Est. Time</span>
-              <span className="value">{route.estimatedTime} min</span>
-            </div>
+            <p className="description">{route.description}</p>
+            {onRouteSelected && (
+              <button
+                className="btn btn-primary"
+                onClick={() => onRouteSelected(route)}
+              >
+                Select This Route
+              </button>
+            )}
           </div>
-          <p className="description">{route.description}</p>
-          {onRouteSelected && (
-            <button
-              className="btn btn-primary"
-              onClick={() => onRouteSelected(route)}
-            >
-              Select This Route
-            </button>
-          )}
-        </div>
         )}
       </div>
     </div>

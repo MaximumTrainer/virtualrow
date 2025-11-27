@@ -7,7 +7,7 @@ VirtualRow is a web-based fitness application that lets you row on virtual water
 ### 🗺️ Custom Water Routes
 - Browse a curated collection of scenic water routes (lakes, rivers, coastal areas)
 - Filter routes by difficulty, distance, and location
-- Real-time map visualization using OpenStreetMap and Leaflet
+- Real-time 3D route visualization using Three.js
 - Route information including distance, estimated time, elevation gain, and difficulty level
 - Create custom water routes for your community
 
@@ -91,8 +91,8 @@ Web Bluetooth API support varies by browser:
 ### Core Components
 
 **RouteMap** (`src/components/RouteMap.tsx`)
-- Interactive map visualization of water routes
-- Leaflet-based mapping with multiple tile layers
+- Interactive 3D visualization of water routes using Three.js
+- Shows route with start/end markers and progress tracking
 - Route information overlay
 
 **BluetoothDevice** (`src/components/BluetoothDevice.tsx`)
@@ -200,8 +200,8 @@ All routes parsed from actual GPS data recorded at these locations!
 - **Vite** - Fast bundler and dev server
 - **React 18** - UI framework
 - **TypeScript** - Type-safe development
-- **Leaflet** - Map library
-- **React-Leaflet** - React wrapper for Leaflet
+- **Three.js** - 3D graphics library for route and rowing visualization
+- **React Three Fiber** - React renderer for Three.js
 - **pm5-base** - Concept2 PM5 Bluetooth protocol library
 
 ### Development Commands
@@ -517,7 +517,7 @@ MIT License - see LICENSE file for details
 
 - **Inspired by**: Biketerra
 - **Concept2**: PM5 device specifications
-- **Leaflet**: Map visualization
+- **Three.js**: 3D visualization
 - **Web Bluetooth API**: Device connectivity
 
 ## Support
