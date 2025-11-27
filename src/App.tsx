@@ -4,13 +4,16 @@ import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
+import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import Rower3D from './components/Rower3D';
-import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
+import { WorkoutGenerator } from './components/WorkoutGenerator';
+import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
+import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
+  const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -19,6 +22,12 @@ function App() {
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
+  const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
+  const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
+  // Filter state for routes
+  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
+  const [distanceMin, setDistanceMin] = useState<number>(0);
+  const [distanceMax, setDistanceMax] = useState<number>(100);
 
   useEffect(() => {
     const allRoutes = routeService.getAllRoutes();
@@ -72,10 +81,18 @@ function App() {
 
     const session = workoutService.startSession(
       selectedRoute.id, 
-      selectedRoute.name
+      selectedRoute.name,
+      selectedWorkout?.id
     );
     setCurrentSession(session);
     setIsWorkoutActive(true);
+    
+    // Start structured workout if selected
+    if (selectedWorkout) {
+      const progress = workoutGeneratorService.startWorkout(selectedWorkout.id);
+      setWorkoutProgress(progress);
+    }
+    
     setCurrentView('workout');
   };
 
@@ -86,13 +103,44 @@ function App() {
     }
     setIsWorkoutActive(false);
     setCurrentSession(null);
+    setWorkoutProgress(null);
+    workoutGeneratorService.endWorkout();
     setCurrentView('history');
   };
+
+  const handleSelectWorkout = (workout: StructuredWorkout | null) => {
+    setSelectedWorkout(workout);
+  };
+
+  const handleClearWorkout = () => {
+    setSelectedWorkout(null);
+  };
+
+  // Get filtered routes based on current filter settings
+  const getFilteredRoutes = useCallback(() => {
+    let filtered = routes;
+    if (difficultyFilter !== 'all') {
+      filtered = filtered.filter(r => r.difficulty === difficultyFilter);
+    }
+    filtered = filtered.filter(r => r.distance >= distanceMin && r.distance <= distanceMax);
+    return filtered;
+  }, [routes, difficultyFilter, distanceMin, distanceMax]);
+
+  const filteredRoutes = getFilteredRoutes();
 
   const handlePM5Data = useCallback((data: PM5Data) => {
     setPM5Data(data);
     if (isWorkoutActive && currentSession) {
       workoutService.updateSessionWithPM5Data(data);
+      
+      // Update structured workout progress if active
+      if (selectedWorkout) {
+        const progress = workoutGeneratorService.updateProgress(data);
+        if (progress) {
+          setWorkoutProgress(progress);
+          workoutService.updateWorkoutProgress(progress);
+        }
+      }
       
       // If PM5 gives HR, ensure samples state updates from session source
       if (data.heartRate) {
@@ -101,7 +149,7 @@ function App() {
       }
       setCurrentSession({ ...currentSession });
     }
-  }, [isWorkoutActive, currentSession]);
+  }, [isWorkoutActive, currentSession, selectedWorkout]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
@@ -128,6 +176,99 @@ function App() {
     setPM5Connected(false);
   }, []);
 
+  // Export session as GPX format
+  const handleExportGPX = useCallback((session: WorkoutSession) => {
+    const route = routeService.getRouteById(session.routeId);
+    if (!route) {
+      alert('Route data not available for this workout');
+      return;
+    }
+    
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="VirtualRow">
+  <metadata>
+    <name>${session.routeName}</name>
+    <time>${new Date(session.startTime).toISOString()}</time>
+  </metadata>
+  <trk>
+    <name>${session.routeName}</name>
+    <trkseg>
+${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0</ele></trkpt>`).join('\n')}
+    </trkseg>
+  </trk>
+</gpx>`;
+    
+    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `virtualrow-${session.id}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // Export session as FIT format (simplified JSON structure for now)
+  const handleExportFIT = useCallback((session: WorkoutSession) => {
+    // Note: True FIT format is binary. This exports a JSON representation
+    // that could be converted to FIT using external tools
+    const fitData = {
+      file_id: {
+        type: 'activity',
+        manufacturer: 'VirtualRow',
+        product: 1,
+        serial_number: parseInt(session.id) || 0,
+        time_created: new Date(session.startTime).toISOString()
+      },
+      activity: {
+        timestamp: new Date(session.startTime).toISOString(),
+        total_timer_time: session.duration,
+        num_sessions: 1,
+        type: 'manual'
+      },
+      session: {
+        timestamp: new Date(session.startTime).toISOString(),
+        start_time: new Date(session.startTime).toISOString(),
+        total_elapsed_time: session.duration,
+        total_timer_time: session.duration,
+        total_distance: session.distance,
+        total_calories: session.calories,
+        avg_pace: session.averagePace,
+        avg_heart_rate: session.heartRateAvg,
+        max_heart_rate: session.heartRateMax,
+        sport: 'rowing',
+        sub_sport: 'indoor_rowing'
+      },
+      records: session.splits.map(split => ({
+        timestamp: new Date(split.timestamp).toISOString(),
+        distance: split.distance,
+        pace: split.pace,
+        power: split.power,
+        heart_rate: split.heartRate
+      }))
+    };
+    
+    const blob = new Blob([JSON.stringify(fitData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `virtualrow-${session.id}.fit.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // Calculate personal best for a route
+  const getPersonalBest = useCallback((routeId: string) => {
+    const sessionsByRoute = workoutHistory.filter(s => s.routeId === routeId && s.averagePace > 0);
+    if (sessionsByRoute.length === 0) return null;
+    return sessionsByRoute.reduce((best, session) => 
+      session.averagePace < best.averagePace ? session : best
+    , sessionsByRoute[0]);
+  }, [workoutHistory]);
+
   const stats = workoutService.getStats();
 
   return (
@@ -147,6 +288,12 @@ function App() {
               onClick={() => setCurrentView('routes')}
             >
               <span className="tab-icon">🗺️</span> Routes
+            </button>
+            <button
+              className={`nav-tab ${currentView === 'workouts' ? 'active' : ''}`}
+              onClick={() => setCurrentView('workouts')}
+            >
+              <span className="tab-icon">💪</span> Workouts
             </button>
             <button
               className={`nav-tab ${currentView === 'workout' ? 'active' : ''}`}
@@ -248,6 +395,12 @@ function App() {
                       {selectedRoute.difficulty}
                     </span>
                   </div>
+                  {getPersonalBest(selectedRoute.id) && (
+                    <div className="meta-item pb-highlight">
+                      <span className="meta-label">🏆 Personal Best:</span>
+                      <span>{getPersonalBest(selectedRoute.id)?.averagePace}s/500m</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="route-tags">
@@ -258,6 +411,16 @@ function App() {
                   ))}
                 </div>
 
+                {selectedWorkout && (
+                  <div className="selected-workout-info">
+                    <h4>Selected Workout</h4>
+                    <p>{selectedWorkout.name}</p>
+                    <button className="btn-clear-workout" onClick={handleClearWorkout}>
+                      ✕ Clear Selection
+                    </button>
+                  </div>
+                )}
+
                 <button
                   className="btn btn-start-workout"
                   onClick={handleStartWorkout}
@@ -266,9 +429,47 @@ function App() {
                   {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
                 </button>
 
+                {/* Route Filters */}
+                <div className="route-filters">
+                  <h3>Filter Routes</h3>
+                  <div className="filter-group">
+                    <label>Difficulty:</label>
+                    <select
+                      value={difficultyFilter}
+                      onChange={(e) => setDifficultyFilter(e.target.value as 'all' | 'easy' | 'moderate' | 'hard')}
+                    >
+                      <option value="all">All</option>
+                      <option value="easy">Easy</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label>Distance (km):</label>
+                    <div className="distance-inputs">
+                      <input
+                        type="number"
+                        min="0"
+                        value={distanceMin}
+                        onChange={(e) => setDistanceMin(Number(e.target.value))}
+                        placeholder="Min"
+                      />
+                      <span>-</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={distanceMax}
+                        onChange={(e) => setDistanceMax(Number(e.target.value))}
+                        placeholder="Max"
+                      />
+                    </div>
+                  </div>
+                  <span className="filter-count">{filteredRoutes.length} routes</span>
+                </div>
+
                 <div className="routes-list">
                   <h3>Other Routes</h3>
-                  {routes.map((route) => (
+                  {filteredRoutes.map((route) => (
                     <div
                       key={route.id}
                       className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
@@ -293,6 +494,16 @@ function App() {
             </div>
           )}
 
+          {/* New Workouts Tab View */}
+          {currentView === 'workouts' && (
+            <div className="view-container workouts-view">
+              <WorkoutGenerator
+                onSelectWorkout={handleSelectWorkout}
+                selectedWorkout={selectedWorkout}
+              />
+            </div>
+          )}
+
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div className="view-container workout-view-fullscreen">
               {/* Fullscreen 3D scene with overlays */}
@@ -303,8 +514,19 @@ function App() {
                   distanceMeters={pm5Data?.distance} 
                   isPlaying={isWorkoutActive} 
                   cadence={pm5Data?.cadence} 
-                  performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'} 
+                  performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                  intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
                 />
+                
+                {/* Workout Progress Display Overlay (top-left) */}
+                {selectedWorkout && workoutProgress && (
+                  <div className="workout-progress-overlay">
+                    <WorkoutProgressDisplay
+                      progress={workoutProgress}
+                      allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
+                    />
+                  </div>
+                )}
                 
                 {/* Bottom left: Heart rate */}
                 <div className="overlay-bottom-left">
@@ -365,30 +587,61 @@ function App() {
                   {workoutHistory
                     .slice()
                     .reverse()
-                    .map((session) => (
-                      <div key={session.id} className="history-item">
-                        <div className="history-header">
-                          <h3>{session.routeName}</h3>
-                          <span className="date">
-                            {new Date(session.startTime).toLocaleDateString()}
-                          </span>
+                    .map((session) => {
+                      const pb = getPersonalBest(session.routeId);
+                      const isPB = pb && pb.id === session.id;
+                      return (
+                        <div key={session.id} className={`history-item ${isPB ? 'pb-item' : ''}`}>
+                          <div className="history-header">
+                            <h3>
+                              {session.routeName}
+                              {isPB && <span className="pb-badge">🏆 PB</span>}
+                            </h3>
+                            <span className="date">
+                              {new Date(session.startTime).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="history-stats">
+                            <div className="stat">
+                              <span>{(session.distance / 1000).toFixed(2)} km</span>
+                            </div>
+                            <div className="stat">
+                              <span>{formatDuration(session.duration)}</span>
+                            </div>
+                            <div className="stat">
+                              <span>{session.averagePace}s/500m</span>
+                            </div>
+                            <div className="stat">
+                              <span>{session.calories} kcal</span>
+                            </div>
+                          </div>
+                          {session.workoutProgress && (
+                            <div className="compliance-info">
+                              <span className="compliance-label">Compliance:</span>
+                              <span className={`compliance-value ${session.workoutProgress.isOnTarget ? 'on-target' : 'off-target'}`}>
+                                {session.workoutProgress.isOnTarget ? '✓ On Target' : '⚠ Off Target'}
+                              </span>
+                            </div>
+                          )}
+                          <div className="history-actions">
+                            <button
+                              className="btn-export"
+                              onClick={() => handleExportGPX(session)}
+                              title="Export as GPX"
+                            >
+                              📍 GPX
+                            </button>
+                            <button
+                              className="btn-export"
+                              onClick={() => handleExportFIT(session)}
+                              title="Export as FIT"
+                            >
+                              📊 FIT
+                            </button>
+                          </div>
                         </div>
-                        <div className="history-stats">
-                          <div className="stat">
-                            <span>{(session.distance / 1000).toFixed(2)} km</span>
-                          </div>
-                          <div className="stat">
-                            <span>{formatDuration(session.duration)}</span>
-                          </div>
-                          <div className="stat">
-                            <span>{session.averagePace}s/500m</span>
-                          </div>
-                          <div className="stat">
-                            <span>{session.calories} kcal</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </div>
