@@ -1014,3 +1014,57 @@ body {
   color: #d97706;
   font-weight: 600;
 }
+
+/* Heart Rate Zones Section in History */
+.hr-zones-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Performance Chart Toggle Button */
+.btn-toggle-chart {
+  position: absolute;
+  top: 80px;
+  right: 24px;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-chart:hover {
+  background: white;
+  transform: scale(1.05);
+}
+
+/* Performance Chart Overlay */
+.performance-chart-overlay {
+  position: absolute;
+  bottom: 100px;
+  left: 24px;
+  z-index: 100;
+  width: 400px;
+  max-width: calc(100% - 48px);
+  opacity: 0.95;
+}
+
+@media (max-width: 768px) {
+  .performance-chart-overlay {
+    width: calc(100% - 48px);
+    bottom: 120px;
+  }
+  
+  .btn-toggle-chart {
+    top: auto;
+    bottom: 80px;
+    right: 12px;
+  }
+}

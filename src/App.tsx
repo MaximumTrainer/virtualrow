@@ -9,8 +9,16 @@ import HeartRateMonitor from './components/HeartRateMonitor';
 import Rower3D from './components/Rower3D';
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
+import { HeartRateZonesChart } from './components/HeartRateZonesChart';
+import { PerformanceChart } from './components/PerformanceChart';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
+
+// Performance data point interface
+interface PerformanceDataPoint {
+  time: number;
+  value: number;
+}
 
 function App() {
   const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
@@ -28,6 +36,10 @@ function App() {
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
   const [distanceMin, setDistanceMin] = useState<number>(0);
   const [distanceMax, setDistanceMax] = useState<number>(100);
+  // Real-time performance data
+  const [paceHistory, setPaceHistory] = useState<PerformanceDataPoint[]>([]);
+  const [heartRateHistory, setHeartRateHistory] = useState<PerformanceDataPoint[]>([]);
+  const [showPerformanceChart, setShowPerformanceChart] = useState(false);
 
   useEffect(() => {
     const allRoutes = routeService.getAllRoutes();
@@ -104,6 +116,8 @@ function App() {
     setIsWorkoutActive(false);
     setCurrentSession(null);
     setWorkoutProgress(null);
+    setPaceHistory([]);
+    setHeartRateHistory([]);
     workoutGeneratorService.endWorkout();
     setCurrentView('history');
   };
@@ -140,6 +154,24 @@ function App() {
           setWorkoutProgress(progress);
           workoutService.updateWorkoutProgress(progress);
         }
+      }
+      
+      // Collect performance history for charts
+      const elapsedTime = Math.floor(data.elapsedTime / 1000);
+      if (data.pace) {
+        setPaceHistory(prev => {
+          const newPoint = { time: elapsedTime, value: data.pace! };
+          // Keep only last 300 points (5 minutes at 1 sample/sec)
+          const updated = [...prev, newPoint];
+          return updated.slice(-300);
+        });
+      }
+      if (data.heartRate) {
+        setHeartRateHistory(prev => {
+          const newPoint = { time: elapsedTime, value: data.heartRate! };
+          const updated = [...prev, newPoint];
+          return updated.slice(-300);
+        });
       }
       
       // If PM5 gives HR, ensure samples state updates from session source
@@ -528,6 +560,28 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   </div>
                 )}
                 
+                {/* Performance Chart Toggle Button */}
+                <button
+                  className="btn-toggle-chart"
+                  onClick={() => setShowPerformanceChart(!showPerformanceChart)}
+                  title={showPerformanceChart ? 'Hide Performance Chart' : 'Show Performance Chart'}
+                >
+                  📈
+                </button>
+                
+                {/* Performance Chart Overlay (bottom-left, above heart rate) */}
+                {showPerformanceChart && (paceHistory.length > 0 || heartRateHistory.length > 0) && (
+                  <div className="performance-chart-overlay">
+                    <PerformanceChart
+                      paceData={paceHistory}
+                      heartRateData={heartRateHistory}
+                      showPace={true}
+                      showHeartRate={true}
+                      maxPoints={60}
+                    />
+                  </div>
+                )}
+                
                 {/* Bottom left: Heart rate */}
                 <div className="overlay-bottom-left">
                   <div className="overlay-metric">
@@ -639,6 +693,11 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                               📊 FIT
                             </button>
                           </div>
+                          {session.heartRateSamples && session.heartRateSamples.length > 0 && (
+                            <div className="hr-zones-section">
+                              <HeartRateZonesChart samples={session.heartRateSamples} />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
