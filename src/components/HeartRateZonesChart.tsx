@@ -61,8 +61,13 @@ export function HeartRateZonesChart({ samples, maxHeartRate = 190 }: HeartRateZo
     }));
   }, [samples, maxHeartRate]);
 
+  /**
+   * Format sample count as time duration.
+   * Note: This assumes heart rate samples are collected at approximately 1 sample per second,
+   * which matches the typical HR monitor and PM5 update rate. The actual sample rate may vary
+   * slightly based on device behavior.
+   */
   const formatTime = (sampleCount: number): string => {
-    // Assuming 1 sample per second
     const seconds = sampleCount;
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;

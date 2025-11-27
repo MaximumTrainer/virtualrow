@@ -161,16 +161,21 @@ function App() {
       if (data.pace) {
         setPaceHistory(prev => {
           const newPoint = { time: elapsedTime, value: data.pace! };
-          // Keep only last 300 points (5 minutes at 1 sample/sec)
-          const updated = [...prev, newPoint];
-          return updated.slice(-300);
+          // Only slice if we exceed the limit to avoid unnecessary array operations
+          if (prev.length >= 300) {
+            return [...prev.slice(-299), newPoint];
+          }
+          return [...prev, newPoint];
         });
       }
       if (data.heartRate) {
         setHeartRateHistory(prev => {
           const newPoint = { time: elapsedTime, value: data.heartRate! };
-          const updated = [...prev, newPoint];
-          return updated.slice(-300);
+          // Only slice if we exceed the limit to avoid unnecessary array operations
+          if (prev.length >= 300) {
+            return [...prev.slice(-299), newPoint];
+          }
+          return [...prev, newPoint];
         });
       }
       
@@ -245,12 +250,16 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
   const handleExportFIT = useCallback((session: WorkoutSession) => {
     // Note: True FIT format is binary. This exports a JSON representation
     // that could be converted to FIT using external tools
+    // Generate a numeric serial from session ID (use hash if not numeric)
+    const serialNumber = /^\d+$/.test(session.id) 
+      ? parseInt(session.id, 10) 
+      : session.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const fitData = {
       file_id: {
         type: 'activity',
         manufacturer: 'VirtualRow',
         product: 1,
-        serial_number: parseInt(session.id) || 0,
+        serial_number: serialNumber,
         time_created: new Date(session.startTime).toISOString()
       },
       activity: {

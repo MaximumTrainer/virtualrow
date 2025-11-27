@@ -1,8 +1,17 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
+import type { ChartDataset, ScaleOptions } from 'chart.js';
 import './PerformanceChart.css';
 
 Chart.register(...registerables);
+
+// Chart color constants for consistency
+const CHART_COLORS = {
+  pace: { border: '#667eea', background: 'rgba(102, 126, 234, 0.1)' },
+  power: { border: '#22c55e', background: 'rgba(34, 197, 94, 0.1)' },
+  heartRate: { border: '#ef4444', background: 'rgba(239, 68, 68, 0.1)' },
+  distance: { border: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' },
+};
 
 interface DataPoint {
   time: number; // elapsed time in seconds
@@ -60,15 +69,15 @@ export function PerformanceChart({
     const ctx = chartRef.current.getContext('2d');
     if (!ctx) return;
 
-    const datasets: any[] = [];
+    const datasets: ChartDataset<'line', number[]>[] = [];
     const labels = limitedData.pace.map(d => formatTime(d.time));
 
     if (showPace && limitedData.pace.length > 0) {
       datasets.push({
         label: 'Pace (s/500m)',
         data: limitedData.pace.map(d => d.value),
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+        borderColor: CHART_COLORS.pace.border,
+        backgroundColor: CHART_COLORS.pace.background,
         tension: 0.4,
         fill: true,
         yAxisID: 'pace',
@@ -79,8 +88,8 @@ export function PerformanceChart({
       datasets.push({
         label: 'Power (W)',
         data: limitedData.power.map(d => d.value),
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        borderColor: CHART_COLORS.power.border,
+        backgroundColor: CHART_COLORS.power.background,
         tension: 0.4,
         fill: false,
         yAxisID: 'power',
@@ -91,8 +100,8 @@ export function PerformanceChart({
       datasets.push({
         label: 'Heart Rate (bpm)',
         data: limitedData.heartRate.map(d => d.value),
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderColor: CHART_COLORS.heartRate.border,
+        backgroundColor: CHART_COLORS.heartRate.background,
         tension: 0.4,
         fill: false,
         yAxisID: 'hr',
@@ -103,15 +112,15 @@ export function PerformanceChart({
       datasets.push({
         label: 'Distance (m)',
         data: limitedData.distance.map(d => d.value),
-        borderColor: '#f59e0b',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        borderColor: CHART_COLORS.distance.border,
+        backgroundColor: CHART_COLORS.distance.background,
         tension: 0.4,
         fill: false,
         yAxisID: 'distance',
       });
     }
 
-    const scales: any = {
+    const scales: Record<string, ScaleOptions<'linear'>> = {
       x: {
         display: true,
         title: {
