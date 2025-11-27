@@ -299,7 +299,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       
       for (let i = 0; i < numLeft; i++) {
         const distanceFromWater = 6 + seededRandom() * 20;
-        const treeType = seededRandom() < 0.4 ? 'pine' : (seededRandom() < 0.7 ? 'deciduous' : 'bush');
+        const treeTypeRand = seededRandom();
+        const treeType = treeTypeRand < 0.4 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
         trees.push({
           x: -distanceFromWater,
           z: z + seededRandom() * 3 - 1.5,
@@ -312,7 +313,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       
       for (let i = 0; i < numRight; i++) {
         const distanceFromWater = 6 + seededRandom() * 20;
-        const treeType = seededRandom() < 0.4 ? 'pine' : (seededRandom() < 0.7 ? 'deciduous' : 'bush');
+        const treeTypeRand = seededRandom();
+        const treeType = treeTypeRand < 0.4 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
         trees.push({
           x: distanceFromWater,
           z: z + seededRandom() * 3 - 1.5,
@@ -512,7 +514,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       // Trees at various distances from shore
       for (let i = 0; i < 3; i++) {
         const distance = 62 + seededRandom() * 15;
-        const treeType = seededRandom() < 0.5 ? 'pine' : (seededRandom() < 0.7 ? 'deciduous' : 'bush');
+        const treeTypeRand = seededRandom();
+        const treeType = treeTypeRand < 0.5 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
         trees.push({
           x: Math.cos(angle + seededRandom() * 0.3) * distance,
           z: Math.sin(angle + seededRandom() * 0.3) * distance,
@@ -523,11 +526,12 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       
       // Vegetation near water
       if (seededRandom() > 0.4) {
+        const vegTypeRand = seededRandom();
         vegetation.push({
           x: Math.cos(angle) * (60 + seededRandom() * 3),
           z: Math.sin(angle) * (60 + seededRandom() * 3),
           scale: 0.3 + seededRandom() * 0.2,
-          type: seededRandom() > 0.5 ? 'reeds' : 'grass'
+          type: vegTypeRand > 0.5 ? 'reeds' : 'grass'
         });
       }
       
