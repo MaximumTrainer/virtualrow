@@ -140,15 +140,15 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     posRef.current.copy(pos);
     yawRef.current = yaw;
     
-    // Keep boat stationary at a fixed position and orientation
-    // The boat always faces forward (toward camera), the world moves around it
-    boatRef.current.position.set(0, 0, 1.5); // Position boat forward/up in view
-    boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
+    // Position boat in the lower-center of screen, pointing forward (away from camera)
+    // Boat at origin, facing negative Z (forward into the scene)
+    boatRef.current.position.set(0, 0, 0);
+    boatRef.current.rotation.set(0, 0, 0); // Boat nose points toward negative Z
 
-    // Fixed camera position - behind and above the boat, looking forward
-    // This creates the illusion that the boat is moving forward while the world moves back
-    camera.position.set(0, 3.5, 4.5); // Behind and elevated
-    camera.lookAt(0, 0, 0); // Look toward boat position
+    // Camera positioned behind and slightly above the rower, looking forward horizontally
+    // Lower camera angle to see horizon and boat together
+    camera.position.set(0, 1.0, 3); // Close behind rower, at head height
+    camera.lookAt(0, 0.5, -30); // Look ahead at eye level toward horizon
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -292,7 +292,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     }> = [];
     const seededRandom = createSeededRandom(12345);
     
-    for (let z = -100; z < 100; z += 3) {
+    // Generate trees extending forward (negative Z is ahead of the boat)
+    for (let z = -400; z < 50; z += 3) {
       // Generate multiple trees/vegetation per z position for density
       const numLeft = 1 + Math.floor(seededRandom() * 2);
       const numRight = 1 + Math.floor(seededRandom() * 2);
@@ -340,7 +341,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     }> = [];
     const seededRandom = createSeededRandom(67890);
     
-    for (let z = -100; z < 100; z += 2) {
+    // Generate vegetation extending forward (negative Z is ahead)
+    for (let z = -400; z < 50; z += 2) {
       // Reeds near water edge
       if (seededRandom() > 0.5) {
         vegetation.push({
@@ -422,8 +424,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     const buildingColors = ['#d4c4a8', '#c9b896', '#e8dcc8', '#a89880', '#b8a888'];
     const roofColors = ['#8b4513', '#654321', '#4a3520', '#5c3d2e', '#6b4226'];
     
-    // Spread buildings sparsely along the route
-    for (let z = -90; z < 90; z += 20) {
+    // Spread buildings sparsely along the route (negative Z is ahead)
+    for (let z = -380; z < 50; z += 20) {
       // Chance to place building on left or right
       if (seededRandom() > 0.4) {
         const roofChoice = seededRandom();
@@ -566,15 +568,14 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   }, [isLakeRoute]);
 
   // Helper function to calculate perspective scale based on distance from camera
-  // Objects further away appear smaller
+  // Objects further away appear smaller (camera is at z=3, looking forward toward negative Z)
   const calculatePerspectiveScale = (z: number, baseScale: number): number => {
-    // Camera is at z=4.5, boat at z=1.5
+    // Camera is at z=3, boat at z=0
     // Objects at z < 0 are ahead (in front of boat), z > 0 are behind
-    const cameraZ = 4.5;
+    const cameraZ = 3;
     const distanceFromCamera = Math.abs(z - cameraZ);
     // Use inverse distance for perspective - closer objects are larger
-    // Minimum scale factor to prevent objects from disappearing
-    const perspectiveFactor = Math.max(0.3, Math.min(1.5, 8 / (distanceFromCamera + 5)));
+    const perspectiveFactor = Math.max(0.1, Math.min(3.0, 20 / (distanceFromCamera + 10)));
     return baseScale * perspectiveFactor;
   };
 
@@ -582,19 +583,23 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     <>
       {/* ambient light */}
       <ambientLight intensity={isLakeRoute ? 0.7 : 0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={isLakeRoute ? 0.8 : 0.6} />
+      <directionalLight position={[5, 10, 5]} intensity={isLakeRoute ? 0.8 : 0.6} castShadow />
       
-      {/* Sky color based on route type */}
-      {isLakeRoute && (
-        <mesh position={[0, 50, 0]}>
-          <sphereGeometry args={[200, 16, 16]} />
-          <meshBasicMaterial color={'#87CEEB'} side={2} />
-        </mesh>
-      )}
+      {/* Sky dome - visible horizon for all routes */}
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[500, 32, 32]} />
+        <meshBasicMaterial color={isLakeRoute ? '#87CEEB' : '#6eb5ff'} side={2} />
+      </mesh>
+      
+      {/* Horizon line - distant land/fog */}
+      <mesh position={[0, -10, -300]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1000, 200]} />
+        <meshBasicMaterial color={isLakeRoute ? '#a8d5ba' : '#8bc99a'} transparent opacity={0.7} />
+      </mesh>
       
       {/* water plane - moves backward with route to create illusion of movement */}
       <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <planeGeometry args={[500, 500, 8, 8]} />
+        <planeGeometry args={[500, 1000, 16, 16]} />
         <meshStandardMaterial 
           color={isLakeRoute ? '#3b82c4' : '#4a9eda'} 
           metalness={isLakeRoute ? 0.3 : 0.2} 
@@ -605,36 +610,36 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       {/* RIVER SCENERY - grass banks and trees */}
       {isRiverRoute && (
         <group ref={riverSceneryRef}>
-          {/* Left grass bank */}
+          {/* Left grass bank - extends forward (negative Z) */}
           <mesh 
             rotation={[-Math.PI / 2, 0, 0]} 
-            position={[-15, 0.01, 0]}
+            position={[-15, 0.01, -200]}
           >
-            <planeGeometry args={[25, 500]} />
+            <planeGeometry args={[25, 800]} />
             <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
           </mesh>
           {/* Right grass bank */}
           <mesh 
             rotation={[-Math.PI / 2, 0, 0]} 
-            position={[15, 0.01, 0]}
+            position={[15, 0.01, -200]}
           >
-            <planeGeometry args={[25, 500]} />
+            <planeGeometry args={[25, 800]} />
             <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
           </mesh>
           {/* Left bank edge (darker grass) */}
           <mesh 
             rotation={[-Math.PI / 2, 0, 0]} 
-            position={[-4, 0.02, 0]}
+            position={[-4, 0.02, -200]}
           >
-            <planeGeometry args={[3, 500]} />
+            <planeGeometry args={[3, 800]} />
             <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
           </mesh>
           {/* Right bank edge (darker grass) */}
           <mesh 
             rotation={[-Math.PI / 2, 0, 0]} 
-            position={[4, 0.02, 0]}
+            position={[4, 0.02, -200]}
           >
-            <planeGeometry args={[3, 500]} />
+            <planeGeometry args={[3, 800]} />
             <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
           </mesh>
           
@@ -1242,7 +1247,7 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
       <WebGLErrorBoundary>
         <Canvas 
-          camera={{ position: [0, 5, 5], fov: 50 }}
+          camera={{ position: [0, 1.0, 3], fov: 70 }}
           gl={{
             // WebGL-safe options for CI/headless environments
             antialias: false,
