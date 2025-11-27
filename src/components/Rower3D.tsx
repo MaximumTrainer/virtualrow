@@ -1167,7 +1167,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
               <meshStandardMaterial color={'#dc2626'} roughness={0.7} />
             </mesh>
             {/* Stairs (99 steps!) - simplified representation */}
-            {[0, 1, 2, 3, 4].map((i) => (
+            {Array.from({ length: 5 }, (_, i) => (
               <mesh key={`step-${i}`} position={[4 + i * 0.8, 0.3 + i * 0.3, 0]}>
                 <boxGeometry args={[1, 0.3, 2]} />
                 <meshStandardMaterial color={'#9ca3af'} roughness={0.9} />
