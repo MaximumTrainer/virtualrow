@@ -629,7 +629,40 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
     <div className="rower3d-canvas-container">
       {/* fallback marker for test automation if Canvas isn't created due to WebGL issues */}
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
-      <Canvas camera={{ position: [0, 5, 5], fov: 50 }}>
+      <Canvas 
+        camera={{ position: [0, 5, 5], fov: 50 }}
+        gl={{ 
+          antialias: false, // Disable for better performance in headless
+          powerPreference: 'low-power', // More stable in CI environments
+          failIfMajorPerformanceCaveat: false, // Allow software rendering
+          preserveDrawingBuffer: true, // Helps prevent context loss
+        }}
+        onCreated={({ gl }) => {
+          // Handle WebGL context loss at canvas level
+          const canvas = gl.domElement;
+          canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('WebGL context lost in Rower3D canvas');
+            try {
+              (window as unknown as Record<string, unknown>).__ROWER3D_WEBGL_LOST = true;
+              const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement;
+              if (marker) marker.style.display = 'block';
+            } catch {
+              // Ignore
+            }
+          });
+          canvas.addEventListener('webglcontextrestored', () => {
+            console.info('WebGL context restored in Rower3D canvas');
+            try {
+              (window as unknown as Record<string, unknown>).__ROWER3D_WEBGL_LOST = false;
+              const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement;
+              if (marker) marker.style.display = 'none';
+            } catch {
+              // Ignore
+            }
+          });
+        }}
+      >
         <RowerScene {...props} />
       </Canvas>
     </div>

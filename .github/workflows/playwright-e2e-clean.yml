@@ -9,6 +9,10 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    # Force software rendering for WebGL in headless CI
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      CI: true
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -30,14 +34,17 @@ jobs:
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
       - name: Ensure Playwright browsers installed
         run: npm run pretest:e2e
+      - name: Kill any lingering processes on test ports
+        run: |
+          # Clean up any processes that might be using our ports
+          sudo lsof -ti:5173,9001,9002 | xargs kill -9 2>/dev/null || true
+          sleep 2
       - name: Start simulator server
         run: |
           npm run start:sim & echo $! > /tmp/sim.pid
           # Wait for simulator to be ready
           npx wait-on http://localhost:9002
       - name: Run tests (unit + e2e)
-        env:
-          CI: true
         run: npm run test && npm run test:e2e:ci
         timeout-minutes: 30
       - name: Upload Playwright artifacts (always)

@@ -4,30 +4,43 @@ import { defineConfig } from '@playwright/test';
  * CI-specific Playwright configuration
  * Use with: npm run test:e2e:ci
  * 
- * Excludes tests with known issues in GitHub Actions environment:
- * - WebGL context loss in headless Chromium causing 3D animation tests to fail
- * - Network firewall restrictions blocking external map tile requests
+ * Optimized for WebGL/THREE.js rendering in headless CI environments:
+ * - Uses SwiftShader for software-based WebGL rendering
+ * - Disables GPU features that can cause context loss in headless mode
+ * - Increased timeout for software rendering performance
  * 
- * Use --grep-invert flag to exclude: "plays a single route with PM5 & HR simulators"
- * This test requires stable WebGL context which is not available in headless CI.
+ * To run all tests including WebGL-heavy tests, ensure LIBGL_ALWAYS_SOFTWARE=1
+ * environment variable is set in the CI pipeline.
  */
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  timeout: 60 * 1000,
+  timeout: 90 * 1000, // Increased timeout for software rendering
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 720 },
-    actionTimeout: 5 * 1000,
+    actionTimeout: 10 * 1000, // Increased action timeout for WebGL operations
     // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
     launchOptions: {
-      // NOTE: SwiftShader enables software GL rendering in headless mode.
-      // `--enable-unsafe-swiftshader` is required for newer Chromium versions
-      // where automatic SwiftShader fallback was changed. This flag bypasses
-      // GPU sandbox restrictions and should only be used in CI/test environments.
-      args: ['--enable-unsafe-webgl', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox']
+      // Chrome flags for stable WebGL in headless mode:
+      // - SwiftShader provides software GL rendering
+      // - Disable GPU features that can cause context loss
+      // - Use single process to reduce memory pressure
+      args: [
+        '--enable-unsafe-webgl',
+        '--use-gl=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-gpu-rasterization',
+        '--disable-gpu-compositing',
+        '--disable-software-rasterizer',
+        '--disable-dev-shm-usage', // Prevent shared memory issues in Docker/CI
+        '--disable-setuid-sandbox',
+        '--single-process', // Reduce memory fragmentation
+      ]
     },
     // Capture screenshots as test evidence - both on failure and success
     screenshot: 'on',
@@ -38,5 +51,6 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: false,
+    timeout: 60 * 1000, // Give dev server time to start
   },
 });
