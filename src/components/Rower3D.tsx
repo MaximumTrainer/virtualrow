@@ -2,6 +2,7 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { CatmullRomCurve3, Vector3, Mesh, Group } from 'three';
 import { useThree } from '@react-three/fiber';
+import { Sky, Environment } from '@react-three/drei';
 import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './Rower3D.css';
@@ -15,6 +16,53 @@ interface Rower3DProps {
   performanceMode?: 'auto' | 'high' | 'low';
   intensityFactor?: number; // Speed adjustment factor from workout intensity (e.g., 0.6-1.2)
 }
+
+// Fallback simple water for environments where Water shader may not work (e.g., CI)
+// This provides improved rendering with better metalness and roughness for reflections
+interface SimpleWaterProps {
+  position?: [number, number, number];
+  isLake?: boolean;
+  waterRef?: React.RefObject<Mesh | null>;
+}
+
+const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isLake = false, waterRef }) => {
+  const meshRef = useRef<Mesh>(null);
+  
+  // Animate water with subtle wave effect by modulating metalness/roughness
+  useFrame(() => {
+    if (meshRef.current) {
+      const material = meshRef.current.material as THREE.MeshStandardMaterial;
+      if (material && material.roughness !== undefined) {
+        // Subtle shimmer effect
+        material.roughness = 0.3 + Math.sin(performance.now() * 0.001) * 0.1;
+      }
+    }
+  });
+
+  return (
+    <mesh 
+      ref={(ref) => {
+        meshRef.current = ref;
+        if (waterRef) {
+          (waterRef as React.MutableRefObject<Mesh | null>).current = ref;
+        }
+      }} 
+      rotation={[-Math.PI / 2, 0, 0]} 
+      position={position}
+    >
+      <planeGeometry args={[500, 500, 32, 32]} />
+      <meshStandardMaterial 
+        color={isLake ? '#1a5fb4' : '#2d7dc9'} 
+        metalness={0.6}
+        roughness={0.3}
+        envMapIntensity={1.0}
+      />
+    </mesh>
+  );
+};
+
+// Import THREE namespace for type casting
+import * as THREE from 'three';
 
 // Simple boat mesh is built in the scene below
 
@@ -323,27 +371,40 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
   return (
     <>
-      {/* ambient light */}
-      <ambientLight intensity={isLakeRoute ? 0.7 : 0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={isLakeRoute ? 0.8 : 0.6} />
+      {/* Improved lighting setup for better reflections */}
+      <ambientLight intensity={isLakeRoute ? 0.5 : 0.4} />
+      <directionalLight 
+        position={[10, 20, 10]} 
+        intensity={isLakeRoute ? 1.2 : 1.0} 
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <directionalLight 
+        position={[-5, 10, -5]} 
+        intensity={0.3} 
+        color="#b3d4fc"
+      />
       
-      {/* Sky color based on route type */}
-      {isLakeRoute && (
-        <mesh position={[0, 50, 0]}>
-          <sphereGeometry args={[200, 16, 16]} />
-          <meshBasicMaterial color={'#87CEEB'} side={2} />
-        </mesh>
-      )}
+      {/* Realistic sky with sun for reflections */}
+      <Sky 
+        distance={450000}
+        sunPosition={[100, 20, 100]}
+        inclination={0.5}
+        azimuth={0.25}
+        turbidity={isLakeRoute ? 8 : 10}
+        rayleigh={isLakeRoute ? 0.5 : 2}
+      />
       
-      {/* water plane - moves backward with route to create illusion of movement */}
-      <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <planeGeometry args={[500, 500, 8, 8]} />
-        <meshStandardMaterial 
-          color={isLakeRoute ? '#3b82c4' : '#4a9eda'} 
-          metalness={isLakeRoute ? 0.3 : 0.2} 
-          roughness={isLakeRoute ? 0.4 : 0.6} 
-        />
-      </mesh>
+      {/* Environment map for realistic reflections on water and boat */}
+      <Environment preset={isLakeRoute ? "dawn" : "sunset"} />
+      
+      {/* Realistic water with reflections - use SimpleWater for better compatibility */}
+      <SimpleWater 
+        waterRef={waterRef} 
+        isLake={isLakeRoute} 
+        position={[0, -0.05, 0]} 
+      />
 
       {/* RIVER SCENERY - grass banks and trees */}
       {isRiverRoute && (
@@ -673,6 +734,10 @@ class WebGLErrorBoundary extends React.Component<
 }
 
 export const Rower3D: React.FC<Rower3DProps> = (props) => {
+  // Check if we should use high quality rendering
+  const isHighQuality = props.performanceMode === 'high' || 
+    (props.performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING);
+  
   return (
     <div className="rower3d-canvas-container">
       {/* fallback marker for test automation if Canvas isn't created due to WebGL issues */}
@@ -680,15 +745,21 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
       <WebGLErrorBoundary>
         <Canvas 
           camera={{ position: [0, 5, 5], fov: 50 }}
+          shadows={isHighQuality}
           gl={{
-            // WebGL-safe options for CI/headless environments
-            antialias: false,
+            // Enable antialiasing for smoother edges in high quality mode
+            antialias: isHighQuality,
             alpha: true,
-            powerPreference: 'low-power',
+            powerPreference: isHighQuality ? 'high-performance' : 'low-power',
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: true,
+            // Enable tone mapping for better colors
+            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMappingExposure: 1.0,
           }}
           onCreated={({ gl }) => {
+            // Set output color space for better color accuracy
+            gl.outputColorSpace = THREE.SRGBColorSpace;
             // Additional context loss handling setup
             gl.domElement.addEventListener('webglcontextlost', (e) => {
               e.preventDefault();
