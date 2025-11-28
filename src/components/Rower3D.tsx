@@ -1,6 +1,7 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { CatmullRomCurve3, Vector3, Mesh, Group } from 'three';
+import { CatmullRomCurve3, Vector3, Mesh, Group, MeshStandardMaterial } from 'three';
+import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
@@ -30,9 +31,10 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
   
   // Animate water with subtle wave effect by modulating metalness/roughness
   useFrame(() => {
-    if (meshRef.current) {
-      const material = meshRef.current.material as THREE.MeshStandardMaterial;
-      if (material && material.roughness !== undefined) {
+    if (meshRef.current && meshRef.current.material) {
+      const material = meshRef.current.material;
+      // Type guard to check if material is MeshStandardMaterial
+      if (material instanceof MeshStandardMaterial && material.roughness !== undefined) {
         // Subtle shimmer effect
         material.roughness = 0.3 + Math.sin(performance.now() * 0.001) * 0.1;
       }
@@ -43,8 +45,13 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
     <mesh 
       ref={(ref) => {
         meshRef.current = ref;
-        if (waterRef) {
-          (waterRef as React.MutableRefObject<Mesh | null>).current = ref;
+        // Only assign if waterRef is mutable (has writable current property)
+        if (waterRef && 'current' in waterRef) {
+          try {
+            (waterRef as React.MutableRefObject<Mesh | null>).current = ref;
+          } catch {
+            // Ref might be read-only, ignore assignment
+          }
         }
       }} 
       rotation={[-Math.PI / 2, 0, 0]} 
@@ -60,9 +67,6 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
     </mesh>
   );
 };
-
-// Import THREE namespace for type casting
-import * as THREE from 'three';
 
 // Simple boat mesh is built in the scene below
 
