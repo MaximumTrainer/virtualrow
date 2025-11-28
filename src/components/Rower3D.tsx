@@ -142,13 +142,14 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     
     // Keep boat stationary at a fixed position and orientation
     // The boat always faces forward (toward camera), the world moves around it
-    boatRef.current.position.set(0, 0, 1.5); // Position boat forward/up in view
+    boatRef.current.position.set(0, 0, -2); // Position boat forward in the scene
     boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
 
     // Fixed camera position - behind and above the boat, looking forward
-    // This creates the illusion that the boat is moving forward while the world moves back
-    camera.position.set(0, 3.5, 4.5); // Behind and elevated
-    camera.lookAt(0, 0, 0); // Look toward boat position
+    // Camera is positioned further back and lower to show the whole boat in lower center of screen
+    // This creates a chase camera view where the rower and boat are visible moving forward
+    camera.position.set(0, 2.5, 6); // Further back and lower for better chase view
+    camera.lookAt(0, 1, -4); // Look at a point ahead and above the boat to position boat in lower center
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -214,7 +215,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         (window as any).__ROWER3D_POS = { 
           x: 0,  // Actual rendered x position (boat is fixed at origin)
           y: 0,  // Actual rendered y position
-          z: 1.5,  // Actual rendered z position  
+          z: -2,  // Actual rendered z position  
           progress: progressRef.current, 
           yaw: -yaw + Math.PI  // Actual boat orientation (faces forward)
         };
