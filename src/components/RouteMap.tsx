@@ -1,13 +1,4 @@
-import React, { useMemo, useRef } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { 
-  CatmullRomCurve3, 
-  Vector3, 
-  TubeGeometry,
-  ACESFilmicToneMapping,
-  SRGBColorSpace
-} from 'three';
-import { Sky } from '@react-three/drei';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
@@ -18,287 +9,299 @@ interface RouteMapProps {
   progressPercent?: number; // 0-100, percentage of route completed
 }
 
-// Props for the internal 3D scene component (subset of RouteMapProps)
-interface RouteSceneProps {
-  route: WaterRoute;
-  progressPercent?: number;
-}
-
-// Scale factor to convert real-world meters to scene units
-const SCALE_FACTOR = 0.0005;
-
-// Component for rendering the route line and markers in 3D
-const RouteScene: React.FC<RouteSceneProps> = ({
-  route,
-  progressPercent,
-}) => {
-  const { camera } = useThree();
-  
-  // Convert lat/lng coordinates to 3D positions
-  const routePoints = useMemo(() => {
-    if (!route || !route.coordinates || route.coordinates.length === 0) return [];
-    const originLat = route.coordinates[0].lat;
-    const originLng = route.coordinates[0].lng;
-    
-    return route.coordinates.map((c) => {
-      const p = latLngToMeters(c.lat, c.lng, originLat, originLng);
-      // Scale and convert: x = east/west, z = north/south, y = elevation (0 for water)
-      return new Vector3(p.x * SCALE_FACTOR, 0, -p.y * SCALE_FACTOR);
-    });
-  }, [route]);
-
-  // Create smooth curve from route points
-  const routeCurve = useMemo(() => {
-    if (routePoints.length < 2) return null;
-    return new CatmullRomCurve3(routePoints, false, 'centripetal', 0.5);
-  }, [routePoints]);
-
-  // Calculate bounds for camera positioning
-  const bounds = useMemo(() => {
-    if (routePoints.length === 0) return { center: new Vector3(0, 0, 0), size: 10 };
-    
-    let minX = Infinity, maxX = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
-    
-    for (const point of routePoints) {
-      minX = Math.min(minX, point.x);
-      maxX = Math.max(maxX, point.x);
-      minZ = Math.min(minZ, point.z);
-      maxZ = Math.max(maxZ, point.z);
-    }
-    
-    const center = new Vector3(
-      (minX + maxX) / 2,
-      0,
-      (minZ + maxZ) / 2
-    );
-    const size = Math.max(maxX - minX, maxZ - minZ);
-    
-    return { center, size };
-  }, [routePoints]);
-
-  // Split progress index
-  const splitIndex = useMemo(() => {
-    if (progressPercent === undefined || progressPercent <= 0) return 0;
-    return Math.min(
-      Math.floor((progressPercent / 100) * routePoints.length),
-      routePoints.length - 1
-    );
-  }, [progressPercent, routePoints.length]);
-
-  // Refs for animated elements
-  const cameraInitialized = useRef(false);
-
-  // Set up camera on first render - bird's eye view to see entire route
-  useFrame(() => {
-    if (!cameraInitialized.current && bounds.size > 0) {
-      // Increase distance multiplier for better overview - true bird's eye view
-      const distance = bounds.size * 2.5;
-      camera.position.set(
-        bounds.center.x,
-        distance,
-        bounds.center.z + distance * 0.1 // Reduced offset for more top-down view
-      );
-      camera.lookAt(bounds.center.x, 0, bounds.center.z);
-      cameraInitialized.current = true;
-    }
-  });
-
-  // Create geometries for completed and remaining portions
-  const completedGeometry = useMemo(() => {
-    if (!routeCurve || splitIndex <= 0) return null;
-    const completedPoints = routePoints.slice(0, splitIndex + 1);
-    if (completedPoints.length < 2) return null;
-    const completedCurve = new CatmullRomCurve3(completedPoints, false, 'centripetal', 0.5);
-    return new TubeGeometry(completedCurve, completedPoints.length * 4, 0.15, 8, false);
-  }, [routeCurve, routePoints, splitIndex]);
-
-  const remainingGeometry = useMemo(() => {
-    if (!routeCurve) return null;
-    if (progressPercent !== undefined && progressPercent > 0 && splitIndex < routePoints.length - 1) {
-      const remainingPoints = routePoints.slice(splitIndex);
-      if (remainingPoints.length < 2) return null;
-      const remainingCurve = new CatmullRomCurve3(remainingPoints, false, 'centripetal', 0.5);
-      return new TubeGeometry(remainingCurve, remainingPoints.length * 4, 0.15, 8, false);
-    }
-    // No progress - show full route in blue
-    return new TubeGeometry(routeCurve, routePoints.length * 4, 0.15, 8, false);
-  }, [routeCurve, routePoints, progressPercent, splitIndex]);
-
-  // Current position for marker
-  const currentPosition = useMemo(() => {
-    if (progressPercent === undefined || progressPercent <= 0 || splitIndex >= routePoints.length) {
-      return null;
-    }
-    return routePoints[splitIndex];
-  }, [progressPercent, splitIndex, routePoints]);
-
-  // Start and end positions
-  const startPosition = routePoints[0];
-  const endPosition = routePoints[routePoints.length - 1];
-
-  if (routePoints.length < 2) {
-    return null;
-  }
-
-  return (
-    <>
-      {/* Improved lighting for better reflections */}
-      <ambientLight intensity={0.4} />
-      <directionalLight 
-        position={[10, 20, 10]} 
-        intensity={1.0} 
-        castShadow
-      />
-      <directionalLight 
-        position={[-5, 10, -5]} 
-        intensity={0.3} 
-        color="#b3d4fc"
-      />
-      
-      {/* Realistic sky */}
-      <Sky 
-        distance={450000}
-        sunPosition={[100, 20, 100]}
-        inclination={0.5}
-        azimuth={0.25}
-      />
-      
-      {/* Green land/terrain base - covers the entire view */}
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[bounds.center.x, -0.2, bounds.center.z]}
-      >
-        <planeGeometry args={[bounds.size * 6, bounds.size * 6]} />
-        <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-      </mesh>
-
-      {/* Water plane - sized to contain the route with margin */}
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[bounds.center.x, -0.1, bounds.center.z]}
-      >
-        <planeGeometry args={[bounds.size * 1.5, bounds.size * 1.5, 32, 32]} />
-        <meshStandardMaterial 
-          color={'#1a5fb4'} 
-          metalness={0.6}
-          roughness={0.3}
-          envMapIntensity={1.0}
-        />
-      </mesh>
-
-      {/* Completed portion of route (red) */}
-      {completedGeometry && progressPercent !== undefined && progressPercent > 0 && (
-        <mesh geometry={completedGeometry}>
-          <meshStandardMaterial 
-            color={'#ef4444'} 
-            metalness={0.2} 
-            roughness={0.6} 
-          />
-        </mesh>
-      )}
-
-      {/* Remaining/full route (green if progress, blue otherwise) */}
-      {remainingGeometry && (
-        <mesh geometry={remainingGeometry}>
-          <meshStandardMaterial 
-            color={progressPercent !== undefined && progressPercent > 0 ? '#22c55e' : '#3b82f6'} 
-            metalness={0.2} 
-            roughness={0.6} 
-          />
-        </mesh>
-      )}
-
-      {/* Current position marker (yellow) */}
-      {currentPosition && (
-        <mesh 
-          position={[currentPosition.x, 0.5, currentPosition.z]}
-        >
-          <sphereGeometry args={[0.3, 16, 16]} />
-          <meshStandardMaterial 
-            color={'#fbbf24'} 
-            emissive={'#f59e0b'}
-            emissiveIntensity={0.3}
-          />
-        </mesh>
-      )}
-
-      {/* Start marker (green) */}
-      {startPosition && (
-        <group position={[startPosition.x, 0, startPosition.z]}>
-          {/* Pin base */}
-          <mesh position={[0, 0.4, 0]}>
-            <cylinderGeometry args={[0.15, 0.25, 0.8, 8]} />
-            <meshStandardMaterial color={'#22c55e'} />
-          </mesh>
-          {/* Pin top */}
-          <mesh position={[0, 1.0, 0]}>
-            <sphereGeometry args={[0.3, 16, 16]} />
-            <meshStandardMaterial 
-              color={'#22c55e'} 
-              emissive={'#16a34a'}
-              emissiveIntensity={0.2}
-            />
-          </mesh>
-        </group>
-      )}
-
-      {/* End marker (red) */}
-      {endPosition && (
-        <group position={[endPosition.x, 0, endPosition.z]}>
-          {/* Pin base */}
-          <mesh position={[0, 0.4, 0]}>
-            <cylinderGeometry args={[0.15, 0.25, 0.8, 8]} />
-            <meshStandardMaterial color={'#ef4444'} />
-          </mesh>
-          {/* Pin top */}
-          <mesh position={[0, 1.0, 0]}>
-            <sphereGeometry args={[0.3, 16, 16]} />
-            <meshStandardMaterial 
-              color={'#ef4444'} 
-              emissive={'#dc2626'}
-              emissiveIntensity={0.2}
-            />
-          </mesh>
-        </group>
-      )}
-    </>
-  );
-};
-
 export const RouteMap: React.FC<RouteMapProps> = ({
   route,
   highlightMode,
   progressPercent,
 }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Convert lat/lng coordinates to pixel positions
+  const { points, bounds } = useMemo(() => {
+    if (!route || !route.coordinates || route.coordinates.length === 0) {
+      return { points: [], bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 } };
+    }
+    
+    const originLat = route.coordinates[0].lat;
+    const originLng = route.coordinates[0].lng;
+    
+    // Convert to meters
+    const meterPoints = route.coordinates.map((c) => {
+      const p = latLngToMeters(c.lat, c.lng, originLat, originLng);
+      return { x: p.x, y: p.y };
+    });
+    
+    // Calculate bounds
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    
+    for (const point of meterPoints) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+    
+    const width = maxX - minX;
+    const height = maxY - minY;
+    
+    return {
+      points: meterPoints,
+      bounds: { minX, maxX, minY, maxY, width, height }
+    };
+  }, [route]);
+
+  // Draw the route on canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || points.length < 2) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Get actual canvas dimensions
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Set canvas size with device pixel ratio for crisp rendering
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    
+    const canvasWidth = rect.width;
+    const canvasHeight = rect.height;
+    
+    // Calculate scale to fit route in canvas with padding
+    const padding = 40;
+    const availableWidth = canvasWidth - padding * 2;
+    const availableHeight = canvasHeight - padding * 2;
+    
+    const scaleX = bounds.width > 0 ? availableWidth / bounds.width : 1;
+    const scaleY = bounds.height > 0 ? availableHeight / bounds.height : 1;
+    const scale = Math.min(scaleX, scaleY);
+    
+    // Center offset
+    const routeWidth = bounds.width * scale;
+    const routeHeight = bounds.height * scale;
+    const offsetX = padding + (availableWidth - routeWidth) / 2;
+    const offsetY = padding + (availableHeight - routeHeight) / 2;
+    
+    // Transform function: meters to canvas pixels
+    const toCanvas = (x: number, y: number) => ({
+      x: offsetX + (x - bounds.minX) * scale,
+      y: offsetY + (bounds.maxY - y) * scale // Flip Y for canvas coordinates
+    });
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Draw earth background (green/gray gradient)
+    const earthGradient = ctx.createRadialGradient(
+      canvasWidth / 2, canvasHeight / 2, 0,
+      canvasWidth / 2, canvasHeight / 2, Math.max(canvasWidth, canvasHeight)
+    );
+    earthGradient.addColorStop(0, '#6b8e6b'); // Green-gray center
+    earthGradient.addColorStop(0.5, '#5a7d5a'); // Slightly darker
+    earthGradient.addColorStop(1, '#4a6a4a'); // Darker edges
+    ctx.fillStyle = earthGradient;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Add subtle texture pattern
+    ctx.globalAlpha = 0.1;
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * canvasWidth;
+      const y = Math.random() * canvasHeight;
+      const size = Math.random() * 3 + 1;
+      ctx.fillStyle = Math.random() > 0.5 ? '#3d5c3d' : '#7a9e7a';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Draw water area around route (lighter blue area)
+    const waterPadding = 30;
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+    ctx.beginPath();
+    
+    // Create water path following route with offset
+    if (points.length > 0) {
+      const firstPoint = toCanvas(points[0].x, points[0].y);
+      ctx.moveTo(firstPoint.x - waterPadding, firstPoint.y - waterPadding);
+      
+      for (const point of points) {
+        const p = toCanvas(point.x, point.y);
+        ctx.lineTo(p.x, p.y);
+      }
+    }
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)';
+    ctx.lineWidth = 60;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    
+    // Calculate split point for progress
+    const splitIndex = progressPercent !== undefined && progressPercent > 0
+      ? Math.min(Math.floor((progressPercent / 100) * points.length), points.length - 1)
+      : 0;
+    
+    // Draw route shadow for depth
+    ctx.beginPath();
+    const shadowStart = toCanvas(points[0].x, points[0].y);
+    ctx.moveTo(shadowStart.x + 2, shadowStart.y + 2);
+    for (let i = 1; i < points.length; i++) {
+      const p = toCanvas(points[i].x, points[i].y);
+      ctx.lineTo(p.x + 2, p.y + 2);
+    }
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    
+    // Draw completed portion (red) if there's progress
+    if (progressPercent !== undefined && progressPercent > 0 && splitIndex > 0) {
+      ctx.beginPath();
+      const completedStart = toCanvas(points[0].x, points[0].y);
+      ctx.moveTo(completedStart.x, completedStart.y);
+      for (let i = 1; i <= splitIndex; i++) {
+        const p = toCanvas(points[i].x, points[i].y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = '#ef4444'; // Red
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      
+      // Draw remaining portion (green)
+      if (splitIndex < points.length - 1) {
+        ctx.beginPath();
+        const remainingStart = toCanvas(points[splitIndex].x, points[splitIndex].y);
+        ctx.moveTo(remainingStart.x, remainingStart.y);
+        for (let i = splitIndex + 1; i < points.length; i++) {
+          const p = toCanvas(points[i].x, points[i].y);
+          ctx.lineTo(p.x, p.y);
+        }
+        ctx.strokeStyle = '#22c55e'; // Green
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    } else {
+      // Draw full route (blue)
+      ctx.beginPath();
+      const start = toCanvas(points[0].x, points[0].y);
+      ctx.moveTo(start.x, start.y);
+      for (let i = 1; i < points.length; i++) {
+        const p = toCanvas(points[i].x, points[i].y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = '#3b82f6'; // Blue
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+    
+    // Draw start marker (green circle)
+    const startPoint = toCanvas(points[0].x, points[0].y);
+    ctx.beginPath();
+    ctx.arc(startPoint.x, startPoint.y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#22c55e';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw end marker (red circle with flag)
+    const endPoint = toCanvas(points[points.length - 1].x, points[points.length - 1].y);
+    ctx.beginPath();
+    ctx.arc(endPoint.x, endPoint.y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#ef4444';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw current position marker (yellow) if there's progress
+    if (progressPercent !== undefined && progressPercent > 0 && splitIndex < points.length) {
+      const currentPoint = toCanvas(points[splitIndex].x, points[splitIndex].y);
+      ctx.beginPath();
+      ctx.arc(currentPoint.x, currentPoint.y, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(currentPoint.x, currentPoint.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill();
+    }
+    
+    // Draw distance scale in corner (if not in highlight mode)
+    if (!highlightMode) {
+      const scaleBarWidth = 100;
+      const scaleDistance = scaleBarWidth / scale; // meters
+      const scaleX = canvasWidth - padding - scaleBarWidth;
+      const scaleY = canvasHeight - 20;
+      
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(scaleX - 10, scaleY - 20, scaleBarWidth + 20, 30);
+      
+      ctx.strokeStyle = '#374151';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(scaleX, scaleY);
+      ctx.lineTo(scaleX + scaleBarWidth, scaleY);
+      ctx.stroke();
+      
+      // Scale ticks
+      ctx.beginPath();
+      ctx.moveTo(scaleX, scaleY - 5);
+      ctx.lineTo(scaleX, scaleY + 5);
+      ctx.moveTo(scaleX + scaleBarWidth, scaleY - 5);
+      ctx.lineTo(scaleX + scaleBarWidth, scaleY + 5);
+      ctx.stroke();
+      
+      // Scale label
+      ctx.fillStyle = '#374151';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      const distanceLabel = scaleDistance >= 1000 
+        ? `${(scaleDistance / 1000).toFixed(1)} km` 
+        : `${Math.round(scaleDistance)} m`;
+      ctx.fillText(distanceLabel, scaleX + scaleBarWidth / 2, scaleY - 8);
+    }
+    
+  }, [points, bounds, progressPercent, highlightMode]);
+
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      // Trigger re-render by updating canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const event = new Event('resize');
+        window.dispatchEvent(event);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
     <div className={`route-map-container ${highlightMode ? 'highlight-mode' : ''}`}>
       <div className="route-map">
-        <Canvas 
-          camera={{ 
-            position: [0, 10, 10], 
-            fov: 50,
-            near: 0.1,
-            far: 1000
-          }}
-          gl={{ 
-            antialias: true, // Enable for smoother edges
-            alpha: true,
-            powerPreference: 'high-performance',
-            failIfMajorPerformanceCaveat: false, // Allow software rendering
-            preserveDrawingBuffer: true, // Helps prevent context loss
-            toneMapping: ACESFilmicToneMapping,
-            toneMappingExposure: 1.0,
-          }}
-          onCreated={({ gl }) => {
-            gl.outputColorSpace = SRGBColorSpace;
-          }}
-        >
-          <RouteScene 
-            route={route} 
-            progressPercent={progressPercent}
-          />
-        </Canvas>
+        <canvas 
+          ref={canvasRef}
+          style={{ width: '100%', height: '100%' }}
+        />
       </div>
     </div>
   );
