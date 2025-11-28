@@ -61,7 +61,7 @@ async function ensureSimServerStarted() {
 async function cleanupPortsAndWait(): Promise<void> {
   await killPortProcess(SIM_WS_PORT);
   await killPortProcess(SIM_HTTP_PORT);
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 2000));
 }
 
 async function startSimServer(retryCount = 0): Promise<void> {
@@ -69,7 +69,7 @@ async function startSimServer(retryCount = 0): Promise<void> {
   
   return new Promise((resolve, reject) => {
     simProcess = child_process.spawn('node', [simPath], {
-      env: { PORT: String(SIM_WS_PORT), ...process.env },
+      env: { SIM_WS_PORT: String(SIM_WS_PORT), SIM_HTTP_PORT: String(SIM_HTTP_PORT), PORT: String(SIM_WS_PORT), ...process.env },
       stdio: 'inherit',
     });
     
@@ -80,7 +80,7 @@ async function startSimServer(retryCount = 0): Promise<void> {
       const errMsg = err.message || '';
       // Handle EADDRINUSE with retry
       if (errMsg.includes('EADDRINUSE') || errMsg.includes('address already in use')) {
-        if (retryCount < 2) {
+        if (retryCount < 5) {
           console.log(`Port ${SIM_WS_PORT} or ${SIM_HTTP_PORT} in use, attempting to clean up and retry...`);
           try {
             await cleanupPortsAndWait();
@@ -101,7 +101,7 @@ async function startSimServer(retryCount = 0): Promise<void> {
     simProcess.on('close', async (code) => {
       if (code !== 0 && code !== null && !errorOccurred) {
         // Server exited unexpectedly - could be port conflict
-        if (retryCount < 2) {
+        if (retryCount < 5) {
           console.log(`Sim server exited with code ${code}, attempting to clean up ports and retry...`);
           try {
             await cleanupPortsAndWait();
