@@ -415,7 +415,9 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             <div className="view-container">
               <div className="map-container">
                 <RouteMap route={selectedRoute} />
-                
+              </div>
+              <div className="route-details-panel">
+
                 {/* Route Info Overlay */}
                 <div className="route-info-overlay">
                   <div className="route-info-header">
@@ -466,46 +468,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   >
                     {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
                   </button>
-                </div>
-              </div>
-              <div className="route-details-panel">
-
-                {/* Route Filters */}
-                <div className="route-filters">
-                  <h3>Filter Routes</h3>
-                  <div className="filter-group">
-                    <label>Difficulty:</label>
-                    <select
-                      value={difficultyFilter}
-                      onChange={(e) => setDifficultyFilter(e.target.value as 'all' | 'easy' | 'moderate' | 'hard')}
-                    >
-                      <option value="all">All</option>
-                      <option value="easy">Easy</option>
-                      <option value="moderate">Moderate</option>
-                      <option value="hard">Hard</option>
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label>Distance (km):</label>
-                    <div className="distance-inputs">
-                      <input
-                        type="number"
-                        min="0"
-                        value={distanceMin}
-                        onChange={(e) => setDistanceMin(Number(e.target.value))}
-                        placeholder="Min"
-                      />
-                      <span>-</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={distanceMax}
-                        onChange={(e) => setDistanceMax(Number(e.target.value))}
-                        placeholder="Max"
-                      />
-                    </div>
-                  </div>
-                  <span className="filter-count">{filteredRoutes.length} routes</span>
                 </div>
 
                 <div className="routes-list">
