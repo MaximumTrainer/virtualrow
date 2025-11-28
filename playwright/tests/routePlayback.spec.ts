@@ -323,7 +323,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForTimeout(500);
     const laterOar = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
     // The oar angle should change over time and the amplitude should be within expected limits
-    // Note: threshold lowered to 0.01 to account for timing variability in CI environments
+    // Reduced threshold from 0.05 to 0.01 to account for software rendering in CI environments
     expect(Math.abs(laterOar - initialOar)).toBeGreaterThanOrEqual(0.01);
     expect(Math.abs(laterOar)).toBeLessThanOrEqual(0.8);
 
