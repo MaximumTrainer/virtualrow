@@ -14,7 +14,6 @@ import './RouteMap.css';
 
 interface RouteMapProps {
   route: WaterRoute;
-  onRouteSelected?: (route: WaterRoute) => void;
   highlightMode?: boolean;
   progressPercent?: number; // 0-100, percentage of route completed
 }
@@ -90,14 +89,15 @@ const RouteScene: React.FC<RouteSceneProps> = ({
   // Refs for animated elements
   const cameraInitialized = useRef(false);
 
-  // Set up camera on first render
+  // Set up camera on first render - bird's eye view to see entire route
   useFrame(() => {
     if (!cameraInitialized.current && bounds.size > 0) {
-      const distance = bounds.size * 1.5;
+      // Increase distance multiplier for better overview - true bird's eye view
+      const distance = bounds.size * 2.5;
       camera.position.set(
         bounds.center.x,
         distance,
-        bounds.center.z + distance * 0.3
+        bounds.center.z + distance * 0.1 // Reduced offset for more top-down view
       );
       camera.lookAt(bounds.center.x, 0, bounds.center.z);
       cameraInitialized.current = true;
@@ -164,27 +164,27 @@ const RouteScene: React.FC<RouteSceneProps> = ({
         azimuth={0.25}
       />
       
-      {/* Water plane with improved reflections */}
+      {/* Green land/terrain base - covers the entire view */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[bounds.center.x, -0.2, bounds.center.z]}
+      >
+        <planeGeometry args={[bounds.size * 6, bounds.size * 6]} />
+        <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+      </mesh>
+
+      {/* Water plane - sized to contain the route with margin */}
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[bounds.center.x, -0.1, bounds.center.z]}
       >
-        <planeGeometry args={[bounds.size * 3, bounds.size * 3, 32, 32]} />
+        <planeGeometry args={[bounds.size * 1.5, bounds.size * 1.5, 32, 32]} />
         <meshStandardMaterial 
           color={'#1a5fb4'} 
           metalness={0.6}
           roughness={0.3}
           envMapIntensity={1.0}
         />
-      </mesh>
-
-      {/* Land/shore around water */}
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[bounds.center.x, -0.15, bounds.center.z]}
-      >
-        <ringGeometry args={[bounds.size * 1.2, bounds.size * 3, 32]} />
-        <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
       </mesh>
 
       {/* Completed portion of route (red) */}
@@ -268,7 +268,6 @@ const RouteScene: React.FC<RouteSceneProps> = ({
 
 export const RouteMap: React.FC<RouteMapProps> = ({
   route,
-  onRouteSelected,
   highlightMode,
   progressPercent,
 }) => {
@@ -300,39 +299,6 @@ export const RouteMap: React.FC<RouteMapProps> = ({
             progressPercent={progressPercent}
           />
         </Canvas>
-      </div>
-
-      <div className="route-info-overlay">
-        {!highlightMode && (
-          <div className="route-info-card">
-            <h3>{route.name}</h3>
-            <div className="route-stats">
-              <div className="stat">
-                <span className="label">Distance</span>
-                <span className="value">{route.distance} km</span>
-              </div>
-              <div className="stat">
-                <span className="label">Difficulty</span>
-                <span className={`badge badge-${route.difficulty}`}>
-                  {route.difficulty}
-                </span>
-              </div>
-              <div className="stat">
-                <span className="label">Est. Time</span>
-                <span className="value">{route.estimatedTime} min</span>
-              </div>
-            </div>
-            <p className="description">{route.description}</p>
-            {onRouteSelected && (
-              <button
-                className="btn btn-primary"
-                onClick={() => onRouteSelected(route)}
-              >
-                Select This Route
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

@@ -250,6 +250,131 @@ body {
   z-index: 1;
 }
 
+/* Route Info Overlay - appears above map */
+.route-info-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 16px 20px;
+  z-index: 50;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-info-overlay .route-info-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-info-overlay .route-info-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.route-info-overlay .route-location {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.route-info-overlay .route-description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4b5563;
+  line-height: 1.4;
+}
+
+.route-info-overlay .route-meta-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.route-info-overlay .meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f3f4f6;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.route-info-overlay .meta-badge.badge-easy {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.route-info-overlay .meta-badge.badge-moderate {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.route-info-overlay .meta-badge.badge-hard {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.route-info-overlay .meta-badge.pb-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.route-info-overlay .route-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-info-overlay .route-tags .tag {
+  padding: 2px 8px;
+  background: #e5e7eb;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #4b5563;
+}
+
+.route-info-overlay .selected-workout-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #eff6ff;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #1e40af;
+}
+
+.route-info-overlay .selected-workout-info .btn-clear-workout {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.9rem;
+}
+
+.route-info-overlay .selected-workout-info .btn-clear-workout:hover {
+  color: #ef4444;
+}
+
+.route-info-overlay .btn-start-workout {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .three-map-container {
   position: relative;
   height: 100%;

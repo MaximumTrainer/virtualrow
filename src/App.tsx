@@ -414,61 +414,61 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
           {currentView === 'routes' && selectedRoute && (
             <div className="view-container">
               <div className="map-container">
-                <RouteMap route={selectedRoute} onRouteSelected={handleRouteSelect} />
-              </div>
-              <div className="route-details-panel">
-                <h2>{selectedRoute.name}</h2>
-                <p className="route-location">📍 {selectedRoute.location}</p>
-                <p className="route-description">{selectedRoute.description}</p>
+                <RouteMap route={selectedRoute} />
                 
-                <div className="route-meta">
-                  <div className="meta-item">
-                    <span className="meta-label">Distance:</span>
-                    <span>{selectedRoute.distance} km</span>
+                {/* Route Info Overlay */}
+                <div className="route-info-overlay">
+                  <div className="route-info-header">
+                    <h2>{selectedRoute.name}</h2>
+                    <p className="route-location">📍 {selectedRoute.location}</p>
                   </div>
-                  <div className="meta-item">
-                    <span className="meta-label">Estimated Time:</span>
-                    <span>{selectedRoute.estimatedTime} minutes</span>
-                  </div>
-                  <div className="meta-item">
-                    <span className="meta-label">Difficulty:</span>
-                    <span className={`badge badge-${selectedRoute.difficulty}`}>
+                  
+                  <p className="route-description">{selectedRoute.description}</p>
+                  
+                  <div className="route-meta-compact">
+                    <span className="meta-badge">
+                      📏 {selectedRoute.distance} km
+                    </span>
+                    <span className="meta-badge">
+                      ⏱️ {selectedRoute.estimatedTime} min
+                    </span>
+                    <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
+                    {getPersonalBest(selectedRoute.id) && (
+                      <span className="meta-badge pb-badge">
+                        🏆 PB: {getPersonalBest(selectedRoute.id)?.averagePace}s/500m
+                      </span>
+                    )}
                   </div>
-                  {getPersonalBest(selectedRoute.id) && (
-                    <div className="meta-item pb-highlight">
-                      <span className="meta-label">🏆 Personal Best:</span>
-                      <span>{getPersonalBest(selectedRoute.id)?.averagePace}s/500m</span>
+
+                  <div className="route-tags">
+                    {selectedRoute.tags.map((tag) => (
+                      <span key={tag} className="tag">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  {selectedWorkout && (
+                    <div className="selected-workout-info">
+                      <span>🎯 {selectedWorkout.name}</span>
+                      <button className="btn-clear-workout" onClick={handleClearWorkout}>
+                        ✕
+                      </button>
                     </div>
                   )}
+
+                  <button
+                    className="btn btn-start-workout"
+                    onClick={handleStartWorkout}
+                    disabled={!pm5Connected}
+                  >
+                    {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
+                  </button>
                 </div>
-
-                <div className="route-tags">
-                  {selectedRoute.tags.map((tag) => (
-                    <span key={tag} className="tag">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                {selectedWorkout && (
-                  <div className="selected-workout-info">
-                    <h4>Selected Workout</h4>
-                    <p>{selectedWorkout.name}</p>
-                    <button className="btn-clear-workout" onClick={handleClearWorkout}>
-                      ✕ Clear Selection
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  className="btn btn-start-workout"
-                  onClick={handleStartWorkout}
-                  disabled={!pm5Connected}
-                >
-                  {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
-                </button>
+              </div>
+              <div className="route-details-panel">
 
                 {/* Route Filters */}
                 <div className="route-filters">
@@ -629,7 +629,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   <div className="overlay-mini-map">
                     <RouteMap 
                       route={selectedRoute!} 
-                      onRouteSelected={handleRouteSelect} 
                       highlightMode={true}
                       progressPercent={pm5Data && selectedRoute ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100) : 0}
                     />
