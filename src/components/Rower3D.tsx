@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { CatmullRomCurve3, Vector3, Mesh, Group } from 'three';
 import { useThree } from '@react-three/fiber';
-import { Sky, Environment } from '@react-three/drei';
+import { Sky } from '@react-three/drei';
 import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './Rower3D.css';
@@ -395,9 +395,6 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         turbidity={isLakeRoute ? 8 : 10}
         rayleigh={isLakeRoute ? 0.5 : 2}
       />
-      
-      {/* Environment map for realistic reflections on water and boat */}
-      <Environment preset={isLakeRoute ? "dawn" : "sunset"} />
       
       {/* Realistic water with reflections - use SimpleWater for better compatibility */}
       <SimpleWater 

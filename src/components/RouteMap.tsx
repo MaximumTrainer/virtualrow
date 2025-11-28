@@ -7,7 +7,7 @@ import {
   ACESFilmicToneMapping,
   SRGBColorSpace
 } from 'three';
-import { Sky, Environment } from '@react-three/drei';
+import { Sky } from '@react-three/drei';
 import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
@@ -163,9 +163,6 @@ const RouteScene: React.FC<RouteSceneProps> = ({
         inclination={0.5}
         azimuth={0.25}
       />
-      
-      {/* Environment map for reflections */}
-      <Environment preset="sunset" />
       
       {/* Water plane with improved reflections */}
       <mesh 
