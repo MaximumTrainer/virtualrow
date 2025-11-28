@@ -1,7 +1,9 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { CatmullRomCurve3, Vector3, Mesh, Group } from 'three';
+import { CatmullRomCurve3, Vector3, Mesh, Group, MeshStandardMaterial } from 'three';
+import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
+import { Sky } from '@react-three/drei';
 import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import { LandmarkRenderer, getRouteLandmarkConfig } from './routeLandmarks';
@@ -16,6 +18,56 @@ interface Rower3DProps {
   performanceMode?: 'auto' | 'high' | 'low';
   intensityFactor?: number; // Speed adjustment factor from workout intensity (e.g., 0.6-1.2)
 }
+
+// Fallback simple water for environments where Water shader may not work (e.g., CI)
+// This provides improved rendering with better metalness and roughness for reflections
+interface SimpleWaterProps {
+  position?: [number, number, number];
+  isLake?: boolean;
+  waterRef?: React.RefObject<Mesh | null>;
+}
+
+const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isLake = false, waterRef }) => {
+  const meshRef = useRef<Mesh>(null);
+  
+  // Animate water with subtle wave effect by modulating metalness/roughness
+  useFrame(() => {
+    if (meshRef.current && meshRef.current.material) {
+      const material = meshRef.current.material;
+      // Type guard to check if material is MeshStandardMaterial
+      if (material instanceof MeshStandardMaterial && material.roughness !== undefined) {
+        // Subtle shimmer effect
+        material.roughness = 0.3 + Math.sin(performance.now() * 0.001) * 0.1;
+      }
+    }
+  });
+
+  return (
+    <mesh 
+      ref={(ref) => {
+        meshRef.current = ref;
+        // Only assign if waterRef is mutable (has writable current property)
+        if (waterRef && 'current' in waterRef) {
+          try {
+            (waterRef as React.MutableRefObject<Mesh | null>).current = ref;
+          } catch {
+            // Ref might be read-only, ignore assignment
+          }
+        }
+      }} 
+      rotation={[-Math.PI / 2, 0, 0]} 
+      position={position}
+    >
+      <planeGeometry args={[500, 500, 32, 32]} />
+      <meshStandardMaterial 
+        color={isLake ? '#1a5fb4' : '#2d7dc9'} 
+        metalness={0.6}
+        roughness={0.3}
+        envMapIntensity={1.0}
+      />
+    </mesh>
+  );
+};
 
 // Simple boat mesh is built in the scene below
 
@@ -141,15 +193,16 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     posRef.current.copy(pos);
     yawRef.current = yaw;
     
-    // Position boat in the lower-center of screen, pointing forward (away from camera)
-    // Boat at origin, facing negative Z (forward into the scene)
-    boatRef.current.position.set(0, 0, 0);
-    boatRef.current.rotation.set(0, 0, 0); // Boat nose points toward negative Z
+    // Keep boat stationary at a fixed position and orientation
+    // The boat always faces forward (toward camera), the world moves around it
+    boatRef.current.position.set(0, 0, -2); // Position boat forward in the scene
+    boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
 
-    // Camera positioned behind and slightly above the rower, looking forward horizontally
-    // Lower camera angle to see horizon and boat together
-    camera.position.set(0, 1.0, 3); // Close behind rower, at head height
-    camera.lookAt(0, 0.5, -30); // Look ahead at eye level toward horizon
+    // Fixed camera position - behind and above the boat, looking forward
+    // Camera is positioned further back and lower to show the whole boat in lower center of screen
+    // This creates a chase camera view where the rower and boat are visible moving forward
+    camera.position.set(0, 2.5, 6); // Further back and lower for better chase view
+    camera.lookAt(0, 1, -4); // Look at a point ahead and above the boat to position boat in lower center
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -215,7 +268,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         (window as any).__ROWER3D_POS = { 
           x: 0,  // Actual rendered x position (boat is fixed at origin)
           y: 0,  // Actual rendered y position
-          z: 1.5,  // Actual rendered z position  
+          z: -2,  // Actual rendered z position  
           progress: progressRef.current, 
           yaw: -yaw + Math.PI  // Actual boat orientation (faces forward)
         };
@@ -575,11 +628,11 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   }, [isLakeRoute]);
 
   // Helper function to calculate perspective scale based on distance from camera
-  // Objects further away appear smaller (camera is at z=3, looking forward toward negative Z)
+  // Objects further away appear smaller (camera is at z=6, looking forward toward negative Z)
   const calculatePerspectiveScale = (z: number, baseScale: number): number => {
-    // Camera is at z=3, boat at z=0
+    // Camera is at z=6, boat at z=-2
     // Objects at z < 0 are ahead (in front of boat), z > 0 are behind
-    const cameraZ = 3;
+    const cameraZ = 6;
     const distanceFromCamera = Math.abs(z - cameraZ);
     // Use inverse distance for perspective - closer objects are larger
     const perspectiveFactor = Math.max(0.1, Math.min(3.0, 20 / (distanceFromCamera + 10)));
@@ -588,31 +641,37 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
   return (
     <>
-      {/* ambient light */}
-      <ambientLight intensity={isLakeRoute ? 0.7 : 0.6} />
-      <directionalLight position={[5, 10, 5]} intensity={isLakeRoute ? 0.8 : 0.6} castShadow />
+      {/* Improved lighting setup for better reflections */}
+      <ambientLight intensity={isLakeRoute ? 0.5 : 0.4} />
+      <directionalLight 
+        position={[10, 20, 10]} 
+        intensity={isLakeRoute ? 1.2 : 1.0} 
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <directionalLight 
+        position={[-5, 10, -5]} 
+        intensity={0.3} 
+        color="#b3d4fc"
+      />
       
-      {/* Sky dome - visible horizon for all routes */}
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[500, 16, 16]} />
-        <meshBasicMaterial color={isLakeRoute ? '#87CEEB' : '#6eb5ff'} side={2} />
-      </mesh>
+      {/* Realistic sky with sun for reflections */}
+      <Sky 
+        distance={450000}
+        sunPosition={[100, 20, 100]}
+        inclination={0.5}
+        azimuth={0.25}
+        turbidity={isLakeRoute ? 8 : 10}
+        rayleigh={isLakeRoute ? 0.5 : 2}
+      />
       
-      {/* Horizon line - distant land/fog */}
-      <mesh position={[0, -10, -300]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1000, 200]} />
-        <meshBasicMaterial color={isLakeRoute ? '#a8d5ba' : '#8bc99a'} transparent opacity={0.7} />
-      </mesh>
-      
-      {/* water plane - moves backward with route to create illusion of movement */}
-      <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <planeGeometry args={[500, 1000, 8, 8]} />
-        <meshStandardMaterial 
-          color={isLakeRoute ? '#3b82c4' : '#4a9eda'} 
-          metalness={isLakeRoute ? 0.3 : 0.2} 
-          roughness={isLakeRoute ? 0.4 : 0.6} 
-        />
-      </mesh>
+      {/* Realistic water with reflections - use SimpleWater for better compatibility */}
+      <SimpleWater 
+        waterRef={waterRef} 
+        isLake={isLakeRoute} 
+        position={[0, -0.05, 0]} 
+      />
 
       {/* RIVER SCENERY - grass banks and trees */}
       {isRiverRoute && (
@@ -1025,7 +1084,6 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         </group>
       )}
 
-
       {/* ROUTE-SPECIFIC LANDMARKS - rendered via injected configuration */}
       <LandmarkRenderer config={routeLandmarkConfig} />
 
@@ -1252,22 +1310,32 @@ class WebGLErrorBoundary extends React.Component<
 }
 
 export const Rower3D: React.FC<Rower3DProps> = (props) => {
+  // Check if we should use high quality rendering
+  const isHighQuality = props.performanceMode === 'high' || 
+    (props.performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING);
+  
   return (
     <div className="rower3d-canvas-container">
       {/* fallback marker for test automation if Canvas isn't created due to WebGL issues */}
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
       <WebGLErrorBoundary>
         <Canvas 
-          camera={{ position: [0, 1.0, 3], fov: 70 }}
+          camera={{ position: [0, 5, 5], fov: 50 }}
+          shadows={isHighQuality}
           gl={{
-            // WebGL-safe options for CI/headless environments
-            antialias: false,
+            // Enable antialiasing for smoother edges in high quality mode
+            antialias: isHighQuality,
             alpha: true,
-            powerPreference: 'low-power',
+            powerPreference: isHighQuality ? 'high-performance' : 'low-power',
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: true,
+            // Enable tone mapping for better colors
+            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMappingExposure: 1.0,
           }}
           onCreated={({ gl }) => {
+            // Set output color space for better color accuracy
+            gl.outputColorSpace = THREE.SRGBColorSpace;
             // Additional context loss handling setup
             gl.domElement.addEventListener('webglcontextlost', (e) => {
               e.preventDefault();

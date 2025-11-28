@@ -4,8 +4,10 @@ import {
   CatmullRomCurve3, 
   Vector3, 
   TubeGeometry,
-  DoubleSide
+  ACESFilmicToneMapping,
+  SRGBColorSpace
 } from 'three';
+import { Sky } from '@react-three/drei';
 import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
@@ -141,28 +143,38 @@ const RouteScene: React.FC<RouteSceneProps> = ({
 
   return (
     <>
-      {/* Ambient light for even illumination */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 20, 10]} intensity={0.8} />
+      {/* Improved lighting for better reflections */}
+      <ambientLight intensity={0.4} />
+      <directionalLight 
+        position={[10, 20, 10]} 
+        intensity={1.0} 
+        castShadow
+      />
+      <directionalLight 
+        position={[-5, 10, -5]} 
+        intensity={0.3} 
+        color="#b3d4fc"
+      />
       
-      {/* Sky dome */}
-      <mesh position={[bounds.center.x, 30, bounds.center.z]}>
-        <sphereGeometry args={[100, 32, 32]} />
-        <meshBasicMaterial color={'#87CEEB'} side={DoubleSide} />
-      </mesh>
+      {/* Realistic sky */}
+      <Sky 
+        distance={450000}
+        sunPosition={[100, 20, 100]}
+        inclination={0.5}
+        azimuth={0.25}
+      />
       
-      {/* Water plane */}
+      {/* Water plane with improved reflections */}
       <mesh 
         rotation={[-Math.PI / 2, 0, 0]} 
         position={[bounds.center.x, -0.1, bounds.center.z]}
       >
         <planeGeometry args={[bounds.size * 3, bounds.size * 3, 32, 32]} />
         <meshStandardMaterial 
-          color={'#4a90d9'} 
-          metalness={0.3} 
-          roughness={0.5}
-          transparent
-          opacity={0.9}
+          color={'#1a5fb4'} 
+          metalness={0.6}
+          roughness={0.3}
+          envMapIntensity={1.0}
         />
       </mesh>
 
@@ -271,11 +283,16 @@ export const RouteMap: React.FC<RouteMapProps> = ({
             far: 1000
           }}
           gl={{ 
-            antialias: false, // Disable for better performance in headless
+            antialias: true, // Enable for smoother edges
             alpha: true,
-            powerPreference: 'low-power', // More stable in CI environments
+            powerPreference: 'high-performance',
             failIfMajorPerformanceCaveat: false, // Allow software rendering
             preserveDrawingBuffer: true, // Helps prevent context loss
+            toneMapping: ACESFilmicToneMapping,
+            toneMappingExposure: 1.0,
+          }}
+          onCreated={({ gl }) => {
+            gl.outputColorSpace = SRGBColorSpace;
           }}
         >
           <RouteScene 
