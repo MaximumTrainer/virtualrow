@@ -36,7 +36,7 @@ export class RouteService {
         coordinates: veniceCoordinates,
         elevationGain: 0, // Sea level route
         estimatedTime: Math.round((3.65 / 3.5) * 60), // ~63 minutes at average pace
-        tags: ['canal', 'historic', 'scenic', 'italy', 'cultural', 'gpx-imported'],
+        tags: ['canal', 'historic', 'scenic', 'italy', 'cultural'],
         createdAt: new Date('2024-08-15'),
       },
       {
@@ -49,7 +49,7 @@ export class RouteService {
         coordinates: henleyCoordinates,
         elevationGain: 0, // River route
         estimatedTime: Math.round((7.03 / 3.5) * 60), // ~121 minutes at average pace
-        tags: ['river', 'historic', 'racing', 'uk', 'thames', 'regatta', 'gpx-imported'],
+        tags: ['river', 'historic', 'racing', 'uk', 'thames', 'regatta'],
         createdAt: new Date('2024-08-16'),
       },
       {
@@ -62,7 +62,7 @@ export class RouteService {
         coordinates: charlesRiverCoordinates,
         elevationGain: 0, // River route
         estimatedTime: Math.round((11.07 / 3.5) * 60), // ~190 minutes at average pace
-        tags: ['river', 'racing', 'boston', 'usa', 'regatta', 'charles', 'famous', 'competition', 'gpx-imported'],
+        tags: ['river', 'racing', 'boston', 'usa', 'regatta', 'charles', 'famous', 'competition'],
         createdAt: new Date('2024-08-17'),
       },
       {
@@ -75,7 +75,7 @@ export class RouteService {
         coordinates: lakeBledCoordinates,
         elevationGain: 0, // Lake route
         estimatedTime: Math.round((6.24 / 3.5) * 60), // ~107 minutes at average pace
-        tags: ['lake', 'scenic', 'alpine', 'slovenia', 'europe', 'mountain', 'castle', 'competition', 'gpx-imported'],
+        tags: ['lake', 'scenic', 'alpine', 'slovenia', 'europe', 'mountain', 'castle', 'competition'],
         createdAt: new Date('2024-08-18'),
       },
       {
@@ -88,7 +88,7 @@ export class RouteService {
         coordinates: riverThamesCoordinates,
         elevationGain: 0, // River route
         estimatedTime: Math.round((32.50 / 3.5) * 60), // ~557 minutes at average pace
-        tags: ['river', 'urban', 'london', 'uk', 'thames', 'landmarks', 'long-distance', 'gpx-imported'],
+        tags: ['river', 'urban', 'london', 'uk', 'thames', 'landmarks', 'long-distance'],
         createdAt: new Date('2024-08-19'),
       },
     ];
