@@ -49,6 +49,17 @@ jobs:
           echo 'Processes listening on ports after cleanup:'
           sudo lsof -i :9001 -i :9002 || true
           sleep 2
+      - name: Ensure ports 9001 and 9002 are free
+        run: |
+          echo 'Verifying ports are free before starting simulator...'
+          for port in 9001 9002; do
+            if sudo lsof -i :$port >/dev/null 2>&1; then
+              echo "Port $port is still in use after cleanup. Listing process details:";
+              sudo lsof -i :$port || true
+              echo "Failing the job to avoid spurious EADDRINUSE when starting simulator.";
+              exit 1
+            fi
+          done
       - name: Start simulator server
         run: |
           npm run start:sim & echo $! > /tmp/sim.pid
