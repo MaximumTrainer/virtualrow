@@ -308,7 +308,7 @@ function createBankStripGeometry(
 const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode, intensityFactor }) => {
   // Scale factor: 0.01 means 1 meter = 0.01 world units, so 100m = 1 world unit
   const ROUTE_SCALE = 0.01;
-  const WATER_HALF_WIDTH = 4; // Half-width of water in world units
+  const WATER_HALF_WIDTH = 8; // Half-width of water in world units (wider for visibility)
   
   // Create geographically accurate route curve from GPX coordinates
   const routeData = useMemo(() => {
@@ -335,17 +335,18 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     const { leftBank, rightBank } = bankData;
     const normals = routePoints.map(p => p.normal);
     
-    // Water surface geometry
-    const waterGeometry = createStripGeometry(leftBank, rightBank, -0.02);
+    // Water surface geometry - at y=0 (water level)
+    const waterGeometry = createStripGeometry(leftBank, rightBank, 0);
     
-    // Bank geometries
-    const bankWidth = 25; // Width of main bank
-    const edgeWidth = 3;  // Darker edge near water
+    // Bank geometries - elevated above water level for clear separation
+    const bankWidth = 30; // Width of main bank
+    const edgeWidth = 2;  // Darker edge near water (narrower for cleaner look)
     
-    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.01);
-    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.01);
-    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.02);
-    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.02);
+    // Banks raised above water level (y=0.3) with edges slightly lower
+    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.3);
+    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.3);
+    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.15);
+    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.15);
     
     return { waterGeometry, leftBankGeometry, rightBankGeometry, leftEdgeGeometry, rightEdgeGeometry };
   }, [routeData, bankData, routePoints]);
@@ -462,14 +463,15 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     
     // Keep boat stationary at a fixed position and orientation
     // The boat always faces forward (toward camera), the world moves around it
-    boatRef.current.position.set(0, 0, -2); // Position boat forward in the scene
+    // Boat is positioned at y=-0.1 so hull sits IN the water (water is at y=0)
+    boatRef.current.position.set(0, -0.1, -2); // Position boat forward in the scene, lowered into water
     boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
 
     // Fixed camera position - behind and above the boat, looking forward
     // Camera is positioned further back and lower to show the whole boat in lower center of screen
     // This creates a chase camera view where the rower and boat are visible moving forward
-    camera.position.set(0, 2.5, 6); // Further back and lower for better chase view
-    camera.lookAt(0, 1, -4); // Look at a point ahead and above the boat to position boat in lower center
+    camera.position.set(0, 3, 8); // Further back and higher for better view of water
+    camera.lookAt(0, 0.5, -4); // Look at a point ahead at water level
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -969,14 +971,14 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
               <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
             </mesh>
             
-            {/* Left edge - darker grass near water */}
+            {/* Left edge - muddy brown shoreline near water */}
             <mesh geometry={geometries.leftEdgeGeometry}>
-              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
             </mesh>
             
-            {/* Right edge - darker grass near water */}
+            {/* Right edge - muddy brown shoreline near water */}
             <mesh geometry={geometries.rightEdgeGeometry}>
-              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
             </mesh>
           </group>
         )}
