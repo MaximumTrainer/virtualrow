@@ -8,7 +8,7 @@ Your VirtualRow application has been successfully created, configured, and is cu
 
 ## 📊 What Was Built
 
-A **Concept2 PM5 Indoor Rower Fitness Application** with virtual water route mapping, inspired by Biketerra but designed specifically for rowing on scenic water routes rather than cycling on roads.
+A **Concept2 PM5 Indoor Rower Fitness Application** with virtual water route mapping, designed specifically for rowing on scenic water routes.
 
 ### Core Capabilities
 

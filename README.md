@@ -1,6 +1,6 @@
 # 🚣 VirtualRow - Virtual Rowing on Water Routes
 
-VirtualRow is a web-based fitness application that lets you row on virtual water routes around the world while connected to your Concept2 PM5 indoor rower via Bluetooth. It's inspired by Biketerra but tailored specifically for rowing on scenic water routes rather than cycling on roads.
+VirtualRow is a web-based fitness application that lets you row on virtual water routes around the world while connected to your Concept2 PM5 indoor rower via Bluetooth. Experience immersive rowing on scenic water routes from your home.
 
 ![VirtualRow 3D Rower in Action](docs/screenshot-rower-3d.png)
 
@@ -517,7 +517,6 @@ MIT License - see LICENSE file for details
 
 ## Credits
 
-- **Inspired by**: Biketerra
 - **Concept2**: PM5 device specifications
 - **Three.js**: 3D visualization
 - **Web Bluetooth API**: Device connectivity
