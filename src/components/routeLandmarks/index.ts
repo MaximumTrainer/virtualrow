@@ -7,6 +7,8 @@ export * from './types';
 import { lakeBledDetector, lakeBledConfig } from './lakeBled';
 import { bostonDetector, bostonConfig } from './boston';
 import { londonDetector, londonConfig } from './london';
+import { veniceDetector, veniceConfig } from './venice';
+import { henleyDetector, henleyConfig } from './henley';
 
 import type { RouteLandmarkConfig, RouteLandmarkRegistry } from './types';
 
@@ -27,6 +29,14 @@ export const routeLandmarkRegistry: RouteLandmarkRegistry = {
   'river-thames-london': {
     detector: londonDetector,
     config: londonConfig
+  },
+  'venice-grand-canal': {
+    detector: veniceDetector,
+    config: veniceConfig
+  },
+  'henley-regatta': {
+    detector: henleyDetector,
+    config: henleyConfig
   }
 };
 
@@ -69,3 +79,5 @@ export function hasRouteLandmarks(
 export { lakeBledConfig, lakeBledDetector } from './lakeBled';
 export { bostonConfig, bostonDetector } from './boston';
 export { londonConfig, londonDetector } from './london';
+export { veniceConfig, veniceDetector } from './venice';
+export { henleyConfig, henleyDetector } from './henley';

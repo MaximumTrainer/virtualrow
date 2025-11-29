@@ -1,10 +1,11 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { CatmullRomCurve3, Vector3, Mesh, Group, MeshStandardMaterial } from 'three';
+import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute } from 'three';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
-import { latLngToMeters, routeTotalDistanceMeters } from '../utils/geoUtils';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
+import { createRouteCurve, getRoutePoints, generateBankGeometry, type RoutePoint3D } from '../utils/routeGeometry';
 import type { WaterRoute } from '../types/index';
 import { LandmarkRenderer, getRouteLandmarkConfig } from './routeLandmarks';
 import './Rower3D.css';
@@ -69,27 +70,161 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
   );
 };
 
+/**
+ * Creates a mesh strip geometry from two arrays of points (for water or ground)
+ */
+function createStripGeometry(
+  leftPoints: Vector3[],
+  rightPoints: Vector3[],
+  yOffset: number = 0
+): BufferGeometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  
+  const numPoints = Math.min(leftPoints.length, rightPoints.length);
+  
+  for (let i = 0; i < numPoints; i++) {
+    const left = leftPoints[i];
+    const right = rightPoints[i];
+    const t = i / (numPoints - 1);
+    
+    positions.push(left.x, yOffset, left.z);
+    normals.push(0, 1, 0);
+    uvs.push(0, t);
+    
+    positions.push(right.x, yOffset, right.z);
+    normals.push(0, 1, 0);
+    uvs.push(1, t);
+  }
+  
+  for (let i = 0; i < numPoints - 1; i++) {
+    const bl = i * 2;
+    const br = i * 2 + 1;
+    const tl = (i + 1) * 2;
+    const tr = (i + 1) * 2 + 1;
+    
+    indices.push(bl, tl, br);
+    indices.push(br, tl, tr);
+  }
+  
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  
+  return geometry;
+}
+
+/**
+ * Creates bank/shore geometry (strip on one side of the water)
+ */
+function createBankStripGeometry(
+  innerPoints: Vector3[],
+  width: number,
+  routeNormals: Vector3[],
+  side: 'left' | 'right',
+  yOffset: number = 0.01
+): BufferGeometry {
+  const positions: number[] = [];
+  const norms: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  
+  const numPoints = innerPoints.length;
+  const multiplier = side === 'left' ? -1 : 1;
+  
+  for (let i = 0; i < numPoints; i++) {
+    const inner = innerPoints[i];
+    const normal = routeNormals[i];
+    const t = i / (numPoints - 1);
+    
+    positions.push(inner.x, yOffset, inner.z);
+    norms.push(0, 1, 0);
+    uvs.push(0, t);
+    
+    const outerX = inner.x + normal.x * width * multiplier;
+    const outerZ = inner.z + normal.z * width * multiplier;
+    positions.push(outerX, yOffset, outerZ);
+    norms.push(0, 1, 0);
+    uvs.push(1, t);
+  }
+  
+  for (let i = 0; i < numPoints - 1; i++) {
+    const bl = i * 2;
+    const br = i * 2 + 1;
+    const tl = (i + 1) * 2;
+    const tr = (i + 1) * 2 + 1;
+    
+    indices.push(bl, tl, br);
+    indices.push(br, tl, tr);
+  }
+  
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new Float32BufferAttribute(norms, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  
+  return geometry;
+}
+
 // Simple boat mesh is built in the scene below
 
 const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode, intensityFactor }) => {
-  // Convert latlng points into meters local coordinates
-  const pointsLocal = useMemo(() => {
-    if (!route || !route.coordinates || route.coordinates.length === 0) return [];
-    const originLat = route.coordinates[0].lat;
-    const originLng = route.coordinates[0].lng;
-    return route.coordinates.map((c) => {
-      const p = latLngToMeters(c.lat, c.lng, originLat, originLng);
-      // We'll use z as 0 and map x ~ east, y ~ height (use small scale)
-      return new Vector3(p.x * 0.001, 0, -p.y * 0.001);
-    });
+  // Scale factor: 0.01 means 1 meter = 0.01 world units, so 100m = 1 world unit
+  const ROUTE_SCALE = 0.01;
+  const WATER_HALF_WIDTH = 4; // Half-width of water in world units
+  
+  // Create geographically accurate route curve from GPX coordinates
+  const routeData = useMemo(() => {
+    if (!route || !route.coordinates || route.coordinates.length === 0) return null;
+    return createRouteCurve(route.coordinates, ROUTE_SCALE, 300);
   }, [route]);
+  
+  // Get detailed route points with positions, tangents, and normals for bank geometry
+  const routePoints = useMemo((): RoutePoint3D[] => {
+    if (!routeData) return [];
+    return getRoutePoints(routeData.curve, routeData.totalMeters, 299);
+  }, [routeData]);
+  
+  // Generate bank geometry from route points
+  const bankData = useMemo(() => {
+    if (routePoints.length === 0) return null;
+    return generateBankGeometry(routePoints, WATER_HALF_WIDTH);
+  }, [routePoints]);
+  
+  // Create water and bank geometries
+  const geometries = useMemo(() => {
+    if (!routeData || !bankData || routePoints.length === 0) return null;
+    
+    const { leftBank, rightBank } = bankData;
+    const normals = routePoints.map(p => p.normal);
+    
+    // Water surface geometry
+    const waterGeometry = createStripGeometry(leftBank, rightBank, -0.02);
+    
+    // Bank geometries
+    const bankWidth = 25; // Width of main bank
+    const edgeWidth = 3;  // Darker edge near water
+    
+    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.01);
+    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.01);
+    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.02);
+    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.02);
+    
+    return { waterGeometry, leftBankGeometry, rightBankGeometry, leftEdgeGeometry, rightEdgeGeometry };
+  }, [routeData, bankData, routePoints]);
 
-  const curve = useMemo(() => {
-    if (pointsLocal.length === 0) return null;
-    return new CatmullRomCurve3(pointsLocal);
-  }, [pointsLocal]);
-
-  const totalDistance = useMemo(() => routeTotalDistanceMeters(route.coordinates), [route]);
+  const curve = routeData?.curve || null;
+  
+  // Memoize total distance calculation to avoid expensive recomputation
+  const totalDistance = useMemo(() => {
+    if (routeData?.totalMeters) return routeData.totalMeters;
+    return routeTotalDistanceMeters(route.coordinates);
+  }, [routeData?.totalMeters, route.coordinates]);
 
   // default boat progress is derived from distanceMeters / totalDistance
   const targetProgress = useMemo(() => {
@@ -105,7 +240,9 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   const progressRef = useRef<number>(0);
   const posRef = useRef<Vector3>(new Vector3(0, 0, 0));
   const yawRef = useRef<number>(0);
-  const distanceTraveledRef = useRef<number>(0); // Track distance for scenery scrolling
+  
+  // World group ref - this will be transformed to keep boat centered
+  const worldRef = useRef<Group | null>(null);
   
   // Scenery refs - these need to be updated in useFrame to move with the world
   const waterRef = useRef<Mesh | null>(null);
@@ -175,8 +312,6 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
 
     if (isPlaying && speedMps > 0) {
       progressRef.current = Math.min(1, progressRef.current + progressPerSecond * delta);
-      // Track actual distance traveled for scenery scrolling (scaled for visual effect)
-      distanceTraveledRef.current += speedMps * delta * 0.01; // Scale factor for visual movement
     } else {
       // if not playing, smoothly follow targetProgress using damping
       progressRef.current += (targetProgress - progressRef.current) * Math.min(1, delta * 5);
@@ -300,17 +435,29 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       }
     } catch (e) {}
     
-    // Update scenery position to move backward (creates illusion boat is moving forward)
-    // Scenery scrolls in the -Z direction as the boat "moves forward"
-    const scrollZ = distanceTraveledRef.current;
-    if (waterRef.current) {
-      waterRef.current.position.set(0, -0.05, -scrollZ);
-    }
-    if (riverSceneryRef.current) {
-      riverSceneryRef.current.position.set(0, 0, -scrollZ);
-    }
-    if (lakeSceneryRef.current) {
-      lakeSceneryRef.current.position.set(0, 0, -scrollZ);
+    // Transform the world group to keep boat centered on the geographically accurate route
+    // The world is translated and rotated so the boat appears to stay in place while
+    // the route geometry (water, banks, landmarks) moves past it
+    if (worldRef.current && curve) {
+      const routePos = curve.getPointAt(progressRef.current);
+      const routeTangent = curve.getTangentAt(progressRef.current).normalize();
+      
+      // Calculate rotation to align route forward direction with screen forward (-Z)
+      // Route forward is the tangent direction, we want it to point toward -Z
+      const worldRotation = Math.atan2(routeTangent.x, -routeTangent.z);
+      
+      // Apply rotation first, then translation
+      // We rotate around Y axis, then translate to center the boat
+      worldRef.current.rotation.set(0, -worldRotation, 0);
+      
+      // Translate so the route position under the boat is at origin
+      // We need to account for the rotation when translating
+      const cosR = Math.cos(-worldRotation);
+      const sinR = Math.sin(-worldRotation);
+      const translatedX = -(routePos.x * cosR - routePos.z * sinR);
+      const translatedZ = -(routePos.x * sinR + routePos.z * cosR);
+      
+      worldRef.current.position.set(translatedX, 0, translatedZ);
     }
   });
 
@@ -666,49 +813,65 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         rayleigh={isLakeRoute ? 0.5 : 2}
       />
       
-      {/* Realistic water with reflections - use SimpleWater for better compatibility */}
-      <SimpleWater 
-        waterRef={waterRef} 
-        isLake={isLakeRoute} 
-        position={[0, -0.05, 0]} 
-      />
+      {/* World group - contains all scenery that moves with the route
+          This group is transformed to keep the boat centered and facing forward */}
+      <group ref={worldRef}>
+        {/* Geographically accurate water and bank geometry for river/canal routes */}
+        {isRiverRoute && geometries && (
+          <group>
+            {/* Water surface following the actual GPX route */}
+            <mesh geometry={geometries.waterGeometry}>
+              <meshStandardMaterial 
+                color={'#2d7dc9'}
+                metalness={0.6}
+                roughness={0.3}
+                envMapIntensity={1.0}
+              />
+            </mesh>
+            
+            {/* Left bank - main grass following route curve */}
+            <mesh geometry={geometries.leftBankGeometry}>
+              <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+            </mesh>
+            
+            {/* Right bank - main grass following route curve */}
+            <mesh geometry={geometries.rightBankGeometry}>
+              <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
+            </mesh>
+            
+            {/* Left edge - darker grass near water */}
+            <mesh geometry={geometries.leftEdgeGeometry}>
+              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+            </mesh>
+            
+            {/* Right edge - darker grass near water */}
+            <mesh geometry={geometries.rightEdgeGeometry}>
+              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+            </mesh>
+          </group>
+        )}
+        
+        {/* For lake routes, use simple water (lakes don't follow a linear path) */}
+        {isLakeRoute && (
+          <SimpleWater 
+            waterRef={waterRef} 
+            isLake={isLakeRoute} 
+            position={[0, -0.05, 0]} 
+          />
+        )}
+        
+        {/* Fallback water for non-route types */}
+        {!isRiverRoute && !isLakeRoute && (
+          <SimpleWater 
+            waterRef={waterRef} 
+            isLake={false} 
+            position={[0, -0.05, 0]} 
+          />
+        )}
 
-      {/* RIVER SCENERY - grass banks and trees */}
+      {/* RIVER SCENERY - trees and vegetation along the route-following banks */}
       {isRiverRoute && (
         <group ref={riverSceneryRef}>
-          {/* Left grass bank - extends forward (negative Z) */}
-          <mesh 
-            rotation={[-Math.PI / 2, 0, 0]} 
-            position={[-15, 0.01, -200]}
-          >
-            <planeGeometry args={[25, 800]} />
-            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-          </mesh>
-          {/* Right grass bank */}
-          <mesh 
-            rotation={[-Math.PI / 2, 0, 0]} 
-            position={[15, 0.01, -200]}
-          >
-            <planeGeometry args={[25, 800]} />
-            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-          </mesh>
-          {/* Left bank edge (darker grass) */}
-          <mesh 
-            rotation={[-Math.PI / 2, 0, 0]} 
-            position={[-4, 0.02, -200]}
-          >
-            <planeGeometry args={[3, 800]} />
-            <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
-          </mesh>
-          {/* Right bank edge (darker grass) */}
-          <mesh 
-            rotation={[-Math.PI / 2, 0, 0]} 
-            position={[4, 0.02, -200]}
-          >
-            <planeGeometry args={[3, 800]} />
-            <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
-          </mesh>
-          
           {/* Trees along the banks - with different types and perspective scaling */}
           {treePositions.map((tree, idx) => {
             const perspectiveScale = calculatePerspectiveScale(tree.z, tree.scale);
@@ -1088,8 +1251,11 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       <LandmarkRenderer config={routeLandmarkConfig} />
 
       {/* Route line removed - now shown in top-right map overlay */}
+      
+      </group>
+      {/* End of world group */}
 
-      {/* boat + oars */}
+      {/* boat + oars - positioned outside world group so it stays fixed */}
       <group ref={boatRef} position={[0, 0, 0]}>
         {/* Racing scull hull - sleek narrow boat shape */}
         {/* Main hull body */}
