@@ -26,11 +26,14 @@ export interface WorkoutSessionRow {
 
 /**
  * Convert database row to WorkoutSession.
+ * Note: routeId uses empty string as the domain representation of "no route",
+ * while the database uses null. This conversion maintains that contract.
  */
 function rowToSession(row: WorkoutSessionRow): WorkoutSession {
   return {
     id: row.id,
-    routeId: row.route_id || '',
+    // Convert null to empty string for domain model consistency
+    routeId: row.route_id ?? '',
     routeName: row.route_name,
     startTime: new Date(row.start_time),
     endTime: row.end_time ? new Date(row.end_time) : undefined,
@@ -65,6 +68,7 @@ export async function createSession(session: WorkoutSession): Promise<WorkoutSes
     RETURNING *`,
     [
       session.id,
+      // Convert empty string to null for database storage
       session.routeId || null,
       session.routeName,
       session.startTime,

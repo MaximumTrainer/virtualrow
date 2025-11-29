@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { QueryResult } from 'pg';
 
 // Mock the pg module
 vi.mock('pg', () => {

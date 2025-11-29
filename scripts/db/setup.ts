@@ -16,10 +16,35 @@ import {
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'migrations');
 
 /**
+ * Validate database name to prevent SQL injection.
+ * Only allows alphanumeric characters and underscores.
+ */
+function validateDatabaseName(name: string): boolean {
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+}
+
+/**
+ * Get SSL configuration based on environment.
+ * Uses proper certificate validation in production.
+ */
+function getSslConfig(ssl: boolean): false | { rejectUnauthorized: boolean } {
+  if (!ssl) return false;
+  // In production, certificate validation should be enabled.
+  // Set DB_SSL_REJECT_UNAUTHORIZED=true for strict validation.
+  const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+  return { rejectUnauthorized };
+}
+
+/**
  * Create the database if it doesn't exist.
  */
 async function createDatabaseIfNotExists(): Promise<void> {
   const config = getDatabaseConfig();
+  
+  // Validate database name to prevent SQL injection
+  if (!validateDatabaseName(config.database)) {
+    throw new Error(`Invalid database name: ${config.database}. Only alphanumeric characters and underscores are allowed.`);
+  }
   
   // Connect to postgres database to create our target database
   const adminPool = new Pool({
@@ -28,7 +53,7 @@ async function createDatabaseIfNotExists(): Promise<void> {
     database: 'postgres',
     user: config.user,
     password: config.password,
-    ssl: config.ssl ? { rejectUnauthorized: false } : false,
+    ssl: getSslConfig(config.ssl),
   });
 
   try {
@@ -40,8 +65,9 @@ async function createDatabaseIfNotExists(): Promise<void> {
 
     if (result.rows.length === 0) {
       console.log(`Creating database: ${config.database}`);
-      // Use template0 to avoid encoding issues
-      await adminPool.query(`CREATE DATABASE ${config.database} TEMPLATE template0`);
+      // Database names cannot be parameterized in PostgreSQL,
+      // but we've validated the name above to prevent injection
+      await adminPool.query(`CREATE DATABASE "${config.database}" TEMPLATE template0`);
       console.log(`Database ${config.database} created successfully`);
     } else {
       console.log(`Database ${config.database} already exists`);

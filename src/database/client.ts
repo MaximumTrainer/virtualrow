@@ -9,6 +9,18 @@ import { getDatabaseConfig } from './config';
 let pool: Pool | null = null;
 
 /**
+ * Get SSL configuration based on environment.
+ * Uses proper certificate validation by default.
+ */
+function getSslConfig(ssl: boolean): false | { rejectUnauthorized: boolean } {
+  if (!ssl) return false;
+  // In production, certificate validation should be enabled.
+  // Set DB_SSL_REJECT_UNAUTHORIZED=false only for development/testing.
+  const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+  return { rejectUnauthorized };
+}
+
+/**
  * Initialize the database connection pool.
  * Call this once at application startup.
  */
@@ -24,7 +36,7 @@ export function initializePool(): Pool {
     database: config.database,
     user: config.user,
     password: config.password,
-    ssl: config.ssl ? { rejectUnauthorized: false } : false,
+    ssl: getSslConfig(config.ssl),
     max: config.maxPoolSize,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
