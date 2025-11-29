@@ -219,7 +219,12 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   }, [routeData, bankData, routePoints]);
 
   const curve = routeData?.curve || null;
-  const totalDistance = routeData?.totalMeters || routeTotalDistanceMeters(route.coordinates);
+  
+  // Memoize total distance calculation to avoid expensive recomputation
+  const totalDistance = useMemo(() => {
+    if (routeData?.totalMeters) return routeData.totalMeters;
+    return routeTotalDistanceMeters(route.coordinates);
+  }, [routeData?.totalMeters, route.coordinates]);
 
   // default boat progress is derived from distanceMeters / totalDistance
   const targetProgress = useMemo(() => {
