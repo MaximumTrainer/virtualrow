@@ -78,6 +78,58 @@ The application will be available at `http://localhost:5173/` in development mod
 
 > Note: Vite requires Node 20.19+ for best compatibility. If you see a Vite compatibility warning, upgrade Node to 20.19 or later.
 
+### Database Setup
+
+VirtualRow uses PostgreSQL for data persistence. Set the following environment variables to configure the database connection:
+
+```bash
+# Database configuration
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=virtualrow
+export DB_USER=postgres
+export DB_PASSWORD=your_password
+export DB_SSL=false
+
+# Or use a connection string
+export DATABASE_URL=postgresql://user:password@host:port/database
+```
+
+#### Database Commands
+
+```bash
+# Run all pending migrations
+npm run db:migrate
+
+# Check migration status
+npm run db:migrate:status
+
+# Rollback last migration
+npm run db:rollback
+
+# Rollback all migrations
+npm run db:rollback:all
+
+# Setup database (create + migrate) - useful for CI
+npm run db:setup
+```
+
+#### Running with Docker (PostgreSQL)
+
+```bash
+# Start PostgreSQL container
+docker run -d \
+  --name virtualrow-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=virtualrow \
+  -p 5432:5432 \
+  postgres:16
+
+# Run migrations
+npm run db:migrate
+```
+
 ## Browser Compatibility
 
 Web Bluetooth API support varies by browser:
@@ -410,10 +462,11 @@ The app tracks:
 
 ## Privacy & Data
 
-- All data is stored locally in browser (IndexedDB/LocalStorage)
-- No data is sent to external servers
+- Workout and route data is stored in a PostgreSQL database
+- Local storage is used for browser-side caching when database is unavailable
+- Database connection is secured via SSL in production (configure `DB_SSL=true`)
 - Workout history persists between sessions
-- Export functionality for personal data backup
+- Export functionality for personal data backup (CSV, JSON)
 
 ## Roadmap
 
