@@ -1,14 +1,17 @@
 import type { IntegrationConnection, IntegrationPlatform, WorkoutSession } from '../types/index';
 import { authService } from './authService';
 
-// Platform-specific configuration
-const PLATFORM_CONFIG: Record<IntegrationPlatform, {
+// Platform info type
+interface PlatformInfo {
   name: string;
   authUrl: string;
   tokenUrl: string;
   apiBaseUrl: string;
   scopes: string[];
-}> = {
+}
+
+// Platform-specific configuration
+const PLATFORM_CONFIG: Record<IntegrationPlatform, PlatformInfo> = {
   strava: {
     name: 'Strava',
     authUrl: 'https://www.strava.com/oauth/authorize',
@@ -36,7 +39,7 @@ export class IntegrationsService {
   /**
    * Get information about a platform
    */
-  getPlatformInfo(platform: IntegrationPlatform): typeof PLATFORM_CONFIG[IntegrationPlatform] | null {
+  getPlatformInfo(platform: IntegrationPlatform): PlatformInfo | null {
     return PLATFORM_CONFIG[platform] || null;
   }
 
@@ -116,7 +119,7 @@ export class IntegrationsService {
       throw new Error('User must be logged in to sync workouts');
     }
 
-    const results: Record<string, boolean> = {};
+    const results: Partial<Record<IntegrationPlatform, boolean>> = {};
     const connectedIntegrations = this.getConnectedIntegrations();
 
     for (const integration of connectedIntegrations) {

@@ -36,7 +36,7 @@ function App() {
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
   const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
-  // Filter state for routes (used in getFilteredRoutes)
+  // Filter state for routes (used in getFilteredRoutes, setters omitted - filtering UI not yet implemented)
   const [difficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
   const [distanceMin] = useState<number>(0);
   const [distanceMax] = useState<number>(100);

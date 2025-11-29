@@ -1,4 +1,4 @@
-import type { AuthUser, UserProfile, UserProfileWithIntegrations, IntegrationConnection } from '../types/index';
+import type { AuthUser, UserProfile, UserProfileWithIntegrations, IntegrationConnection, IntegrationPlatform } from '../types/index';
 
 const STORAGE_KEY = 'virtualrow_auth';
 const PROFILE_STORAGE_KEY = 'virtualrow_user_profile';
@@ -259,7 +259,7 @@ export class AuthService {
   /**
    * Remove an integration connection
    */
-  removeIntegration(platform: string): void {
+  removeIntegration(platform: IntegrationPlatform): void {
     if (!this.userProfile) return;
 
     this.userProfile.integrations = this.userProfile.integrations.filter(
@@ -272,7 +272,7 @@ export class AuthService {
   /**
    * Get an integration by platform
    */
-  getIntegration(platform: string): IntegrationConnection | undefined {
+  getIntegration(platform: IntegrationPlatform): IntegrationConnection | undefined {
     return this.userProfile?.integrations.find(i => i.platform === platform);
   }
 
