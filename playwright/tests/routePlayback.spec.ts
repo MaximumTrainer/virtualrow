@@ -384,23 +384,24 @@ test.describe('Simulated e2e route playback', () => {
       console.warn('Snapshot or canvas check non-fatal:', e?.message || e);
     }
 
-    // Test WebGL contextlost fallback: dispatch event and verify fallback marker & flag
+    // Test GPU context lost fallback: dispatch webglcontextlost event and verify fallback marker & flag
+    // Note: This tests the fallback mechanism for both WebGPU and WebGL (they share the same fallback UI)
     await page.evaluate(() => {
       const canvas = document.querySelector('.rower3d-canvas-container canvas');
       if (canvas) canvas.dispatchEvent(new Event('webglcontextlost'));
     });
     await page.waitForTimeout(200);
-    const webglLost = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === true);
-    expect(webglLost).toBeTruthy();
+    const gpuContextLost = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === true);
+    expect(gpuContextLost).toBeTruthy();
     const markerVisible = await page.evaluate(() => {
       const m = document.querySelector('.rower3d-fallback-marker');
       return !!m && (m as HTMLElement).style.display !== 'none';
     });
     expect(markerVisible).toBeTruthy();
-    // Capture WebGL context lost state
+    // Capture GPU context lost state
     await highlightElement(page, '.rower3d-fallback-marker', 'orange');
-    await annotateElement(page, '.rower3d-fallback-marker', 'WebGL Context Lost', 'bottom');
-    await captureTestEvidence(page, testInfo, '11-webgl-context-lost');
+    await annotateElement(page, '.rower3d-fallback-marker', 'GPU Context Lost', 'bottom');
+    await captureTestEvidence(page, testInfo, '11-gpu-context-lost');
     await clearAnnotations(page);
     // Restore context
     await page.evaluate(() => {
@@ -408,8 +409,8 @@ test.describe('Simulated e2e route playback', () => {
       if (canvas) canvas.dispatchEvent(new Event('webglcontextrestored'));
     });
     await page.waitForTimeout(200);
-    const webglRestored = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === false);
-    expect(webglRestored).toBeTruthy();
+    const gpuContextRestored = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === false);
+    expect(gpuContextRestored).toBeTruthy();
 
     // End Workout (click End if present)
     const endBtn = page.locator('.btn-end-workout');

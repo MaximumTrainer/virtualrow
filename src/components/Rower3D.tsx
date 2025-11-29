@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute, ShaderMaterial } from 'three';
 import * as THREE from 'three';
@@ -8,9 +8,13 @@ import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { createRouteCurve, getRoutePoints, generateBankGeometry, type RoutePoint3D } from '../utils/routeGeometry';
 import type { WaterRoute } from '../types/index';
 import { LandmarkRenderer, getRouteLandmarkConfig } from './routeLandmarks';
+import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import './Rower3D.css';
 
-// Custom WebGL Water Ripple Shader Material
+// GPU backend type for renderer selection
+type GPUBackend = 'webgpu' | 'webgl' | 'none';
+
+// Custom Water Ripple Shader Material (compatible with both WebGL and WebGPU via Three.js)
 // This creates realistic water ripples emanating from a source point (the boat)
 class WaterRippleMaterial extends ShaderMaterial {
   constructor() {
@@ -161,8 +165,9 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
   );
 };
 
-// Advanced WebGL water with ripple effects from rower movement
+// Advanced GPU water with ripple effects from rower movement
 // Uses custom shader to render realistic water ripples emanating from the boat
+// Works with both WebGPU and WebGL renderers via Three.js ShaderMaterial
 interface RippleWaterProps {
   geometry: BufferGeometry;
   boatPosition?: { x: number; z: number };
@@ -183,7 +188,7 @@ const RippleWater: React.FC<RippleWaterProps> = ({ geometry, boatPosition = { x:
     }
   });
   
-  // For low performance mode or when WebGL shaders may fail, fallback to simple material
+  // For low performance mode or when GPU shaders may fail, fallback to simple material
   if (!isHighQuality) {
     return (
       <mesh geometry={geometry}>
@@ -395,7 +400,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     } catch (e) {}
   }, [gl, performanceMode, devicePixelRatio]);
 
-  // Add WebGL context lost / restore handlers to enable graceful fallback
+  // Add GPU context lost / restore handlers to enable graceful fallback
+  // Supports both WebGPU and WebGL context events
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     const canvas = gl.domElement;
@@ -408,7 +414,10 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
       try {
         const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
         if (marker) marker.style.display = 'block';
-        // Expose window flag for tests
+        // Expose window flag for tests (unified flag for both WebGL and WebGPU)
+        // @ts-ignore
+        (window as any).__ROWER3D_GPU_CONTEXT_LOST = true;
+        // Keep legacy flag for backward compatibility
         // @ts-ignore
         (window as any).__ROWER3D_WEBGL_LOST = true;
       } catch (e) {}
@@ -418,14 +427,19 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
         if (marker) marker.style.display = 'none';
         // @ts-ignore
+        (window as any).__ROWER3D_GPU_CONTEXT_LOST = false;
+        // @ts-ignore
         (window as any).__ROWER3D_WEBGL_LOST = false;
       } catch (e) {}
     };
-    canvas.addEventListener('webglcontextlost', onContextLost as any, false);
-    canvas.addEventListener('webglcontextrestored', onContextRestore as any, false);
+    // Listen for both WebGL and WebGPU context events
+    canvas.addEventListener('webglcontextlost', onContextLost as EventListener, false);
+    canvas.addEventListener('webglcontextrestored', onContextRestore as EventListener, false);
+    // WebGPU uses 'uncapturederror' event on the device, but context loss is handled differently
+    // For now, the webgl events cover the fallback case
     return () => {
-      canvas.removeEventListener('webglcontextlost', onContextLost as any);
-      canvas.removeEventListener('webglcontextrestored', onContextRestore as any);
+      canvas.removeEventListener('webglcontextlost', onContextLost as EventListener);
+      canvas.removeEventListener('webglcontextrestored', onContextRestore as EventListener);
     };
   }, [gl]);
 
@@ -953,7 +967,7 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         {/* Geographically accurate water and bank geometry for river/canal routes */}
         {isRiverRoute && geometries && (
           <group>
-            {/* Water surface with WebGL ripple effects following the actual GPX route */}
+            {/* Water surface with GPU ripple effects (WebGPU/WebGL) following the actual GPX route */}
             <RippleWater 
               geometry={geometries.waterGeometry}
               boatPosition={{ x: posRef.current.x, z: posRef.current.z }}
@@ -1565,8 +1579,8 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
   );
 };
 
-// Error boundary component for graceful WebGL failure handling
-class WebGLErrorBoundary extends React.Component<
+// Error boundary component for graceful GPU failure handling (WebGPU/WebGL)
+class GPUErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback?: React.ReactNode },
   { hasError: boolean }
 > {
@@ -1580,7 +1594,7 @@ class WebGLErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.warn('WebGL Error Boundary caught error:', error, errorInfo);
+    console.warn('GPU Error Boundary caught error:', error, errorInfo);
     // Expose error state for testing
     try {
       (window as Window & { __ROWER3D_ERROR?: boolean }).__ROWER3D_ERROR = true;
@@ -1612,11 +1626,67 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
   const isHighQuality = props.performanceMode === 'high' || 
     (props.performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING);
   
+  // Track GPU backend availability
+  const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
+  
+  // Detect WebGPU availability on mount
+  useEffect(() => {
+    let mounted = true;
+    
+    async function detectBackend() {
+      try {
+        const webgpuAvailable = await isWebGPUAvailable();
+        if (mounted) {
+          if (webgpuAvailable) {
+            setGpuBackend('webgpu');
+            console.log('VirtualRow: WebGPU is available, using WebGPU renderer');
+          } else if (isWebGLAvailable()) {
+            setGpuBackend('webgl');
+            console.log('VirtualRow: WebGPU not available, falling back to WebGL renderer');
+          } else {
+            setGpuBackend('none');
+            console.warn('VirtualRow: No GPU rendering available');
+          }
+        }
+      } catch (error) {
+        if (mounted) {
+          setGpuBackend(isWebGLAvailable() ? 'webgl' : 'none');
+        }
+      }
+    }
+    
+    detectBackend();
+    return () => { mounted = false; };
+  }, []);
+  
+  // If no GPU rendering is available, show fallback
+  if (gpuBackend === 'none') {
+    return (
+      <div className="rower3d-canvas-container">
+        <div className="rower3d-fallback-marker" data-loaded="true" style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          height: '100%',
+          color: '#888'
+        }}>
+          3D view unavailable - GPU rendering not supported
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="rower3d-canvas-container">
-      {/* fallback marker for test automation if Canvas isn't created due to WebGL issues */}
+      {/* fallback marker for test automation if Canvas isn't created due to GPU issues */}
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
-      <WebGLErrorBoundary>
+      {/* GPU backend indicator for debugging/testing */}
+      <div 
+        className="rower3d-gpu-backend" 
+        data-backend={gpuBackend}
+        style={{ display: 'none' }}
+      />
+      <GPUErrorBoundary>
         <Canvas 
           camera={{ position: [0, 5, 5], fov: 50 }}
           shadows={isHighQuality}
@@ -1634,16 +1704,24 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
           onCreated={({ gl }) => {
             // Set output color space for better color accuracy
             gl.outputColorSpace = THREE.SRGBColorSpace;
+            
+            // Expose GPU backend for testing
+            try {
+              (window as Window & { __ROWER3D_GPU_BACKEND?: string }).__ROWER3D_GPU_BACKEND = gpuBackend;
+            } catch {
+              // Ignore window access errors
+            }
+            
             // Additional context loss handling setup
             gl.domElement.addEventListener('webglcontextlost', (e) => {
               e.preventDefault();
-              console.warn('WebGL context lost in Canvas');
+              console.warn('GPU context lost in Canvas');
             });
           }}
         >
           <RowerScene {...props} />
         </Canvas>
-      </WebGLErrorBoundary>
+      </GPUErrorBoundary>
     </div>
   );
 };

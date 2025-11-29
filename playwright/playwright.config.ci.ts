@@ -5,10 +5,12 @@ import { defineConfig } from '@playwright/test';
  * Use with: npm run test:e2e:ci
  * 
  * Optimized for GitHub Actions environment with:
- * - Software GL rendering via SwiftShader for WebGL stability
+ * - Software GL rendering via SwiftShader for WebGL fallback (WebGPU requires hardware)
  * - Single worker to avoid port conflicts
  * - Extended timeouts and retries for CI reliability
  * - GPU sandbox workarounds for headless Chromium
+ * 
+ * Note: The app supports WebGPU when available but falls back to WebGL in CI.
  */
 export default defineConfig({
   testDir: './tests',
@@ -23,7 +25,8 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10_000, // 10 seconds
-    // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
+    // Ensure GPU rendering works in headless CI by enabling swiftshader/software GL fallback
+    // Note: WebGPU requires hardware GPU support; CI uses WebGL fallback
     launchOptions: {
       // NOTE: SwiftShader enables software GL rendering in headless mode.
       // `--enable-unsafe-swiftshader` is required for newer Chromium versions

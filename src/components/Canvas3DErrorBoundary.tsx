@@ -9,7 +9,23 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  webglAvailable: boolean;
+  gpuAvailable: boolean;
+  gpuBackend: 'webgpu' | 'webgl' | 'none';
+}
+
+/**
+ * Check if WebGPU is available in the browser.
+ */
+async function checkWebGPUAvailability(): Promise<boolean> {
+  try {
+    if (!navigator.gpu) {
+      return false;
+    }
+    const adapter = await navigator.gpu.requestAdapter();
+    return adapter !== null;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -18,7 +34,7 @@ interface State {
 function checkWebGLAvailability(): boolean {
   try {
     const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     return !!gl;
   } catch {
     return false;
@@ -26,14 +42,27 @@ function checkWebGLAvailability(): boolean {
 }
 
 /**
+ * Synchronously check GPU availability and return the best available backend.
+ */
+function checkGPUAvailabilitySync(): { available: boolean; backend: 'webgpu' | 'webgl' | 'none' } {
+  // WebGL check is synchronous, WebGPU requires async check
+  // For synchronous fallback, just check WebGL
+  const webglAvailable = checkWebGLAvailability();
+  if (webglAvailable) {
+    return { available: true, backend: 'webgl' };
+  }
+  return { available: false, backend: 'none' };
+}
+
+/**
  * Error boundary for Three.js Canvas components.
- * Catches WebGL context loss and other 3D rendering errors,
+ * Catches WebGPU/WebGL context loss and other 3D rendering errors,
  * displaying a graceful fallback UI instead of crashing the app.
  */
 export class Canvas3DErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, webglAvailable: true };
+    this.state = { hasError: false, error: null, gpuAvailable: true, gpuBackend: 'webgl' };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -59,13 +88,19 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = (): void => {
-    // Check WebGL availability before attempting retry
-    const webglAvailable = checkWebGLAvailability();
-    if (webglAvailable) {
-      this.setState({ hasError: false, error: null, webglAvailable: true });
-    } else {
-      this.setState({ webglAvailable: false });
-    }
+    // Check GPU availability before attempting retry
+    // Try WebGPU first asynchronously, fall back to WebGL sync check
+    checkWebGPUAvailability().then((webgpuAvailable) => {
+      if (webgpuAvailable) {
+        this.setState({ hasError: false, error: null, gpuAvailable: true, gpuBackend: 'webgpu' });
+      } else {
+        const { available, backend } = checkGPUAvailabilitySync();
+        this.setState({ hasError: !available, error: null, gpuAvailable: available, gpuBackend: backend });
+      }
+    }).catch(() => {
+      const { available, backend } = checkGPUAvailabilitySync();
+      this.setState({ hasError: !available, error: null, gpuAvailable: available, gpuBackend: backend });
+    });
   };
 
   render(): ReactNode {
@@ -99,11 +134,11 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
             3D View Unavailable
           </h3>
           <p style={{ margin: 0, fontSize: '14px', color: '#a0a0a0' }}>
-            {this.state.webglAvailable
-              ? 'WebGL context lost. Your workout data is still being tracked.'
-              : 'WebGL is not available. Your workout data is still being tracked.'}
+            {this.state.gpuAvailable
+              ? 'GPU context lost. Your workout data is still being tracked.'
+              : 'WebGPU/WebGL is not available. Your workout data is still being tracked.'}
           </p>
-          {this.state.webglAvailable && (
+          {this.state.gpuAvailable && (
             <button
               onClick={this.handleRetry}
               style={{
