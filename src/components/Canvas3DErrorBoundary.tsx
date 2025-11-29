@@ -1,4 +1,5 @@
 import React, { Component, type ReactNode } from 'react';
+import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 
 interface Props {
   children: ReactNode;
@@ -14,40 +15,12 @@ interface State {
 }
 
 /**
- * Check if WebGPU is available in the browser.
- */
-async function checkWebGPUAvailability(): Promise<boolean> {
-  try {
-    if (!navigator.gpu) {
-      return false;
-    }
-    const adapter = await navigator.gpu.requestAdapter();
-    return adapter !== null;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if WebGL is available in the browser.
- */
-function checkWebGLAvailability(): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    return !!gl;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Synchronously check GPU availability and return the best available backend.
  */
 function checkGPUAvailabilitySync(): { available: boolean; backend: 'webgpu' | 'webgl' | 'none' } {
   // WebGL check is synchronous, WebGPU requires async check
   // For synchronous fallback, just check WebGL
-  const webglAvailable = checkWebGLAvailability();
+  const webglAvailable = isWebGLAvailable();
   if (webglAvailable) {
     return { available: true, backend: 'webgl' };
   }
@@ -90,7 +63,7 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
   handleRetry = (): void => {
     // Check GPU availability before attempting retry
     // Try WebGPU first asynchronously, fall back to WebGL sync check
-    checkWebGPUAvailability().then((webgpuAvailable) => {
+    isWebGPUAvailable().then((webgpuAvailable) => {
       if (webgpuAvailable) {
         this.setState({ hasError: false, error: null, gpuAvailable: true, gpuBackend: 'webgpu' });
       } else {

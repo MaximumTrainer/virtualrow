@@ -44,13 +44,16 @@ export function isWebGLAvailable(): boolean {
 
 /**
  * Get the preferred GPU backend based on availability.
- * Returns 'webgpu' if WebGPU is available, otherwise 'webgl'.
+ * Returns 'webgpu' if WebGPU is available, 'webgl' if only WebGL is available, or 'none' if neither.
  */
-export async function getPreferredGPUBackend(): Promise<'webgpu' | 'webgl'> {
+export async function getPreferredGPUBackend(): Promise<'webgpu' | 'webgl' | 'none'> {
   if (await isWebGPUAvailable()) {
     return 'webgpu';
   }
-  return 'webgl';
+  if (isWebGLAvailable()) {
+    return 'webgl';
+  }
+  return 'none';
 }
 
 /**
@@ -63,8 +66,8 @@ export interface GPUCapabilities {
   webgl2: boolean;
   /** Whether WebGL 1 is available */
   webgl: boolean;
-  /** The recommended backend to use */
-  recommended: 'webgpu' | 'webgl';
+  /** The recommended backend to use ('none' if no GPU rendering available) */
+  recommended: 'webgpu' | 'webgl' | 'none';
 }
 
 /**
@@ -84,10 +87,18 @@ export async function detectGPUCapabilities(): Promise<GPUCapabilities> {
     // Ignore errors
   }
   
+  // Determine recommended backend
+  let recommended: 'webgpu' | 'webgl' | 'none' = 'none';
+  if (webgpu) {
+    recommended = 'webgpu';
+  } else if (webgl2 || webgl) {
+    recommended = 'webgl';
+  }
+  
   return {
     webgpu,
     webgl2,
     webgl,
-    recommended: webgpu ? 'webgpu' : 'webgl',
+    recommended,
   };
 }
