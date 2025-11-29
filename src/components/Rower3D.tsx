@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute } from 'three';
+import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute, ShaderMaterial } from 'three';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
@@ -9,6 +9,97 @@ import { createRouteCurve, getRoutePoints, generateBankGeometry, type RoutePoint
 import type { WaterRoute } from '../types/index';
 import { LandmarkRenderer, getRouteLandmarkConfig } from './routeLandmarks';
 import './Rower3D.css';
+
+// Custom WebGL Water Ripple Shader Material
+// This creates realistic water ripples emanating from a source point (the boat)
+class WaterRippleMaterial extends ShaderMaterial {
+  constructor() {
+    super({
+      uniforms: {
+        uTime: { value: 0 },
+        uBoatPosition: { value: new THREE.Vector2(0, 0) },
+        uWaterColor: { value: new THREE.Color('#2d7dc9') },
+        uRippleStrength: { value: 0.3 },
+        uRippleSpeed: { value: 2.0 },
+        uCadence: { value: 30.0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        uniform float uTime;
+        uniform vec2 uBoatPosition;
+        uniform float uRippleStrength;
+        uniform float uRippleSpeed;
+        uniform float uCadence;
+        
+        void main() {
+          vUv = uv;
+          vPosition = position;
+          
+          vec3 pos = position;
+          
+          // Calculate distance from boat position for ripple effect
+          float dist = distance(vec2(pos.x, pos.z), uBoatPosition);
+          
+          // Create expanding ripples from boat position
+          float rippleFreq = uCadence / 30.0; // Normalize to base cadence
+          float rippleWave = sin(dist * 3.0 - uTime * uRippleSpeed * rippleFreq) * exp(-dist * 0.15);
+          
+          // Add general water waves
+          float wave1 = sin(pos.x * 0.5 + uTime * 0.8) * 0.02;
+          float wave2 = sin(pos.z * 0.7 + uTime * 0.6) * 0.015;
+          float wave3 = sin((pos.x + pos.z) * 0.3 + uTime * 1.2) * 0.01;
+          
+          // Combine boat ripples with ambient waves
+          pos.y += rippleWave * uRippleStrength * 0.1;
+          pos.y += wave1 + wave2 + wave3;
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec2 uBoatPosition;
+        uniform vec3 uWaterColor;
+        uniform float uRippleStrength;
+        uniform float uCadence;
+        
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        
+        void main() {
+          // Calculate distance from boat for ripple highlight
+          float dist = distance(vec2(vPosition.x, vPosition.z), uBoatPosition);
+          
+          // Create ripple rings effect
+          float rippleFreq = uCadence / 30.0;
+          float ripple = sin(dist * 3.0 - uTime * 2.0 * rippleFreq) * exp(-dist * 0.15);
+          
+          // Base water color with depth variation
+          vec3 shallowColor = vec3(0.2, 0.5, 0.8);
+          vec3 deepColor = uWaterColor;
+          float depthFactor = smoothstep(0.0, 10.0, dist);
+          vec3 baseColor = mix(shallowColor, deepColor, depthFactor);
+          
+          // Add ripple highlights (white foam/reflection effect)
+          float rippleHighlight = max(0.0, ripple) * uRippleStrength;
+          vec3 foamColor = vec3(0.9, 0.95, 1.0);
+          
+          // Combine colors
+          vec3 finalColor = mix(baseColor, foamColor, rippleHighlight * 0.5);
+          
+          // Add specular-like highlights based on viewing angle
+          float fresnel = pow(1.0 - dot(vec3(0.0, 1.0, 0.0), normalize(vPosition - vec3(0.0, 2.0, 5.0))), 2.0);
+          finalColor += vec3(0.1, 0.15, 0.2) * fresnel * 0.3;
+          
+          gl_FragColor = vec4(finalColor, 0.95);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+    });
+  }
+}
 
 interface Rower3DProps {
   route: WaterRoute;
@@ -67,6 +158,47 @@ const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isL
         envMapIntensity={1.0}
       />
     </mesh>
+  );
+};
+
+// Advanced WebGL water with ripple effects from rower movement
+// Uses custom shader to render realistic water ripples emanating from the boat
+interface RippleWaterProps {
+  geometry: BufferGeometry;
+  boatPosition?: { x: number; z: number };
+  cadence?: number;
+  isHighQuality?: boolean;
+}
+
+const RippleWater: React.FC<RippleWaterProps> = ({ geometry, boatPosition = { x: 0, z: 0 }, cadence = 30, isHighQuality = true }) => {
+  // Create material instance (memoized to avoid recreation)
+  const material = useMemo(() => new WaterRippleMaterial(), []);
+  
+  // Update shader uniforms on each frame using the material instance directly
+  useFrame(() => {
+    if (material) {
+      material.uniforms.uTime.value = performance.now() * 0.001;
+      material.uniforms.uBoatPosition.value.set(boatPosition.x, boatPosition.z);
+      material.uniforms.uCadence.value = Math.max(10, cadence || 30);
+    }
+  });
+  
+  // For low performance mode or when WebGL shaders may fail, fallback to simple material
+  if (!isHighQuality) {
+    return (
+      <mesh geometry={geometry}>
+        <meshStandardMaterial 
+          color={'#2d7dc9'}
+          metalness={0.6}
+          roughness={0.3}
+          envMapIntensity={1.0}
+        />
+      </mesh>
+    );
+  }
+  
+  return (
+    <mesh geometry={geometry} material={material} />
   );
 };
 
@@ -176,7 +308,7 @@ function createBankStripGeometry(
 const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode, intensityFactor }) => {
   // Scale factor: 0.01 means 1 meter = 0.01 world units, so 100m = 1 world unit
   const ROUTE_SCALE = 0.01;
-  const WATER_HALF_WIDTH = 4; // Half-width of water in world units
+  const WATER_HALF_WIDTH = 8; // Half-width of water in world units (wider for visibility)
   
   // Create geographically accurate route curve from GPX coordinates
   const routeData = useMemo(() => {
@@ -203,17 +335,18 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     const { leftBank, rightBank } = bankData;
     const normals = routePoints.map(p => p.normal);
     
-    // Water surface geometry
-    const waterGeometry = createStripGeometry(leftBank, rightBank, -0.02);
+    // Water surface geometry - at y=0 (water level)
+    const waterGeometry = createStripGeometry(leftBank, rightBank, 0);
     
-    // Bank geometries
-    const bankWidth = 25; // Width of main bank
-    const edgeWidth = 3;  // Darker edge near water
+    // Bank geometries - elevated above water level for clear separation
+    const bankWidth = 30; // Width of main bank
+    const edgeWidth = 2;  // Darker edge near water (narrower for cleaner look)
     
-    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.01);
-    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.01);
-    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.02);
-    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.02);
+    // Banks raised above water level (y=0.3) with edges slightly lower
+    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.3);
+    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.3);
+    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.15);
+    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.15);
     
     return { waterGeometry, leftBankGeometry, rightBankGeometry, leftEdgeGeometry, rightEdgeGeometry };
   }, [routeData, bankData, routePoints]);
@@ -330,14 +463,15 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
     
     // Keep boat stationary at a fixed position and orientation
     // The boat always faces forward (toward camera), the world moves around it
-    boatRef.current.position.set(0, 0, -2); // Position boat forward in the scene
+    // Boat is positioned at y=-0.1 so hull sits IN the water (water is at y=0)
+    boatRef.current.position.set(0, -0.1, -2); // Position boat forward in the scene, lowered into water
     boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
 
     // Fixed camera position - behind and above the boat, looking forward
     // Camera is positioned further back and lower to show the whole boat in lower center of screen
     // This creates a chase camera view where the rower and boat are visible moving forward
-    camera.position.set(0, 2.5, 6); // Further back and lower for better chase view
-    camera.lookAt(0, 1, -4); // Look at a point ahead and above the boat to position boat in lower center
+    camera.position.set(0, 3, 8); // Further back and higher for better view of water
+    camera.lookAt(0, 0.5, -4); // Look at a point ahead at water level
 
     // Oar animation: simulate realistic rowing stroke cycle
     // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
@@ -819,15 +953,13 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
         {/* Geographically accurate water and bank geometry for river/canal routes */}
         {isRiverRoute && geometries && (
           <group>
-            {/* Water surface following the actual GPX route */}
-            <mesh geometry={geometries.waterGeometry}>
-              <meshStandardMaterial 
-                color={'#2d7dc9'}
-                metalness={0.6}
-                roughness={0.3}
-                envMapIntensity={1.0}
-              />
-            </mesh>
+            {/* Water surface with WebGL ripple effects following the actual GPX route */}
+            <RippleWater 
+              geometry={geometries.waterGeometry}
+              boatPosition={{ x: posRef.current.x, z: posRef.current.z }}
+              cadence={cadence || 30}
+              isHighQuality={performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING}
+            />
             
             {/* Left bank - main grass following route curve */}
             <mesh geometry={geometries.leftBankGeometry}>
@@ -839,14 +971,14 @@ const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters
               <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
             </mesh>
             
-            {/* Left edge - darker grass near water */}
+            {/* Left edge - muddy brown shoreline near water */}
             <mesh geometry={geometries.leftEdgeGeometry}>
-              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
             </mesh>
             
-            {/* Right edge - darker grass near water */}
+            {/* Right edge - muddy brown shoreline near water */}
             <mesh geometry={geometries.rightEdgeGeometry}>
-              <meshStandardMaterial color={'#22c55e'} roughness={0.9} />
+              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
             </mesh>
           </group>
         )}
