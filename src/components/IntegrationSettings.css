@@ -1,0 +1,304 @@
+.integration-settings {
+  padding: 20px;
+  background: var(--bg-primary, white);
+  border-radius: 8px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.integration-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.integration-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-primary, #333);
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  color: #666;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close:hover {
+  background: #f0f0f0;
+}
+
+.integration-description {
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.login-required {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary, #666);
+}
+
+.platforms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.platform-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.platform-card.connected {
+  border-color: #4caf50;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.05) 0%, rgba(76, 175, 80, 0.1) 100%);
+}
+
+.platform-info {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.platform-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.platform-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.platform-details h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary, #333);
+}
+
+.platform-details p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  line-height: 1.4;
+}
+
+.last-sync {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+}
+
+.platform-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.platform-actions.connected {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+}
+
+.sync-toggle input {
+  cursor: pointer;
+}
+
+.btn-connect {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn-connect:hover {
+  opacity: 0.9;
+}
+
+.btn-disconnect {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #d32f2f;
+  background: transparent;
+  border: 1px solid #d32f2f;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-disconnect:hover {
+  background: #d32f2f;
+  color: white;
+}
+
+/* Connection dialog */
+.connect-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.connect-dialog {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.connect-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: var(--text-primary, #333);
+}
+
+.connect-error {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #d32f2f;
+  background: #ffebee;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.connect-dialog .form-group {
+  margin-bottom: 16px;
+}
+
+.connect-dialog label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+  margin-bottom: 6px;
+}
+
+.connect-dialog input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.connect-dialog input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.dialog-actions .btn-submit {
+  flex: 1;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dialog-actions .btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dialog-actions .btn-cancel {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: #666;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dialog-actions .btn-cancel:hover {
+  background: #f0f0f0;
+}
+
+.help-text {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.help-text p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.help-text a {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.help-text a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .platform-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .platform-actions.connected {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}

@@ -116,6 +116,13 @@ body {
   font-size: 16px;
 }
 
+.user-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
 .device-panel,
 .workout-stats-panel,
 .history-stats-panel {
@@ -987,6 +994,12 @@ body {
 .workouts-view {
   flex-direction: column;
   overflow-y: auto;
+}
+
+.integrations-view {
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 /* Clear Workout Button */

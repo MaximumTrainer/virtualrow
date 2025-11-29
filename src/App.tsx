@@ -5,13 +5,17 @@ import { PM5Simulator } from './components/PM5Simulator';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import { workoutGeneratorService } from './services/workoutGeneratorService';
+import { authService } from './services/authService';
+import { integrationsService } from './services/integrationsService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import Rower3D from './components/Rower3D';
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { PerformanceChart } from './components/PerformanceChart';
-import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
+import { UserAuth } from './components/UserAuth';
+import { IntegrationSettings } from './components/IntegrationSettings';
+import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress, AuthUser } from './types/index';
 import './App.css';
 
 // Performance data point interface
@@ -21,7 +25,7 @@ interface PerformanceDataPoint {
 }
 
 function App() {
-  const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
+  const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history' | 'integrations'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -32,14 +36,16 @@ function App() {
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
   const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
-  // Filter state for routes
-  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
-  const [distanceMin, setDistanceMin] = useState<number>(0);
-  const [distanceMax, setDistanceMax] = useState<number>(100);
+  // Filter state for routes (used in getFilteredRoutes)
+  const [difficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
+  const [distanceMin] = useState<number>(0);
+  const [distanceMax] = useState<number>(100);
   // Real-time performance data
   const [paceHistory, setPaceHistory] = useState<PerformanceDataPoint[]>([]);
   const [heartRateHistory, setHeartRateHistory] = useState<PerformanceDataPoint[]>([]);
   const [showPerformanceChart, setShowPerformanceChart] = useState(false);
+  // User authentication state
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(authService.getCurrentUser());
 
   useEffect(() => {
     const allRoutes = routeService.getAllRoutes();
@@ -108,10 +114,20 @@ function App() {
     setCurrentView('workout');
   };
 
-  const handleEndWorkout = () => {
+  const handleEndWorkout = async () => {
     const completed = workoutService.endSession();
     if (completed) {
       setWorkoutHistory(workoutService.getAllSessions());
+      
+      // Sync to connected integrations if user is logged in
+      if (currentUser) {
+        authService.addWorkoutToHistory(completed.id);
+        try {
+          await integrationsService.syncWorkout(completed);
+        } catch (e) {
+          console.warn('Failed to sync workout to integrations:', e);
+        }
+      }
     }
     setIsWorkoutActive(false);
     setCurrentSession(null);
@@ -121,6 +137,10 @@ function App() {
     workoutGeneratorService.endWorkout();
     setCurrentView('history');
   };
+
+  const handleAuthChange = useCallback((user: AuthUser | null) => {
+    setCurrentUser(user);
+  }, []);
 
   const handleSelectWorkout = (workout: StructuredWorkout | null) => {
     setSelectedWorkout(workout);
@@ -323,6 +343,11 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
 
       <div className="app-layout">
         <aside className="app-sidebar">
+          {/* User Authentication Panel */}
+          <div className="user-panel">
+            <UserAuth onAuthChange={handleAuthChange} />
+          </div>
+
           <nav className="nav-tabs">
             <button
               className={`nav-tab ${currentView === 'routes' ? 'active' : ''}`}
@@ -347,6 +372,12 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
               onClick={() => setCurrentView('history')}
             >
               <span className="tab-icon">📊</span> History
+            </button>
+            <button
+              className={`nav-tab ${currentView === 'integrations' ? 'active' : ''}`}
+              onClick={() => setCurrentView('integrations')}
+            >
+              <span className="tab-icon">🔗</span> Integrations
             </button>
           </nav>
 
@@ -673,6 +704,13 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Integrations Tab View */}
+          {currentView === 'integrations' && (
+            <div className="view-container integrations-view">
+              <IntegrationSettings />
             </div>
           )}
         </main>

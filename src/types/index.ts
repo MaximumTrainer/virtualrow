@@ -177,3 +177,34 @@ export interface WorkoutProgress {
   isOnTarget: boolean; // whether user is meeting target metrics
   deviationPercent?: number; // how far off target (positive = too fast, negative = too slow)
 }
+
+// External platform integration types
+export type IntegrationPlatform = 'strava' | 'intervals' | 'trainingpeaks';
+
+export interface IntegrationConnection {
+  platform: IntegrationPlatform;
+  connected: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+  athleteId?: string;
+  athleteName?: string;
+  lastSyncAt?: Date;
+  syncEnabled: boolean;
+}
+
+// User authentication state
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  createdAt: Date;
+  lastLoginAt: Date;
+}
+
+// Extended user profile with integrations
+export interface UserProfileWithIntegrations extends UserProfile {
+  integrations: IntegrationConnection[];
+  workoutHistory: string[]; // IDs of workout sessions
+}
