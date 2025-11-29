@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useFrame, extend } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute, ShaderMaterial } from 'three';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
@@ -101,9 +101,6 @@ class WaterRippleMaterial extends ShaderMaterial {
   }
 }
 
-// Extend Three.js with our custom material
-extend({ WaterRippleMaterial });
-
 interface Rower3DProps {
   route: WaterRoute;
   paceSPer500?: number | null; // seconds per 500m
@@ -174,17 +171,15 @@ interface RippleWaterProps {
 }
 
 const RippleWater: React.FC<RippleWaterProps> = ({ geometry, boatPosition = { x: 0, z: 0 }, cadence = 30, isHighQuality = true }) => {
-  const materialRef = useRef<WaterRippleMaterial>(null);
-  
-  // Create material instance
+  // Create material instance (memoized to avoid recreation)
   const material = useMemo(() => new WaterRippleMaterial(), []);
   
-  // Update shader uniforms on each frame
+  // Update shader uniforms on each frame using the material instance directly
   useFrame(() => {
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = performance.now() * 0.001;
-      materialRef.current.uniforms.uBoatPosition.value.set(boatPosition.x, boatPosition.z);
-      materialRef.current.uniforms.uCadence.value = Math.max(10, cadence || 30);
+    if (material) {
+      material.uniforms.uTime.value = performance.now() * 0.001;
+      material.uniforms.uBoatPosition.value.set(boatPosition.x, boatPosition.z);
+      material.uniforms.uCadence.value = Math.max(10, cadence || 30);
     }
   });
   
@@ -203,9 +198,7 @@ const RippleWater: React.FC<RippleWaterProps> = ({ geometry, boatPosition = { x:
   }
   
   return (
-    <mesh geometry={geometry}>
-      <primitive object={material} ref={materialRef} attach="material" />
-    </mesh>
+    <mesh geometry={geometry} material={material} />
   );
 };
 
