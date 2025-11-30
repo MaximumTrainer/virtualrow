@@ -4,7 +4,8 @@ import { defineConfig } from '@playwright/test';
  * Local Playwright configuration
  * Use with: npm run test:e2e
  * 
- * Optimized for WebGL/THREE.js rendering in headless local environments.
+ * Optimized for WebGPU/WebGL/THREE.js rendering in headless local environments.
+ * The app will automatically use WebGPU when available, falling back to WebGL.
  */
 export default defineConfig({
   testDir: './tests',
@@ -19,7 +20,8 @@ export default defineConfig({
     headless: true,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10_000, // 10 seconds
-    // Ensure WebGL works in headless CI by enabling swiftshader/software GL fallback
+    // Ensure GPU rendering works in headless CI by enabling swiftshader/software GL fallback
+    // Note: WebGPU requires hardware support; in CI environments, WebGL fallback is used
     launchOptions: {
       // NOTE: swiftshader enables software GL rendering in headless mode. The
       // `--enable-unsafe-swiftshader` flag is required for some Chromium builds
