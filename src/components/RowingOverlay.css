@@ -1,0 +1,470 @@
+/* ============================================================================
+   ROWING OVERLAY STYLES
+   Fitness-app inspired dark theme with glassmorphism
+   Colors: Dark backgrounds (#0f172a), Cyan accent (#00f5d4), Pink accent (#ff006e)
+   ============================================================================ */
+
+/* Font import - Inter for clean geometric sans-serif */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.rowing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  z-index: 100;
+}
+
+/* ============================================================================
+   OVERLAY PANELS - Glassmorphism style
+   ============================================================================ */
+.overlay-panel {
+  position: absolute;
+  pointer-events: auto;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
+   PRIMARY METRICS - Top center, large display
+   ============================================================================ */
+.primary-metrics {
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 20px 40px;
+  min-width: 500px;
+}
+
+.metric-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 50px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.metric.large .metric-value {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.metric.large .metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* Accent colors */
+.accent-cyan {
+  color: #00f5d4 !important;
+  text-shadow: 0 0 30px rgba(0, 245, 212, 0.5) !important;
+}
+
+.accent-pink {
+  color: #ff006e !important;
+  text-shadow: 0 0 30px rgba(255, 0, 110, 0.5) !important;
+}
+
+.accent-yellow {
+  color: #ffd60a !important;
+  text-shadow: 0 0 30px rgba(255, 214, 10, 0.5) !important;
+}
+
+.accent-white {
+  color: #ffffff !important;
+}
+
+/* ============================================================================
+   SECONDARY METRICS - Bottom left panel
+   ============================================================================ */
+.secondary-metrics {
+  padding: 16px 20px;
+  min-width: 200px;
+}
+
+.secondary-metrics.bottom-left {
+  bottom: 20px;
+  left: 20px;
+}
+
+.metric-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.metric-row:last-child {
+  margin-bottom: 0;
+}
+
+.metric-row.single {
+  justify-content: center;
+}
+
+.metric.small {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 80px;
+}
+
+.metric-icon {
+  font-size: 20px;
+  opacity: 0.9;
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric.small .metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.metric.small .metric-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+
+/* ============================================================================
+   STROKE RHYTHM VISUALIZER - Bottom center
+   ============================================================================ */
+.rhythm-panel {
+  padding: 12px 20px;
+}
+
+.rhythm-panel.bottom-center {
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.stroke-rhythm-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stroke-rhythm-canvas {
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.stroke-rhythm-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+/* ============================================================================
+   PERFORMANCE GRAPH - Bottom right
+   ============================================================================ */
+.graph-panel {
+  padding: 16px;
+  min-width: 280px;
+  min-height: 160px;
+}
+
+.graph-panel.bottom-right {
+  bottom: 20px;
+  right: 20px;
+}
+
+.performance-graph {
+  width: 100%;
+  height: 100%;
+}
+
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.graph-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
+.graph-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.graph-container {
+  height: 100px;
+  position: relative;
+}
+
+.graph-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ============================================================================
+   CONTROL PANEL - Top right
+   ============================================================================ */
+.control-panel {
+  padding: 16px 20px;
+  min-width: 180px;
+}
+
+.control-panel.top-right {
+  top: 20px;
+  right: 20px;
+}
+
+.workout-segment-info {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.segment-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #00f5d4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.segment-progress {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.segment-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00f5d4, #00d4aa);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.control-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.control-btn .btn-icon {
+  font-size: 14px;
+}
+
+.control-btn.start {
+  background: linear-gradient(135deg, #00f5d4, #00d4aa);
+  color: #0f172a;
+}
+
+.control-btn.start:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(0, 245, 212, 0.4);
+}
+
+.control-btn.pause {
+  background: rgba(255, 214, 10, 0.2);
+  color: #ffd60a;
+  border: 1px solid rgba(255, 214, 10, 0.3);
+}
+
+.control-btn.pause:hover {
+  background: rgba(255, 214, 10, 0.3);
+}
+
+.control-btn.resume {
+  background: rgba(0, 245, 212, 0.2);
+  color: #00f5d4;
+  border: 1px solid rgba(0, 245, 212, 0.3);
+}
+
+.control-btn.resume:hover {
+  background: rgba(0, 245, 212, 0.3);
+}
+
+.control-btn.end {
+  background: rgba(255, 0, 110, 0.2);
+  color: #ff006e;
+  border: 1px solid rgba(255, 0, 110, 0.3);
+}
+
+.control-btn.end:hover {
+  background: rgba(255, 0, 110, 0.3);
+}
+
+.control-btn.reset {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.control-btn.reset:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================================================ */
+@media (max-width: 1200px) {
+  .primary-metrics {
+    min-width: 400px;
+    padding: 16px 30px;
+  }
+  
+  .metric.large .metric-value {
+    font-size: 40px;
+  }
+  
+  .metric-group {
+    gap: 35px;
+  }
+}
+
+@media (max-width: 900px) {
+  .primary-metrics {
+    min-width: 320px;
+    padding: 14px 24px;
+  }
+  
+  .metric.large .metric-value {
+    font-size: 32px;
+  }
+  
+  .metric-group {
+    gap: 25px;
+  }
+  
+  .graph-panel {
+    min-width: 220px;
+    min-height: 140px;
+  }
+  
+  .graph-container {
+    height: 80px;
+  }
+}
+
+@media (max-width: 768px) {
+  .primary-metrics {
+    top: 10px;
+    min-width: 280px;
+    padding: 12px 20px;
+  }
+  
+  .metric.large .metric-value {
+    font-size: 28px;
+  }
+  
+  .secondary-metrics.bottom-left {
+    bottom: 80px;
+    left: 10px;
+  }
+  
+  .rhythm-panel.bottom-center {
+    bottom: 10px;
+  }
+  
+  .graph-panel.bottom-right {
+    bottom: 80px;
+    right: 10px;
+  }
+  
+  .control-panel.top-right {
+    top: 10px;
+    right: 10px;
+  }
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 245, 212, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 245, 212, 0.6);
+  }
+}
+
+.control-btn.start:active {
+  animation: pulse-glow 0.3s ease;
+}
+
+/* Value change animation */
+@keyframes value-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.metric-value {
+  transition: all 0.2s ease;
+}

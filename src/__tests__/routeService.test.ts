@@ -1,73 +1,49 @@
 import { describe, it, expect } from 'vitest';
 import { routeService } from '../services/routeService';
 
-// Venice bounding box from GPX data
-const VENICE_BBOX = { minLat: 45.435777, maxLat: 45.449551, minLng: 12.318319, maxLng: 12.336167 };
-// Henley bounding box from GPX data
-const HENLEY_BBOX = { minLat: 51.533121, maxLat: 51.560266, minLng: -0.901301, maxLng: -0.885381 };
+// Willowbrook River bounding box
+const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };
 
 describe('RouteService basic data', () => {
-  it('provides Venice, Henley, Charles River, Lake Bled, and River Thames routes with distance and coordinates', () => {
+  it('provides Willowbrook River route with distance and coordinates', () => {
     const routes = routeService.getAllRoutes();
-    expect(routes.length).toBe(5);
+    expect(routes.length).toBe(1);
     
-    // Venice route
-    const venice = routes.find(r => r.id === '1');
-    expect(venice?.name).toBe('Venice Grand Canal');
-    expect(venice?.distance).toBeCloseTo(3.65, 1);
-    expect(venice?.coordinates.length).toBeGreaterThan(150); // Should have ~272 coordinates from GPX
-    
-    // Henley route
-    const henley = routes.find(r => r.id === '2');
-    expect(henley?.name).toBe('Henley Regatta Route');
-    expect(henley?.distance).toBeCloseTo(7.03, 1);
-    expect(henley?.coordinates.length).toBeCloseTo(50, 5); // Should have ~50 coordinates from GPX
-    
-    // Charles River route
-    const charles = routes.find(r => r.id === '3');
-    expect(charles?.name).toBe('Charles River Boston');
-    expect(charles?.distance).toBeCloseTo(11.07, 1);
-    expect(charles?.coordinates.length).toBeGreaterThan(3000); // Should have ~3009 coordinates from GPX
-    
-    // Lake Bled route
-    const bled = routes.find(r => r.id === '4');
-    expect(bled?.name).toBe('Lake Bled Circuit');
-    expect(bled?.distance).toBeCloseTo(6.24, 1);
-    expect(bled?.coordinates.length).toBeGreaterThan(1800); // Should have ~1830 coordinates from GPX
-    
-    // River Thames route
-    const thames = routes.find(r => r.id === '5');
-    expect(thames?.name).toBe('River Thames London');
-    expect(thames?.distance).toBeCloseTo(32.50, 1);
-    expect(thames?.coordinates.length).toBeGreaterThan(900); // Should have ~918 coordinates from GPX
+    // Willowbrook River route (only route)
+    const willowbrook = routes.find(r => r.id === '1');
+    expect(willowbrook?.name).toBe('Willowbrook River');
+    expect(willowbrook?.distance).toBeCloseTo(5.0, 1);
+    expect(willowbrook?.coordinates.length).toBeGreaterThan(70); // At least 70 coordinate points across 5 sections
+    expect(willowbrook?.difficulty).toBe('easy');
+    expect(willowbrook?.location).toBe('Willowbrook Valley');
   });
 
-  it('ensures Venice route coordinates lie within Venice bounding box', () => {
+  it('ensures Willowbrook River coordinates lie within bounding box', () => {
     const routes = routeService.getAllRoutes();
-    const venice = routes.find(r => r.id === '1')!;
+    const willowbrook = routes.find(r => r.id === '1')!;
     
-    // Check that all coordinates are within Venice bbox (allowing some tolerance for GPS drift)
-    const outOfBounds = venice.coordinates.filter(c => 
-      c.lat < VENICE_BBOX.minLat - 0.01 || c.lat > VENICE_BBOX.maxLat + 0.01 ||
-      c.lng < VENICE_BBOX.minLng - 0.01 || c.lng > VENICE_BBOX.maxLng + 0.01
+    // Check that all coordinates are within Willowbrook bbox
+    const outOfBounds = willowbrook.coordinates.filter(c => 
+      c.lat < WILLOWBROOK_BBOX.minLat - 0.01 || c.lat > WILLOWBROOK_BBOX.maxLat + 0.01 ||
+      c.lng < WILLOWBROOK_BBOX.minLng - 0.01 || c.lng > WILLOWBROOK_BBOX.maxLng + 0.01
     );
     
-    // Most points should be within bounds (allow up to 10% drift for GPS accuracy)
-    expect(outOfBounds.length).toBeLessThan(venice.coordinates.length * 0.1);
+    // All points should be within bounds
+    expect(outOfBounds.length).toBe(0);
   });
 
-  it('ensures Henley route coordinates lie within Henley bounding box', () => {
+  it('Willowbrook route covers approximately 5km with proper meanders', () => {
     const routes = routeService.getAllRoutes();
-    const henley = routes.find(r => r.id === '2')!;
+    const willowbrook = routes.find(r => r.id === '1')!;
     
-    // Check that all coordinates are within Henley bbox (allowing some tolerance for GPS drift)
-    const outOfBounds = henley.coordinates.filter(c => 
-      c.lat < HENLEY_BBOX.minLat - 0.01 || c.lat > HENLEY_BBOX.maxLat + 0.01 ||
-      c.lng < HENLEY_BBOX.minLng - 0.01 || c.lng > HENLEY_BBOX.maxLng + 0.01
-    );
+    // The route should have 5 distinct sections with points totaling at least 70
+    expect(willowbrook.coordinates.length).toBeGreaterThan(70);
     
-    // Most points should be within bounds (allow up to 10% drift for GPS accuracy)
-    expect(outOfBounds.length).toBeLessThan(henley.coordinates.length * 0.1);
+    // Route should cover terrain from forest headwaters to lake delta
+    expect(willowbrook.tags).toContain('forest');
+    expect(willowbrook.tags).toContain('meadow');
+    expect(willowbrook.tags).toContain('village');
+    expect(willowbrook.tags).toContain('lake');
   });
 });
 

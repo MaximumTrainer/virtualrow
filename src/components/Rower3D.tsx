@@ -1,1619 +1,426 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Vector3, Mesh, Group, MeshStandardMaterial, BufferGeometry, Float32BufferAttribute, ShaderMaterial } from 'three';
+﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useThree } from '@react-three/fiber';
-import { Sky } from '@react-three/drei';
-import { routeTotalDistanceMeters } from '../utils/geoUtils';
-import { createRouteCurve, getRoutePoints, generateBankGeometry, type RoutePoint3D } from '../utils/routeGeometry';
 import type { WaterRoute } from '../types/index';
-import { LandmarkRenderer, getRouteLandmarkConfig } from './routeLandmarks';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import './Rower3D.css';
 
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
 
-// Custom Water Ripple Shader Material (compatible with both WebGL and WebGPU via Three.js)
-// This creates realistic water ripples emanating from a source point (the boat)
-class WaterRippleMaterial extends ShaderMaterial {
-  constructor() {
-    super({
-      uniforms: {
-        uTime: { value: 0 },
-        uBoatPosition: { value: new THREE.Vector2(0, 0) },
-        uWaterColor: { value: new THREE.Color('#2d7dc9') },
-        uRippleStrength: { value: 0.3 },
-        uRippleSpeed: { value: 2.0 },
-        uCadence: { value: 30.0 },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        uniform float uTime;
-        uniform vec2 uBoatPosition;
-        uniform float uRippleStrength;
-        uniform float uRippleSpeed;
-        uniform float uCadence;
-        
-        void main() {
-          vUv = uv;
-          vPosition = position;
-          
-          vec3 pos = position;
-          
-          // Calculate distance from boat position for ripple effect
-          float dist = distance(vec2(pos.x, pos.z), uBoatPosition);
-          
-          // Create expanding ripples from boat position
-          float rippleFreq = uCadence / 30.0; // Normalize to base cadence
-          float rippleWave = sin(dist * 3.0 - uTime * uRippleSpeed * rippleFreq) * exp(-dist * 0.15);
-          
-          // Add general water waves
-          float wave1 = sin(pos.x * 0.5 + uTime * 0.8) * 0.02;
-          float wave2 = sin(pos.z * 0.7 + uTime * 0.6) * 0.015;
-          float wave3 = sin((pos.x + pos.z) * 0.3 + uTime * 1.2) * 0.01;
-          
-          // Combine boat ripples with ambient waves
-          pos.y += rippleWave * uRippleStrength * 0.1;
-          pos.y += wave1 + wave2 + wave3;
-          
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform vec2 uBoatPosition;
-        uniform vec3 uWaterColor;
-        uniform float uRippleStrength;
-        uniform float uCadence;
-        
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        
-        void main() {
-          // Calculate distance from boat for ripple highlight
-          float dist = distance(vec2(vPosition.x, vPosition.z), uBoatPosition);
-          
-          // Create ripple rings effect
-          float rippleFreq = uCadence / 30.0;
-          float ripple = sin(dist * 3.0 - uTime * 2.0 * rippleFreq) * exp(-dist * 0.15);
-          
-          // Base water color with depth variation
-          vec3 shallowColor = vec3(0.2, 0.5, 0.8);
-          vec3 deepColor = uWaterColor;
-          float depthFactor = smoothstep(0.0, 10.0, dist);
-          vec3 baseColor = mix(shallowColor, deepColor, depthFactor);
-          
-          // Add ripple highlights (white foam/reflection effect)
-          float rippleHighlight = max(0.0, ripple) * uRippleStrength;
-          vec3 foamColor = vec3(0.9, 0.95, 1.0);
-          
-          // Combine colors
-          vec3 finalColor = mix(baseColor, foamColor, rippleHighlight * 0.5);
-          
-          // Add specular-like highlights based on viewing angle
-          float fresnel = pow(1.0 - dot(vec3(0.0, 1.0, 0.0), normalize(vPosition - vec3(0.0, 2.0, 5.0))), 2.0);
-          finalColor += vec3(0.1, 0.15, 0.2) * fresnel * 0.3;
-          
-          gl_FragColor = vec4(finalColor, 0.95);
-        }
-      `,
-      transparent: true,
-      side: THREE.DoubleSide,
-    });
-  }
-}
-
 interface Rower3DProps {
   route: WaterRoute;
-  paceSPer500?: number | null; // seconds per 500m
-  distanceMeters?: number | null; // meters
+  paceSPer500?: number | null;
+  distanceMeters?: number | null;
   isPlaying?: boolean;
-  cadence?: number | null; // strokes per minute
+  cadence?: number | null;
   performanceMode?: 'auto' | 'high' | 'low';
-  intensityFactor?: number; // Speed adjustment factor from workout intensity (e.g., 0.6-1.2)
+  intensityFactor?: number;
+  debugMode?: boolean;
 }
 
-// Fallback simple water for environments where Water shader may not work (e.g., CI)
-// This provides improved rendering with better metalness and roughness for reflections
-interface SimpleWaterProps {
-  position?: [number, number, number];
-  isLake?: boolean;
-  waterRef?: React.RefObject<Mesh | null>;
-}
-
-const SimpleWater: React.FC<SimpleWaterProps> = ({ position = [0, -0.05, 0], isLake = false, waterRef }) => {
-  const meshRef = useRef<Mesh>(null);
+// ============================================================================
+// ANIMATED WATER PLANE - Creates flowing water effect
+// ============================================================================
+const AnimatedWater: React.FC<{ boatZ: number }> = ({ boatZ }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   
-  // Animate water with subtle wave effect by modulating metalness/roughness
-  useFrame(() => {
-    if (meshRef.current && meshRef.current.material) {
-      const material = meshRef.current.material;
-      // Type guard to check if material is MeshStandardMaterial
-      if (material instanceof MeshStandardMaterial && material.roughness !== undefined) {
-        // Subtle shimmer effect
-        material.roughness = 0.3 + Math.sin(performance.now() * 0.001) * 0.1;
-      }
+  useFrame((_, delta) => {
+    // Animate water texture offset to simulate flow (opposite to boat movement)
+    if (materialRef.current && materialRef.current.map) {
+      materialRef.current.map.offset.y += delta * 0.05;
     }
   });
-
+  
   return (
     <mesh 
-      ref={(ref) => {
-        meshRef.current = ref;
-        // Only assign if waterRef is mutable (has writable current property)
-        if (waterRef && 'current' in waterRef) {
-          try {
-            (waterRef as React.MutableRefObject<Mesh | null>).current = ref;
-          } catch {
-            // Ref might be read-only, ignore assignment
-          }
-        }
-      }} 
+      ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]} 
-      position={position}
+      position={[0, -0.1, boatZ]}
+      receiveShadow
     >
-      <planeGeometry args={[500, 500, 32, 32]} />
+      <planeGeometry args={[1000, 1000, 64, 64]} />
       <meshStandardMaterial 
-        color={isLake ? '#1a5fb4' : '#2d7dc9'} 
-        metalness={0.6}
-        roughness={0.3}
-        envMapIntensity={1.0}
+        ref={materialRef}
+        color="#2d7dc9"
+        transparent
+        opacity={0.85}
+        roughness={0.8}
+        metalness={0.2}
       />
     </mesh>
   );
 };
 
-// Advanced GPU water with ripple effects from rower movement
-// Uses custom shader to render realistic water ripples emanating from the boat
-// Works with both WebGPU and WebGL renderers via Three.js ShaderMaterial
-interface RippleWaterProps {
-  geometry: BufferGeometry;
-  boatPosition?: { x: number; z: number };
-  cadence?: number;
-  isHighQuality?: boolean;
-}
-
-const RippleWater: React.FC<RippleWaterProps> = ({ geometry, boatPosition = { x: 0, z: 0 }, cadence = 30, isHighQuality = true }) => {
-  // Create material instance (memoized to avoid recreation)
-  const material = useMemo(() => new WaterRippleMaterial(), []);
+// ============================================================================
+// PROCEDURAL TERRAIN - Mountains along the banks
+// ============================================================================
+const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -35 : 35;
   
-  // Update shader uniforms on each frame using the material instance directly
-  useFrame(() => {
-    if (material) {
-      material.uniforms.uTime.value = performance.now() * 0.001;
-      material.uniforms.uBoatPosition.value.set(boatPosition.x, boatPosition.z);
-      material.uniforms.uCadence.value = Math.max(10, cadence || 30);
+  // Generate mountain positions along the route
+  const mountains = useMemo(() => {
+    const result: Array<{ x: number; z: number; scale: number; height: number }> = [];
+    for (let z = -500; z < 500; z += 40) {
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 10,
+        z: z + (Math.random() - 0.5) * 20,
+        scale: 8 + Math.random() * 12,
+        height: 15 + Math.random() * 25,
+      });
     }
-  });
-  
-  // For low performance mode or when GPU shaders may fail, fallback to simple material
-  if (!isHighQuality) {
-    return (
-      <mesh geometry={geometry}>
-        <meshStandardMaterial 
-          color={'#2d7dc9'}
-          metalness={0.6}
-          roughness={0.3}
-          envMapIntensity={1.0}
-        />
-      </mesh>
-    );
-  }
+    return result;
+  }, [xOffset]);
   
   return (
-    <mesh geometry={geometry} material={material} />
+    <group position={[0, 0, boatZ]}>
+      {mountains.map((m, i) => (
+        <mesh key={i} position={[m.x, m.height / 2 - 2, m.z]} castShadow receiveShadow>
+          <coneGeometry args={[m.scale, m.height, 6]} />
+          <meshStandardMaterial color="#5a7247" roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
   );
 };
 
-/**
- * Creates a mesh strip geometry from two arrays of points (for water or ground)
- */
-function createStripGeometry(
-  leftPoints: Vector3[],
-  rightPoints: Vector3[],
-  yOffset: number = 0
-): BufferGeometry {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
+// ============================================================================
+// PINE TREES - Scattered along the banks
+// ============================================================================
+const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xBase = side === 'left' ? -25 : 25;
   
-  const numPoints = Math.min(leftPoints.length, rightPoints.length);
+  // Generate tree positions
+  const trees = useMemo(() => {
+    const result: Array<{ x: number; z: number; scale: number }> = [];
+    for (let z = -400; z < 400; z += 8) {
+      const count = 1 + Math.floor(Math.random() * 2);
+      for (let j = 0; j < count; j++) {
+        result.push({
+          x: xBase + (Math.random() - 0.5) * 15 + (side === 'left' ? -5 : 5),
+          z: z + (Math.random() - 0.5) * 6,
+          scale: 0.8 + Math.random() * 0.6,
+        });
+      }
+    }
+    return result;
+  }, [xBase, side]);
   
-  for (let i = 0; i < numPoints; i++) {
-    const left = leftPoints[i];
-    const right = rightPoints[i];
-    const t = i / (numPoints - 1);
-    
-    positions.push(left.x, yOffset, left.z);
-    normals.push(0, 1, 0);
-    uvs.push(0, t);
-    
-    positions.push(right.x, yOffset, right.z);
-    normals.push(0, 1, 0);
-    uvs.push(1, t);
-  }
-  
-  for (let i = 0; i < numPoints - 1; i++) {
-    const bl = i * 2;
-    const br = i * 2 + 1;
-    const tl = (i + 1) * 2;
-    const tr = (i + 1) * 2 + 1;
-    
-    indices.push(bl, tl, br);
-    indices.push(br, tl, tr);
-  }
-  
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  
-  return geometry;
-}
+  return (
+    <group position={[0, 0, boatZ]}>
+      {trees.map((tree, i) => (
+        <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale}>
+          {/* Tree trunk */}
+          <mesh position={[0, 1, 0]} castShadow>
+            <cylinderGeometry args={[0.15, 0.2, 2, 8]} />
+            <meshStandardMaterial color="#4a3728" roughness={0.9} />
+          </mesh>
+          {/* Tree foliage - 3 stacked cones */}
+          <mesh position={[0, 3, 0]} castShadow>
+            <coneGeometry args={[1.2, 2.5, 8]} />
+            <meshStandardMaterial color="#2d5a27" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 4, 0]} castShadow>
+            <coneGeometry args={[0.9, 2, 8]} />
+            <meshStandardMaterial color="#3a6b32" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 4.8, 0]} castShadow>
+            <coneGeometry args={[0.6, 1.5, 8]} />
+            <meshStandardMaterial color="#4a7a42" roughness={0.8} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
 
-/**
- * Creates bank/shore geometry (strip on one side of the water)
- */
-function createBankStripGeometry(
-  innerPoints: Vector3[],
-  width: number,
-  routeNormals: Vector3[],
-  side: 'left' | 'right',
-  yOffset: number = 0.01
-): BufferGeometry {
-  const positions: number[] = [];
-  const norms: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  
-  const numPoints = innerPoints.length;
-  const multiplier = side === 'left' ? -1 : 1;
-  
-  for (let i = 0; i < numPoints; i++) {
-    const inner = innerPoints[i];
-    const normal = routeNormals[i];
-    const t = i / (numPoints - 1);
-    
-    positions.push(inner.x, yOffset, inner.z);
-    norms.push(0, 1, 0);
-    uvs.push(0, t);
-    
-    const outerX = inner.x + normal.x * width * multiplier;
-    const outerZ = inner.z + normal.z * width * multiplier;
-    positions.push(outerX, yOffset, outerZ);
-    norms.push(0, 1, 0);
-    uvs.push(1, t);
-  }
-  
-  for (let i = 0; i < numPoints - 1; i++) {
-    const bl = i * 2;
-    const br = i * 2 + 1;
-    const tl = (i + 1) * 2;
-    const tr = (i + 1) * 2 + 1;
-    
-    indices.push(bl, tl, br);
-    indices.push(br, tl, tr);
-  }
-  
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new Float32BufferAttribute(norms, 3));
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  
-  return geometry;
-}
+// ============================================================================
+// RIVERBANKS - Ground along the sides
+// ============================================================================
+const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
+  return (
+    <group position={[0, -0.5, boatZ]}>
+      {/* Left bank */}
+      <mesh position={[-40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[60, 1000]} />
+        <meshStandardMaterial color="#4a7c32" roughness={0.95} />
+      </mesh>
+      {/* Right bank */}
+      <mesh position={[40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[60, 1000]} />
+        <meshStandardMaterial color="#4a7c32" roughness={0.95} />
+      </mesh>
+    </group>
+  );
+};
 
-// Simple boat mesh is built in the scene below
+// ============================================================================
+// ROWING SCULL (BOAT) with animated oars
+// ============================================================================
+const RowingScull: React.FC<{ 
+  position: [number, number, number]; 
+  cadence: number;
+}> = ({ position, cadence }) => {
+  const leftOarRef = useRef<THREE.Group>(null);
+  const rightOarRef = useRef<THREE.Group>(null);
+  
+  useFrame(() => {
+    // Animate oars based on cadence
+    const strokesPerMinute = Math.max(20, cadence || 30);
+    const freqHz = strokesPerMinute / 60;
+    const time = performance.now() * 0.001;
+    const phase = (time * freqHz % 1) * Math.PI * 2;
+    
+    // Oar sweep angle (forward/back motion)
+    const oarSweep = Math.sin(phase) * 0.5;
+    
+    if (leftOarRef.current) {
+      leftOarRef.current.rotation.y = oarSweep;
+    }
+    if (rightOarRef.current) {
+      rightOarRef.current.rotation.y = -oarSweep;
+    }
+  });
+  
+  return (
+    <group position={position}>
+      {/* Main hull - long narrow box */}
+      <mesh castShadow>
+        <boxGeometry args={[0.5, 0.2, 8]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+      </mesh>
+      
+      {/* Bow (front) - pointed cone toward -Z */}
+      <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <coneGeometry args={[0.25, 0.8, 8]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+      </mesh>
+      
+      {/* Stern (back) - tapered toward +Z */}
+      <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
+        <coneGeometry args={[0.2, 0.6, 8]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+      </mesh>
+      
+      {/* Rower - simple seated figure */}
+      <group position={[0, 0.4, 1]}>
+        {/* Body */}
+        <mesh castShadow>
+          <boxGeometry args={[0.4, 0.5, 0.3]} />
+          <meshStandardMaterial color="#2563eb" />
+        </mesh>
+        {/* Head */}
+        <mesh position={[0, 0.4, 0]} castShadow>
+          <sphereGeometry args={[0.15, 16, 16]} />
+          <meshStandardMaterial color="#d4a574" />
+        </mesh>
+      </group>
+      
+      {/* Left oar group */}
+      <group ref={leftOarRef} position={[-0.3, 0.15, 0.5]}>
+        {/* Rigger */}
+        <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.03, 0.03, 1.2, 8]} />
+          <meshStandardMaterial color="#666666" metalness={0.6} />
+        </mesh>
+        {/* Oar shaft */}
+        <mesh position={[-1.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.025, 0.025, 2.5, 8]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
+        {/* Oar blade */}
+        <mesh position={[-2.8, 0, 0]}>
+          <boxGeometry args={[0.5, 0.02, 0.15]} />
+          <meshStandardMaterial color="#1e40af" />
+        </mesh>
+      </group>
+      
+      {/* Right oar group */}
+      <group ref={rightOarRef} position={[0.3, 0.15, 0.5]}>
+        {/* Rigger */}
+        <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.03, 0.03, 1.2, 8]} />
+          <meshStandardMaterial color="#666666" metalness={0.6} />
+        </mesh>
+        {/* Oar shaft */}
+        <mesh position={[1.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.025, 0.025, 2.5, 8]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
+        {/* Oar blade */}
+        <mesh position={[2.8, 0, 0]}>
+          <boxGeometry args={[0.5, 0.02, 0.15]} />
+          <meshStandardMaterial color="#1e40af" />
+        </mesh>
+      </group>
+    </group>
+  );
+};
 
-const RowerScene: React.FC<Rower3DProps> = ({ route, paceSPer500, distanceMeters, isPlaying, cadence, performanceMode, intensityFactor }) => {
-  // Scale factor: 0.01 means 1 meter = 0.01 world units, so 100m = 1 world unit
-  const ROUTE_SCALE = 0.01;
-  const WATER_HALF_WIDTH = 8; // Half-width of water in world units (wider for visibility)
+// ============================================================================
+// MAIN SCENE - Handles boat movement, camera following, and scenery
+// ============================================================================
+const RowerScene: React.FC<Rower3DProps> = ({ 
+  route, 
+  paceSPer500, 
+  distanceMeters, 
+  isPlaying, 
+  cadence,
+  intensityFactor 
+}) => {
+  const { camera } = useThree();
   
-  // Create geographically accurate route curve from GPX coordinates
-  const routeData = useMemo(() => {
-    if (!route || !route.coordinates || route.coordinates.length === 0) return null;
-    return createRouteCurve(route.coordinates, ROUTE_SCALE, 300);
-  }, [route]);
+  // Boat position ref - boat moves along -Z axis
+  const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const [boatZ, setBoatZ] = useState(0);
   
-  // Get detailed route points with positions, tangents, and normals for bank geometry
-  const routePoints = useMemo((): RoutePoint3D[] => {
-    if (!routeData) return [];
-    return getRoutePoints(routeData.curve, routeData.totalMeters, 299);
-  }, [routeData]);
-  
-  // Generate bank geometry from route points
-  const bankData = useMemo(() => {
-    if (routePoints.length === 0) return null;
-    return generateBankGeometry(routePoints, WATER_HALF_WIDTH);
-  }, [routePoints]);
-  
-  // Create water and bank geometries
-  const geometries = useMemo(() => {
-    if (!routeData || !bankData || routePoints.length === 0) return null;
-    
-    const { leftBank, rightBank } = bankData;
-    const normals = routePoints.map(p => p.normal);
-    
-    // Water surface geometry - at y=0 (water level)
-    const waterGeometry = createStripGeometry(leftBank, rightBank, 0);
-    
-    // Bank geometries - elevated above water level for clear separation
-    const bankWidth = 30; // Width of main bank
-    const edgeWidth = 2;  // Darker edge near water (narrower for cleaner look)
-    
-    // Banks raised above water level (y=0.3) with edges slightly lower
-    const leftBankGeometry = createBankStripGeometry(leftBank, bankWidth, normals, 'left', 0.3);
-    const rightBankGeometry = createBankStripGeometry(rightBank, bankWidth, normals, 'right', 0.3);
-    const leftEdgeGeometry = createBankStripGeometry(leftBank, edgeWidth, normals, 'left', 0.15);
-    const rightEdgeGeometry = createBankStripGeometry(rightBank, edgeWidth, normals, 'right', 0.15);
-    
-    return { waterGeometry, leftBankGeometry, rightBankGeometry, leftEdgeGeometry, rightEdgeGeometry };
-  }, [routeData, bankData, routePoints]);
-
-  const curve = routeData?.curve || null;
-  
-  // Memoize total distance calculation to avoid expensive recomputation
+  // Calculate total route distance
   const totalDistance = useMemo(() => {
-    if (routeData?.totalMeters) return routeData.totalMeters;
     return routeTotalDistanceMeters(route.coordinates);
-  }, [routeData?.totalMeters, route.coordinates]);
-
-  // default boat progress is derived from distanceMeters / totalDistance
-  const targetProgress = useMemo(() => {
-    if (!distanceMeters || totalDistance === 0) return 0;
-    const p = Math.min(1, Math.max(0, distanceMeters / totalDistance));
-    return p;
-  }, [distanceMeters, totalDistance]);
-
-          
-  const boatRef = useRef<Mesh | null>(null);
-  const leftOarRef = useRef<Group | null>(null);
-  const rightOarRef = useRef<Group | null>(null);
-  const progressRef = useRef<number>(0);
-  const posRef = useRef<Vector3>(new Vector3(0, 0, 0));
-  const yawRef = useRef<number>(0);
+  }, [route.coordinates]);
   
-  // World group ref - this will be transformed to keep boat centered
-  const worldRef = useRef<Group | null>(null);
-  
-  // Scenery refs - these need to be updated in useFrame to move with the world
-  const waterRef = useRef<Mesh | null>(null);
-  const riverSceneryRef = useRef<Group | null>(null);
-  const lakeSceneryRef = useRef<Group | null>(null);
-
-  const { camera, gl } = useThree();
-  // dynamic pixel ratio and simple performance adaptation
-  // lastLongFrameRef retained for future use (was used for dynamic pixel ratio tuning)
-  // Noop for now to not keep unused variable warnings
-  const lastLongFrameRef = useRef<number>(0);
-  const devicePixelRatio = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-  React.useEffect(() => {
-    const desired = (performanceMode === 'low') || (typeof window !== 'undefined' && (window as any).__PLAYWRIGHT_TESTING) ? 0.5 : devicePixelRatio;
-    try {
-      gl.setPixelRatio(desired);
-    } catch (e) {}
-  }, [gl, performanceMode, devicePixelRatio]);
-
-  // Add GPU context lost / restore handlers to enable graceful fallback
-  // Supports both WebGPU and WebGL context events
-  useEffect(() => {
-    if (!gl || !gl.domElement) return;
-    const canvas = gl.domElement;
-    const onContextLost = (ev: Event) => {
-      try {
-        // prevent default so we can control restoration
-        // @ts-ignore
-        ev.preventDefault && (ev as any).preventDefault();
-      } catch (e) {}
-      try {
-        const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-        if (marker) marker.style.display = 'block';
-        // Expose window flag for tests (unified flag for both WebGL and WebGPU)
-        // @ts-ignore
-        (window as any).__ROWER3D_GPU_CONTEXT_LOST = true;
-        // Keep legacy flag for backward compatibility
-        // @ts-ignore
-        (window as any).__ROWER3D_WEBGL_LOST = true;
-      } catch (e) {}
-    };
-    const onContextRestore = () => {
-      try {
-        const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-        if (marker) marker.style.display = 'none';
-        // @ts-ignore
-        (window as any).__ROWER3D_GPU_CONTEXT_LOST = false;
-        // @ts-ignore
-        (window as any).__ROWER3D_WEBGL_LOST = false;
-      } catch (e) {}
-    };
-    // Listen for both WebGL and WebGPU context events
-    canvas.addEventListener('webglcontextlost', onContextLost as EventListener, false);
-    canvas.addEventListener('webglcontextrestored', onContextRestore as EventListener, false);
-    // WebGPU uses 'uncapturederror' event on the device, but context loss is handled differently
-    // For now, the webgl events cover the fallback case
-    return () => {
-      canvas.removeEventListener('webglcontextlost', onContextLost as EventListener);
-      canvas.removeEventListener('webglcontextrestored', onContextRestore as EventListener);
-    };
-  }, [gl]);
-
-  useFrame((_, delta: number) => {
-    if (!curve || !boatRef.current) return;
-    // compute effective speed using pace if given; pace is seconds/500m -> m/s = 500/pace
+  // Animation loop - move boat forward and camera follows
+  useFrame((_, delta) => {
+    // Calculate speed from pace (seconds per 500m -> meters per second)
     let speedMps = 0;
-    if (paceSPer500 && paceSPer500 > 0) speedMps = 500 / paceSPer500; // m/s
+    if (paceSPer500 && paceSPer500 > 0) {
+      speedMps = 500 / paceSPer500;
+    }
     
-    // Apply intensity factor from structured workout if provided
+    // Apply intensity factor if provided
     if (intensityFactor && intensityFactor > 0) {
       speedMps *= intensityFactor;
     }
-
-    // convert to progress per second relative to route length
-    const progressPerSecond = totalDistance > 0 ? (speedMps / totalDistance) : 0;
-
+    
+    // Move boat forward along -Z axis when playing
     if (isPlaying && speedMps > 0) {
-      progressRef.current = Math.min(1, progressRef.current + progressPerSecond * delta);
-    } else {
-      // if not playing, smoothly follow targetProgress using damping
-      progressRef.current += (targetProgress - progressRef.current) * Math.min(1, delta * 5);
-    }
-
-    // Get position and tangent from curve
-    const pos = curve.getPointAt(progressRef.current);
-    const tangent = curve.getTangentAt(progressRef.current).normalize();
-    
-    // Compute orientation from tangent (for world movement direction)
-    const yaw = Math.atan2(tangent.z, tangent.x);
-    
-    // Store in refs for use in render
-    posRef.current.copy(pos);
-    yawRef.current = yaw;
-    
-    // Keep boat stationary at a fixed position and orientation
-    // The boat always faces forward (toward camera), the world moves around it
-    // Boat is positioned at y=-0.1 so hull sits IN the water (water is at y=0)
-    boatRef.current.position.set(0, -0.1, -2); // Position boat forward in the scene, lowered into water
-    boatRef.current.rotation.set(0, Math.PI, 0); // Always face forward (toward negative Z / camera)
-
-    // Fixed camera position - behind and above the boat, looking forward
-    // Camera is positioned further back and lower to show the whole boat in lower center of screen
-    // This creates a chase camera view where the rower and boat are visible moving forward
-    camera.position.set(0, 3, 8); // Further back and higher for better view of water
-    camera.lookAt(0, 0.5, -4); // Look at a point ahead at water level
-
-    // Oar animation: simulate realistic rowing stroke cycle
-    // Rowing stroke phases: Catch -> Drive -> Finish -> Recovery
-    // Use cadence if available and > 0, otherwise calculate from pace, or default to 30
-    const strokesPerMinute = (cadence && cadence > 0) 
-      ? cadence 
-      : (paceSPer500 ? Math.min(60, Math.round(500 / (paceSPer500 || 100) * 0.25)) : 30);
-    const freqHz = strokesPerMinute / 60;
-    const cycleTime = performance.now() * 0.001 * freqHz; // cycles per second
-    const phase = (cycleTime % 1) * Math.PI * 2; // 0 to 2π for one complete stroke
-    
-    // Rowing stroke motion mapping:
-    // - Catch (0°): Oars forward in water, blade vertical
-    // - Drive (0° to 90°): Pull through water, blade stays vertical
-    // - Finish (90°): Oars back, blade exits water
-    // - Recovery (90° to 360°): Oars return forward through air, blade feathered (horizontal)
-    
-    // Blade angle (rotation around shaft) - vertical in water, horizontal in air
-    const bladeFeather = phase < Math.PI ? 0 : Math.PI / 2; // Flat during recovery
-    
-    // Oar sweep angle (forward/back motion)
-    // Forward position (catch): ~60° forward from perpendicular
-    // Back position (finish): ~30° back from perpendicular
-    // Use smooth sinusoidal motion weighted toward the drive
-    let oarSweep;
-    if (phase < Math.PI * 0.4) {
-      // Drive phase (faster, more power) - 40% of cycle
-      oarSweep = Math.cos(phase / 0.4 * Math.PI / 2) * 0.6 - 0.3; // sweep forward/back
-    } else {
-      // Recovery phase (slower return) - 60% of cycle
-      const recoveryPhase = (phase - Math.PI * 0.4) / (Math.PI * 1.6);
-      oarSweep = -0.3 + recoveryPhase * 0.6; // return to start
+      // Convert real speed to scene units (1 unit ~= 2 meters, but we use 1:1 for simplicity)
+      const sceneSpeed = speedMps * 0.5; // Scale down for visual comfort
+      boatPositionRef.current.z -= sceneSpeed * delta;
+    } else if (distanceMeters !== null && distanceMeters !== undefined && totalDistance > 0) {
+      // When not playing, position based on distance traveled
+      const progress = Math.min(1, distanceMeters / totalDistance);
+      const targetZ = -progress * totalDistance * 0.1; // Scale route to scene
+      boatPositionRef.current.z += (targetZ - boatPositionRef.current.z) * delta * 3;
     }
     
-    // Left and right oars rotate around Y-axis for forward/back sweep motion
-    // Blade feather rotates around Z-axis
-    if (leftOarRef.current) {
-      // Left oar: rotate around Y for sweep, Z for feather
-      leftOarRef.current.rotation.set(0, oarSweep, bladeFeather);
+    // Update state for scenery positioning (throttled)
+    const currentZ = boatPositionRef.current.z;
+    if (Math.abs(currentZ - boatZ) > 5) {
+      setBoatZ(currentZ);
     }
-    if (rightOarRef.current) {
-      // Right oar: opposite Y rotation for symmetric sculling motion
-      rightOarRef.current.rotation.set(0, -oarSweep, -bladeFeather);
-    }
-
-    // Expose oar angle for e2e testing
-    try { // safe window access check
-      // @ts-ignore
-      if ((window as any).__PLAYWRIGHT_TESTING) {
-        // @ts-ignore
-        (window as any).__ROWER3D_OAR_ANGLE = oarSweep;
-        // @ts-ignore
-        (window as any).__ROWER3D_STROKE_RATE = strokesPerMinute;
-      }
-    } catch (e) {}
-
-    // Expose boat position for Playwright testing when enabled
+    
+    // Camera follows boat with fixed offset (chase view)
+    // Camera at (0, 2.5, 6) relative to boat = behind and above
+    camera.position.set(
+      boatPositionRef.current.x,
+      boatPositionRef.current.y + 2.5,
+      boatPositionRef.current.z + 6
+    );
+    
+    // Camera looks at the boat
+    camera.lookAt(
+      boatPositionRef.current.x,
+      boatPositionRef.current.y + 0.3,
+      boatPositionRef.current.z
+    );
+    
+    // Expose boat position for Playwright testing
     try {
-      // @ts-ignore
       if ((window as any).__PLAYWRIGHT_TESTING) {
-        // Export actual rendered boat position (fixed) and orientation, along with route progress
-        // @ts-ignore
-        (window as any).__ROWER3D_POS = { 
-          x: 0,  // Actual rendered x position (boat is fixed at origin)
-          y: 0,  // Actual rendered y position
-          z: -2,  // Actual rendered z position  
-          progress: progressRef.current, 
-          yaw: -yaw + Math.PI  // Actual boat orientation (faces forward)
+        (window as any).__ROWER3D_POS = {
+          x: boatPositionRef.current.x,
+          y: boatPositionRef.current.y,
+          z: boatPositionRef.current.z,
+          progress: totalDistance > 0 ? Math.abs(boatPositionRef.current.z * 10) / totalDistance : 0
         };
       }
-    } catch (e) { /* ignore if window isn't available */ }
-
-    // Dynamic pixel ratio autoscaling: if frames frequently slow, reduce DPR to improve performance
-    try {
-      if (performanceMode === 'auto') {
-        if (delta > 0.05) {
-          lastLongFrameRef.current += 1;
-        } else {
-          lastLongFrameRef.current = Math.max(0, lastLongFrameRef.current - 1);
-        }
-        if (lastLongFrameRef.current > 4) {
-          gl.setPixelRatio(0.5);
-        } else {
-          gl.setPixelRatio(devicePixelRatio);
-        }
-      }
-    } catch (e) { /* silent failures allowed */ }
-
-    // Expose camera for e2e testing
-    try {
-      // @ts-ignore
-      if ((window as any).__PLAYWRIGHT_TESTING) {
-        // @ts-ignore
-        (window as any).__ROWER3D_CAMERA = { position: camera.position.toArray(), rotation: camera.rotation.toArray() };
-      }
-    } catch (e) {}
-    
-    // Transform the world group to keep boat centered on the geographically accurate route
-    // The world is translated and rotated so the boat appears to stay in place while
-    // the route geometry (water, banks, landmarks) moves past it
-    if (worldRef.current && curve) {
-      const routePos = curve.getPointAt(progressRef.current);
-      const routeTangent = curve.getTangentAt(progressRef.current).normalize();
-      
-      // Calculate rotation to align route forward direction with screen forward (-Z)
-      // Route forward is the tangent direction, we want it to point toward -Z
-      const worldRotation = Math.atan2(routeTangent.x, -routeTangent.z);
-      
-      // Apply rotation first, then translation
-      // We rotate around Y axis, then translate to center the boat
-      worldRef.current.rotation.set(0, -worldRotation, 0);
-      
-      // Translate so the route position under the boat is at origin
-      // We need to account for the rotation when translating
-      const cosR = Math.cos(-worldRotation);
-      const sinR = Math.sin(-worldRotation);
-      const translatedX = -(routePos.x * cosR - routePos.z * sinR);
-      const translatedZ = -(routePos.x * sinR + routePos.z * cosR);
-      
-      worldRef.current.position.set(translatedX, 0, translatedZ);
-    }
+    } catch {}
   });
-
-  // Determine route type for scenery - memoize to ensure consistent detection
-  const isLakeRoute = useMemo(() => {
-    return route.tags?.includes('lake') || route.tags?.includes('alpine') || false;
-  }, [route.tags]);
   
-  const isRiverRoute = useMemo(() => {
-    return route.tags?.includes('river') || route.tags?.includes('canal') || false;
-  }, [route.tags]);
-
-  // Get route-specific landmark configuration using the centralized registry
-  // This replaces individual route detection with a single configuration lookup
-  const routeLandmarkConfig = useMemo(() => {
-    return getRouteLandmarkConfig(route.name, route.tags);
-  }, [route.name, route.tags]);
-
-  // Seeded random generator factory for consistent positions
-  const createSeededRandom = (initialSeed: number) => {
-    let seed = initialSeed;
-    return () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-  };
-
-  // Generate tree positions for river/canal routes - use seeded positions for consistency
-  // Include different tree types: pine, deciduous, and bush
-  const treePositions = useMemo(() => {
-    if (!isRiverRoute) return [];
-    const trees: Array<{ 
-      x: number; 
-      z: number; 
-      scale: number; 
-      side: 'left' | 'right';
-      type: 'pine' | 'deciduous' | 'bush';
-      distanceFromWater: number;
-    }> = [];
-    const seededRandom = createSeededRandom(12345);
-    
-    // Generate trees extending forward (negative Z is ahead of the boat)
-    for (let z = -400; z < 50; z += 3) {
-      // Generate multiple trees/vegetation per z position for density
-      const numLeft = 1 + Math.floor(seededRandom() * 2);
-      const numRight = 1 + Math.floor(seededRandom() * 2);
-      
-      for (let i = 0; i < numLeft; i++) {
-        const distanceFromWater = 6 + seededRandom() * 20;
-        const treeTypeRand = seededRandom();
-        const treeType = treeTypeRand < 0.4 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
-        trees.push({
-          x: -distanceFromWater,
-          z: z + seededRandom() * 3 - 1.5,
-          scale: treeType === 'bush' ? 0.3 + seededRandom() * 0.3 : 0.7 + seededRandom() * 0.6,
-          side: 'left',
-          type: treeType,
-          distanceFromWater
-        });
-      }
-      
-      for (let i = 0; i < numRight; i++) {
-        const distanceFromWater = 6 + seededRandom() * 20;
-        const treeTypeRand = seededRandom();
-        const treeType = treeTypeRand < 0.4 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
-        trees.push({
-          x: distanceFromWater,
-          z: z + seededRandom() * 3 - 1.5,
-          scale: treeType === 'bush' ? 0.3 + seededRandom() * 0.3 : 0.7 + seededRandom() * 0.6,
-          side: 'right',
-          type: treeType,
-          distanceFromWater
-        });
-      }
-    }
-    return trees;
-  }, [isRiverRoute]);
-
-  // Generate vegetation positions (grass patches, flowers, reeds) for river routes
-  const vegetationPositions = useMemo(() => {
-    if (!isRiverRoute) return [];
-    const vegetation: Array<{
-      x: number;
-      z: number;
-      scale: number;
-      type: 'grass' | 'flowers' | 'reeds';
-      side: 'left' | 'right';
-    }> = [];
-    const seededRandom = createSeededRandom(67890);
-    
-    // Generate vegetation extending forward (negative Z is ahead)
-    for (let z = -400; z < 50; z += 2) {
-      // Reeds near water edge
-      if (seededRandom() > 0.5) {
-        vegetation.push({
-          x: -4.5 - seededRandom() * 1.5,
-          z: z + seededRandom() * 2,
-          scale: 0.3 + seededRandom() * 0.2,
-          type: 'reeds',
-          side: 'left'
-        });
-      }
-      if (seededRandom() > 0.5) {
-        vegetation.push({
-          x: 4.5 + seededRandom() * 1.5,
-          z: z + seededRandom() * 2,
-          scale: 0.3 + seededRandom() * 0.2,
-          type: 'reeds',
-          side: 'right'
-        });
-      }
-      
-      // Grass patches on banks
-      if (seededRandom() > 0.3) {
-        vegetation.push({
-          x: -7 - seededRandom() * 8,
-          z: z + seededRandom() * 2,
-          scale: 0.4 + seededRandom() * 0.4,
-          type: 'grass',
-          side: 'left'
-        });
-      }
-      if (seededRandom() > 0.3) {
-        vegetation.push({
-          x: 7 + seededRandom() * 8,
-          z: z + seededRandom() * 2,
-          scale: 0.4 + seededRandom() * 0.4,
-          type: 'grass',
-          side: 'right'
-        });
-      }
-      
-      // Flowers scattered
-      if (seededRandom() > 0.7) {
-        vegetation.push({
-          x: -8 - seededRandom() * 10,
-          z: z + seededRandom() * 2,
-          scale: 0.15 + seededRandom() * 0.1,
-          type: 'flowers',
-          side: 'left'
-        });
-      }
-      if (seededRandom() > 0.7) {
-        vegetation.push({
-          x: 8 + seededRandom() * 10,
-          z: z + seededRandom() * 2,
-          scale: 0.15 + seededRandom() * 0.1,
-          type: 'flowers',
-          side: 'right'
-        });
-      }
-    }
-    return vegetation;
-  }, [isRiverRoute]);
-
-  // Generate building positions for river routes
-  const buildingPositions = useMemo(() => {
-    if (!isRiverRoute) return [];
-    const buildings: Array<{
-      x: number;
-      z: number;
-      width: number;
-      height: number;
-      depth: number;
-      roofType: 'flat' | 'pitched' | 'hip';
-      color: string;
-      roofColor: string;
-      side: 'left' | 'right';
-    }> = [];
-    const seededRandom = createSeededRandom(11111);
-    const buildingColors = ['#d4c4a8', '#c9b896', '#e8dcc8', '#a89880', '#b8a888'];
-    const roofColors = ['#8b4513', '#654321', '#4a3520', '#5c3d2e', '#6b4226'];
-    
-    // Spread buildings sparsely along the route (negative Z is ahead)
-    for (let z = -380; z < 50; z += 20) {
-      // Chance to place building on left or right
-      if (seededRandom() > 0.4) {
-        const roofChoice = seededRandom();
-        buildings.push({
-          x: -20 - seededRandom() * 15,
-          z: z + seededRandom() * 10 - 5,
-          width: 2 + seededRandom() * 3,
-          height: 2 + seededRandom() * 4,
-          depth: 2 + seededRandom() * 3,
-          roofType: roofChoice < 0.33 ? 'flat' : (roofChoice < 0.66 ? 'pitched' : 'hip'),
-          color: buildingColors[Math.floor(seededRandom() * buildingColors.length)],
-          roofColor: roofColors[Math.floor(seededRandom() * roofColors.length)],
-          side: 'left'
-        });
-      }
-      if (seededRandom() > 0.4) {
-        const roofChoice = seededRandom();
-        buildings.push({
-          x: 20 + seededRandom() * 15,
-          z: z + seededRandom() * 10 - 5,
-          width: 2 + seededRandom() * 3,
-          height: 2 + seededRandom() * 4,
-          depth: 2 + seededRandom() * 3,
-          roofType: roofChoice < 0.33 ? 'flat' : (roofChoice < 0.66 ? 'pitched' : 'hip'),
-          color: buildingColors[Math.floor(seededRandom() * buildingColors.length)],
-          roofColor: roofColors[Math.floor(seededRandom() * roofColors.length)],
-          side: 'right'
-        });
-      }
-    }
-    return buildings;
-  }, [isRiverRoute]);
-
-  // Generate mountain positions for lake routes
-  const mountainPositions = useMemo(() => {
-    if (!isLakeRoute) return [];
-    const mountains: Array<{ x: number; z: number; scaleX: number; scaleY: number; rotation: number }> = [];
-    const seededRandom = createSeededRandom(54321);
-    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 6) {
-      const distance = 80 + seededRandom() * 40;
-      mountains.push({
-        x: Math.cos(angle) * distance,
-        z: Math.sin(angle) * distance,
-        scaleX: 15 + seededRandom() * 20,
-        scaleY: 8 + seededRandom() * 15,
-        rotation: angle + seededRandom() * 0.3
-      });
-    }
-    return mountains;
-  }, [isLakeRoute]);
-
-  // Generate lake shore features (trees, vegetation, buildings) around the lake
-  const lakeShoreFeatures = useMemo(() => {
-    if (!isLakeRoute) return { trees: [], vegetation: [], buildings: [] };
-    const seededRandom = createSeededRandom(99999);
-    
-    const trees: Array<{
-      x: number;
-      z: number;
-      scale: number;
-      type: 'pine' | 'deciduous' | 'bush';
-    }> = [];
-    
-    const vegetation: Array<{
-      x: number;
-      z: number;
-      scale: number;
-      type: 'grass' | 'flowers' | 'reeds';
-    }> = [];
-    
-    const buildings: Array<{
-      x: number;
-      z: number;
-      width: number;
-      height: number;
-      depth: number;
-      roofType: 'flat' | 'pitched' | 'hip';
-      color: string;
-      roofColor: string;
-      rotation: number;
-    }> = [];
-    
-    const buildingColors = ['#d4c4a8', '#c9b896', '#e8dcc8', '#a89880', '#b8a888'];
-    const roofColors = ['#8b4513', '#654321', '#4a3520', '#5c3d2e', '#6b4226'];
-    
-    // Generate features around the lake shore
-    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
-      // Trees at various distances from shore
-      for (let i = 0; i < 3; i++) {
-        const distance = 62 + seededRandom() * 15;
-        const treeTypeRand = seededRandom();
-        const treeType = treeTypeRand < 0.5 ? 'pine' : (treeTypeRand < 0.7 ? 'deciduous' : 'bush');
-        trees.push({
-          x: Math.cos(angle + seededRandom() * 0.3) * distance,
-          z: Math.sin(angle + seededRandom() * 0.3) * distance,
-          scale: treeType === 'bush' ? 0.3 + seededRandom() * 0.3 : 0.6 + seededRandom() * 0.5,
-          type: treeType
-        });
-      }
-      
-      // Vegetation near water
-      if (seededRandom() > 0.4) {
-        const vegTypeRand = seededRandom();
-        vegetation.push({
-          x: Math.cos(angle) * (60 + seededRandom() * 3),
-          z: Math.sin(angle) * (60 + seededRandom() * 3),
-          scale: 0.3 + seededRandom() * 0.2,
-          type: vegTypeRand > 0.5 ? 'reeds' : 'grass'
-        });
-      }
-      
-      // Flowers
-      if (seededRandom() > 0.6) {
-        vegetation.push({
-          x: Math.cos(angle + 0.1) * (63 + seededRandom() * 5),
-          z: Math.sin(angle + 0.1) * (63 + seededRandom() * 5),
-          scale: 0.15 + seededRandom() * 0.1,
-          type: 'flowers'
-        });
-      }
-      
-      // Buildings (sparse, every few angles)
-      if (seededRandom() > 0.7) {
-        const roofChoice = seededRandom();
-        buildings.push({
-          x: Math.cos(angle) * (70 + seededRandom() * 10),
-          z: Math.sin(angle) * (70 + seededRandom() * 10),
-          width: 2 + seededRandom() * 2,
-          height: 2 + seededRandom() * 3,
-          depth: 2 + seededRandom() * 2,
-          roofType: roofChoice < 0.33 ? 'flat' : (roofChoice < 0.66 ? 'pitched' : 'hip'),
-          color: buildingColors[Math.floor(seededRandom() * buildingColors.length)],
-          roofColor: roofColors[Math.floor(seededRandom() * roofColors.length)],
-          rotation: angle
-        });
-      }
-    }
-    
-    return { trees, vegetation, buildings };
-  }, [isLakeRoute]);
-
-  // Helper function to calculate perspective scale based on distance from camera
-  // Objects further away appear smaller (camera is at z=6, looking forward toward negative Z)
-  const calculatePerspectiveScale = (z: number, baseScale: number): number => {
-    // Camera is at z=6, boat at z=-2
-    // Objects at z < 0 are ahead (in front of boat), z > 0 are behind
-    const cameraZ = 6;
-    const distanceFromCamera = Math.abs(z - cameraZ);
-    // Use inverse distance for perspective - closer objects are larger
-    const perspectiveFactor = Math.max(0.1, Math.min(3.0, 20 / (distanceFromCamera + 10)));
-    return baseScale * perspectiveFactor;
-  };
-
   return (
     <>
-      {/* Improved lighting setup for better reflections */}
-      <ambientLight intensity={isLakeRoute ? 0.5 : 0.4} />
-      <directionalLight 
-        position={[10, 20, 10]} 
-        intensity={isLakeRoute ? 1.2 : 1.0} 
+      {/* Sky blue fog for atmosphere */}
+      <fog attach="fog" args={['#a0cdfa', 50, 500]} />
+      <color attach="background" args={['#a0cdfa']} />
+      
+      {/* Hemisphere light - sky and ground colors */}
+      <hemisphereLight 
+        args={['#ffffff', '#888888', 0.8]} 
+        position={[0, 50, 0]}
+      />
+      
+      {/* Directional light (sunlight) with shadows */}
+      <directionalLight
+        position={[50, 100, 50]}
+        intensity={1.2}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-      <directionalLight 
-        position={[-5, 10, -5]} 
-        intensity={0.3} 
-        color="#b3d4fc"
-      />
-      
-      {/* Realistic sky with sun for reflections */}
-      <Sky 
-        distance={450000}
-        sunPosition={[100, 20, 100]}
-        inclination={0.5}
-        azimuth={0.25}
-        turbidity={isLakeRoute ? 8 : 10}
-        rayleigh={isLakeRoute ? 0.5 : 2}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-far={500}
+        shadow-camera-left={-100}
+        shadow-camera-right={100}
+        shadow-camera-top={100}
+        shadow-camera-bottom={-100}
       />
       
-      {/* World group - contains all scenery that moves with the route
-          This group is transformed to keep the boat centered and facing forward */}
-      <group ref={worldRef}>
-        {/* Geographically accurate water and bank geometry for river/canal routes */}
-        {isRiverRoute && geometries && (
-          <group>
-            {/* Water surface with GPU ripple effects (WebGPU/WebGL) following the actual GPX route */}
-            <RippleWater 
-              geometry={geometries.waterGeometry}
-              boatPosition={{ x: posRef.current.x, z: posRef.current.z }}
-              cadence={cadence || 30}
-              isHighQuality={performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING}
-            />
-            
-            {/* Left bank - main grass following route curve */}
-            <mesh geometry={geometries.leftBankGeometry}>
-              <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-            </mesh>
-            
-            {/* Right bank - main grass following route curve */}
-            <mesh geometry={geometries.rightBankGeometry}>
-              <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-            </mesh>
-            
-            {/* Left edge - muddy brown shoreline near water */}
-            <mesh geometry={geometries.leftEdgeGeometry}>
-              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
-            </mesh>
-            
-            {/* Right edge - muddy brown shoreline near water */}
-            <mesh geometry={geometries.rightEdgeGeometry}>
-              <meshStandardMaterial color={'#8B7355'} roughness={0.85} />
-            </mesh>
-          </group>
-        )}
-        
-        {/* For lake routes, use simple water (lakes don't follow a linear path) */}
-        {isLakeRoute && (
-          <SimpleWater 
-            waterRef={waterRef} 
-            isLake={isLakeRoute} 
-            position={[0, -0.05, 0]} 
-          />
-        )}
-        
-        {/* Fallback water for non-route types */}
-        {!isRiverRoute && !isLakeRoute && (
-          <SimpleWater 
-            waterRef={waterRef} 
-            isLake={false} 
-            position={[0, -0.05, 0]} 
-          />
-        )}
-
-      {/* RIVER SCENERY - trees and vegetation along the route-following banks */}
-      {isRiverRoute && (
-        <group ref={riverSceneryRef}>
-          {/* Trees along the banks - with different types and perspective scaling */}
-          {treePositions.map((tree, idx) => {
-            const perspectiveScale = calculatePerspectiveScale(tree.z, tree.scale);
-            
-            if (tree.type === 'pine') {
-              // Pine tree - layered cones
-              return (
-                <group 
-                  key={`tree-${idx}`} 
-                  position={[tree.x, 0, tree.z]}
-                >
-                  {/* Tree trunk */}
-                  <mesh position={[0, perspectiveScale * 1.2, 0]}>
-                    <cylinderGeometry args={[0.15 * perspectiveScale, 0.25 * perspectiveScale, perspectiveScale * 2.4, 8]} />
-                    <meshStandardMaterial color={'#8B4513'} roughness={0.9} />
-                  </mesh>
-                  {/* Tree foliage - layered cones for pine tree look */}
-                  <mesh position={[0, perspectiveScale * 2.8, 0]}>
-                    <coneGeometry args={[perspectiveScale * 1.5, perspectiveScale * 2.5, 8]} />
-                    <meshStandardMaterial color={'#228B22'} roughness={0.8} />
-                  </mesh>
-                  <mesh position={[0, perspectiveScale * 3.8, 0]}>
-                    <coneGeometry args={[perspectiveScale * 1.2, perspectiveScale * 2, 8]} />
-                    <meshStandardMaterial color={'#2d8f2d'} roughness={0.8} />
-                  </mesh>
-                  <mesh position={[0, perspectiveScale * 4.6, 0]}>
-                    <coneGeometry args={[perspectiveScale * 0.8, perspectiveScale * 1.5, 8]} />
-                    <meshStandardMaterial color={'#32a032'} roughness={0.8} />
-                  </mesh>
-                </group>
-              );
-            } else if (tree.type === 'deciduous') {
-              // Deciduous tree - trunk with rounded foliage spheres
-              return (
-                <group 
-                  key={`tree-${idx}`} 
-                  position={[tree.x, 0, tree.z]}
-                >
-                  {/* Tree trunk */}
-                  <mesh position={[0, perspectiveScale * 1.5, 0]}>
-                    <cylinderGeometry args={[0.12 * perspectiveScale, 0.2 * perspectiveScale, perspectiveScale * 3, 8]} />
-                    <meshStandardMaterial color={'#5c4033'} roughness={0.9} />
-                  </mesh>
-                  {/* Main foliage - large sphere */}
-                  <mesh position={[0, perspectiveScale * 3.5, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 1.8, 12, 12]} />
-                    <meshStandardMaterial color={'#3a7d44'} roughness={0.85} />
-                  </mesh>
-                  {/* Secondary foliage clusters */}
-                  <mesh position={[perspectiveScale * 0.8, perspectiveScale * 3.2, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 1.0, 8, 8]} />
-                    <meshStandardMaterial color={'#4a8b50'} roughness={0.85} />
-                  </mesh>
-                  <mesh position={[-perspectiveScale * 0.6, perspectiveScale * 3.6, perspectiveScale * 0.4]}>
-                    <sphereGeometry args={[perspectiveScale * 0.9, 8, 8]} />
-                    <meshStandardMaterial color={'#45a049'} roughness={0.85} />
-                  </mesh>
-                </group>
-              );
-            } else {
-              // Bush - low rounded shape
-              return (
-                <group 
-                  key={`tree-${idx}`} 
-                  position={[tree.x, 0, tree.z]}
-                >
-                  {/* Bush main body */}
-                  <mesh position={[0, perspectiveScale * 0.6, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 1.2, 8, 8]} />
-                    <meshStandardMaterial color={'#2d5a27'} roughness={0.9} />
-                  </mesh>
-                  {/* Bush secondary mound */}
-                  <mesh position={[perspectiveScale * 0.5, perspectiveScale * 0.4, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 0.8, 6, 6]} />
-                    <meshStandardMaterial color={'#3d6d35'} roughness={0.9} />
-                  </mesh>
-                </group>
-              );
-            }
-          })}
-          
-          {/* Vegetation - grass patches, flowers, and reeds */}
-          {vegetationPositions.map((veg, idx) => {
-            const perspectiveScale = calculatePerspectiveScale(veg.z, veg.scale);
-            
-            if (veg.type === 'reeds') {
-              // Reeds near water - tall thin cylinders
-              return (
-                <group key={`veg-${idx}`} position={[veg.x, 0, veg.z]}>
-                  {[0, 0.1, -0.1, 0.05, -0.05].map((offset, i) => (
-                    <mesh key={i} position={[offset * perspectiveScale, perspectiveScale * 0.8, (i * 0.03) * perspectiveScale]}>
-                      <cylinderGeometry args={[0.02 * perspectiveScale, 0.03 * perspectiveScale, perspectiveScale * 1.6, 4]} />
-                      <meshStandardMaterial color={'#8b7355'} roughness={0.9} />
-                    </mesh>
-                  ))}
-                  {/* Reed tops */}
-                  {[0, 0.1, -0.1].map((offset, i) => (
-                    <mesh key={`top-${i}`} position={[offset * perspectiveScale, perspectiveScale * 1.7, (i * 0.03) * perspectiveScale]}>
-                      <coneGeometry args={[0.05 * perspectiveScale, 0.15 * perspectiveScale, 4]} />
-                      <meshStandardMaterial color={'#a08060'} roughness={0.9} />
-                    </mesh>
-                  ))}
-                </group>
-              );
-            } else if (veg.type === 'grass') {
-              // Grass patch - small bumpy ground cover
-              return (
-                <group key={`veg-${idx}`} position={[veg.x, 0.02, veg.z]}>
-                  <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                    <circleGeometry args={[perspectiveScale * 1.5, 8]} />
-                    <meshStandardMaterial color={'#5cb85c'} roughness={0.95} />
-                  </mesh>
-                  {/* Small grass tufts */}
-                  {[-0.3, 0, 0.3, -0.15, 0.15].map((offset, i) => (
-                    <mesh key={i} position={[offset * perspectiveScale, perspectiveScale * 0.1, (i * 0.1 - 0.2) * perspectiveScale]}>
-                      <coneGeometry args={[0.08 * perspectiveScale, perspectiveScale * 0.3, 4]} />
-                      <meshStandardMaterial color={'#4ca64c'} roughness={0.95} />
-                    </mesh>
-                  ))}
-                </group>
-              );
-            } else {
-              // Flowers - small colorful dots
-              const flowerColors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff6b9d'];
-              return (
-                <group key={`veg-${idx}`} position={[veg.x, 0.05, veg.z]}>
-                  {[0, 0.08, -0.08, 0.04, -0.04].map((offset, i) => (
-                    <mesh key={i} position={[offset * perspectiveScale, perspectiveScale * 0.1, (i * 0.05 - 0.1) * perspectiveScale]}>
-                      <sphereGeometry args={[perspectiveScale * 0.06, 6, 6]} />
-                      <meshStandardMaterial color={flowerColors[i % flowerColors.length]} roughness={0.7} />
-                    </mesh>
-                  ))}
-                  {/* Stems */}
-                  {[0, 0.08, -0.08].map((offset, i) => (
-                    <mesh key={`stem-${i}`} position={[offset * perspectiveScale, perspectiveScale * 0.05, (i * 0.05 - 0.1) * perspectiveScale]}>
-                      <cylinderGeometry args={[0.01 * perspectiveScale, 0.01 * perspectiveScale, perspectiveScale * 0.1, 4]} />
-                      <meshStandardMaterial color={'#228B22'} roughness={0.9} />
-                    </mesh>
-                  ))}
-                </group>
-              );
-            }
-          })}
-          
-          {/* Buildings on land */}
-          {buildingPositions.map((building, idx) => {
-            const perspectiveScale = calculatePerspectiveScale(building.z, 1);
-            const scaledWidth = building.width * perspectiveScale;
-            const scaledHeight = building.height * perspectiveScale;
-            const scaledDepth = building.depth * perspectiveScale;
-            
-            return (
-              <group key={`building-${idx}`} position={[building.x, 0, building.z]}>
-                {/* Building main body */}
-                <mesh position={[0, scaledHeight / 2, 0]}>
-                  <boxGeometry args={[scaledWidth, scaledHeight, scaledDepth]} />
-                  <meshStandardMaterial color={building.color} roughness={0.8} />
-                </mesh>
-                
-                {/* Windows - simple dark rectangles */}
-                {[-0.3, 0.3].map((xOffset, i) => (
-                  <mesh 
-                    key={`window-${i}`} 
-                    position={[xOffset * scaledWidth, scaledHeight * 0.6, scaledDepth / 2 + 0.01]}
-                  >
-                    <planeGeometry args={[scaledWidth * 0.2, scaledHeight * 0.2]} />
-                    <meshStandardMaterial color={'#1a365d'} roughness={0.5} />
-                  </mesh>
-                ))}
-                
-                {/* Door */}
-                <mesh position={[0, scaledHeight * 0.25, scaledDepth / 2 + 0.01]}>
-                  <planeGeometry args={[scaledWidth * 0.25, scaledHeight * 0.35]} />
-                  <meshStandardMaterial color={'#5c4033'} roughness={0.7} />
-                </mesh>
-                
-                {/* Roof */}
-                {building.roofType === 'pitched' && (
-                  <mesh position={[0, scaledHeight + scaledHeight * 0.2, 0]} rotation={[0, 0, 0]}>
-                    <coneGeometry args={[scaledWidth * 0.8, scaledHeight * 0.4, 4]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-                {building.roofType === 'hip' && (
-                  <mesh position={[0, scaledHeight + scaledHeight * 0.15, 0]}>
-                    <coneGeometry args={[scaledWidth * 0.7, scaledHeight * 0.3, 8]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-                {building.roofType === 'flat' && (
-                  <mesh position={[0, scaledHeight + 0.05 * perspectiveScale, 0]}>
-                    <boxGeometry args={[scaledWidth * 1.05, 0.1 * perspectiveScale, scaledDepth * 1.05]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-                
-                {/* Chimney for pitched/hip roofs */}
-                {(building.roofType === 'pitched' || building.roofType === 'hip') && (
-                  <mesh position={[scaledWidth * 0.25, scaledHeight + scaledHeight * 0.35, 0]}>
-                    <boxGeometry args={[scaledWidth * 0.12, scaledHeight * 0.25, scaledDepth * 0.12]} />
-                    <meshStandardMaterial color={'#8b4513'} roughness={0.9} />
-                  </mesh>
-                )}
-              </group>
-            );
-          })}
-        </group>
-      )}
-
-      {/* LAKE SCENERY - mountains around the lake */}
-      {isLakeRoute && (
-        <group ref={lakeSceneryRef}>
-          {/* Distant shore all around */}
-          <mesh 
-            rotation={[-Math.PI / 2, 0, 0]} 
-            position={[0, -0.02, 0]}
-          >
-            <ringGeometry args={[60, 200, 32]} />
-            <meshStandardMaterial color={'#4ade80'} roughness={0.9} />
-          </mesh>
-          
-          {/* Mountains around the lake */}
-          {mountainPositions.map((mtn, idx) => (
-            <group key={`mtn-${idx}`} position={[mtn.x, 0, mtn.z]} rotation={[0, mtn.rotation, 0]}>
-              {/* Main mountain peak */}
-              <mesh position={[0, mtn.scaleY / 2, 0]}>
-                <coneGeometry args={[mtn.scaleX, mtn.scaleY, 8]} />
-                <meshStandardMaterial color={'#6b7280'} roughness={0.9} />
-              </mesh>
-              {/* Snow cap */}
-              <mesh position={[0, mtn.scaleY * 0.75, 0]}>
-                <coneGeometry args={[mtn.scaleX * 0.4, mtn.scaleY * 0.35, 8]} />
-                <meshStandardMaterial color={'#f8fafc'} roughness={0.7} />
-              </mesh>
-              {/* Secondary peak */}
-              <mesh position={[mtn.scaleX * 0.5, mtn.scaleY * 0.3, mtn.scaleX * 0.2]}>
-                <coneGeometry args={[mtn.scaleX * 0.6, mtn.scaleY * 0.6, 6]} />
-                <meshStandardMaterial color={'#4b5563'} roughness={0.9} />
-              </mesh>
-              {/* Tree line at base */}
-              <mesh position={[0, 1.5, 0]}>
-                <cylinderGeometry args={[mtn.scaleX * 0.8, mtn.scaleX * 1.1, 3, 16]} />
-                <meshStandardMaterial color={'#166534'} roughness={0.9} />
-              </mesh>
-            </group>
-          ))}
-          
-          {/* Trees around the lake shore */}
-          {lakeShoreFeatures.trees.map((tree, idx) => {
-            const distance = Math.sqrt(tree.x * tree.x + tree.z * tree.z);
-            // For lake, use distance from center for perspective
-            const perspectiveScale = tree.scale * Math.max(0.4, Math.min(1.2, 80 / distance));
-            
-            if (tree.type === 'pine') {
-              return (
-                <group key={`lake-tree-${idx}`} position={[tree.x, 0, tree.z]}>
-                  <mesh position={[0, perspectiveScale * 1.2, 0]}>
-                    <cylinderGeometry args={[0.15 * perspectiveScale, 0.25 * perspectiveScale, perspectiveScale * 2.4, 8]} />
-                    <meshStandardMaterial color={'#8B4513'} roughness={0.9} />
-                  </mesh>
-                  <mesh position={[0, perspectiveScale * 2.8, 0]}>
-                    <coneGeometry args={[perspectiveScale * 1.5, perspectiveScale * 2.5, 8]} />
-                    <meshStandardMaterial color={'#228B22'} roughness={0.8} />
-                  </mesh>
-                  <mesh position={[0, perspectiveScale * 3.8, 0]}>
-                    <coneGeometry args={[perspectiveScale * 1.2, perspectiveScale * 2, 8]} />
-                    <meshStandardMaterial color={'#2d8f2d'} roughness={0.8} />
-                  </mesh>
-                </group>
-              );
-            } else if (tree.type === 'deciduous') {
-              return (
-                <group key={`lake-tree-${idx}`} position={[tree.x, 0, tree.z]}>
-                  <mesh position={[0, perspectiveScale * 1.5, 0]}>
-                    <cylinderGeometry args={[0.12 * perspectiveScale, 0.2 * perspectiveScale, perspectiveScale * 3, 8]} />
-                    <meshStandardMaterial color={'#5c4033'} roughness={0.9} />
-                  </mesh>
-                  <mesh position={[0, perspectiveScale * 3.5, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 1.8, 12, 12]} />
-                    <meshStandardMaterial color={'#3a7d44'} roughness={0.85} />
-                  </mesh>
-                </group>
-              );
-            } else {
-              return (
-                <group key={`lake-tree-${idx}`} position={[tree.x, 0, tree.z]}>
-                  <mesh position={[0, perspectiveScale * 0.6, 0]}>
-                    <sphereGeometry args={[perspectiveScale * 1.2, 8, 8]} />
-                    <meshStandardMaterial color={'#2d5a27'} roughness={0.9} />
-                  </mesh>
-                </group>
-              );
-            }
-          })}
-          
-          {/* Vegetation around lake shore */}
-          {lakeShoreFeatures.vegetation.map((veg, idx) => {
-            const distance = Math.sqrt(veg.x * veg.x + veg.z * veg.z);
-            const perspectiveScale = veg.scale * Math.max(0.4, Math.min(1.2, 80 / distance));
-            
-            if (veg.type === 'reeds') {
-              return (
-                <group key={`lake-veg-${idx}`} position={[veg.x, 0, veg.z]}>
-                  {[0, 0.1, -0.1].map((offset, i) => (
-                    <mesh key={i} position={[offset * perspectiveScale, perspectiveScale * 0.8, 0]}>
-                      <cylinderGeometry args={[0.02 * perspectiveScale, 0.03 * perspectiveScale, perspectiveScale * 1.6, 4]} />
-                      <meshStandardMaterial color={'#8b7355'} roughness={0.9} />
-                    </mesh>
-                  ))}
-                </group>
-              );
-            } else if (veg.type === 'grass') {
-              return (
-                <group key={`lake-veg-${idx}`} position={[veg.x, 0.02, veg.z]}>
-                  <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                    <circleGeometry args={[perspectiveScale * 1.5, 8]} />
-                    <meshStandardMaterial color={'#5cb85c'} roughness={0.95} />
-                  </mesh>
-                </group>
-              );
-            } else {
-              const flowerColors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff6b9d'];
-              return (
-                <group key={`lake-veg-${idx}`} position={[veg.x, 0.05, veg.z]}>
-                  {[0, 0.06, -0.06].map((offset, i) => (
-                    <mesh key={i} position={[offset * perspectiveScale, perspectiveScale * 0.08, 0]}>
-                      <sphereGeometry args={[perspectiveScale * 0.05, 6, 6]} />
-                      <meshStandardMaterial color={flowerColors[i % flowerColors.length]} roughness={0.7} />
-                    </mesh>
-                  ))}
-                </group>
-              );
-            }
-          })}
-          
-          {/* Buildings around lake shore */}
-          {lakeShoreFeatures.buildings.map((building, idx) => {
-            const distance = Math.sqrt(building.x * building.x + building.z * building.z);
-            const perspectiveScale = Math.max(0.5, Math.min(1.0, 80 / distance));
-            const scaledWidth = building.width * perspectiveScale;
-            const scaledHeight = building.height * perspectiveScale;
-            const scaledDepth = building.depth * perspectiveScale;
-            
-            return (
-              <group key={`lake-building-${idx}`} position={[building.x, 0, building.z]} rotation={[0, building.rotation, 0]}>
-                <mesh position={[0, scaledHeight / 2, 0]}>
-                  <boxGeometry args={[scaledWidth, scaledHeight, scaledDepth]} />
-                  <meshStandardMaterial color={building.color} roughness={0.8} />
-                </mesh>
-                
-                {/* Roof */}
-                {building.roofType === 'pitched' && (
-                  <mesh position={[0, scaledHeight + scaledHeight * 0.2, 0]}>
-                    <coneGeometry args={[scaledWidth * 0.8, scaledHeight * 0.4, 4]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-                {building.roofType === 'hip' && (
-                  <mesh position={[0, scaledHeight + scaledHeight * 0.15, 0]}>
-                    <coneGeometry args={[scaledWidth * 0.7, scaledHeight * 0.3, 8]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-                {building.roofType === 'flat' && (
-                  <mesh position={[0, scaledHeight + 0.05 * perspectiveScale, 0]}>
-                    <boxGeometry args={[scaledWidth * 1.05, 0.1 * perspectiveScale, scaledDepth * 1.05]} />
-                    <meshStandardMaterial color={building.roofColor} roughness={0.85} />
-                  </mesh>
-                )}
-              </group>
-            );
-          })}
-        </group>
-      )}
-
-      {/* ROUTE-SPECIFIC LANDMARKS - rendered via injected configuration */}
-      <LandmarkRenderer config={routeLandmarkConfig} />
-
-      {/* Route line removed - now shown in top-right map overlay */}
+      {/* Ambient light for fill */}
+      <ambientLight intensity={0.3} />
       
-      </group>
-      {/* End of world group */}
-
-      {/* boat + oars - positioned outside world group so it stays fixed */}
-      <group ref={boatRef} position={[0, 0, 0]}>
-        {/* Racing scull hull - sleek narrow boat shape */}
-        {/* Main hull body */}
-        <mesh position={[0, 0.02, 0]}>
-          <boxGeometry args={[0.32, 0.08, 4.0]} />
-          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
-        </mesh>
-        {/* Hull bottom curve simulation - center keel */}
-        <mesh position={[0, -0.02, 0]} rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.18, 0.18, 3.8]} />
-          <meshStandardMaterial color={'#e8b732'} metalness={0.4} roughness={0.3} />
-        </mesh>
-        {/* Bow (front) - pointed */}
-        <mesh position={[0, 0.01, -2.1]} scale={[0.6, 0.5, 1]} rotation={[Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.18, 0.6, 8]} />
-          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
-        </mesh>
-        {/* Stern (back) - tapered */}
-        <mesh position={[0, 0.01, 2.0]} scale={[0.5, 0.4, 0.8]} rotation={[-Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.2, 0.5, 8]} />
-          <meshStandardMaterial color={'#f5c542'} metalness={0.4} roughness={0.3} />
-        </mesh>
-        {/* Gunwales (side rails) - left */}
-        <mesh position={[-0.15, 0.08, 0]}>
-          <boxGeometry args={[0.03, 0.04, 3.6]} />
-          <meshStandardMaterial color={'#d4a832'} metalness={0.3} roughness={0.4} />
-        </mesh>
-        {/* Gunwales (side rails) - right */}
-        <mesh position={[0.15, 0.08, 0]}>
-          <boxGeometry args={[0.03, 0.04, 3.6]} />
-          <meshStandardMaterial color={'#d4a832'} metalness={0.3} roughness={0.4} />
-        </mesh>
-        {/* Seat (sliding) */}
-        <mesh position={[0, 0.12, 0.15]}>
-          <boxGeometry args={[0.28, 0.03, 0.25]} />
-          <meshStandardMaterial color={'#2a2a2a'} metalness={0.2} roughness={0.6} />
-        </mesh>
-        {/* Foot stretcher */}
-        <mesh position={[0, 0.06, -0.5]} rotation={[0.3, 0, 0]}>
-          <boxGeometry args={[0.26, 0.02, 0.18]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-        
-        {/* ROWER - more realistic human figure */}
-        {/* Pelvis/hips */}
-        <mesh position={[0, 0.18, 0.15]}>
-          <boxGeometry args={[0.28, 0.12, 0.2]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-        {/* Torso/chest */}
-        <mesh position={[0, 0.38, 0.1]}>
-          <boxGeometry args={[0.32, 0.28, 0.18]} />
-          <meshStandardMaterial color={'#2563eb'} />
-        </mesh>
-        {/* Shoulders */}
-        <mesh position={[0, 0.52, 0.08]}>
-          <boxGeometry args={[0.42, 0.1, 0.14]} />
-          <meshStandardMaterial color={'#2563eb'} />
-        </mesh>
-        {/* Neck */}
-        <mesh position={[0, 0.6, 0.08]}>
-          <cylinderGeometry args={[0.05, 0.06, 0.08, 12]} />
-          <meshStandardMaterial color={'#d4a574'} />
-        </mesh>
-        {/* Head */}
-        <mesh position={[0, 0.72, 0.08]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color={'#d4a574'} />
-        </mesh>
-        {/* Hair/cap */}
-        <mesh position={[0, 0.78, 0.06]}>
-          <sphereGeometry args={[0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshStandardMaterial color={'#2a1a0a'} />
-        </mesh>
-        {/* Left upper arm */}
-        <mesh position={[-0.26, 0.48, 0.08]} rotation={[0, 0, 0.4]}>
-          <capsuleGeometry args={[0.04, 0.18, 8, 12]} />
-          <meshStandardMaterial color={'#2563eb'} />
-        </mesh>
-        {/* Right upper arm */}
-        <mesh position={[0.26, 0.48, 0.08]} rotation={[0, 0, -0.4]}>
-          <capsuleGeometry args={[0.04, 0.18, 8, 12]} />
-          <meshStandardMaterial color={'#2563eb'} />
-        </mesh>
-        {/* Left forearm */}
-        <mesh position={[-0.38, 0.38, 0.05]} rotation={[0, 0, 0.8]}>
-          <capsuleGeometry args={[0.035, 0.16, 8, 12]} />
-          <meshStandardMaterial color={'#d4a574'} />
-        </mesh>
-        {/* Right forearm */}
-        <mesh position={[0.38, 0.38, 0.05]} rotation={[0, 0, -0.8]}>
-          <capsuleGeometry args={[0.035, 0.16, 8, 12]} />
-          <meshStandardMaterial color={'#d4a574'} />
-        </mesh>
-        {/* Left thigh */}
-        <mesh position={[-0.1, 0.14, -0.1]} rotation={[1.2, 0, 0]}>
-          <capsuleGeometry args={[0.055, 0.28, 8, 12]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-        {/* Right thigh */}
-        <mesh position={[0.1, 0.14, -0.1]} rotation={[1.2, 0, 0]}>
-          <capsuleGeometry args={[0.055, 0.28, 8, 12]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-        {/* Left shin */}
-        <mesh position={[-0.1, 0.08, -0.38]} rotation={[0.3, 0, 0]}>
-          <capsuleGeometry args={[0.04, 0.24, 8, 12]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-        {/* Right shin */}
-        <mesh position={[0.1, 0.08, -0.38]} rotation={[0.3, 0, 0]}>
-          <capsuleGeometry args={[0.04, 0.24, 8, 12]} />
-          <meshStandardMaterial color={'#1a1a1a'} />
-        </mesh>
-
-        {/* LEFT OAR - realistic sculling oar */}
-        <group ref={leftOarRef} position={[-0.18, 0.12, 0.05]}>
-          {/* Oarlock/rigger attachment */}
-          <mesh position={[-0.08, 0.04, 0]}>
-            <cylinderGeometry args={[0.025, 0.025, 0.06, 8]} />
-            <meshStandardMaterial color={'#666666'} metalness={0.8} roughness={0.2} />
-          </mesh>
-          {/* Oar handle (inboard) */}
-          <mesh position={[0.15, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.022, 0.018, 0.4, 12]} />
-            <meshStandardMaterial color={'#8B4513'} roughness={0.7} />
-          </mesh>
-          {/* Oar shaft (outboard) */}
-          <mesh position={[-0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.018, 0.022, 1.4, 12]} />
-            <meshStandardMaterial color={'#654321'} roughness={0.5} />
-          </mesh>
-          {/* Oar blade - hatchet shape */}
-          <mesh position={[-1.5, 0, 0]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[0.5, 0.015, 0.16]} />
-            <meshStandardMaterial color={'#1e40af'} metalness={0.1} roughness={0.3} />
-          </mesh>
-          {/* Blade spine */}
-          <mesh position={[-1.5, 0.012, 0]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[0.48, 0.015, 0.03]} />
-            <meshStandardMaterial color={'#1e3a8a'} />
-          </mesh>
-        </group>
-
-        {/* RIGHT OAR - realistic sculling oar */}
-        <group ref={rightOarRef} position={[0.18, 0.12, 0.05]}>
-          {/* Oarlock/rigger attachment */}
-          <mesh position={[0.08, 0.04, 0]}>
-            <cylinderGeometry args={[0.025, 0.025, 0.06, 8]} />
-            <meshStandardMaterial color={'#666666'} metalness={0.8} roughness={0.2} />
-          </mesh>
-          {/* Oar handle (inboard) */}
-          <mesh position={[-0.15, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.022, 0.018, 0.4, 12]} />
-            <meshStandardMaterial color={'#8B4513'} roughness={0.7} />
-          </mesh>
-          {/* Oar shaft (outboard) */}
-          <mesh position={[0.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.018, 0.022, 1.4, 12]} />
-            <meshStandardMaterial color={'#654321'} roughness={0.5} />
-          </mesh>
-          {/* Oar blade - hatchet shape */}
-          <mesh position={[1.5, 0, 0]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[0.5, 0.015, 0.16]} />
-            <meshStandardMaterial color={'#1e40af'} metalness={0.1} roughness={0.3} />
-          </mesh>
-          {/* Blade spine */}
-          <mesh position={[1.5, 0.012, 0]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[0.48, 0.015, 0.03]} />
-            <meshStandardMaterial color={'#1e3a8a'} />
-          </mesh>
-        </group>
-      </group>
+      {/* Animated water plane */}
+      <AnimatedWater boatZ={boatZ} />
+      
+      {/* Riverbanks */}
+      <Riverbanks boatZ={boatZ} />
+      
+      {/* Procedural mountains on both sides */}
+      <ProceduralTerrain side="left" boatZ={boatZ} />
+      <ProceduralTerrain side="right" boatZ={boatZ} />
+      
+      {/* Pine trees along the banks */}
+      <PineTrees side="left" boatZ={boatZ} />
+      <PineTrees side="right" boatZ={boatZ} />
+      
+      {/* The rowing scull - positioned at current boat location */}
+      <RowingScull 
+        position={[
+          boatPositionRef.current.x, 
+          boatPositionRef.current.y, 
+          boatPositionRef.current.z
+        ]} 
+        cadence={cadence || 30}
+      />
     </>
   );
 };
 
-// Error boundary component for graceful GPU failure handling (WebGPU/WebGL)
+// ============================================================================
+// GPU ERROR BOUNDARY
+// ============================================================================
 class GPUErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback?: React.ReactNode },
+  { children: React.ReactNode },
   { hasError: boolean }
 > {
-  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(): { hasError: boolean } {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.warn('GPU Error Boundary caught error:', error, errorInfo);
-    // Expose error state for testing
-    try {
-      (window as Window & { __ROWER3D_ERROR?: boolean }).__ROWER3D_ERROR = true;
-    } catch {
-      // Ignore errors when window is not available
-    }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('GPU Error Boundary caught error:', error, info);
   }
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="rower3d-fallback-marker" data-loaded="true" style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          height: '100%',
-          color: '#888'
-        }}>
-          3D view unavailable
+      return (
+        <div className="rower3d-fallback-marker" data-loaded="true">
+          3D rendering error - GPU may not be available
         </div>
       );
     }
@@ -1621,15 +428,14 @@ class GPUErrorBoundary extends React.Component<
   }
 }
 
-export const Rower3D: React.FC<Rower3DProps> = (props) => {
-  // Check if we should use high quality rendering
-  const isHighQuality = props.performanceMode === 'high' || 
-    (props.performanceMode !== 'low' && typeof window !== 'undefined' && !(window as Window & { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING);
-  
-  // Track GPU backend availability
+// ============================================================================
+// MAIN COMPONENT - Canvas wrapper with GPU detection
+// ============================================================================
+const Rower3D: React.FC<Rower3DProps> = (props) => {
+  const isHighQuality = props.performanceMode !== 'low';
   const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
   
-  // Detect WebGPU availability on mount
+  // Detect GPU availability on mount
   useEffect(() => {
     let mounted = true;
     
@@ -1639,16 +445,13 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
         if (mounted) {
           if (webgpuAvailable) {
             setGpuBackend('webgpu');
-            console.log('VirtualRow: WebGPU is available, using WebGPU renderer');
           } else if (isWebGLAvailable()) {
             setGpuBackend('webgl');
-            console.log('VirtualRow: WebGPU not available, falling back to WebGL renderer');
           } else {
             setGpuBackend('none');
-            console.warn('VirtualRow: No GPU rendering available');
           }
         }
-      } catch (error) {
+      } catch {
         if (mounted) {
           setGpuBackend(isWebGLAvailable() ? 'webgl' : 'none');
         }
@@ -1659,13 +462,13 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
     return () => { mounted = false; };
   }, []);
   
-  // If no GPU rendering is available, show fallback
+  // If no GPU, show fallback
   if (gpuBackend === 'none') {
     return (
       <div className="rower3d-canvas-container">
-        <div className="rower3d-fallback-marker" data-loaded="true" style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div className="rower3d-fallback-marker" data-loaded="true" style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
           color: '#888'
@@ -1678,45 +481,26 @@ export const Rower3D: React.FC<Rower3DProps> = (props) => {
   
   return (
     <div className="rower3d-canvas-container">
-      {/* fallback marker for test automation if Canvas isn't created due to GPU issues */}
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
-      {/* GPU backend indicator for debugging/testing */}
-      <div 
-        className="rower3d-gpu-backend" 
-        data-backend={gpuBackend}
-        style={{ display: 'none' }}
-      />
+      <div className="rower3d-gpu-backend" data-backend={gpuBackend} style={{ display: 'none' }} />
       <GPUErrorBoundary>
-        <Canvas 
-          camera={{ position: [0, 5, 5], fov: 50 }}
+        <Canvas
+          camera={{ position: [0, 2.5, 6], fov: 60 }}
           shadows={isHighQuality}
           gl={{
-            // Enable antialiasing for smoother edges in high quality mode
             antialias: isHighQuality,
             alpha: true,
             powerPreference: isHighQuality ? 'high-performance' : 'low-power',
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: true,
-            // Enable tone mapping for better colors
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
           onCreated={({ gl }) => {
-            // Set output color space for better color accuracy
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            
-            // Expose GPU backend for testing
             try {
-              (window as Window & { __ROWER3D_GPU_BACKEND?: string }).__ROWER3D_GPU_BACKEND = gpuBackend;
-            } catch {
-              // Ignore window access errors
-            }
-            
-            // Additional context loss handling setup
-            gl.domElement.addEventListener('webglcontextlost', (e) => {
-              e.preventDefault();
-              console.warn('GPU context lost in Canvas');
-            });
+              (window as any).__ROWER3D_GPU_BACKEND = gpuBackend;
+            } catch {}
           }}
         >
           <RowerScene {...props} />

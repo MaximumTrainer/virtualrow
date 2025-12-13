@@ -139,6 +139,37 @@ export function generateBankGeometry(
 }
 
 /**
+ * Generate bank vertices with variable width along the route
+ * The widthFunction receives (progress: 0-1, totalMeters: number) and returns half-width
+ * This allows natural river width variation - wider in meadows/delta, narrower in gorges
+ */
+export function generateVariableWidthBankGeometry(
+  routePoints: RoutePoint3D[],
+  widthFunction: (progress: number, totalMeters: number) => number,
+  totalMeters: number
+): { leftBank: Vector3[]; rightBank: Vector3[]; widths: number[] } {
+  const leftBank: Vector3[] = [];
+  const rightBank: Vector3[] = [];
+  const widths: number[] = [];
+  
+  const numPoints = routePoints.length;
+  
+  for (let i = 0; i < numPoints; i++) {
+    const point = routePoints[i];
+    const progress = i / (numPoints - 1);
+    const halfWidth = widthFunction(progress, totalMeters);
+    widths.push(halfWidth);
+    
+    // Left bank is in the negative normal direction
+    leftBank.push(point.position.clone().add(point.normal.clone().multiplyScalar(-halfWidth)));
+    // Right bank is in the positive normal direction
+    rightBank.push(point.position.clone().add(point.normal.clone().multiplyScalar(halfWidth)));
+  }
+  
+  return { leftBank, rightBank, widths };
+}
+
+/**
  * Convert a geographic coordinate to a 3D position relative to the route
  * This allows placing landmarks at their real-world locations
  */

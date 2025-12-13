@@ -38,8 +38,11 @@ export const PM5Simulator: React.FC<PM5SimulatorProps> = ({
   }, [handleData]);
 
   const handleStartSimulator = () => {
-    pm5Simulator.updateSettings(settings);
+    // When starting the simulator, also start rowing automatically
+    const startSettings = { ...settings, isRowing: true };
+    pm5Simulator.updateSettings(startSettings);
     pm5Simulator.start();
+    setSettings(startSettings);
     setIsActive(true);
     onConnected?.('PM5 Simulator');
   };

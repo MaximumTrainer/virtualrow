@@ -1,52 +1,72 @@
+/* ===========================================
+   WorkoutProgressDisplay.css - Dark Theme Fitness App
+   =========================================== */
+
 .workout-progress-display {
-  background: white;
-  border-radius: 8px;
-  padding: 15px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(10, 14, 20, 0.98));
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(0, 245, 212, 0.15);
+  backdrop-filter: blur(12px);
   margin-bottom: 20px;
 }
 
+/* Progress Header */
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .progress-header h3 {
   margin: 0;
-  color: #1a73e8;
+  color: #00f5d4;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 18px;
+  font-weight: 700;
+  text-shadow: 0 0 15px rgba(0, 245, 212, 0.3);
 }
 
 .overall-progress {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1a73e8;
+  font-family: 'Inter', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #00f5d4, #00d4aa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 30px rgba(0, 245, 212, 0.4);
 }
 
+/* Current Segment */
 .current-segment {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 15px;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8));
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(100, 116, 139, 0.2);
 }
 
 .segment-info {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .segment-type {
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: 8px 14px;
+  border-radius: 8px;
   color: white;
-  font-weight: bold;
-  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .segment-details {
@@ -54,108 +74,131 @@
 }
 
 .segment-description {
-  margin: 0 0 8px 0;
+  margin: 0 0 10px 0;
+  font-family: 'Inter', sans-serif;
   font-size: 14px;
-  color: #333;
-  font-weight: 500;
+  font-weight: 600;
+  color: #e2e8f0;
 }
 
+/* Target Info */
 .target-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .target-item {
-  padding: 4px 8px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 6px 12px;
+  background: rgba(0, 245, 212, 0.1);
+  border: 1px solid rgba(0, 245, 212, 0.2);
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
   font-size: 12px;
-  color: #666;
+  font-weight: 500;
+  color: #00f5d4;
 }
 
+/* Progress Bar */
 .segment-progress-bar {
-  height: 8px;
-  background: #e0e0e0;
-  border-radius: 4px;
+  height: 10px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 5px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(100, 116, 139, 0.2);
 }
 
 .segment-progress-fill {
   height: 100%;
   transition: width 0.3s ease;
-  border-radius: 4px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #00f5d4, #00d4aa);
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.5);
 }
 
 .segment-stats {
   display: flex;
   justify-content: space-between;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
-  color: #666;
+  color: #94a3b8;
 }
 
+/* Target Indicator */
 .target-indicator {
-  padding: 10px 15px;
-  border-radius: 6px;
+  padding: 14px 18px;
+  border-radius: 10px;
   text-align: center;
-  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
   font-size: 14px;
-  margin-bottom: 15px;
+  margin-bottom: 18px;
+  backdrop-filter: blur(8px);
 }
 
 .target-indicator.on-target {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #4caf50;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
 }
 
 .target-indicator.off-target {
-  background: #fff3e0;
-  color: #e65100;
-  border: 1px solid #ff9800;
+  background: linear-gradient(135deg, rgba(255, 214, 10, 0.2), rgba(255, 214, 10, 0.1));
+  color: #ffd60a;
+  border: 1px solid rgba(255, 214, 10, 0.4);
+  box-shadow: 0 0 20px rgba(255, 214, 10, 0.2);
 }
 
+/* Upcoming Segments */
 .upcoming-segments {
-  border-top: 1px solid #e0e0e0;
-  padding-top: 15px;
+  border-top: 1px solid rgba(100, 116, 139, 0.2);
+  padding-top: 18px;
 }
 
 .upcoming-segments h4 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
-  color: #666;
+  margin: 0 0 12px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
+/* Timeline */
 .segments-timeline {
   display: flex;
-  gap: 2px;
-  height: 30px;
-  border-radius: 4px;
+  gap: 3px;
+  height: 36px;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
+  background: rgba(30, 41, 59, 0.5);
+  padding: 3px;
 }
 
 .timeline-segment {
-  min-width: 20px;
+  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
   position: relative;
   cursor: pointer;
+  border-radius: 4px;
 }
 
 .timeline-segment:hover {
-  opacity: 0.8 !important;
+  opacity: 0.85 !important;
+  transform: scaleY(1.1);
 }
 
 .timeline-segment.active {
-  border: 2px solid #1a73e8;
-  box-shadow: 0 0 8px rgba(26, 115, 232, 0.5);
+  border: 2px solid #00f5d4;
+  box-shadow: 0 0 15px rgba(0, 245, 212, 0.5);
+  z-index: 10;
 }
 
 .timeline-segment.completed {
@@ -163,9 +206,10 @@
 }
 
 .current-marker {
-  color: white;
-  font-size: 16px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -178,9 +222,10 @@
   }
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
   .workout-progress-display {
-    padding: 12px;
+    padding: 16px;
   }
 
   .progress-header h3 {
@@ -188,11 +233,12 @@
   }
 
   .overall-progress {
-    font-size: 20px;
+    font-size: 24px;
   }
 
   .segment-info {
     flex-direction: column;
+    gap: 12px;
   }
 
   .target-info {
@@ -200,6 +246,10 @@
   }
 
   .segments-timeline {
-    height: 25px;
+    height: 30px;
+  }
+
+  .timeline-segment {
+    min-width: 20px;
   }
 }

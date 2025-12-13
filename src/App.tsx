@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
@@ -11,6 +11,7 @@ import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { PerformanceChart } from './components/PerformanceChart';
+import { RowingOverlay } from './components/RowingOverlay';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
 
@@ -19,6 +20,9 @@ interface PerformanceDataPoint {
   time: number;
   value: number;
 }
+
+// Session state type for workout controls
+type SessionState = 'idle' | 'active' | 'paused';
 
 function App() {
   const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
@@ -40,6 +44,37 @@ function App() {
   const [paceHistory, setPaceHistory] = useState<PerformanceDataPoint[]>([]);
   const [heartRateHistory, setHeartRateHistory] = useState<PerformanceDataPoint[]>([]);
   const [showPerformanceChart, setShowPerformanceChart] = useState(false);
+  // Local activity timer (ms elapsed since workout started)
+  const [activityElapsedMs, setActivityElapsedMs] = useState(0);
+  const activityTimerRef = useRef<number | null>(null);
+  // Debug mode state
+  const [debugMode, setDebugMode] = useState(false);
+  // Session state for the overlay UI
+  const [sessionState, setSessionState] = useState<SessionState>('idle');
+  // Use new overlay mode (toggle for transition)
+  const [useNewOverlay, setUseNewOverlay] = useState(true);
+
+  // Start/stop activity timer when workout state changes
+  useEffect(() => {
+    if (isWorkoutActive) {
+      const startTime = Date.now();
+      activityTimerRef.current = window.setInterval(() => {
+        setActivityElapsedMs(Date.now() - startTime);
+      }, 250);
+    } else {
+      if (activityTimerRef.current !== null) {
+        clearInterval(activityTimerRef.current);
+        activityTimerRef.current = null;
+      }
+      setActivityElapsedMs(0);
+    }
+    return () => {
+      if (activityTimerRef.current !== null) {
+        clearInterval(activityTimerRef.current);
+        activityTimerRef.current = null;
+      }
+    };
+  }, [isWorkoutActive]);
 
   useEffect(() => {
     const allRoutes = routeService.getAllRoutes();
@@ -98,6 +133,7 @@ function App() {
     );
     setCurrentSession(session);
     setIsWorkoutActive(true);
+    setSessionState('active');
     
     // Start structured workout if selected
     if (selectedWorkout) {
@@ -118,8 +154,27 @@ function App() {
     setWorkoutProgress(null);
     setPaceHistory([]);
     setHeartRateHistory([]);
+    setSessionState('idle');
     workoutGeneratorService.endWorkout();
     setCurrentView('history');
+  };
+
+  const handlePauseWorkout = () => {
+    setSessionState('paused');
+    // Note: Full pause logic would need to be added to workoutService
+  };
+
+  const handleResumeWorkout = () => {
+    setSessionState('active');
+    // Note: Full resume logic would need to be added to workoutService
+  };
+
+  const handleResetWorkout = () => {
+    // Reset metrics but keep session
+    setPaceHistory([]);
+    setHeartRateHistory([]);
+    setActivityElapsedMs(0);
+    // Note: Full reset logic would need to clear workoutService data
   };
 
   const handleSelectWorkout = (workout: StructuredWorkout | null) => {
@@ -301,13 +356,19 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
     URL.revokeObjectURL(url);
   }, []);
 
-  // Calculate personal best for a route
+  // Calculate personal best for a route (only completed sessions count)
   const getPersonalBest = useCallback((routeId: string) => {
-    const sessionsByRoute = workoutHistory.filter(s => s.routeId === routeId && s.averagePace > 0);
-    if (sessionsByRoute.length === 0) return null;
-    return sessionsByRoute.reduce((best, session) => 
+    const route = routeService.getRouteById(routeId);
+    if (!route) return null;
+    const routeDistanceMeters = route.distance * 1000; // route.distance is in km
+    // Only sessions that completed the full course are eligible for PB
+    const completedSessions = workoutHistory.filter(
+      s => s.routeId === routeId && s.averagePace > 0 && s.distance >= routeDistanceMeters
+    );
+    if (completedSessions.length === 0) return null;
+    return completedSessions.reduce((best, session) =>
       session.averagePace < best.averagePace ? session : best
-    , sessionsByRoute[0]);
+    , completedSessions[0]);
   }, [workoutHistory]);
 
   const stats = workoutService.getStats();
@@ -353,11 +414,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
           <div className="device-panel">
             <h3 className="panel-title">PM5 Device</h3>
             <BluetoothDevice
-              onConnected={handlePM5Connected}
-              onDisconnected={handlePM5Disconnected}
-              onDataReceived={handlePM5Data}
-            />
-            <PM5Simulator
               onConnected={handlePM5Connected}
               onDisconnected={handlePM5Disconnected}
               onDataReceived={handlePM5Data}
@@ -515,87 +571,126 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   route={selectedRoute!} 
                   paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
                   distanceMeters={pm5Data?.distance} 
-                  isPlaying={isWorkoutActive} 
+                  isPlaying={isWorkoutActive && sessionState === 'active'} 
                   cadence={pm5Data?.cadence} 
                   performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
                   intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
+                  debugMode={debugMode}
                 />
                 
-                {/* Workout Progress Display Overlay (top-left) */}
-                {selectedWorkout && workoutProgress && (
-                  <div className="workout-progress-overlay">
-                    <WorkoutProgressDisplay
-                      progress={workoutProgress}
-                      allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
-                    />
-                  </div>
-                )}
-                
-                {/* Performance Chart Toggle Button */}
-                <button
-                  className="btn-toggle-chart"
-                  onClick={() => setShowPerformanceChart(!showPerformanceChart)}
-                  title={showPerformanceChart ? 'Hide Performance Chart' : 'Show Performance Chart'}
-                >
-                  📈
-                </button>
-                
-                {/* Performance Chart Overlay (bottom-left, above heart rate) */}
-                {showPerformanceChart && (paceHistory.length > 0 || heartRateHistory.length > 0) && (
-                  <div className="performance-chart-overlay">
-                    <PerformanceChart
-                      paceData={paceHistory}
-                      heartRateData={heartRateHistory}
-                      showPace={true}
-                      showHeartRate={true}
-                      maxPoints={60}
-                    />
-                  </div>
-                )}
-                
-                {/* Bottom left: Heart rate */}
-                <div className="overlay-bottom-left">
-                  <div className="overlay-metric">
-                    <span className="overlay-label">Heart rate</span>
-                    {heartRateSamples.length > 0 && (
-                      <span className="overlay-value-large">{heartRateSamples[heartRateSamples.length - 1].bpm}</span>
+                {/* New Rowing Overlay UI */}
+                {useNewOverlay ? (
+                  <RowingOverlay
+                    pm5Data={pm5Data}
+                    heartRate={heartRateSamples.length > 0 ? heartRateSamples[heartRateSamples.length - 1].bpm : null}
+                    elapsedTimeMs={pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs}
+                    isPlaying={isWorkoutActive && sessionState === 'active'}
+                    workoutProgress={workoutProgress}
+                    onStart={handleStartWorkout}
+                    onPause={handlePauseWorkout}
+                    onResume={handleResumeWorkout}
+                    onEnd={handleEndWorkout}
+                    onReset={handleResetWorkout}
+                    paceHistory={paceHistory}
+                    powerHistory={paceHistory.map(p => ({ time: p.time, value: pm5Data?.power || 0 }))}
+                  />
+                ) : (
+                  <>
+                    {/* Legacy Overlay - Workout Progress Display Overlay (top-left) */}
+                    {selectedWorkout && workoutProgress && (
+                      <div className="workout-progress-overlay">
+                        <WorkoutProgressDisplay
+                          progress={workoutProgress}
+                          allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
+                        />
+                      </div>
                     )}
-                  </div>
-                </div>
+                    
+                    {/* Legacy Overlay - Performance Chart Toggle Button */}
+                    <button
+                      className="btn-toggle-chart"
+                      onClick={() => setShowPerformanceChart(!showPerformanceChart)}
+                      title={showPerformanceChart ? 'Hide Performance Chart' : 'Show Performance Chart'}
+                    >
+                      📈
+                    </button>
+                    
+                    {/* Legacy Overlay - Performance Chart Overlay (bottom-left, above heart rate) */}
+                    {showPerformanceChart && (paceHistory.length > 0 || heartRateHistory.length > 0) && (
+                      <div className="performance-chart-overlay">
+                        <PerformanceChart
+                          paceData={paceHistory}
+                          heartRateData={heartRateHistory}
+                          showPace={true}
+                          showHeartRate={true}
+                          maxPoints={60}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Legacy Overlay - Bottom left: Heart rate */}
+                    <div className="overlay-bottom-left">
+                      <div className="overlay-metric">
+                        <span className="overlay-label">Heart rate</span>
+                        {heartRateSamples.length > 0 && (
+                          <span className="overlay-value-large">{heartRateSamples[heartRateSamples.length - 1].bpm}</span>
+                        )}
+                      </div>
+                    </div>
 
-                {/* Bottom center: Time / metrics */}
-                <div className="overlay-bottom-center">
-                  {pm5Data && (
-                    <>
+                    {/* Legacy Overlay - Bottom center: Time / metrics */}
+                    <div className="overlay-bottom-center">
                       <div className="overlay-metric-inline">
                         <span className="overlay-label">time:</span>
-                        <span className="overlay-value">{formatTime(pm5Data.elapsedTime)}</span>
+                        <span className="overlay-value">{formatTime(pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs)}</span>
                       </div>
                       <div className="overlay-metric-inline">
                         <span className="overlay-label">pace:</span>
-                        <span className="overlay-value">{pm5Data.pace ? (pm5Data.pace / 100).toFixed(1) : '--'}</span>
+                        <span className="overlay-value">{pm5Data?.pace ? (pm5Data.pace / 100).toFixed(1) : '--'}</span>
                       </div>
                       <div className="overlay-metric-inline">
                         <span className="overlay-label">distance:</span>
-                        <span className="overlay-value">{(pm5Data.distance / 1000).toFixed(2)} km</span>
+                        <span className="overlay-value">{pm5Data ? (pm5Data.distance / 1000).toFixed(2) : '0.00'} km</span>
                       </div>
-                    </>
-                  )}
-                </div>
+                    </div>
 
-                {/* Top right: End workout button and route map */}
-                <div className="overlay-top-right-panel">
-                  <button className="btn-overlay-end" onClick={handleEndWorkout}>
-                    ⏹ End Workout
-                  </button>
-                  <div className="overlay-mini-map">
-                    <RouteMap 
-                      route={selectedRoute!} 
-                      highlightMode={true}
-                      progressPercent={pm5Data && selectedRoute ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100) : 0}
-                    />
-                  </div>
-                </div>
+                    {/* Legacy Overlay - Top right: End workout button and route map */}
+                    <div className="overlay-top-right-panel">
+                      <button className="btn-overlay-end" onClick={handleEndWorkout}>
+                        ⏹ End Workout
+                      </button>
+                      <div className="overlay-mini-map">
+                        <RouteMap 
+                          route={selectedRoute!} 
+                          highlightMode={true}
+                          progressPercent={pm5Data && selectedRoute ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100) : 0}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {/* Overlay toggle button */}
+                <button
+                  className="btn-toggle-overlay-mode"
+                  onClick={() => setUseNewOverlay(!useNewOverlay)}
+                  title={useNewOverlay ? 'Switch to Legacy Overlay' : 'Switch to New Overlay'}
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    zIndex: 150,
+                    padding: '6px 12px',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {useNewOverlay ? '🎨 New UI' : '📊 Legacy'}
+                </button>
               </div>
             </div>
           )}
@@ -677,6 +772,84 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
           )}
         </main>
       </div>
+
+      {/* Debug Panel - Global, appears on all views */}
+      <div className="debug-panel-toggle">
+        <button 
+          className={`btn-debug-toggle ${debugMode ? 'active' : ''}`}
+          onClick={() => setDebugMode(!debugMode)}
+          title="Toggle Debug Mode"
+        >
+          🐛 Debug
+        </button>
+      </div>
+
+      {/* Debug Info Panel - only visible when debugMode is on */}
+      {debugMode && (
+        <div className="debug-info-panel">
+          <div className="debug-panel-header">
+            <h4>🔧 Debug Mode</h4>
+            <button className="debug-close-btn" onClick={() => setDebugMode(false)}>✕</button>
+          </div>
+          
+          {/* PM5 Simulator Controls */}
+          <div className="debug-section debug-simulator-section">
+            <h5>PM5 Simulator</h5>
+            <PM5Simulator
+              onConnected={handlePM5Connected}
+              onDisconnected={handlePM5Disconnected}
+              onDataReceived={handlePM5Data}
+            />
+          </div>
+          
+          <div className="debug-section">
+            <h5>PM5 Data (Live)</h5>
+            <table className="debug-table">
+              <tbody>
+                <tr><td>Connected:</td><td>{pm5Connected ? '✅ Yes' : '❌ No'}</td></tr>
+                <tr><td>Pace (raw):</td><td>{pm5Data?.pace ?? 'N/A'}</td></tr>
+                <tr><td>Pace (s/500m):</td><td>{pm5Data?.pace ? (pm5Data.pace / 100).toFixed(2) : 'N/A'}</td></tr>
+                <tr><td>Speed (m/s):</td><td>{pm5Data?.pace ? (500 / (pm5Data.pace / 100)).toFixed(2) : 'N/A'}</td></tr>
+                <tr><td>Distance (m):</td><td>{pm5Data?.distance?.toFixed(1) ?? 'N/A'}</td></tr>
+                <tr><td>Elapsed (s):</td><td>{pm5Data?.elapsedTime ?? 'N/A'}</td></tr>
+                <tr><td>Cadence (spm):</td><td>{pm5Data?.cadence ?? 'N/A'}</td></tr>
+                <tr><td>Power (W):</td><td>{pm5Data?.power ?? 'N/A'}</td></tr>
+                <tr><td>Heart Rate:</td><td>{pm5Data?.heartRate ?? 'N/A'}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          
+          {currentView === 'workout' && (
+            <div className="debug-section">
+              <h5>Route Visualization (3D View)</h5>
+              <p>🔴 Red lines = Water edges (left/right bank)</p>
+              <p>🟡 Yellow line = Route centerline</p>
+            </div>
+          )}
+          
+          <div className="debug-section">
+            <h5>Route Info</h5>
+            <table className="debug-table">
+              <tbody>
+                <tr><td>Route:</td><td>{selectedRoute?.name ?? 'None'}</td></tr>
+                <tr><td>Distance (km):</td><td>{selectedRoute?.distance ?? 'N/A'}</td></tr>
+                <tr><td>Progress (%):</td><td>{pm5Data && selectedRoute ? ((pm5Data.distance / 1000) / selectedRoute.distance * 100).toFixed(1) : '0.0'}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="debug-section">
+            <h5>App State</h5>
+            <table className="debug-table">
+              <tbody>
+                <tr><td>Current View:</td><td>{currentView}</td></tr>
+                <tr><td>Workout Active:</td><td>{isWorkoutActive ? 'Yes' : 'No'}</td></tr>
+                <tr><td>HR Samples:</td><td>{heartRateSamples.length}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

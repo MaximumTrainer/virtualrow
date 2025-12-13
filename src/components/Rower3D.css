@@ -1,9 +1,17 @@
+/* ===========================================
+   Rower3D.css - Dark Theme Fitness App
+   =========================================== */
+
 .rower3d-canvas-container {
   width: 100%;
   height: 100%;
+  background: linear-gradient(180deg, #0a0e14 0%, #0f172a 50%, #1a2744 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
 }
 
-/* canvas default fills container but doesn't block clicks in non-workout views */
+/* Canvas fills container but doesn't block clicks in non-workout views */
 .rower3d-canvas-container canvas {
   width: 100% !important;
   height: 100% !important;
@@ -15,8 +23,111 @@
   pointer-events: auto;
 }
 
-/* mini metrics overlay if needed (we already added separate CSS) */
+/* Ambient glow effect around the container */
+.rower3d-canvas-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 245, 212, 0.03) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Mini metrics overlay z-index handled in MiniMetrics.css */
 .mini-metrics {
-  /* positioning is handled in MiniMetrics.css, however add z-index if needed */
   z-index: 60;
+}
+
+/* Loading state for 3D scene */
+.rower3d-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 100;
+}
+
+.rower3d-loading-spinner {
+  width: 56px;
+  height: 56px;
+  border: 3px solid rgba(0, 245, 212, 0.15);
+  border-top-color: #00f5d4;
+  border-radius: 50%;
+  animation: rower3d-spin 1s linear infinite;
+}
+
+.rower3d-loading-text {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes rower3d-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error state */
+.rower3d-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  padding: 24px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(10, 14, 20, 0.98));
+  border: 1px solid rgba(255, 0, 110, 0.3);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  max-width: 400px;
+}
+
+.rower3d-error-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.rower3d-error-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ff006e;
+  margin-bottom: 8px;
+}
+
+.rower3d-error-message {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .rower3d-canvas-container {
+    border-radius: 12px;
+  }
+
+  .rower3d-loading-spinner {
+    width: 44px;
+    height: 44px;
+  }
+
+  .rower3d-loading-text {
+    font-size: 13px;
+  }
 }
