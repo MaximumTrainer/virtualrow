@@ -165,75 +165,345 @@ const RowingScull: React.FC<{
 }> = ({ position, cadence }) => {
   const leftOarRef = useRef<THREE.Group>(null);
   const rightOarRef = useRef<THREE.Group>(null);
+  const rowerRef = useRef<THREE.Group>(null);
+  
+  // Body part refs for animation
+  const torsoRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Mesh>(null);
+  const leftUpperArmRef = useRef<THREE.Group>(null);
+  const rightUpperArmRef = useRef<THREE.Group>(null);
+  const leftForearmRef = useRef<THREE.Group>(null);
+  const rightForearmRef = useRef<THREE.Group>(null);
+  const leftThighRef = useRef<THREE.Group>(null);
+  const rightThighRef = useRef<THREE.Group>(null);
+  const leftShinRef = useRef<THREE.Group>(null);
+  const rightShinRef = useRef<THREE.Group>(null);
+  const seatRef = useRef<THREE.Mesh>(null);
   
   useFrame(() => {
-    // Animate oars based on cadence
-    const strokesPerMinute = Math.max(20, cadence || 30);
+    // Animate based on cadence
+    const strokesPerMinute = Math.max(18, cadence || 24);
     const freqHz = strokesPerMinute / 60;
     const time = performance.now() * 0.001;
-    const phase = (time * freqHz % 1) * Math.PI * 2;
+    const phase = (time * freqHz % 1);
     
-    // Oar sweep angle (forward/back motion)
-    const oarSweep = Math.sin(phase) * 0.5;
+    // Rowing stroke phases:
+    // 0.0-0.4: Drive (push with legs, pull with arms, body swings back)
+    // 0.4-1.0: Recovery (arms extend, body leans forward, legs compress)
     
-    if (leftOarRef.current) {
-      leftOarRef.current.rotation.y = oarSweep;
+    // Smooth easing function
+    const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    
+    let drivePhase: number;
+    let legCompression: number;
+    let armPull: number;
+    let bodyLean: number;
+    let seatPosition: number;
+    
+    if (phase < 0.4) {
+      // Drive phase - legs extend, arms pull, body swings back
+      const t = easeInOut(phase / 0.4);
+      drivePhase = t;
+      legCompression = 1 - t; // 1 (compressed) -> 0 (extended)
+      armPull = t; // 0 (arms extended) -> 1 (arms pulled in)
+      bodyLean = -0.3 + t * 0.5; // lean forward -> lean back
+      seatPosition = -0.5 + t * 0.5; // back -> forward on slide
+    } else {
+      // Recovery phase - legs compress, arms extend, body leans forward
+      const t = easeInOut((phase - 0.4) / 0.6);
+      drivePhase = 1 - t;
+      legCompression = t; // 0 (extended) -> 1 (compressed)
+      armPull = 1 - t; // 1 (arms pulled in) -> 0 (arms extended)
+      bodyLean = 0.2 - t * 0.5; // lean back -> lean forward
+      seatPosition = t * -0.5; // forward -> back on slide
     }
-    if (rightOarRef.current) {
-      rightOarRef.current.rotation.y = -oarSweep;
+    
+    // Oar sweep angle
+    const oarSweep = Math.sin(phase * Math.PI * 2) * 0.5;
+    
+    if (leftOarRef.current) leftOarRef.current.rotation.y = oarSweep;
+    if (rightOarRef.current) rightOarRef.current.rotation.y = -oarSweep;
+    
+    // Animate rower body
+    if (torsoRef.current) {
+      torsoRef.current.rotation.x = bodyLean;
     }
+    
+    if (headRef.current) {
+      // Head stays relatively level
+      headRef.current.rotation.x = -bodyLean * 0.3;
+    }
+    
+    // Seat slides on the track
+    if (seatRef.current) {
+      seatRef.current.position.z = seatPosition;
+    }
+    
+    // Leg animation - thighs rotate at hip
+    const thighAngle = -0.3 + legCompression * 1.0; // More compressed = more angled
+    const shinAngle = 0.2 + legCompression * 1.2; // Shin follows thigh
+    
+    if (leftThighRef.current) leftThighRef.current.rotation.x = thighAngle;
+    if (rightThighRef.current) rightThighRef.current.rotation.x = thighAngle;
+    if (leftShinRef.current) leftShinRef.current.rotation.x = shinAngle;
+    if (rightShinRef.current) rightShinRef.current.rotation.x = shinAngle;
+    
+    // Arm animation
+    const upperArmAngle = -0.5 + armPull * 1.2; // Reach forward -> pull back
+    const forearmAngle = 0.3 + armPull * 0.8; // Extend -> bend at elbow
+    
+    if (leftUpperArmRef.current) leftUpperArmRef.current.rotation.x = upperArmAngle;
+    if (rightUpperArmRef.current) rightUpperArmRef.current.rotation.x = upperArmAngle;
+    if (leftForearmRef.current) leftForearmRef.current.rotation.x = forearmAngle;
+    if (rightForearmRef.current) rightForearmRef.current.rotation.x = forearmAngle;
   });
+  
+  // Skin tone and athletic wear colors
+  const skinColor = "#e0b89d";
+  const hairColor = "#3d2314";
+  const shirtColor = "#1e40af";
+  const shortsColor = "#1e3a5f";
   
   return (
     <group position={position}>
-      {/* Main hull - long narrow box */}
+      {/* Main hull - long narrow racing shell */}
       <mesh castShadow>
-        <boxGeometry args={[0.5, 0.2, 8]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+        <boxGeometry args={[0.45, 0.15, 8]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+      </mesh>
+      
+      {/* Hull deck detail */}
+      <mesh position={[0, 0.08, 0]} castShadow>
+        <boxGeometry args={[0.4, 0.02, 7.5]} />
+        <meshStandardMaterial color="#ffeaa7" metalness={0.3} roughness={0.4} />
       </mesh>
       
       {/* Bow (front) - pointed cone toward -Z */}
       <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[0.25, 0.8, 8]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+        <coneGeometry args={[0.22, 1.0, 12]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
       </mesh>
       
       {/* Stern (back) - tapered toward +Z */}
       <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[0.2, 0.6, 8]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.3} roughness={0.4} />
+        <coneGeometry args={[0.2, 0.8, 12]} />
+        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
       </mesh>
       
-      {/* Rower - simple seated figure */}
-      <group position={[0, 0.4, 1]}>
-        {/* Body */}
-        <mesh castShadow>
-          <boxGeometry args={[0.4, 0.5, 0.3]} />
-          <meshStandardMaterial color="#2563eb" />
-        </mesh>
-        {/* Head */}
-        <mesh position={[0, 0.4, 0]} castShadow>
-          <sphereGeometry args={[0.15, 16, 16]} />
-          <meshStandardMaterial color="#d4a574" />
-        </mesh>
+      {/* Sliding seat track */}
+      <mesh position={[0, 0.12, 0]}>
+        <boxGeometry args={[0.25, 0.02, 1.2]} />
+        <meshStandardMaterial color="#444444" metalness={0.7} roughness={0.3} />
+      </mesh>
+      
+      {/* Sliding seat */}
+      <mesh ref={seatRef} position={[0, 0.18, 0]} castShadow>
+        <boxGeometry args={[0.22, 0.04, 0.2]} />
+        <meshStandardMaterial color="#333333" metalness={0.5} roughness={0.4} />
+      </mesh>
+      
+      {/* Foot stretchers */}
+      <mesh position={[0, 0.15, -0.6]} rotation={[0.4, 0, 0]}>
+        <boxGeometry args={[0.35, 0.03, 0.25]} />
+        <meshStandardMaterial color="#222222" />
+      </mesh>
+      
+      {/* ============================================ */}
+      {/* REALISTIC HUMANOID ROWER */}
+      {/* ============================================ */}
+      <group ref={rowerRef} position={[0, 0.35, 0]}>
+        
+        {/* TORSO GROUP - rotates for body swing */}
+        <group ref={torsoRef} position={[0, 0.15, 0]}>
+          
+          {/* Lower torso / hips */}
+          <mesh position={[0, 0, 0]} castShadow>
+            <boxGeometry args={[0.28, 0.15, 0.18]} />
+            <meshStandardMaterial color={shortsColor} />
+          </mesh>
+          
+          {/* Mid torso / abdomen */}
+          <mesh position={[0, 0.12, 0]} castShadow>
+            <boxGeometry args={[0.26, 0.12, 0.16]} />
+            <meshStandardMaterial color={shirtColor} />
+          </mesh>
+          
+          {/* Upper torso / chest */}
+          <mesh position={[0, 0.26, 0]} castShadow>
+            <boxGeometry args={[0.32, 0.16, 0.18]} />
+            <meshStandardMaterial color={shirtColor} />
+          </mesh>
+          
+          {/* Shoulders */}
+          <mesh position={[0, 0.36, 0]} castShadow>
+            <boxGeometry args={[0.4, 0.08, 0.14]} />
+            <meshStandardMaterial color={shirtColor} />
+          </mesh>
+          
+          {/* Neck */}
+          <mesh position={[0, 0.44, 0]} castShadow>
+            <cylinderGeometry args={[0.05, 0.06, 0.08, 12]} />
+            <meshStandardMaterial color={skinColor} />
+          </mesh>
+          
+          {/* HEAD */}
+          <group position={[0, 0.56, 0]}>
+            {/* Head - ellipsoid shape */}
+            <mesh ref={headRef} castShadow>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Hair */}
+            <mesh position={[0, 0.04, -0.02]} castShadow>
+              <sphereGeometry args={[0.095, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+              <meshStandardMaterial color={hairColor} />
+            </mesh>
+            
+            {/* Face features - subtle */}
+            {/* Nose */}
+            <mesh position={[0, -0.01, 0.09]}>
+              <boxGeometry args={[0.02, 0.03, 0.02]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Eyes */}
+            <mesh position={[-0.03, 0.02, 0.085]}>
+              <sphereGeometry args={[0.012, 8, 8]} />
+              <meshStandardMaterial color="#2c1810" />
+            </mesh>
+            <mesh position={[0.03, 0.02, 0.085]}>
+              <sphereGeometry args={[0.012, 8, 8]} />
+              <meshStandardMaterial color="#2c1810" />
+            </mesh>
+            
+            {/* Ears */}
+            <mesh position={[-0.1, 0, 0]}>
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            <mesh position={[0.1, 0, 0]}>
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+          </group>
+          
+          {/* LEFT ARM */}
+          <group ref={leftUpperArmRef} position={[-0.22, 0.32, 0]}>
+            {/* Upper arm */}
+            <mesh position={[0, -0.1, 0]} castShadow>
+              <capsuleGeometry args={[0.035, 0.15, 8, 12]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Forearm group - pivots at elbow */}
+            <group ref={leftForearmRef} position={[0, -0.2, 0]}>
+              <mesh position={[0, -0.1, 0]} castShadow>
+                <capsuleGeometry args={[0.03, 0.14, 8, 12]} />
+                <meshStandardMaterial color={skinColor} />
+              </mesh>
+              
+              {/* Hand */}
+              <mesh position={[0, -0.22, 0]} castShadow>
+                <sphereGeometry args={[0.035, 8, 8]} />
+                <meshStandardMaterial color={skinColor} />
+              </mesh>
+            </group>
+          </group>
+          
+          {/* RIGHT ARM */}
+          <group ref={rightUpperArmRef} position={[0.22, 0.32, 0]}>
+            {/* Upper arm */}
+            <mesh position={[0, -0.1, 0]} castShadow>
+              <capsuleGeometry args={[0.035, 0.15, 8, 12]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Forearm group - pivots at elbow */}
+            <group ref={rightForearmRef} position={[0, -0.2, 0]}>
+              <mesh position={[0, -0.1, 0]} castShadow>
+                <capsuleGeometry args={[0.03, 0.14, 8, 12]} />
+                <meshStandardMaterial color={skinColor} />
+              </mesh>
+              
+              {/* Hand */}
+              <mesh position={[0, -0.22, 0]} castShadow>
+                <sphereGeometry args={[0.035, 8, 8]} />
+                <meshStandardMaterial color={skinColor} />
+              </mesh>
+            </group>
+          </group>
+        </group>
+        
+        {/* LEGS - attached to hips, independent of torso rotation */}
+        {/* LEFT LEG */}
+        <group ref={leftThighRef} position={[-0.08, 0.1, 0]}>
+          {/* Thigh */}
+          <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
+            <capsuleGeometry args={[0.05, 0.22, 8, 12]} />
+            <meshStandardMaterial color={shortsColor} />
+          </mesh>
+          
+          {/* Shin group - pivots at knee */}
+          <group ref={leftShinRef} position={[0, 0, 0.28]}>
+            <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
+              <capsuleGeometry args={[0.04, 0.2, 8, 12]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Foot */}
+            <mesh position={[0, -0.02, 0.3]} castShadow>
+              <boxGeometry args={[0.06, 0.03, 0.12]} />
+              <meshStandardMaterial color="#222222" />
+            </mesh>
+          </group>
+        </group>
+        
+        {/* RIGHT LEG */}
+        <group ref={rightThighRef} position={[0.08, 0.1, 0]}>
+          {/* Thigh */}
+          <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
+            <capsuleGeometry args={[0.05, 0.22, 8, 12]} />
+            <meshStandardMaterial color={shortsColor} />
+          </mesh>
+          
+          {/* Shin group - pivots at knee */}
+          <group ref={rightShinRef} position={[0, 0, 0.28]}>
+            <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
+              <capsuleGeometry args={[0.04, 0.2, 8, 12]} />
+              <meshStandardMaterial color={skinColor} />
+            </mesh>
+            
+            {/* Foot */}
+            <mesh position={[0, -0.02, 0.3]} castShadow>
+              <boxGeometry args={[0.06, 0.03, 0.12]} />
+              <meshStandardMaterial color="#222222" />
+            </mesh>
+          </group>
+        </group>
       </group>
       
       {/* Left oar group */}
       <group ref={leftOarRef} position={[-0.3, 0.15, 0.5]}>
-        {/* Rigger */}
+        {/* Rigger - metal outrigger */}
         <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.03, 0.03, 1.2, 8]} />
-          <meshStandardMaterial color="#666666" metalness={0.6} />
+          <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
+          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+        </mesh>
+        {/* Oarlock */}
+        <mesh position={[-1.15, 0, 0]}>
+          <torusGeometry args={[0.04, 0.015, 8, 16]} />
+          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
         </mesh>
         {/* Oar shaft */}
-        <mesh position={[-1.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.025, 0.025, 2.5, 8]} />
-          <meshStandardMaterial color="#8B4513" />
+        <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
+          <meshStandardMaterial color="#c4a882" roughness={0.6} />
         </mesh>
-        {/* Oar blade */}
-        <mesh position={[-2.8, 0, 0]}>
-          <boxGeometry args={[0.5, 0.02, 0.15]} />
-          <meshStandardMaterial color="#1e40af" />
+        {/* Oar blade - spoon shape */}
+        <mesh position={[-3.3, 0, 0]}>
+          <boxGeometry args={[0.55, 0.015, 0.18]} />
+          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
         </mesh>
       </group>
       
@@ -241,18 +511,23 @@ const RowingScull: React.FC<{
       <group ref={rightOarRef} position={[0.3, 0.15, 0.5]}>
         {/* Rigger */}
         <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.03, 0.03, 1.2, 8]} />
-          <meshStandardMaterial color="#666666" metalness={0.6} />
+          <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
+          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+        </mesh>
+        {/* Oarlock */}
+        <mesh position={[1.15, 0, 0]}>
+          <torusGeometry args={[0.04, 0.015, 8, 16]} />
+          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
         </mesh>
         {/* Oar shaft */}
-        <mesh position={[1.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.025, 0.025, 2.5, 8]} />
-          <meshStandardMaterial color="#8B4513" />
+        <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
+          <meshStandardMaterial color="#c4a882" roughness={0.6} />
         </mesh>
         {/* Oar blade */}
-        <mesh position={[2.8, 0, 0]}>
-          <boxGeometry args={[0.5, 0.02, 0.15]} />
-          <meshStandardMaterial color="#1e40af" />
+        <mesh position={[3.3, 0, 0]}>
+          <boxGeometry args={[0.55, 0.015, 0.18]} />
+          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
         </mesh>
       </group>
     </group>
