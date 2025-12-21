@@ -674,7 +674,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                 <button
                   className="btn-toggle-overlay-mode"
                   onClick={() => setUseNewOverlay(!useNewOverlay)}
-                  title={useNewOverlay ? 'Switch to Legacy Overlay' : 'Switch to New Overlay'}
+                  title={useNewOverlay ? 'Switch to Crisp Display' : 'Switch to Data Rich'}
                   style={{
                     position: 'absolute',
                     top: '10px',
@@ -689,7 +689,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     cursor: 'pointer',
                   }}
                 >
-                  {useNewOverlay ? '🎨 New UI' : '📊 Legacy'}
+                  {useNewOverlay ? '🎨 Data Rich' : '📊 Crisp Display'}
                 </button>
               </div>
             </div>

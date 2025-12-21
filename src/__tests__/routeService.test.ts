@@ -4,10 +4,30 @@ import { routeService } from '../services/routeService';
 // Willowbrook River bounding box
 const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };
 
+// Fantasy routes bounding boxes based on real-world locations
+const LAKE_BLED_BBOX = { minLat: 46.3540, maxLat: 46.3740, minLng: 14.0770, maxLng: 14.1060 };
+const VENICE_BBOX = { minLat: 45.4280, maxLat: 45.4420, minLng: 12.3200, maxLng: 12.3600 };
+const HENLEY_BBOX = { minLat: 51.5420, maxLat: 51.5610, minLng: -0.9120, maxLng: -0.8750 };
+const THAMES_BBOX = { minLat: 51.4670, maxLat: 51.4870, minLng: -0.2700, maxLng: -0.1520 };
+const CHARLES_BBOX = { minLat: 42.3520, maxLat: 42.3770, minLng: -71.1560, maxLng: -71.1090 };
+
 describe('RouteService basic data', () => {
+  it('provides all 6 routes (1 original + 5 fantasy routes)', () => {
+    const routes = routeService.getAllRoutes();
+    expect(routes.length).toBe(6);
+    
+    // Check all route IDs exist
+    const ids = routes.map(r => r.id);
+    expect(ids).toContain('1'); // Willowbrook
+    expect(ids).toContain('2'); // Lake Bled
+    expect(ids).toContain('3'); // Venice
+    expect(ids).toContain('4'); // Henley
+    expect(ids).toContain('5'); // Thames
+    expect(ids).toContain('6'); // Charles River
+  });
+  
   it('provides Willowbrook River route with distance and coordinates', () => {
     const routes = routeService.getAllRoutes();
-    expect(routes.length).toBe(1);
     
     // Willowbrook River route (only route)
     const willowbrook = routes.find(r => r.id === '1');
@@ -44,6 +64,151 @@ describe('RouteService basic data', () => {
     expect(willowbrook.tags).toContain('meadow');
     expect(willowbrook.tags).toContain('village');
     expect(willowbrook.tags).toContain('lake');
+  });
+});
+
+describe('Fantasy Routes based on real-world locations', () => {
+  it('Crystal Sanctum of Bled (Lake Bled) is circular with correct geography', () => {
+    const routes = routeService.getAllRoutes();
+    const bled = routes.find(r => r.id === '2')!;
+    
+    expect(bled.name).toBe('Crystal Sanctum of Bled');
+    expect(bled.distance).toBeCloseTo(6.0, 1); // ~6km circumference
+    expect(bled.difficulty).toBe('easy');
+    expect(bled.tags).toContain('circular');
+    expect(bled.tags).toContain('lake');
+    expect(bled.tags).toContain('fantasy');
+    
+    // Check circular: start and end should be the same point
+    const coords = bled.coordinates;
+    expect(coords[0].lat).toBeCloseTo(coords[coords.length - 1].lat, 3);
+    expect(coords[0].lng).toBeCloseTo(coords[coords.length - 1].lng, 3);
+    
+    // Check coordinates are within Lake Bled area (Slovenia)
+    const outOfBounds = coords.filter(c =>
+      c.lat < LAKE_BLED_BBOX.minLat || c.lat > LAKE_BLED_BBOX.maxLat ||
+      c.lng < LAKE_BLED_BBOX.minLng || c.lng > LAKE_BLED_BBOX.maxLng
+    );
+    expect(outOfBounds.length).toBe(0);
+  });
+  
+  it('Canale delle Anime Perdute (Venice) has correct S-curve canal geography', () => {
+    const routes = routeService.getAllRoutes();
+    const venice = routes.find(r => r.id === '3')!;
+    
+    expect(venice.name).toBe('Canale delle Anime Perdute');
+    expect(venice.distance).toBeCloseTo(3.8, 1); // 3.8km like real Grand Canal
+    expect(venice.difficulty).toBe('moderate');
+    expect(venice.tags).toContain('canal');
+    expect(venice.tags).toContain('gothic');
+    expect(venice.tags).toContain('winding');
+    
+    // Check coordinates are within Venice area
+    const coords = venice.coordinates;
+    const outOfBounds = coords.filter(c =>
+      c.lat < VENICE_BBOX.minLat || c.lat > VENICE_BBOX.maxLat ||
+      c.lng < VENICE_BBOX.minLng || c.lng > VENICE_BBOX.maxLng
+    );
+    expect(outOfBounds.length).toBe(0);
+  });
+  
+  it('The Iron Sovereign\'s Gauntlet (Henley) is a straight 2.1km race course', () => {
+    const routes = routeService.getAllRoutes();
+    const henley = routes.find(r => r.id === '4')!;
+    
+    expect(henley.name).toBe('The Iron Sovereign\'s Gauntlet');
+    expect(henley.distance).toBeCloseTo(2.1, 1); // 2,112m Henley course
+    expect(henley.difficulty).toBe('hard');
+    expect(henley.tags).toContain('straight');
+    expect(henley.tags).toContain('racing');
+    expect(henley.tags).toContain('steampunk');
+    
+    // Check coordinates are within Henley area
+    const coords = henley.coordinates;
+    const outOfBounds = coords.filter(c =>
+      c.lat < HENLEY_BBOX.minLat || c.lat > HENLEY_BBOX.maxLat ||
+      c.lng < HENLEY_BBOX.minLng || c.lng > HENLEY_BBOX.maxLng
+    );
+    expect(outOfBounds.length).toBe(0);
+  });
+  
+  it('The Leviathan\'s Wake (Thames Tideway) is a 6.8km Championship Course', () => {
+    const routes = routeService.getAllRoutes();
+    const thames = routes.find(r => r.id === '5')!;
+    
+    expect(thames.name).toBe('The Leviathan\'s Wake');
+    expect(thames.distance).toBeCloseTo(6.8, 1); // 6.8km Championship Course
+    expect(thames.difficulty).toBe('hard');
+    expect(thames.tags).toContain('tidal');
+    expect(thames.tags).toContain('dystopian');
+    expect(thames.tags).toContain('long-distance');
+    
+    // Check coordinates are within Thames Tideway area
+    const coords = thames.coordinates;
+    const outOfBounds = coords.filter(c =>
+      c.lat < THAMES_BBOX.minLat || c.lat > THAMES_BBOX.maxLat ||
+      c.lng < THAMES_BBOX.minLng || c.lng > THAMES_BBOX.maxLng
+    );
+    expect(outOfBounds.length).toBe(0);
+  });
+  
+  it('The Architect\'s Infinite Equation (Charles River) is a 4.8km Head race course', () => {
+    const routes = routeService.getAllRoutes();
+    const charles = routes.find(r => r.id === '6')!;
+    
+    expect(charles.name).toBe('The Architect\'s Infinite Equation');
+    expect(charles.distance).toBeCloseTo(4.8, 1); // 4.8km Head of the Charles
+    expect(charles.difficulty).toBe('moderate');
+    expect(charles.tags).toContain('academic');
+    expect(charles.tags).toContain('sci-fi');
+    expect(charles.tags).toContain('bridges');
+    
+    // Check coordinates are within Charles River area (Boston/Cambridge)
+    const coords = charles.coordinates;
+    const outOfBounds = coords.filter(c =>
+      c.lat < CHARLES_BBOX.minLat || c.lat > CHARLES_BBOX.maxLat ||
+      c.lng < CHARLES_BBOX.minLng || c.lng > CHARLES_BBOX.maxLng
+    );
+    expect(outOfBounds.length).toBe(0);
+  });
+  
+  it('all fantasy routes have different difficulty levels', () => {
+    const routes = routeService.getAllRoutes();
+    const fantasyRoutes = routes.filter(r => ['2', '3', '4', '5', '6'].includes(r.id));
+    
+    const difficulties = fantasyRoutes.map(r => r.difficulty);
+    expect(difficulties).toContain('easy');      // Lake Bled
+    expect(difficulties).toContain('moderate');  // Venice, Charles River
+    expect(difficulties).toContain('hard');      // Henley, Thames
+  });
+  
+  it('all fantasy routes have distinct fantasy/sci-fi themes', () => {
+    const routes = routeService.getAllRoutes();
+    
+    // Lake Bled: elven/crystal fantasy
+    const bled = routes.find(r => r.id === '2')!;
+    expect(bled.tags).toContain('elven');
+    expect(bled.tags).toContain('crystal');
+    
+    // Venice: gothic/spectral
+    const venice = routes.find(r => r.id === '3')!;
+    expect(venice.tags).toContain('gothic');
+    expect(venice.tags).toContain('haunted');
+    
+    // Henley: steampunk/victorian
+    const henley = routes.find(r => r.id === '4')!;
+    expect(henley.tags).toContain('steampunk');
+    expect(henley.tags).toContain('victorian');
+    
+    // Thames: dystopian/kaiju
+    const thames = routes.find(r => r.id === '5')!;
+    expect(thames.tags).toContain('dystopian');
+    expect(thames.tags).toContain('kaiju');
+    
+    // Charles: sci-fi/geometric
+    const charles = routes.find(r => r.id === '6')!;
+    expect(charles.tags).toContain('sci-fi');
+    expect(charles.tags).toContain('geometric');
   });
 });
 

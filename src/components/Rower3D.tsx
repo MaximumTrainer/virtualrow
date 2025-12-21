@@ -9,6 +9,32 @@ import './Rower3D.css';
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
 
+// Route theme types for landscape selection
+type RouteTheme = 'willowbrook' | 'crystal-bled' | 'gothic-venice' | 'steampunk-henley' | 'dystopian-thames' | 'scifi-boston';
+
+// Detect route theme from route name and tags
+const detectRouteTheme = (route: WaterRoute): RouteTheme => {
+  const name = route.name?.toLowerCase() || '';
+  const tags = route.tags || [];
+  
+  if (name.includes('bled') || name.includes('crystal') || name.includes('sanctum') || tags.includes('elven')) {
+    return 'crystal-bled';
+  }
+  if (name.includes('venice') || name.includes('anime') || name.includes('perdute') || tags.includes('gothic')) {
+    return 'gothic-venice';
+  }
+  if (name.includes('henley') || name.includes('iron sovereign') || name.includes('gauntlet') || tags.includes('steampunk')) {
+    return 'steampunk-henley';
+  }
+  if (name.includes('thames') || name.includes('leviathan') || tags.includes('dystopian') || tags.includes('kaiju')) {
+    return 'dystopian-thames';
+  }
+  if (name.includes('charles') || name.includes('boston') || name.includes('architect') || name.includes('equation') || tags.includes('sci-fi')) {
+    return 'scifi-boston';
+  }
+  return 'willowbrook';
+};
+
 interface Rower3DProps {
   route: WaterRoute;
   paceSPer500?: number | null;
@@ -134,6 +160,423 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
       ))}
     </group>
   );
+};
+
+// ============================================================================
+// THEMED LANDSCAPE COMPONENTS - Replace generic scenery for fantasy routes
+// ============================================================================
+
+// CRYSTAL BLED - Ethereal floating crystal towers, bioluminescent glow
+const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -40 : 40;
+  
+  const crystals = useMemo(() => {
+    const result: Array<{ x: number; z: number; height: number; radius: number; color: string }> = [];
+    const colors = ['#00f5d4', '#7df9ff', '#a0e7e5', '#40e0d0', '#00ced1'];
+    for (let z = -500; z < 500; z += 30) {
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 20,
+        z: z + (Math.random() - 0.5) * 15,
+        height: 12 + Math.random() * 25,
+        radius: 1.5 + Math.random() * 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      });
+    }
+    return result;
+  }, [xOffset]);
+  
+  const mountains = useMemo(() => {
+    const result: Array<{ x: number; z: number; scale: number; height: number }> = [];
+    for (let z = -500; z < 500; z += 80) {
+      result.push({
+        x: xOffset + (side === 'left' ? -30 : 30) + (Math.random() - 0.5) * 15,
+        z: z + (Math.random() - 0.5) * 30,
+        scale: 20 + Math.random() * 20,
+        height: 30 + Math.random() * 40,
+      });
+    }
+    return result;
+  }, [xOffset, side]);
+  
+  return (
+    <group position={[0, 0, boatZ]}>
+      {/* Crystal spires */}
+      {crystals.map((c, i) => (
+        <group key={i} position={[c.x, 0, c.z]}>
+          {/* Main crystal */}
+          <mesh position={[0, c.height / 2, 0]} castShadow>
+            <cylinderGeometry args={[c.radius * 0.3, c.radius, c.height, 6]} />
+            <meshStandardMaterial color={c.color} transparent opacity={0.8} emissive={c.color} emissiveIntensity={0.3} roughness={0.2} metalness={0.4} />
+          </mesh>
+          {/* Glow base */}
+          <mesh position={[0, 0.5, 0]}>
+            <cylinderGeometry args={[c.radius * 1.2, c.radius * 1.5, 1, 8]} />
+            <meshStandardMaterial color={c.color} transparent opacity={0.4} emissive={c.color} emissiveIntensity={0.5} />
+          </mesh>
+        </group>
+      ))}
+      {/* Snow-capped mountains in background */}
+      {mountains.map((m, i) => (
+        <group key={`mtn-${i}`} position={[m.x, 0, m.z]}>
+          <mesh position={[0, m.height / 2 - 2, 0]} castShadow>
+            <coneGeometry args={[m.scale, m.height, 6]} />
+            <meshStandardMaterial color="#6b7280" roughness={0.9} />
+          </mesh>
+          {/* Snow cap */}
+          <mesh position={[0, m.height * 0.75, 0]}>
+            <coneGeometry args={[m.scale * 0.4, m.height * 0.3, 6]} />
+            <meshStandardMaterial color="#f8fafc" roughness={0.7} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// GOTHIC VENICE - Ruined palaces, spectral mist, ghostly structures
+const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -25 : 25;
+  
+  const buildings = useMemo(() => {
+    const result: Array<{ x: number; z: number; height: number; width: number; depth: number; color: string; tilt: number }> = [];
+    const colors = ['#2d3436', '#1e272e', '#2c3e50', '#34495e', '#192a56'];
+    for (let z = -400; z < 400; z += 20) {
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 12,
+        z: z + (Math.random() - 0.5) * 10,
+        height: 8 + Math.random() * 14,
+        width: 4 + Math.random() * 6,
+        depth: 4 + Math.random() * 5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        tilt: (Math.random() - 0.5) * 0.15, // Slightly tilted ruins
+      });
+    }
+    return result;
+  }, [xOffset]);
+  
+  return (
+    <group position={[0, 0, boatZ]}>
+      {buildings.map((b, i) => (
+        <group key={i} position={[b.x, 0, b.z]} rotation={[0, 0, b.tilt]}>
+          {/* Ruined palazzo */}
+          <mesh position={[0, b.height / 2, 0]} castShadow>
+            <boxGeometry args={[b.width, b.height, b.depth]} />
+            <meshStandardMaterial color={b.color} roughness={0.9} />
+          </mesh>
+          {/* Gothic window arches */}
+          {[0.3, 0.5, 0.7].map((yPos, j) => (
+            <mesh key={j} position={[b.width / 2 + 0.01, b.height * yPos, 0]}>
+              <boxGeometry args={[0.1, 1.5, b.depth * 0.6]} />
+              <meshStandardMaterial color="#0a3d62" emissive="#0a3d62" emissiveIntensity={0.2} transparent opacity={0.6} />
+            </mesh>
+          ))}
+          {/* Crumbling top */}
+          <mesh position={[(Math.random() - 0.5) * b.width * 0.3, b.height + 0.5, 0]}>
+            <boxGeometry args={[b.width * 0.4, 1, b.depth * 0.4]} />
+            <meshStandardMaterial color={b.color} roughness={0.95} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// STEAMPUNK HENLEY - Brass towers, clockwork mechanisms, steam vents
+const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -30 : 30;
+  
+  const structures = useMemo(() => {
+    const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'platform' | 'gear' }> = [];
+    for (let z = -400; z < 400; z += 25) {
+      const type = Math.random() > 0.6 ? 'tower' : (Math.random() > 0.5 ? 'platform' : 'gear');
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 15,
+        z: z + (Math.random() - 0.5) * 12,
+        height: 8 + Math.random() * 18,
+        type,
+      });
+    }
+    return result;
+  }, [xOffset]);
+  
+  return (
+    <group position={[0, 0, boatZ]}>
+      {structures.map((s, i) => (
+        <group key={i} position={[s.x, 0, s.z]}>
+          {s.type === 'tower' && (
+            <>
+              {/* Brass tower */}
+              <mesh position={[0, s.height / 2, 0]} castShadow>
+                <cylinderGeometry args={[2, 3, s.height, 8]} />
+                <meshStandardMaterial color="#b87333" metalness={0.6} roughness={0.4} />
+              </mesh>
+              {/* Copper dome top */}
+              <mesh position={[0, s.height + 1, 0]}>
+                <sphereGeometry args={[2.5, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial color="#cd7f32" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Steam vent */}
+              <mesh position={[0, s.height + 3, 0]}>
+                <cylinderGeometry args={[0.3, 0.5, 2, 6]} />
+                <meshStandardMaterial color="#8b7355" metalness={0.5} roughness={0.5} />
+              </mesh>
+            </>
+          )}
+          {s.type === 'platform' && (
+            <>
+              {/* Iron platform */}
+              <mesh position={[0, s.height * 0.3, 0]} castShadow>
+                <boxGeometry args={[8, 1, 6]} />
+                <meshStandardMaterial color="#8b7355" metalness={0.4} roughness={0.6} />
+              </mesh>
+              {/* Support legs */}
+              {[[-3, -2], [-3, 2], [3, -2], [3, 2]].map(([x, z], j) => (
+                <mesh key={j} position={[x, s.height * 0.15, z]}>
+                  <cylinderGeometry args={[0.3, 0.4, s.height * 0.3, 6]} />
+                  <meshStandardMaterial color="#6b5344" metalness={0.3} roughness={0.7} />
+                </mesh>
+              ))}
+            </>
+          )}
+          {s.type === 'gear' && (
+            <>
+              {/* Giant gear */}
+              <mesh position={[0, s.height * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[4, 0.8, 8, 16]} />
+                <meshStandardMaterial color="#daa520" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Gear center */}
+              <mesh position={[0, s.height * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[2, 2, 1, 8]} />
+                <meshStandardMaterial color="#cd853f" metalness={0.6} roughness={0.4} />
+              </mesh>
+            </>
+          )}
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// DYSTOPIAN THAMES - Ruined skyscrapers, military fortifications, fog
+const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -35 : 35;
+  
+  const ruins = useMemo(() => {
+    const result: Array<{ x: number; z: number; height: number; width: number; damaged: boolean }> = [];
+    const colors = ['#1a1a2e', '#16213e', '#0f3460', '#162447'];
+    for (let z = -500; z < 500; z += 30) {
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 20,
+        z: z + (Math.random() - 0.5) * 15,
+        height: 15 + Math.random() * 35,
+        width: 4 + Math.random() * 6,
+        damaged: Math.random() > 0.4,
+      });
+    }
+    return result;
+  }, [xOffset]);
+  
+  return (
+    <group position={[0, 0, boatZ]}>
+      {ruins.map((r, i) => (
+        <group key={i} position={[r.x, 0, r.z]}>
+          {/* Ruined skyscraper */}
+          <mesh position={[0, (r.damaged ? r.height * 0.7 : r.height) / 2, 0]} castShadow>
+            <boxGeometry args={[r.width, r.damaged ? r.height * 0.7 : r.height, r.width]} />
+            <meshStandardMaterial color="#1a1a2e" roughness={0.9} />
+          </mesh>
+          {/* Dark windows */}
+          {[0.2, 0.4, 0.6, 0.8].map((yPos, j) => (
+            <mesh key={j} position={[r.width / 2 + 0.01, (r.damaged ? r.height * 0.7 : r.height) * yPos, 0]}>
+              <boxGeometry args={[0.1, 1, r.width * 0.7]} />
+              <meshStandardMaterial color="#0f3460" emissive="#ff006e" emissiveIntensity={Math.random() > 0.7 ? 0.3 : 0} />
+            </mesh>
+          ))}
+          {/* Damage debris */}
+          {r.damaged && (
+            <mesh position={[(Math.random() - 0.5) * r.width, r.height * 0.35 + 1, (Math.random() - 0.5) * r.width]}>
+              <boxGeometry args={[r.width * 0.3, 2, r.width * 0.3]} />
+              <meshStandardMaterial color="#16213e" roughness={0.95} />
+            </mesh>
+          )}
+          {/* Searchlight on some buildings */}
+          {Math.random() > 0.7 && (
+            <mesh position={[0, r.height + 2, 0]}>
+              <cylinderGeometry args={[0.2, 0.4, 3, 6]} />
+              <meshStandardMaterial color="#ffd60a" emissive="#ffd60a" emissiveIntensity={0.5} />
+            </mesh>
+          )}
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// SCI-FI BOSTON - Geometric impossibilities, tesseract architecture, glowing structures
+const SciFiBostonLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+  const xOffset = side === 'left' ? -35 : 35;
+  
+  const structures = useMemo(() => {
+    const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'cube' | 'pyramid' }> = [];
+    for (let z = -500; z < 500; z += 28) {
+      const type = Math.random() > 0.6 ? 'tower' : (Math.random() > 0.5 ? 'cube' : 'pyramid');
+      result.push({
+        x: xOffset + (Math.random() - 0.5) * 18,
+        z: z + (Math.random() - 0.5) * 14,
+        height: 10 + Math.random() * 25,
+        type,
+      });
+    }
+    return result;
+  }, [xOffset]);
+  
+  const colors = ['#00f5d4', '#7df9ff', '#40e0d0', '#00ced1', '#48d1cc'];
+  
+  return (
+    <group position={[0, 0, boatZ]}>
+      {structures.map((s, i) => {
+        const color = colors[i % colors.length];
+        return (
+          <group key={i} position={[s.x, 0, s.z]}>
+            {s.type === 'tower' && (
+              <>
+                {/* Holographic tower */}
+                <mesh position={[0, s.height / 2, 0]} castShadow>
+                  <boxGeometry args={[3, s.height, 3]} />
+                  <meshStandardMaterial color={color} transparent opacity={0.7} emissive={color} emissiveIntensity={0.4} metalness={0.8} roughness={0.1} />
+                </mesh>
+                {/* Antenna */}
+                <mesh position={[0, s.height + 2, 0]}>
+                  <cylinderGeometry args={[0.1, 0.2, 4, 4]} />
+                  <meshStandardMaterial color="#ffd60a" emissive="#ffd60a" emissiveIntensity={0.6} />
+                </mesh>
+              </>
+            )}
+            {s.type === 'cube' && (
+              <>
+                {/* Floating tesseract cube */}
+                <mesh position={[0, s.height * 0.5 + 3, 0]} rotation={[Math.PI / 6, Math.PI / 4, 0]}>
+                  <boxGeometry args={[5, 5, 5]} />
+                  <meshStandardMaterial color={color} transparent opacity={0.6} emissive={color} emissiveIntensity={0.5} wireframe />
+                </mesh>
+                <mesh position={[0, s.height * 0.5 + 3, 0]} rotation={[Math.PI / 4, Math.PI / 6, 0]}>
+                  <boxGeometry args={[3.5, 3.5, 3.5]} />
+                  <meshStandardMaterial color={color} transparent opacity={0.4} emissive={color} emissiveIntensity={0.3} />
+                </mesh>
+              </>
+            )}
+            {s.type === 'pyramid' && (
+              <>
+                {/* Inverted pyramid */}
+                <mesh position={[0, s.height * 0.5, 0]} rotation={[Math.PI, 0, 0]}>
+                  <coneGeometry args={[4, s.height * 0.6, 4]} />
+                  <meshStandardMaterial color={color} transparent opacity={0.7} emissive={color} emissiveIntensity={0.3} metalness={0.7} roughness={0.2} />
+                </mesh>
+                {/* Base platform */}
+                <mesh position={[0, s.height * 0.8, 0]}>
+                  <boxGeometry args={[6, 1, 6]} />
+                  <meshStandardMaterial color="#162447" metalness={0.5} roughness={0.4} />
+                </mesh>
+              </>
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+// ============================================================================
+// THEMED RIVERBANKS - Ground color varies by route theme
+// ============================================================================
+const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const bankColor = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled': return '#2d5a27'; // Lush alpine green
+      case 'gothic-venice': return '#1e272e'; // Dark stone quay
+      case 'steampunk-henley': return '#5d4e37'; // Industrial brown
+      case 'dystopian-thames': return '#1a1a2e'; // Dark concrete
+      case 'scifi-boston': return '#0f172a'; // Dark tech surface
+      default: return '#4a7c32'; // Standard grass
+    }
+  }, [theme]);
+  
+  return (
+    <group position={[0, -0.5, boatZ]}>
+      <mesh position={[-40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[60, 1000]} />
+        <meshStandardMaterial color={bankColor} roughness={0.95} />
+      </mesh>
+      <mesh position={[40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[60, 1000]} />
+        <meshStandardMaterial color={bankColor} roughness={0.95} />
+      </mesh>
+    </group>
+  );
+};
+
+// ============================================================================
+// THEMED WATER - Water color varies by route theme
+// ============================================================================
+const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  
+  const waterColor = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled': return '#00d9ff'; // Bioluminescent cyan
+      case 'gothic-venice': return '#0a3d62'; // Dark spectral green
+      case 'steampunk-henley': return '#4a6741'; // Murky industrial
+      case 'dystopian-thames': return '#162447'; // Toxic dark blue
+      case 'scifi-boston': return '#00ced1'; // Glowing teal
+      default: return '#2d7dc9'; // Standard water blue
+    }
+  }, [theme]);
+  
+  const emissiveIntensity = theme === 'crystal-bled' || theme === 'scifi-boston' ? 0.15 : 0;
+  
+  useFrame((_, delta) => {
+    if (materialRef.current && materialRef.current.map) {
+      materialRef.current.map.offset.y += delta * 0.05;
+    }
+  });
+  
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, boatZ]} receiveShadow>
+      <planeGeometry args={[1000, 1000, 64, 64]} />
+      <meshStandardMaterial 
+        ref={materialRef}
+        color={waterColor}
+        transparent
+        opacity={0.85}
+        roughness={0.8}
+        metalness={0.2}
+        emissive={waterColor}
+        emissiveIntensity={emissiveIntensity}
+      />
+    </mesh>
+  );
+};
+
+// ============================================================================
+// THEMED SKY/FOG - Atmosphere varies by route theme  
+// ============================================================================
+const getThemeAtmosphere = (theme: RouteTheme) => {
+  switch (theme) {
+    case 'crystal-bled':
+      return { fogColor: '#a0cdfa', fogNear: 50, fogFar: 600, skyColor: '#87ceeb' }; // Clear alpine
+    case 'gothic-venice':
+      return { fogColor: '#2c3e50', fogNear: 20, fogFar: 300, skyColor: '#1e272e' }; // Heavy mist
+    case 'steampunk-henley':
+      return { fogColor: '#8b7355', fogNear: 40, fogFar: 400, skyColor: '#c9a227' }; // Sepia steam
+    case 'dystopian-thames':
+      return { fogColor: '#1a1a2e', fogNear: 30, fogFar: 350, skyColor: '#0f172a' }; // Toxic smog
+    case 'scifi-boston':
+      return { fogColor: '#0f172a', fogNear: 60, fogFar: 500, skyColor: '#162447' }; // Neon night
+    default:
+      return { fogColor: '#a0cdfa', fogNear: 50, fogFar: 500, skyColor: '#a0cdfa' }; // Default
+  }
 };
 
 // ============================================================================
@@ -547,6 +990,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
 }) => {
   const { camera } = useThree();
   
+  // Detect route theme for landscape selection
+  const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
+  const atmosphere = useMemo(() => getThemeAtmosphere(routeTheme), [routeTheme]);
+  
   // Boat position ref - boat moves along -Z axis
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const [boatZ, setBoatZ] = useState(0);
@@ -615,11 +1062,62 @@ const RowerScene: React.FC<Rower3DProps> = ({
     } catch {}
   });
   
+  // Render themed landscape based on route
+  const renderThemedLandscape = () => {
+    switch (routeTheme) {
+      case 'crystal-bled':
+        return (
+          <>
+            <CrystalBledLandscape side="left" boatZ={boatZ} />
+            <CrystalBledLandscape side="right" boatZ={boatZ} />
+          </>
+        );
+      case 'gothic-venice':
+        return (
+          <>
+            <GothicVeniceLandscape side="left" boatZ={boatZ} />
+            <GothicVeniceLandscape side="right" boatZ={boatZ} />
+          </>
+        );
+      case 'steampunk-henley':
+        return (
+          <>
+            <SteampunkHenleyLandscape side="left" boatZ={boatZ} />
+            <SteampunkHenleyLandscape side="right" boatZ={boatZ} />
+          </>
+        );
+      case 'dystopian-thames':
+        return (
+          <>
+            <DystopianThamesLandscape side="left" boatZ={boatZ} />
+            <DystopianThamesLandscape side="right" boatZ={boatZ} />
+          </>
+        );
+      case 'scifi-boston':
+        return (
+          <>
+            <SciFiBostonLandscape side="left" boatZ={boatZ} />
+            <SciFiBostonLandscape side="right" boatZ={boatZ} />
+          </>
+        );
+      default:
+        // Willowbrook - keep original mountains and trees
+        return (
+          <>
+            <ProceduralTerrain side="left" boatZ={boatZ} />
+            <ProceduralTerrain side="right" boatZ={boatZ} />
+            <PineTrees side="left" boatZ={boatZ} />
+            <PineTrees side="right" boatZ={boatZ} />
+          </>
+        );
+    }
+  };
+  
   return (
     <>
-      {/* Sky blue fog for atmosphere */}
-      <fog attach="fog" args={['#a0cdfa', 50, 500]} />
-      <color attach="background" args={['#a0cdfa']} />
+      {/* Themed fog and sky */}
+      <fog attach="fog" args={[atmosphere.fogColor, atmosphere.fogNear, atmosphere.fogFar]} />
+      <color attach="background" args={[atmosphere.skyColor]} />
       
       {/* Hemisphere light - sky and ground colors */}
       <hemisphereLight 
@@ -630,7 +1128,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       {/* Directional light (sunlight) with shadows */}
       <directionalLight
         position={[50, 100, 50]}
-        intensity={1.2}
+        intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.6 : 1.2}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -641,22 +1139,17 @@ const RowerScene: React.FC<Rower3DProps> = ({
         shadow-camera-bottom={-100}
       />
       
-      {/* Ambient light for fill */}
-      <ambientLight intensity={0.3} />
+      {/* Ambient light for fill - dimmer for dark themes */}
+      <ambientLight intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3} />
       
-      {/* Animated water plane */}
-      <AnimatedWater boatZ={boatZ} />
+      {/* Themed water plane */}
+      <ThemedWater boatZ={boatZ} theme={routeTheme} />
       
-      {/* Riverbanks */}
-      <Riverbanks boatZ={boatZ} />
+      {/* Themed riverbanks */}
+      <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
       
-      {/* Procedural mountains on both sides */}
-      <ProceduralTerrain side="left" boatZ={boatZ} />
-      <ProceduralTerrain side="right" boatZ={boatZ} />
-      
-      {/* Pine trees along the banks */}
-      <PineTrees side="left" boatZ={boatZ} />
-      <PineTrees side="right" boatZ={boatZ} />
+      {/* Themed landscape elements */}
+      {renderThemedLandscape()}
       
       {/* The rowing scull - positioned at current boat location */}
       <RowingScull 
