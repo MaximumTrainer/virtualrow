@@ -212,13 +212,13 @@ test.describe('Simulated e2e route playback', () => {
     await captureTestEvidence(page, testInfo, '05-hr-connected');
     await clearAnnotations(page);
 
-    // Select Central Park Loop (only if PM5 connected, otherwise fallback already started a session)
+    // Select Willowbrook River (only if PM5 connected, otherwise fallback already started a session)
     if (pm5Connected) {
-      await page.waitForSelector('.route-item:has-text("Central Park Loop")', { timeout: 10000 });
-      await annotateElement(page, '.route-item:has-text("Central Park Loop")', 'Selecting Route', 'right');
+      await page.waitForSelector('.route-item:has-text("Willowbrook River")', { timeout: 10000 });
+      await annotateElement(page, '.route-item:has-text("Willowbrook River")', 'Selecting Route', 'right');
       await captureTestEvidence(page, testInfo, '06-before-route-selection');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Central Park Loop")');
+      await page.click('.route-item:has-text("Willowbrook River")');
       await captureTestEvidence(page, testInfo, '07-after-route-selection');
     }
 

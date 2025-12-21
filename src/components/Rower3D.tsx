@@ -667,6 +667,14 @@ const RowingScull: React.FC<{
     if (leftOarRef.current) leftOarRef.current.rotation.y = oarSweep;
     if (rightOarRef.current) rightOarRef.current.rotation.y = -oarSweep;
     
+    // Expose oar angle and stroke rate for Playwright e2e testing
+    try {
+      if ((window as any).__PLAYWRIGHT_TESTING) {
+        (window as any).__ROWER3D_OAR_ANGLE = oarSweep;
+        (window as any).__ROWER3D_STROKE_RATE = strokesPerMinute;
+      }
+    } catch {}
+    
     // Animate rower body
     if (torsoRef.current) {
       torsoRef.current.rotation.x = bodyLean;
@@ -1058,6 +1066,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
           z: boatPositionRef.current.z,
           progress: totalDistance > 0 ? Math.abs(boatPositionRef.current.z * 10) / totalDistance : 0
         };
+        (window as any).__ROWER3D_CAMERA = {
+          position: [camera.position.x, camera.position.y, camera.position.z]
+        };
       }
     } catch {}
   });
@@ -1269,6 +1280,24 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             try {
               (window as any).__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch {}
+            
+            // Handle WebGL context lost/restored for Playwright tests
+            const canvas = gl.domElement;
+            canvas.addEventListener('webglcontextlost', (ev) => {
+              try {
+                ev.preventDefault?.();
+                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
+                if (marker) marker.style.display = 'block';
+                (window as any).__ROWER3D_WEBGL_LOST = true;
+              } catch {}
+            }, false);
+            canvas.addEventListener('webglcontextrestored', () => {
+              try {
+                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
+                if (marker) marker.style.display = 'none';
+                (window as any).__ROWER3D_WEBGL_LOST = false;
+              } catch {}
+            }, false);
           }}
         >
           <RowerScene {...props} />

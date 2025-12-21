@@ -29,7 +29,9 @@ export class Concept2BluetoothService {
       // Use the pm5-base wrapper for robust PM5 parsing and feature support
       this.pm5Wrapper = new PM5(
         () => this.emit('connecting', {}),
-        () => this.emit('connected', { deviceName: this.device?.name || 'PM5' }),
+        // Note: Read device name from pm5Wrapper.device since bluetoothService.device 
+        // isn't set until after doConnect() returns
+        () => this.emit('connected', { deviceName: this.pm5Wrapper?.device?.name || 'PM5' }),
         () => this.handleDisconnect(),
         // Multiplexed/misc messages
         (msg: any) => this.handlePM5Message(msg)
