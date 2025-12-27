@@ -1435,7 +1435,6 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.1,
             outputColorSpace: THREE.SRGBColorSpace,
-            physicallyCorrectLights: true,
           }}
           onCreated={({ gl, scene }) => {
             // Enhanced rendering settings
@@ -1443,7 +1442,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             gl.shadowMap.enabled = isHighQuality;
             gl.shadowMap.type = isHighQuality ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
             
-            // Enable physically correct lights for better realism
+            // Enable environment for reflections
             scene.environment = null; // Can add environment map here for reflections
             
             try {
