@@ -346,12 +346,13 @@ body {
    ROUTE INFO PANEL
    ============================================================================ */
 .route-details-panel {
-  width: 320px;
+  width: 420px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
+  overflow-y: visible;
   padding-right: 8px;
+  max-height: none;
 }
 
 .route-info-overlay {
@@ -479,8 +480,9 @@ body {
   border-radius: 12px;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  max-height: 400px;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
+  flex: 1 1 auto;
 }
 
 .routes-list h3 {
