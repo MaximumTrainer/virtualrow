@@ -47,7 +47,7 @@ interface Rower3DProps {
 }
 
 // ============================================================================
-// ANIMATED WATER PLANE - Creates flowing water effect
+// ANIMATED WATER PLANE - Creates flowing water effect (LEGACY - not used)
 // ============================================================================
 const AnimatedWater: React.FC<{ boatZ: number }> = ({ boatZ }) => {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -104,8 +104,14 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
     <group position={[0, 0, boatZ]}>
       {mountains.map((m, i) => (
         <mesh key={i} position={[m.x, m.height / 2 - 2, m.z]} castShadow receiveShadow>
-          <coneGeometry args={[m.scale, m.height, 6]} />
-          <meshStandardMaterial color="#5a7247" roughness={0.9} />
+          <coneGeometry args={[m.scale, m.height, 8]} />
+          <meshPhysicalMaterial 
+            color="#5a7247" 
+            roughness={0.85} 
+            metalness={0.05}
+            clearcoat={0.1}
+            clearcoatRoughness={0.8}
+          />
         </mesh>
       ))}
     </group>
@@ -139,22 +145,43 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
       {trees.map((tree, i) => (
         <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale}>
           {/* Tree trunk */}
-          <mesh position={[0, 1, 0]} castShadow>
-            <cylinderGeometry args={[0.15, 0.2, 2, 8]} />
-            <meshStandardMaterial color="#4a3728" roughness={0.9} />
+          <mesh position={[0, 1, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.15, 0.2, 2, 12]} />
+            <meshPhysicalMaterial 
+              color="#4a3728" 
+              roughness={0.85} 
+              metalness={0.0}
+              clearcoat={0.05}
+              clearcoatRoughness={0.9}
+            />
           </mesh>
           {/* Tree foliage - 3 stacked cones */}
-          <mesh position={[0, 3, 0]} castShadow>
-            <coneGeometry args={[1.2, 2.5, 8]} />
-            <meshStandardMaterial color="#2d5a27" roughness={0.8} />
+          <mesh position={[0, 3, 0]} castShadow receiveShadow>
+            <coneGeometry args={[1.2, 2.5, 10]} />
+            <meshPhysicalMaterial 
+              color="#2d5a27" 
+              roughness={0.9} 
+              metalness={0.0}
+              transmission={0.02}
+            />
           </mesh>
-          <mesh position={[0, 4, 0]} castShadow>
-            <coneGeometry args={[0.9, 2, 8]} />
-            <meshStandardMaterial color="#3a6b32" roughness={0.8} />
+          <mesh position={[0, 4, 0]} castShadow receiveShadow>
+            <coneGeometry args={[0.9, 2, 10]} />
+            <meshPhysicalMaterial 
+              color="#3a6b32" 
+              roughness={0.9} 
+              metalness={0.0}
+              transmission={0.02}
+            />
           </mesh>
-          <mesh position={[0, 4.8, 0]} castShadow>
-            <coneGeometry args={[0.6, 1.5, 8]} />
-            <meshStandardMaterial color="#4a7a42" roughness={0.8} />
+          <mesh position={[0, 4.8, 0]} castShadow receiveShadow>
+            <coneGeometry args={[0.6, 1.5, 10]} />
+            <meshPhysicalMaterial 
+              color="#4a7a42" 
+              roughness={0.9} 
+              metalness={0.0}
+              transmission={0.02}
+            />
           </mesh>
         </group>
       ))}
@@ -505,12 +532,24 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
   return (
     <group position={[0, -0.5, boatZ]}>
       <mesh position={[-40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[60, 1000]} />
-        <meshStandardMaterial color={bankColor} roughness={0.95} />
+        <planeGeometry args={[60, 1000, 32, 32]} />
+        <meshPhysicalMaterial 
+          color={bankColor} 
+          roughness={0.9} 
+          metalness={0.0}
+          clearcoat={0.05}
+          clearcoatRoughness={0.95}
+        />
       </mesh>
       <mesh position={[40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[60, 1000]} />
-        <meshStandardMaterial color={bankColor} roughness={0.95} />
+        <planeGeometry args={[60, 1000, 32, 32]} />
+        <meshPhysicalMaterial 
+          color={bankColor} 
+          roughness={0.9} 
+          metalness={0.0}
+          clearcoat={0.05}
+          clearcoatRoughness={0.95}
+        />
       </mesh>
     </group>
   );
@@ -521,7 +560,8 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 // ============================================================================
 const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  const geometryRef = useRef<THREE.PlaneGeometry>(null);
   
   const waterColor = useMemo(() => {
     switch (theme) {
@@ -534,26 +574,86 @@ const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, th
     }
   }, [theme]);
   
+  // Create procedural normal map for water ripples
+  const normalMap = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    
+    const imgData = ctx.createImageData(512, 512);
+    for (let y = 0; y < 512; y++) {
+      for (let x = 0; x < 512; x++) {
+        const i = (y * 512 + x) * 4;
+        // Create wave pattern
+        const wave1 = Math.sin(x * 0.02 + y * 0.015) * 127 + 128;
+        const wave2 = Math.cos(x * 0.015 - y * 0.02) * 127 + 128;
+        imgData.data[i] = wave1; // R
+        imgData.data[i + 1] = wave2; // G
+        imgData.data[i + 2] = 220; // B (up direction)
+        imgData.data[i + 3] = 255; // A
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8);
+    return texture;
+  }, []);
+  
   const emissiveIntensity = theme === 'crystal-bled' || theme === 'scifi-boston' ? 0.15 : 0;
   
+  // Animate water normal map offset and waves
   useFrame((_, delta) => {
-    if (materialRef.current && materialRef.current.map) {
-      materialRef.current.map.offset.y += delta * 0.05;
+    if (normalMap) {
+      normalMap.offset.x += delta * 0.02;
+      normalMap.offset.y += delta * 0.03;
+    }
+    
+    // Animate wave displacement for realistic water surface
+    if (geometryRef.current) {
+      const positions = geometryRef.current.attributes.position;
+      const time = performance.now() * 0.0005;
+      
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i);
+        const y = positions.getY(i);
+        
+        // Multiple wave frequencies for realistic water
+        const wave1 = Math.sin(x * 0.05 + time) * 0.15;
+        const wave2 = Math.cos(y * 0.04 - time * 0.7) * 0.12;
+        const wave3 = Math.sin((x + y) * 0.03 + time * 1.3) * 0.08;
+        
+        positions.setZ(i, wave1 + wave2 + wave3);
+      }
+      positions.needsUpdate = true;
     }
   });
   
   return (
     <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, boatZ]} receiveShadow>
-      <planeGeometry args={[1000, 1000, 64, 64]} />
-      <meshStandardMaterial 
+      <planeGeometry ref={geometryRef} args={[1000, 1000, 128, 128]} />
+      <meshPhysicalMaterial 
         ref={materialRef}
         color={waterColor}
         transparent
-        opacity={0.85}
-        roughness={0.8}
-        metalness={0.2}
+        opacity={0.75}
+        roughness={0.1}
+        metalness={0.05}
+        transmission={0.95}
+        thickness={1.5}
+        ior={1.333} // Water refractive index
+        reflectivity={0.85}
+        clearcoat={0.3}
+        clearcoatRoughness={0.2}
+        normalMap={normalMap || undefined}
+        normalScale={new THREE.Vector2(0.5, 0.5)}
         emissive={waterColor}
         emissiveIntensity={emissiveIntensity}
+        envMapIntensity={1.2}
       />
     </mesh>
   );
@@ -720,43 +820,80 @@ const RowingScull: React.FC<{
       {/* Main hull - long narrow racing shell */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#f5d742" 
+          metalness={0.2} 
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.1}
+          reflectivity={0.8}
+        />
       </mesh>
       
       {/* Hull deck detail */}
       <mesh position={[0, 0.08, 0]} castShadow>
         <boxGeometry args={[0.4, 0.02, 7.5]} />
-        <meshStandardMaterial color="#ffeaa7" metalness={0.3} roughness={0.4} />
+        <meshPhysicalMaterial 
+          color="#ffeaa7" 
+          metalness={0.15} 
+          roughness={0.2}
+          clearcoat={0.8}
+          clearcoatRoughness={0.15}
+        />
       </mesh>
       
       {/* Bow (front) - pointed cone toward -Z */}
       <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.22, 1.0, 12]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#f5d742" 
+          metalness={0.2} 
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.1}
+          reflectivity={0.8}
+        />
       </mesh>
       
       {/* Stern (back) - tapered toward +Z */}
       <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.2, 0.8, 12]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#f5d742" 
+          metalness={0.2} 
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.1}
+          reflectivity={0.8}
+        />
       </mesh>
       
       {/* Sliding seat track */}
       <mesh position={[0, 0.12, 0]}>
         <boxGeometry args={[0.25, 0.02, 1.2]} />
-        <meshStandardMaterial color="#444444" metalness={0.7} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#444444" 
+          metalness={0.9} 
+          roughness={0.2}
+          clearcoat={0.5}
+          clearcoatRoughness={0.1}
+        />
       </mesh>
       
       {/* Sliding seat */}
       <mesh ref={seatRef} position={[0, 0.18, 0]} castShadow>
         <boxGeometry args={[0.22, 0.04, 0.2]} />
-        <meshStandardMaterial color="#333333" metalness={0.5} roughness={0.4} />
+        <meshPhysicalMaterial 
+          color="#333333" 
+          metalness={0.3} 
+          roughness={0.6}
+        />
       </mesh>
       
       {/* Foot stretchers */}
       <mesh position={[0, 0.15, -0.6]} rotation={[0.4, 0, 0]}>
         <boxGeometry args={[0.35, 0.03, 0.25]} />
-        <meshStandardMaterial color="#222222" />
+        <meshPhysicalMaterial color="#222222" roughness={0.8} />
       </mesh>
       
       {/* ============================================ */}
@@ -939,22 +1076,29 @@ const RowingScull: React.FC<{
         {/* Rigger - metal outrigger */}
         <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+          <meshPhysicalMaterial color="#888888" metalness={0.9} roughness={0.15} clearcoat={0.6} />
         </mesh>
         {/* Oarlock */}
         <mesh position={[-1.15, 0, 0]}>
           <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
+          <meshPhysicalMaterial color="#666666" metalness={0.85} roughness={0.2} clearcoat={0.5} />
         </mesh>
         {/* Oar shaft */}
         <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
-          <meshStandardMaterial color="#c4a882" roughness={0.6} />
+          <meshPhysicalMaterial color="#c4a882" roughness={0.4} clearcoat={0.8} clearcoatRoughness={0.2} />
         </mesh>
         {/* Oar blade - spoon shape */}
         <mesh position={[-3.3, 0, 0]}>
           <boxGeometry args={[0.55, 0.015, 0.18]} />
-          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
+          <meshPhysicalMaterial 
+            color="#1e40af" 
+            metalness={0.1} 
+            roughness={0.3}
+            clearcoat={1.0}
+            clearcoatRoughness={0.1}
+            reflectivity={0.7}
+          />
         </mesh>
       </group>
       
@@ -963,22 +1107,29 @@ const RowingScull: React.FC<{
         {/* Rigger */}
         <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+          <meshPhysicalMaterial color="#888888" metalness={0.9} roughness={0.15} clearcoat={0.6} />
         </mesh>
         {/* Oarlock */}
         <mesh position={[1.15, 0, 0]}>
           <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
+          <meshPhysicalMaterial color="#666666" metalness={0.85} roughness={0.2} clearcoat={0.5} />
         </mesh>
         {/* Oar shaft */}
         <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
-          <meshStandardMaterial color="#c4a882" roughness={0.6} />
+          <meshPhysicalMaterial color="#c4a882" roughness={0.4} clearcoat={0.8} clearcoatRoughness={0.2} />
         </mesh>
         {/* Oar blade */}
         <mesh position={[3.3, 0, 0]}>
           <boxGeometry args={[0.55, 0.015, 0.18]} />
-          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
+          <meshPhysicalMaterial 
+            color="#1e40af" 
+            metalness={0.1} 
+            roughness={0.3}
+            clearcoat={1.0}
+            clearcoatRoughness={0.1}
+            reflectivity={0.7}
+          />
         </mesh>
       </group>
     </group>
@@ -1130,28 +1281,37 @@ const RowerScene: React.FC<Rower3DProps> = ({
       <fog attach="fog" args={[atmosphere.fogColor, atmosphere.fogNear, atmosphere.fogFar]} />
       <color attach="background" args={[atmosphere.skyColor]} />
       
-      {/* Hemisphere light - sky and ground colors */}
+      {/* Hemisphere light - sky and ground colors with increased intensity */}
       <hemisphereLight 
-        args={['#ffffff', '#888888', 0.8]} 
+        args={['#ffffff', '#666666', 1.2]} 
         position={[0, 50, 0]}
       />
       
-      {/* Directional light (sunlight) with shadows */}
+      {/* Main directional light (sunlight) with enhanced shadows */}
       <directionalLight
         position={[50, 100, 50]}
-        intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.6 : 1.2}
+        intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.8 : 1.6}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
         shadow-camera-far={500}
         shadow-camera-left={-100}
         shadow-camera-right={100}
         shadow-camera-top={100}
         shadow-camera-bottom={-100}
+        shadow-bias={-0.0001}
+        shadow-normalBias={0.02}
       />
       
-      {/* Ambient light for fill - dimmer for dark themes */}
-      <ambientLight intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3} />
+      {/* Secondary fill light for more realistic lighting */}
+      <directionalLight
+        position={[-30, 40, -30]}
+        intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.2 : 0.4}
+        color="#b0c4de"
+      />
+      
+      {/* Ambient light for base illumination */}
+      <ambientLight intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.2 : 0.4} />
       
       {/* Themed water plane */}
       <ThemedWater boatZ={boatZ} theme={routeTheme} />
@@ -1265,7 +1425,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       <GPUErrorBoundary>
         <Canvas
           camera={{ position: [0, 2.5, 6], fov: 60 }}
-          shadows={isHighQuality}
+          shadows={isHighQuality ? 'soft' : isHighQuality}
           gl={{
             antialias: isHighQuality,
             alpha: true,
@@ -1273,10 +1433,19 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: true,
             toneMapping: THREE.ACESFilmicToneMapping,
-            toneMappingExposure: 1.0,
+            toneMappingExposure: 1.1,
+            outputColorSpace: THREE.SRGBColorSpace,
+            physicallyCorrectLights: true,
           }}
-          onCreated={({ gl }) => {
+          onCreated={({ gl, scene }) => {
+            // Enhanced rendering settings
             gl.outputColorSpace = THREE.SRGBColorSpace;
+            gl.shadowMap.enabled = isHighQuality;
+            gl.shadowMap.type = isHighQuality ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+            
+            // Enable physically correct lights for better realism
+            scene.environment = null; // Can add environment map here for reflections
+            
             try {
               (window as any).__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch {}
