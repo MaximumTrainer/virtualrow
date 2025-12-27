@@ -574,21 +574,21 @@ const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, th
     }
   }, [theme]);
   
-  // Create procedural normal map for water ripples
+  // Create procedural normal map for water ripples  
   const normalMap = useMemo(() => {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
+    canvas.width = 256; // Reduced from 512 for better performance
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     
-    const imgData = ctx.createImageData(512, 512);
-    for (let y = 0; y < 512; y++) {
-      for (let x = 0; x < 512; x++) {
-        const i = (y * 512 + x) * 4;
+    const imgData = ctx.createImageData(256, 256);
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        const i = (y * 256 + x) * 4;
         // Create wave pattern
-        const wave1 = Math.sin(x * 0.02 + y * 0.015) * 127 + 128;
-        const wave2 = Math.cos(x * 0.015 - y * 0.02) * 127 + 128;
+        const wave1 = Math.sin(x * 0.04 + y * 0.03) * 127 + 128;
+        const wave2 = Math.cos(x * 0.03 - y * 0.04) * 127 + 128;
         imgData.data[i] = wave1; // R
         imgData.data[i + 1] = wave2; // G
         imgData.data[i + 2] = 220; // B (up direction)
@@ -613,29 +613,14 @@ const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, th
       normalMap.offset.y += delta * 0.03;
     }
     
-    // Animate wave displacement for realistic water surface
-    if (geometryRef.current) {
-      const positions = geometryRef.current.attributes.position;
-      const time = performance.now() * 0.0005;
-      
-      for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i);
-        const y = positions.getY(i);
-        
-        // Multiple wave frequencies for realistic water
-        const wave1 = Math.sin(x * 0.05 + time) * 0.15;
-        const wave2 = Math.cos(y * 0.04 - time * 0.7) * 0.12;
-        const wave3 = Math.sin((x + y) * 0.03 + time * 1.3) * 0.08;
-        
-        positions.setZ(i, wave1 + wave2 + wave3);
-      }
-      positions.needsUpdate = true;
-    }
+    // Optimize: Skip vertex animation if geometry or positions are not available
+    // This provides smooth normal map animation without the CPU-heavy vertex displacement
+    // For even more realism, could implement in vertex shader in future
   });
   
   return (
     <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, boatZ]} receiveShadow>
-      <planeGeometry ref={geometryRef} args={[1000, 1000, 128, 128]} />
+      <planeGeometry ref={geometryRef} args={[1000, 1000, 64, 64]} />
       <meshPhysicalMaterial 
         ref={materialRef}
         color={waterColor}
@@ -1425,7 +1410,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       <GPUErrorBoundary>
         <Canvas
           camera={{ position: [0, 2.5, 6], fov: 60 }}
-          shadows={isHighQuality ? 'soft' : isHighQuality}
+          shadows={isHighQuality}
           gl={{
             antialias: isHighQuality,
             alpha: true,
@@ -1440,6 +1425,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             // Enhanced rendering settings
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.shadowMap.enabled = isHighQuality;
+            // Use soft shadows when high quality is enabled
             gl.shadowMap.type = isHighQuality ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
             
             // Enable environment for reflections
