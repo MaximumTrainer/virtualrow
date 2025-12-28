@@ -1,6 +1,6 @@
 ﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment } from '@react-three/drei';
+import { Environment, Sky, Cloud } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
@@ -690,6 +690,211 @@ const getThemeAtmosphere = (theme: RouteTheme) => {
 };
 
 // ============================================================================
+// SKY CONFIGURATION - Sun position and atmosphere by theme
+// ============================================================================
+interface SkyConfig {
+  sunPosition: [number, number, number];
+  turbidity: number;         // Haziness (1-20, lower is clearer)
+  rayleigh: number;          // Sky blue scattering (0-4)
+  mieCoefficient: number;    // Particle scattering (0-0.1)
+  mieDirectionalG: number;   // Sun glow direction (0-1)
+  inclination: number;       // Sun elevation (0-1, 0.5 = horizon)
+  azimuth: number;           // Sun compass direction (0-1)
+  exposure: number;          // Overall brightness
+}
+
+const getSkyConfig = (theme: RouteTheme): SkyConfig => {
+  switch (theme) {
+    case 'crystal-bled':
+      // Clear alpine morning - bright blue sky, high sun
+      return {
+        sunPosition: [100, 80, 50],
+        turbidity: 1.5,
+        rayleigh: 2.0,
+        mieCoefficient: 0.005,
+        mieDirectionalG: 0.8,
+        inclination: 0.65,
+        azimuth: 0.25,
+        exposure: 0.5
+      };
+    case 'gothic-venice':
+      // Overcast twilight - low sun, heavy atmosphere
+      return {
+        sunPosition: [50, 15, -100],
+        turbidity: 10,
+        rayleigh: 3.0,
+        mieCoefficient: 0.05,
+        mieDirectionalG: 0.95,
+        inclination: 0.35,
+        azimuth: 0.75,
+        exposure: 0.3
+      };
+    case 'steampunk-henley':
+      // Golden hour - warm sunset colors, dusty atmosphere
+      return {
+        sunPosition: [80, 25, 60],
+        turbidity: 8,
+        rayleigh: 1.5,
+        mieCoefficient: 0.03,
+        mieDirectionalG: 0.9,
+        inclination: 0.42,
+        azimuth: 0.15,
+        exposure: 0.45
+      };
+    case 'dystopian-thames':
+      // Polluted dusk - red/orange haze, obscured sun
+      return {
+        sunPosition: [30, 8, -80],
+        turbidity: 20,
+        rayleigh: 0.5,
+        mieCoefficient: 0.1,
+        mieDirectionalG: 0.99,
+        inclination: 0.28,
+        azimuth: 0.85,
+        exposure: 0.25
+      };
+    case 'scifi-boston':
+      // Night with artificial light - moon-like glow
+      return {
+        sunPosition: [-50, 60, 100],
+        turbidity: 0.5,
+        rayleigh: 0.2,
+        mieCoefficient: 0.001,
+        mieDirectionalG: 0.7,
+        inclination: 0.58,
+        azimuth: 0.6,
+        exposure: 0.2
+      };
+    default: // willowbrook - realistic overcast morning
+      return {
+        sunPosition: [80, 50, 30],
+        turbidity: 4,
+        rayleigh: 2.5,
+        mieCoefficient: 0.01,
+        mieDirectionalG: 0.85,
+        inclination: 0.55,
+        azimuth: 0.2,
+        exposure: 0.4
+      };
+  }
+};
+
+// Cloud configuration by theme
+interface CloudConfig {
+  enabled: boolean;
+  count: number;
+  opacity: number;
+  speed: number;
+  color: string;
+  segments: number;
+}
+
+const getCloudConfig = (theme: RouteTheme): CloudConfig => {
+  switch (theme) {
+    case 'crystal-bled':
+      return { enabled: true, count: 15, opacity: 0.6, speed: 0.2, color: '#ffffff', segments: 30 };
+    case 'gothic-venice':
+      return { enabled: true, count: 25, opacity: 0.9, speed: 0.1, color: '#4a5568', segments: 40 };
+    case 'steampunk-henley':
+      return { enabled: true, count: 20, opacity: 0.7, speed: 0.15, color: '#d4a574', segments: 35 };
+    case 'dystopian-thames':
+      return { enabled: true, count: 30, opacity: 0.95, speed: 0.08, color: '#2d3436', segments: 45 };
+    case 'scifi-boston':
+      return { enabled: false, count: 5, opacity: 0.3, speed: 0.3, color: '#1e3a5f', segments: 20 };
+    default:
+      return { enabled: true, count: 18, opacity: 0.5, speed: 0.2, color: '#e8e8e8', segments: 30 };
+  }
+};
+
+// ============================================================================
+// PHOTOREALISTIC SKYDOME - Physically-based sky with sun, clouds, atmosphere
+// ============================================================================
+const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({ theme, boatZ }) => {
+  const skyConfig = useMemo(() => getSkyConfig(theme), [theme]);
+  const cloudConfig = useMemo(() => getCloudConfig(theme), [theme]);
+  
+  // Cloud positions - spread around the sky, moving with time
+  const cloudPositions = useMemo(() => {
+    const positions: Array<{ x: number; y: number; z: number; scale: number }> = [];
+    for (let i = 0; i < cloudConfig.count; i++) {
+      const angle = (i / cloudConfig.count) * Math.PI * 2;
+      const radius = 150 + Math.random() * 200;
+      const height = 60 + Math.random() * 80;
+      positions.push({
+        x: Math.cos(angle) * radius,
+        y: height,
+        z: Math.sin(angle) * radius,
+        scale: 15 + Math.random() * 25
+      });
+    }
+    return positions;
+  }, [cloudConfig.count]);
+  
+  // Animate clouds drifting
+  const cloudGroupRef = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (cloudGroupRef.current) {
+      // Slow rotation of cloud layer
+      cloudGroupRef.current.rotation.y = state.clock.elapsedTime * cloudConfig.speed * 0.01;
+    }
+  });
+  
+  return (
+    <group>
+      {/* Physically-based sky with atmospheric scattering */}
+      <Sky
+        distance={450000}
+        sunPosition={skyConfig.sunPosition}
+        turbidity={skyConfig.turbidity}
+        rayleigh={skyConfig.rayleigh}
+        mieCoefficient={skyConfig.mieCoefficient}
+        mieDirectionalG={skyConfig.mieDirectionalG}
+      />
+      
+      {/* Volumetric cloud layer */}
+      {cloudConfig.enabled && (
+        <group ref={cloudGroupRef} position={[0, 0, boatZ]}>
+          {cloudPositions.map((pos, i) => (
+            <Cloud
+              key={i}
+              position={[pos.x, pos.y, pos.z]}
+              opacity={cloudConfig.opacity * (0.7 + Math.random() * 0.3)}
+              speed={cloudConfig.speed}
+              segments={cloudConfig.segments}
+              color={cloudConfig.color}
+              scale={pos.scale}
+              depthWrite={false}
+            />
+          ))}
+        </group>
+      )}
+      
+      {/* Secondary distant cloud layer for depth */}
+      {cloudConfig.enabled && (
+        <group position={[0, 120, boatZ - 200]}>
+          {[...Array(5)].map((_, i) => (
+            <Cloud
+              key={`distant-${i}`}
+              position={[
+                (i - 2) * 150,
+                0,
+                -100 + Math.random() * 50
+              ]}
+              opacity={cloudConfig.opacity * 0.4}
+              speed={cloudConfig.speed * 0.5}
+              segments={20}
+              color={cloudConfig.color}
+              scale={40 + Math.random() * 30}
+              depthWrite={false}
+            />
+          ))}
+        </group>
+      )}
+    </group>
+  );
+};
+
+// ============================================================================
 // RIVERBANKS - Ground along the sides
 // ============================================================================
 const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
@@ -1288,22 +1493,50 @@ const RowerScene: React.FC<Rower3DProps> = ({
     }
   };
   
+  // Get sky configuration for sun-aligned lighting
+  const skyConfig = useMemo(() => getSkyConfig(routeTheme), [routeTheme]);
+  
   return (
     <>
-      {/* Themed fog and sky */}
+      {/* Themed exponential fog for depth */}
       <fog attach="fog" args={[atmosphere.fogColor, atmosphere.fogNear, atmosphere.fogFar]} />
-      <color attach="background" args={[atmosphere.skyColor]} />
       
-      {/* Hemisphere light - sky and ground colors */}
+      {/* Photorealistic skydome with physically-based sky and clouds */}
+      <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
+      
+      {/* Hemisphere light - sky and ground colors matched to theme */}
       <hemisphereLight 
-        args={['#ffffff', '#888888', 0.8]} 
+        args={[
+          routeTheme === 'dystopian-thames' ? '#4a3728' : 
+          routeTheme === 'gothic-venice' ? '#3d4f5f' :
+          routeTheme === 'steampunk-henley' ? '#d4a574' :
+          routeTheme === 'scifi-boston' ? '#1e3a5f' :
+          '#b4d7ff',  // Sky color
+          routeTheme === 'dystopian-thames' ? '#1a1a1a' :
+          routeTheme === 'gothic-venice' ? '#2c3e50' :
+          '#3d5c3a',  // Ground color
+          routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.5 : 0.9
+        ]} 
         position={[0, 50, 0]}
       />
       
-      {/* Directional light (sunlight) with shadows */}
+      {/* Primary sunlight - position and color matched to sky */}
       <directionalLight
-        position={[50, 100, 50]}
-        intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.6 : 1.2}
+        position={skyConfig.sunPosition}
+        intensity={
+          routeTheme === 'dystopian-thames' ? 0.4 :
+          routeTheme === 'gothic-venice' ? 0.5 :
+          routeTheme === 'scifi-boston' ? 0.3 :
+          routeTheme === 'steampunk-henley' ? 1.5 :  // Golden hour
+          1.2
+        }
+        color={
+          routeTheme === 'dystopian-thames' ? '#ff6b35' :  // Red-orange pollution
+          routeTheme === 'gothic-venice' ? '#8fa4b8' :     // Cold twilight
+          routeTheme === 'steampunk-henley' ? '#ffd700' :  // Golden sunset
+          routeTheme === 'scifi-boston' ? '#a0d2ff' :      // Moonlight blue
+          '#fffaf0'  // Warm daylight
+        }
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -1314,18 +1547,48 @@ const RowerScene: React.FC<Rower3DProps> = ({
         shadow-camera-bottom={-100}
       />
       
-      {/* Ambient light for fill - dimmer for dark themes */}
-      <ambientLight intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3} />
+      {/* Ambient light for fill - matched to atmosphere */}
+      <ambientLight 
+        intensity={
+          routeTheme === 'dystopian-thames' ? 0.1 :
+          routeTheme === 'gothic-venice' ? 0.12 :
+          routeTheme === 'scifi-boston' ? 0.15 :
+          0.25
+        }
+        color={
+          routeTheme === 'dystopian-thames' ? '#2a1f1a' :
+          routeTheme === 'gothic-venice' ? '#4a5568' :
+          routeTheme === 'scifi-boston' ? '#162447' :
+          '#e8f4f8'
+        }
+      />
       
       {/* Fill light from opposite side for soft shadows */}
       <directionalLight
-        position={[-30, 50, -20]}
-        intensity={0.3}
-        color="#b4c7dc"  // Cool blue fill
+        position={[-skyConfig.sunPosition[0] * 0.6, 50, -skyConfig.sunPosition[2] * 0.5]}
+        intensity={
+          routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3
+        }
+        color={
+          routeTheme === 'steampunk-henley' ? '#ffb347' :  // Warm bounce
+          routeTheme === 'scifi-boston' ? '#4a90d9' :      // Cool sci-fi
+          '#b4c7dc'  // Cool blue fill
+        }
       />
       
-      {/* HDR Environment for realistic reflections */}
-      <Environment preset="city" background={false} blur={0.5} />
+      {/* HDR Environment for realistic reflections - matched to theme */}
+      <Environment 
+        preset={
+          routeTheme === 'scifi-boston' ? 'night' :
+          routeTheme === 'dystopian-thames' ? 'sunset' :
+          routeTheme === 'gothic-venice' ? 'dawn' :
+          routeTheme === 'steampunk-henley' ? 'sunset' :
+          'city'
+        } 
+        background={false} 
+        blur={0.5}
+        environmentIntensity={skyConfig.exposure}
+      />
       
       {/* Photorealistic water with PBR materials */}
       <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
