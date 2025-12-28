@@ -1,5 +1,8 @@
 ﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Environment } from '@react-three/drei';
+import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing';
+import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 import type { WaterRoute } from '../types/index';
 import { routeTotalDistanceMeters } from '../utils/geoUtils';
@@ -47,8 +50,114 @@ interface Rower3DProps {
 }
 
 // ============================================================================
-// ANIMATED WATER PLANE - Creates flowing water effect
+// PHOTOREALISTIC WATER - PBR water with reflections, waves, and depth
 // ============================================================================
+const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  
+  // Theme-based water colors matching reference image (grey-green murky)
+  const waterConfig = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled':
+        return { color: '#4a8fa8', transmission: 0.5, roughness: 0.08, emissive: '#00d9ff', emissiveIntensity: 0.08 };
+      case 'gothic-venice':
+        return { color: '#2a4a4a', transmission: 0.3, roughness: 0.15, emissive: '#0a3d62', emissiveIntensity: 0.02 };
+      case 'steampunk-henley':
+        return { color: '#4a5a41', transmission: 0.25, roughness: 0.2, emissive: '#4a6741', emissiveIntensity: 0.01 };
+      case 'dystopian-thames':
+        return { color: '#1a2a3a', transmission: 0.2, roughness: 0.25, emissive: '#162447', emissiveIntensity: 0.03 };
+      case 'scifi-boston':
+        return { color: '#1a4a5a', transmission: 0.4, roughness: 0.1, emissive: '#00ced1', emissiveIntensity: 0.1 };
+      default: // Realistic river like reference image
+        return { color: '#4a5a50', transmission: 0.35, roughness: 0.12, emissive: '#3a4a40', emissiveIntensity: 0.01 };
+    }
+  }, [theme]);
+  
+  // Animate water surface with procedural waves
+  useFrame((state) => {
+    if (materialRef.current) {
+      // Subtle wave-like roughness variation over time
+      const time = state.clock.elapsedTime;
+      materialRef.current.roughness = waterConfig.roughness + Math.sin(time * 0.5) * 0.02;
+    }
+    // NOTE: Vertex displacement disabled for performance - use shader-based waves in future
+  });
+  
+  return (
+    <mesh 
+      ref={meshRef}
+      rotation={[-Math.PI / 2, 0, 0]} 
+      position={[0, -0.1, boatZ]}
+      receiveShadow
+    >
+      <planeGeometry args={[1000, 1000, 128, 128]} />
+      <meshPhysicalMaterial
+        ref={materialRef}
+        color={waterConfig.color}
+        metalness={0.1}
+        roughness={waterConfig.roughness}
+        transmission={waterConfig.transmission}
+        thickness={2.0}
+        ior={1.33} // Water refraction index
+        reflectivity={0.9}
+        clearcoat={0.3}
+        clearcoatRoughness={0.4}
+        envMapIntensity={1.5}
+        transparent
+        opacity={0.92}
+        emissive={waterConfig.emissive}
+        emissiveIntensity={waterConfig.emissiveIntensity}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
+
+// ============================================================================
+// MIST LAYER - Low-lying fog near water surface for atmosphere
+// ============================================================================
+const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const mistOpacity = useMemo(() => {
+    switch (theme) {
+      case 'gothic-venice': return 0.25;  // Heavy mist
+      case 'dystopian-thames': return 0.2; // Toxic haze
+      case 'steampunk-henley': return 0.15; // Steam
+      case 'crystal-bled': return 0.08;    // Light alpine mist
+      case 'scifi-boston': return 0.1;     // Light neon haze
+      default: return 0.12;                // Standard morning mist
+    }
+  }, [theme]);
+  
+  const mistColor = useMemo(() => {
+    switch (theme) {
+      case 'gothic-venice': return '#1e272e';
+      case 'dystopian-thames': return '#1a1a2e';
+      case 'steampunk-henley': return '#8b7355';
+      case 'crystal-bled': return '#e8f4f8';
+      case 'scifi-boston': return '#162447';
+      default: return '#c8d4dc';
+    }
+  }, [theme]);
+  
+  return (
+    <mesh position={[0, 0.8, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[800, 800]} />
+      <meshBasicMaterial
+        color={mistColor}
+        transparent
+        opacity={mistOpacity}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
+
+// ============================================================================
+// ANIMATED WATER PLANE - Creates flowing water effect (legacy fallback)
+// ============================================================================
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const AnimatedWater: React.FC<{ boatZ: number }> = ({ boatZ }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -517,8 +626,9 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 };
 
 // ============================================================================
-// THEMED WATER - Water color varies by route theme
+// THEMED WATER - Water color varies by route theme (legacy - now uses PhotorealisticWater)
 // ============================================================================
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -717,28 +827,58 @@ const RowingScull: React.FC<{
   
   return (
     <group position={position}>
-      {/* Main hull - long narrow racing shell */}
+      {/* Main hull - long narrow racing shell with fiberglass finish */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#e8d78a"           // Cream/yellow fiberglass
+          metalness={0.0}
+          roughness={0.15}
+          clearcoat={1.0}           // Glossy gel coat finish
+          clearcoatRoughness={0.05} // Very smooth clearcoat
+          reflectivity={0.8}
+          envMapIntensity={1.2}
+          sheen={0.3}
+          sheenColor="#ffffff"
+        />
       </mesh>
       
       {/* Hull deck detail */}
       <mesh position={[0, 0.08, 0]} castShadow>
         <boxGeometry args={[0.4, 0.02, 7.5]} />
-        <meshStandardMaterial color="#ffeaa7" metalness={0.3} roughness={0.4} />
+        <meshPhysicalMaterial 
+          color="#f5eacc" 
+          metalness={0.0} 
+          roughness={0.2}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
+        />
       </mesh>
       
       {/* Bow (front) - pointed cone toward -Z */}
       <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.22, 1.0, 12]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#e8d78a" 
+          metalness={0.0} 
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.05}
+          reflectivity={0.8}
+        />
       </mesh>
       
       {/* Stern (back) - tapered toward +Z */}
       <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.2, 0.8, 12]} />
-        <meshStandardMaterial color="#f5d742" metalness={0.4} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#e8d78a" 
+          metalness={0.0} 
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.05}
+          reflectivity={0.8}
+        />
       </mesh>
       
       {/* Sliding seat track */}
@@ -939,22 +1079,34 @@ const RowingScull: React.FC<{
         {/* Rigger - metal outrigger */}
         <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+          <meshPhysicalMaterial color="#777777" metalness={0.9} roughness={0.15} clearcoat={0.6} />
         </mesh>
         {/* Oarlock */}
         <mesh position={[-1.15, 0, 0]}>
           <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
+          <meshPhysicalMaterial color="#555555" metalness={0.9} roughness={0.2} clearcoat={0.5} />
         </mesh>
-        {/* Oar shaft */}
+        {/* Oar shaft - Carbon fiber look */}
         <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
-          <meshStandardMaterial color="#c4a882" roughness={0.6} />
+          <meshPhysicalMaterial 
+            color="#1a1a1a" 
+            metalness={0.3} 
+            roughness={0.4}
+            clearcoat={0.8}
+            clearcoatRoughness={0.2}
+          />
         </mesh>
-        {/* Oar blade - spoon shape */}
+        {/* Oar blade - Composite material */}
         <mesh position={[-3.3, 0, 0]}>
           <boxGeometry args={[0.55, 0.015, 0.18]} />
-          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
+          <meshPhysicalMaterial 
+            color="#2563eb" 
+            metalness={0.0} 
+            roughness={0.3}
+            clearcoat={0.5}
+            clearcoatRoughness={0.15}
+          />
         </mesh>
       </group>
       
@@ -963,22 +1115,34 @@ const RowingScull: React.FC<{
         {/* Rigger */}
         <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.2} />
+          <meshPhysicalMaterial color="#777777" metalness={0.9} roughness={0.15} clearcoat={0.6} />
         </mesh>
         {/* Oarlock */}
         <mesh position={[1.15, 0, 0]}>
           <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.3} />
+          <meshPhysicalMaterial color="#555555" metalness={0.9} roughness={0.2} clearcoat={0.5} />
         </mesh>
-        {/* Oar shaft */}
+        {/* Oar shaft - Carbon fiber look */}
         <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
-          <meshStandardMaterial color="#c4a882" roughness={0.6} />
+          <meshPhysicalMaterial 
+            color="#1a1a1a" 
+            metalness={0.3} 
+            roughness={0.4}
+            clearcoat={0.8}
+            clearcoatRoughness={0.2}
+          />
         </mesh>
-        {/* Oar blade */}
+        {/* Oar blade - Composite material */}
         <mesh position={[3.3, 0, 0]}>
           <boxGeometry args={[0.55, 0.015, 0.18]} />
-          <meshStandardMaterial color="#1e40af" metalness={0.2} roughness={0.5} />
+          <meshPhysicalMaterial 
+            color="#2563eb" 
+            metalness={0.0} 
+            roughness={0.3}
+            clearcoat={0.5}
+            clearcoatRoughness={0.15}
+          />
         </mesh>
       </group>
     </group>
@@ -1153,8 +1317,21 @@ const RowerScene: React.FC<Rower3DProps> = ({
       {/* Ambient light for fill - dimmer for dark themes */}
       <ambientLight intensity={routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3} />
       
-      {/* Themed water plane */}
-      <ThemedWater boatZ={boatZ} theme={routeTheme} />
+      {/* Fill light from opposite side for soft shadows */}
+      <directionalLight
+        position={[-30, 50, -20]}
+        intensity={0.3}
+        color="#b4c7dc"  // Cool blue fill
+      />
+      
+      {/* HDR Environment for realistic reflections */}
+      <Environment preset="city" background={false} blur={0.5} />
+      
+      {/* Photorealistic water with PBR materials */}
+      <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
+      
+      {/* Mist layer for atmospheric depth */}
+      <MistLayer boatZ={boatZ} theme={routeTheme} />
       
       {/* Themed riverbanks */}
       <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
@@ -1171,6 +1348,21 @@ const RowerScene: React.FC<Rower3DProps> = ({
         ]} 
         cadence={cadence || 30}
       />
+      
+      {/* Post-processing effects for photorealism - disabled in test mode */}
+      {!(window as any).__PLAYWRIGHT_TESTING && (
+        <EffectComposer>
+          {/* Subtle bloom for water highlights and reflections */}
+          <Bloom
+            intensity={0.15}
+            luminanceThreshold={0.85}
+            luminanceSmoothing={0.9}
+          />
+          
+          {/* Filmic tone mapping for realistic color response */}
+          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        </EffectComposer>
+      )}
     </>
   );
 };
