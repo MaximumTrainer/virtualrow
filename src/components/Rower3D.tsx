@@ -618,42 +618,133 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
     switch (el.type) {
       case 'tree':
         return (
-          <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]}>
-            {/* Trunk */}
+          <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]} rotation={[0, el.rotation, 0]}>
+            {/* Photorealistic trunk with bark texture */}
             <mesh position={[0, 2 * el.scale, 0]} castShadow>
-              <cylinderGeometry args={[0.3 * el.scale, 0.5 * el.scale, 4 * el.scale, 8]} />
-              <meshStandardMaterial color="#4a3728" roughness={0.9} />
+              <cylinderGeometry args={[0.25 * el.scale, 0.45 * el.scale, 4 * el.scale, 12]} />
+              <meshPhysicalMaterial 
+                color="#3d2817"
+                roughness={0.95}
+                metalness={0.0}
+                clearcoat={0.03}
+                clearcoatRoughness={0.95}
+              />
             </mesh>
-            {/* Foliage */}
-            <mesh position={[0, 5 * el.scale, 0]} castShadow>
-              <coneGeometry args={[2.5 * el.scale, 6 * el.scale, 8]} />
-              <meshStandardMaterial color={colors.tree} roughness={0.8} />
+            {/* Root flare */}
+            <mesh position={[0, 0.2 * el.scale, 0]} castShadow>
+              <cylinderGeometry args={[0.4 * el.scale, 0.6 * el.scale, 0.5 * el.scale, 8]} />
+              <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
+            </mesh>
+            {/* Multi-layer foliage with subsurface scattering */}
+            <mesh position={[0, 4.5 * el.scale, 0]} castShadow>
+              <coneGeometry args={[2.8 * el.scale, 5 * el.scale, 12]} />
+              <meshPhysicalMaterial 
+                color={colors.tree}
+                roughness={0.82}
+                metalness={0.0}
+                transmission={0.06}
+                thickness={0.5}
+                sheen={0.4}
+                sheenColor="#4a7a4a"
+              />
+            </mesh>
+            <mesh position={[0, 6 * el.scale, 0]} castShadow>
+              <coneGeometry args={[2 * el.scale, 3.5 * el.scale, 12]} />
+              <meshPhysicalMaterial 
+                color={colors.tree}
+                roughness={0.78}
+                transmission={0.08}
+                thickness={0.4}
+                sheen={0.5}
+                sheenColor="#5a8a5a"
+              />
+            </mesh>
+            <mesh position={[0, 7.2 * el.scale, 0]} castShadow>
+              <coneGeometry args={[1.2 * el.scale, 2.5 * el.scale, 10]} />
+              <meshPhysicalMaterial 
+                color={colors.tree}
+                roughness={0.75}
+                transmission={0.1}
+                sheen={0.6}
+                sheenColor="#6a9a6a"
+              />
             </mesh>
           </group>
         );
       case 'mountain':
         return (
-          <mesh 
-            key={`${side}-mountain-${index}`} 
-            position={[el.position.x, 8 * el.scale, el.position.z]} 
-            castShadow 
-            receiveShadow
-          >
-            <coneGeometry args={[10 * el.scale, 20 * el.scale, 6]} />
-            <meshStandardMaterial color={colors.mountain} roughness={0.9} />
-          </mesh>
+          <group key={`${side}-mountain-${index}`} position={[el.position.x, 0, el.position.z]}>
+            {/* Main mountain with realistic rock */}
+            <mesh position={[0, 8 * el.scale, 0]} castShadow receiveShadow>
+              <coneGeometry args={[10 * el.scale, 20 * el.scale, 8]} />
+              <meshPhysicalMaterial 
+                color={colors.mountain}
+                roughness={0.92}
+                metalness={0.04}
+                clearcoat={0.02}
+                clearcoatRoughness={0.95}
+              />
+            </mesh>
+            {/* Snow cap */}
+            <mesh position={[0, 14 * el.scale, 0]} castShadow>
+              <coneGeometry args={[4 * el.scale, 8 * el.scale, 8]} />
+              <meshPhysicalMaterial 
+                color="#f5f8fa"
+                roughness={0.38}
+                metalness={0.0}
+                clearcoat={0.35}
+                clearcoatRoughness={0.55}
+                sheen={0.8}
+                sheenColor="#e0e8f0"
+              />
+            </mesh>
+            {/* Rocky outcrops */}
+            <mesh position={[3 * el.scale, 5 * el.scale, 2 * el.scale]} castShadow>
+              <dodecahedronGeometry args={[1.5 * el.scale, 0]} />
+              <meshPhysicalMaterial color="#4a5545" roughness={0.94} />
+            </mesh>
+          </group>
         );
       case 'building':
         return (
-          <mesh 
+          <group 
             key={`${side}-building-${index}`} 
-            position={[el.position.x, 6 * el.scale, el.position.z]} 
+            position={[el.position.x, 0, el.position.z]} 
             rotation={[0, el.rotation, 0]}
-            castShadow
           >
-            <boxGeometry args={[4 * el.scale, 12 * el.scale, 4 * el.scale]} />
-            <meshStandardMaterial color={colors.building} roughness={0.7} />
-          </mesh>
+            {/* Main building with realistic materials */}
+            <mesh position={[0, 6 * el.scale, 0]} castShadow receiveShadow>
+              <boxGeometry args={[4 * el.scale, 12 * el.scale, 4 * el.scale]} />
+              <meshPhysicalMaterial 
+                color={colors.building}
+                roughness={0.75}
+                metalness={0.1}
+                clearcoat={0.1}
+                clearcoatRoughness={0.8}
+              />
+            </mesh>
+            {/* Roof detail */}
+            <mesh position={[0, 12.2 * el.scale, 0]} castShadow>
+              <boxGeometry args={[4.3 * el.scale, 0.4 * el.scale, 4.3 * el.scale]} />
+              <meshPhysicalMaterial color="#3a3a3a" roughness={0.85} metalness={0.15} />
+            </mesh>
+            {/* Windows with reflections */}
+            {[0.25, 0.45, 0.65, 0.85].map((yPos, j) => (
+              <mesh key={j} position={[2.02 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
+                <boxGeometry args={[0.05 * el.scale, 1.2 * el.scale, 2.5 * el.scale]} />
+                <meshPhysicalMaterial 
+                  color="#1a2a3a"
+                  roughness={0.08}
+                  metalness={0.95}
+                  reflectivity={1.0}
+                  clearcoat={1.0}
+                  clearcoatRoughness={0.02}
+                  emissive="#ffa500"
+                  emissiveIntensity={Math.random() > 0.6 ? 0.3 : 0.05}
+                />
+              </mesh>
+            ))}
+          </group>
         );
     }
   };
@@ -707,27 +798,107 @@ const AnimatedWater: React.FC<{ boatZ: number }> = ({ boatZ }) => {
 const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xOffset = side === 'left' ? -35 : 35;
   
-  // Generate mountain positions along the route
+  // Generate mountain positions along the route with more detail
   const mountains = useMemo(() => {
-    const result: Array<{ x: number; z: number; scale: number; height: number }> = [];
+    const result: Array<{ x: number; z: number; scale: number; height: number; snowLine: number; rockVariant: number }> = [];
     for (let z = -500; z < 500; z += 40) {
+      const height = 15 + Math.random() * 25;
       result.push({
         x: xOffset + (Math.random() - 0.5) * 10,
         z: z + (Math.random() - 0.5) * 20,
         scale: 8 + Math.random() * 12,
-        height: 15 + Math.random() * 25,
+        height,
+        snowLine: 0.6 + Math.random() * 0.2, // Variable snow coverage
+        rockVariant: Math.floor(Math.random() * 3),
       });
     }
     return result;
   }, [xOffset]);
   
+  // Rock color variations for natural appearance
+  const rockColors = ['#5a6350', '#6b7260', '#4a5540', '#5e6955'];
+  
   return (
     <group position={[0, 0, boatZ]}>
       {mountains.map((m, i) => (
-        <mesh key={i} position={[m.x, m.height / 2 - 2, m.z]} castShadow receiveShadow>
-          <coneGeometry args={[m.scale, m.height, 6]} />
-          <meshStandardMaterial color="#5a7247" roughness={0.9} />
-        </mesh>
+        <group key={i} position={[m.x, 0, m.z]}>
+          {/* Main mountain body with realistic rock material */}
+          <mesh position={[0, m.height / 2 - 2, 0]} castShadow receiveShadow>
+            <coneGeometry args={[m.scale, m.height, 8]} />
+            <meshPhysicalMaterial 
+              color={rockColors[m.rockVariant]}
+              roughness={0.92}
+              metalness={0.05}
+              clearcoat={0.02}
+              clearcoatRoughness={0.95}
+            />
+          </mesh>
+          
+          {/* Rocky outcrops for detail */}
+          <mesh position={[m.scale * 0.3, m.height * 0.25, m.scale * 0.2]} castShadow>
+            <dodecahedronGeometry args={[m.scale * 0.15, 0]} />
+            <meshPhysicalMaterial 
+              color="#4a5545"
+              roughness={0.95}
+              metalness={0.02}
+            />
+          </mesh>
+          <mesh position={[-m.scale * 0.25, m.height * 0.35, -m.scale * 0.15]} castShadow>
+            <dodecahedronGeometry args={[m.scale * 0.12, 0]} />
+            <meshPhysicalMaterial 
+              color="#555f50"
+              roughness={0.93}
+              metalness={0.03}
+            />
+          </mesh>
+          
+          {/* Snow cap with realistic material */}
+          <mesh position={[0, m.height * m.snowLine, 0]} castShadow>
+            <coneGeometry args={[m.scale * (1 - m.snowLine) * 1.1, m.height * (1 - m.snowLine) * 1.2, 8]} />
+            <meshPhysicalMaterial 
+              color="#f8fafc"
+              roughness={0.4}
+              metalness={0.0}
+              clearcoat={0.3}
+              clearcoatRoughness={0.6}
+              sheen={0.8}
+              sheenColor="#e8f0ff"
+            />
+          </mesh>
+          
+          {/* Snow detail patches */}
+          <mesh position={[m.scale * 0.2, m.height * (m.snowLine - 0.1), m.scale * 0.1]} castShadow>
+            <sphereGeometry args={[m.scale * 0.08, 8, 6]} />
+            <meshPhysicalMaterial 
+              color="#ffffff"
+              roughness={0.35}
+              clearcoat={0.4}
+              sheenColor="#e0e8ff"
+              sheen={0.7}
+            />
+          </mesh>
+          
+          {/* Treeline at base */}
+          {[0, 1, 2].map((j) => (
+            <mesh 
+              key={`tree-${j}`}
+              position={[
+                m.scale * 0.6 * Math.cos((j / 3) * Math.PI * 2),
+                1.5,
+                m.scale * 0.6 * Math.sin((j / 3) * Math.PI * 2)
+              ]} 
+              castShadow
+            >
+              <coneGeometry args={[1.5, 4, 8]} />
+              <meshPhysicalMaterial 
+                color="#2a4a2a"
+                roughness={0.85}
+                sheen={0.3}
+                sheenColor="#3a5a3a"
+              />
+            </mesh>
+          ))}
+        </group>
       ))}
     </group>
   );
@@ -739,9 +910,9 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
 const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xBase = side === 'left' ? -25 : 25;
   
-  // Generate tree positions
+  // Generate tree positions with variety
   const trees = useMemo(() => {
-    const result: Array<{ x: number; z: number; scale: number }> = [];
+    const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number }> = [];
     for (let z = -400; z < 400; z += 8) {
       const count = 1 + Math.floor(Math.random() * 2);
       for (let j = 0; j < count; j++) {
@@ -749,6 +920,8 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           x: xBase + (Math.random() - 0.5) * 15 + (side === 'left' ? -5 : 5),
           z: z + (Math.random() - 0.5) * 6,
           scale: 0.8 + Math.random() * 0.6,
+          variant: Math.floor(Math.random() * 3), // Tree type variation
+          rotation: Math.random() * Math.PI * 2, // Random rotation for natural look
         });
       }
     }
@@ -758,25 +931,97 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
   return (
     <group position={[0, 0, boatZ]}>
       {trees.map((tree, i) => (
-        <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale}>
-          {/* Tree trunk */}
-          <mesh position={[0, 1, 0]} castShadow>
-            <cylinderGeometry args={[0.15, 0.2, 2, 8]} />
-            <meshStandardMaterial color="#4a3728" roughness={0.9} />
+        <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale} rotation={[0, tree.rotation, 0]}>
+          {/* Photorealistic tree trunk with bark texture simulation */}
+          <mesh position={[0, 1.2, 0]} castShadow>
+            <cylinderGeometry args={[0.12, 0.22, 2.4, 12]} />
+            <meshPhysicalMaterial 
+              color="#3d2817"
+              roughness={0.95}
+              metalness={0.0}
+              clearcoat={0.05}
+              clearcoatRoughness={0.9}
+            />
           </mesh>
-          {/* Tree foliage - 3 stacked cones */}
-          <mesh position={[0, 3, 0]} castShadow>
-            <coneGeometry args={[1.2, 2.5, 8]} />
-            <meshStandardMaterial color="#2d5a27" roughness={0.8} />
+          {/* Bark detail rings */}
+          {[0.4, 0.8, 1.2, 1.6].map((y, j) => (
+            <mesh key={j} position={[0, y, 0]} castShadow>
+              <torusGeometry args={[0.16 + (2.4 - y) * 0.02, 0.02, 6, 12]} />
+              <meshStandardMaterial color="#2a1a0f" roughness={1.0} />
+            </mesh>
+          ))}
+          {/* Root flare at base */}
+          <mesh position={[0, 0.1, 0]} castShadow>
+            <cylinderGeometry args={[0.22, 0.35, 0.3, 8]} />
+            <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
           </mesh>
-          <mesh position={[0, 4, 0]} castShadow>
-            <coneGeometry args={[0.9, 2, 8]} />
-            <meshStandardMaterial color="#3a6b32" roughness={0.8} />
+          
+          {/* Multi-layered foliage with subsurface scattering effect */}
+          {/* Bottom layer - dense, darker */}
+          <mesh position={[0, 2.8, 0]} castShadow>
+            <coneGeometry args={[1.4, 2.2, 12]} />
+            <meshPhysicalMaterial 
+              color="#1a4020"
+              roughness={0.85}
+              metalness={0.0}
+              transmission={0.05}
+              thickness={0.5}
+              sheen={0.3}
+              sheenColor="#2a5030"
+            />
           </mesh>
-          <mesh position={[0, 4.8, 0]} castShadow>
-            <coneGeometry args={[0.6, 1.5, 8]} />
-            <meshStandardMaterial color="#4a7a42" roughness={0.8} />
+          {/* Middle layer */}
+          <mesh position={[0, 3.8, 0]} castShadow>
+            <coneGeometry args={[1.1, 2.0, 12]} />
+            <meshPhysicalMaterial 
+              color="#2a5a30"
+              roughness={0.8}
+              metalness={0.0}
+              transmission={0.08}
+              thickness={0.4}
+              sheen={0.4}
+              sheenColor="#3a7040"
+            />
           </mesh>
+          {/* Upper layer - lighter, catches more light */}
+          <mesh position={[0, 4.6, 0]} castShadow>
+            <coneGeometry args={[0.8, 1.8, 12]} />
+            <meshPhysicalMaterial 
+              color="#3a6a38"
+              roughness={0.75}
+              metalness={0.0}
+              transmission={0.1}
+              thickness={0.3}
+              sheen={0.5}
+              sheenColor="#4a8048"
+            />
+          </mesh>
+          {/* Top spike */}
+          <mesh position={[0, 5.3, 0]} castShadow>
+            <coneGeometry args={[0.4, 1.2, 10]} />
+            <meshPhysicalMaterial 
+              color="#4a7a42"
+              roughness={0.7}
+              transmission={0.12}
+              thickness={0.2}
+              sheen={0.6}
+              sheenColor="#5a9050"
+            />
+          </mesh>
+          
+          {/* Small branch details */}
+          {tree.variant === 0 && (
+            <>
+              <mesh position={[0.3, 2.5, 0.2]} rotation={[0, 0, 0.4]} castShadow>
+                <cylinderGeometry args={[0.03, 0.05, 0.6, 6]} />
+                <meshStandardMaterial color="#3d2817" roughness={0.9} />
+              </mesh>
+              <mesh position={[-0.25, 2.8, -0.15]} rotation={[0, 0, -0.3]} castShadow>
+                <cylinderGeometry args={[0.025, 0.04, 0.5, 6]} />
+                <meshStandardMaterial color="#3d2817" roughness={0.9} />
+              </mesh>
+            </>
+          )}
         </group>
       ))}
     </group>
@@ -787,12 +1032,12 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
 // THEMED LANDSCAPE COMPONENTS - Replace generic scenery for fantasy routes
 // ============================================================================
 
-// CRYSTAL BLED - Ethereal floating crystal towers, bioluminescent glow
+// CRYSTAL BLED - Ethereal floating crystal towers with photorealistic refraction and glow
 const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xOffset = side === 'left' ? -40 : 40;
   
   const crystals = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; radius: number; color: string }> = [];
+    const result: Array<{ x: number; z: number; height: number; radius: number; color: string; facets: number }> = [];
     const colors = ['#00f5d4', '#7df9ff', '#a0e7e5', '#40e0d0', '#00ced1'];
     for (let z = -500; z < 500; z += 30) {
       result.push({
@@ -801,19 +1046,21 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
         height: 12 + Math.random() * 25,
         radius: 1.5 + Math.random() * 2,
         color: colors[Math.floor(Math.random() * colors.length)],
+        facets: 5 + Math.floor(Math.random() * 3), // Varied crystal facets
       });
     }
     return result;
   }, [xOffset]);
   
   const mountains = useMemo(() => {
-    const result: Array<{ x: number; z: number; scale: number; height: number }> = [];
+    const result: Array<{ x: number; z: number; scale: number; height: number; snowAmount: number }> = [];
     for (let z = -500; z < 500; z += 80) {
       result.push({
         x: xOffset + (side === 'left' ? -30 : 30) + (Math.random() - 0.5) * 15,
         z: z + (Math.random() - 0.5) * 30,
         scale: 20 + Math.random() * 20,
         height: 30 + Math.random() * 40,
+        snowAmount: 0.55 + Math.random() * 0.2,
       });
     }
     return result;
@@ -821,32 +1068,105 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
   
   return (
     <group position={[0, 0, boatZ]}>
-      {/* Crystal spires */}
+      {/* Photorealistic crystal spires */}
       {crystals.map((c, i) => (
         <group key={i} position={[c.x, 0, c.z]}>
-          {/* Main crystal */}
+          {/* Main crystal with realistic glass/gem material */}
           <mesh position={[0, c.height / 2, 0]} castShadow>
-            <cylinderGeometry args={[c.radius * 0.3, c.radius, c.height, 6]} />
-            <meshStandardMaterial color={c.color} transparent opacity={0.8} emissive={c.color} emissiveIntensity={0.3} roughness={0.2} metalness={0.4} />
+            <cylinderGeometry args={[c.radius * 0.25, c.radius, c.height, c.facets]} />
+            <meshPhysicalMaterial 
+              color={c.color}
+              transparent 
+              opacity={0.75}
+              transmission={0.6}
+              thickness={2.0}
+              roughness={0.05}
+              metalness={0.0}
+              ior={2.4}
+              reflectivity={1.0}
+              clearcoat={1.0}
+              clearcoatRoughness={0.02}
+              emissive={c.color}
+              emissiveIntensity={0.25}
+              iridescence={0.3}
+              iridescenceIOR={1.3}
+            />
           </mesh>
-          {/* Glow base */}
-          <mesh position={[0, 0.5, 0]}>
-            <cylinderGeometry args={[c.radius * 1.2, c.radius * 1.5, 1, 8]} />
-            <meshStandardMaterial color={c.color} transparent opacity={0.4} emissive={c.color} emissiveIntensity={0.5} />
+          {/* Inner crystal core for depth */}
+          <mesh position={[0, c.height / 2, 0]} castShadow>
+            <cylinderGeometry args={[c.radius * 0.15, c.radius * 0.6, c.height * 0.8, c.facets]} />
+            <meshPhysicalMaterial 
+              color="#ffffff"
+              transparent 
+              opacity={0.4}
+              transmission={0.8}
+              thickness={1.0}
+              roughness={0.02}
+              emissive={c.color}
+              emissiveIntensity={0.4}
+            />
+          </mesh>
+          {/* Glow base with realistic emission */}
+          <mesh position={[0, 0.4, 0]}>
+            <cylinderGeometry args={[c.radius * 1.1, c.radius * 1.4, 0.8, 12]} />
+            <meshPhysicalMaterial 
+              color={c.color}
+              transparent 
+              opacity={0.35}
+              emissive={c.color}
+              emissiveIntensity={0.6}
+              roughness={0.3}
+            />
+          </mesh>
+          {/* Light pool on ground */}
+          <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[c.radius * 2, 16]} />
+            <meshPhysicalMaterial 
+              color={c.color}
+              transparent 
+              opacity={0.2}
+              emissive={c.color}
+              emissiveIntensity={0.3}
+            />
           </mesh>
         </group>
       ))}
-      {/* Snow-capped mountains in background */}
+      {/* Photorealistic snow-capped mountains */}
       {mountains.map((m, i) => (
         <group key={`mtn-${i}`} position={[m.x, 0, m.z]}>
-          <mesh position={[0, m.height / 2 - 2, 0]} castShadow>
-            <coneGeometry args={[m.scale, m.height, 6]} />
-            <meshStandardMaterial color="#6b7280" roughness={0.9} />
+          {/* Main mountain with realistic rock */}
+          <mesh position={[0, m.height / 2 - 2, 0]} castShadow receiveShadow>
+            <coneGeometry args={[m.scale, m.height, 8]} />
+            <meshPhysicalMaterial 
+              color="#5a6570"
+              roughness={0.92}
+              metalness={0.05}
+              clearcoat={0.03}
+              clearcoatRoughness={0.9}
+            />
           </mesh>
-          {/* Snow cap */}
-          <mesh position={[0, m.height * 0.75, 0]}>
-            <coneGeometry args={[m.scale * 0.4, m.height * 0.3, 6]} />
-            <meshStandardMaterial color="#f8fafc" roughness={0.7} />
+          {/* Rocky details */}
+          <mesh position={[m.scale * 0.35, m.height * 0.3, m.scale * 0.2]} castShadow>
+            <dodecahedronGeometry args={[m.scale * 0.12, 0]} />
+            <meshPhysicalMaterial color="#4a5560" roughness={0.94} />
+          </mesh>
+          {/* Realistic snow cap */}
+          <mesh position={[0, m.height * m.snowAmount, 0]} castShadow>
+            <coneGeometry args={[m.scale * (1 - m.snowAmount) * 1.15, m.height * (1 - m.snowAmount) * 1.25, 8]} />
+            <meshPhysicalMaterial 
+              color="#f8fafc"
+              roughness={0.35}
+              metalness={0.0}
+              clearcoat={0.4}
+              clearcoatRoughness={0.5}
+              sheen={0.9}
+              sheenColor="#e8f4ff"
+            />
+          </mesh>
+          {/* Snow patches */}
+          <mesh position={[m.scale * 0.25, m.height * (m.snowAmount - 0.12), m.scale * 0.15]} castShadow>
+            <sphereGeometry args={[m.scale * 0.1, 8, 6]} />
+            <meshPhysicalMaterial color="#ffffff" roughness={0.32} sheen={0.85} sheenColor="#e0e8ff" />
           </mesh>
         </group>
       ))}
@@ -854,12 +1174,12 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
   );
 };
 
-// GOTHIC VENICE - Ruined palaces, spectral mist, ghostly structures
+// GOTHIC VENICE - Ruined palaces with photorealistic weathered stone and reflective windows
 const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xOffset = side === 'left' ? -25 : 25;
   
   const buildings = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; width: number; depth: number; color: string; tilt: number }> = [];
+    const result: Array<{ x: number; z: number; height: number; width: number; depth: number; color: string; tilt: number; windowGlow: number }> = [];
     const colors = ['#2d3436', '#1e272e', '#2c3e50', '#34495e', '#192a56'];
     for (let z = -400; z < 400; z += 20) {
       result.push({
@@ -869,7 +1189,8 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
         width: 4 + Math.random() * 6,
         depth: 4 + Math.random() * 5,
         color: colors[Math.floor(Math.random() * colors.length)],
-        tilt: (Math.random() - 0.5) * 0.15, // Slightly tilted ruins
+        tilt: (Math.random() - 0.5) * 0.15,
+        windowGlow: Math.random(), // Random window illumination
       });
     }
     return result;
@@ -879,22 +1200,80 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
     <group position={[0, 0, boatZ]}>
       {buildings.map((b, i) => (
         <group key={i} position={[b.x, 0, b.z]} rotation={[0, 0, b.tilt]}>
-          {/* Ruined palazzo */}
-          <mesh position={[0, b.height / 2, 0]} castShadow>
+          {/* Ruined palazzo with weathered stone material */}
+          <mesh position={[0, b.height / 2, 0]} castShadow receiveShadow>
             <boxGeometry args={[b.width, b.height, b.depth]} />
-            <meshStandardMaterial color={b.color} roughness={0.9} />
+            <meshPhysicalMaterial 
+              color={b.color}
+              roughness={0.92}
+              metalness={0.02}
+              clearcoat={0.05}
+              clearcoatRoughness={0.9}
+            />
           </mesh>
-          {/* Gothic window arches */}
-          {[0.3, 0.5, 0.7].map((yPos, j) => (
-            <mesh key={j} position={[b.width / 2 + 0.01, b.height * yPos, 0]}>
-              <boxGeometry args={[0.1, 1.5, b.depth * 0.6]} />
-              <meshStandardMaterial color="#0a3d62" emissive="#0a3d62" emissiveIntensity={0.2} transparent opacity={0.6} />
-            </mesh>
+          
+          {/* Architectural details - cornices */}
+          <mesh position={[0, b.height * 0.95, 0]} castShadow>
+            <boxGeometry args={[b.width + 0.3, 0.4, b.depth + 0.3]} />
+            <meshPhysicalMaterial color="#3d4a50" roughness={0.88} metalness={0.03} />
+          </mesh>
+          <mesh position={[0, b.height * 0.6, 0]} castShadow>
+            <boxGeometry args={[b.width + 0.15, 0.2, b.depth + 0.15]} />
+            <meshPhysicalMaterial color="#3d4a50" roughness={0.9} />
+          </mesh>
+          
+          {/* Gothic window arches with glass reflections */}
+          {[0.25, 0.45, 0.65, 0.85].map((yPos, j) => (
+            <group key={j}>
+              {/* Window frame */}
+              <mesh position={[b.width / 2 + 0.02, b.height * yPos, 0]}>
+                <boxGeometry args={[0.08, 1.8, b.depth * 0.5]} />
+                <meshPhysicalMaterial color="#1a1a2e" roughness={0.7} metalness={0.1} />
+              </mesh>
+              {/* Glass pane with reflections */}
+              <mesh position={[b.width / 2 + 0.06, b.height * yPos, 0]}>
+                <boxGeometry args={[0.02, 1.6, b.depth * 0.45]} />
+                <meshPhysicalMaterial 
+                  color="#0a2040"
+                  roughness={0.1}
+                  metalness={0.9}
+                  reflectivity={1.0}
+                  clearcoat={1.0}
+                  clearcoatRoughness={0.05}
+                  emissive={b.windowGlow > 0.7 ? "#ff9500" : "#0a2a4a"}
+                  emissiveIntensity={b.windowGlow > 0.7 ? 0.4 : 0.15}
+                  transparent
+                  opacity={0.85}
+                />
+              </mesh>
+              {/* Pointed arch top */}
+              <mesh position={[b.width / 2 + 0.02, b.height * yPos + 1.0, 0]} rotation={[0, 0, Math.PI / 4]}>
+                <boxGeometry args={[0.3, 0.3, 0.08]} />
+                <meshPhysicalMaterial color="#1a1a2e" roughness={0.75} />
+              </mesh>
+            </group>
           ))}
-          {/* Crumbling top */}
-          <mesh position={[(Math.random() - 0.5) * b.width * 0.3, b.height + 0.5, 0]}>
-            <boxGeometry args={[b.width * 0.4, 1, b.depth * 0.4]} />
-            <meshStandardMaterial color={b.color} roughness={0.95} />
+          
+          {/* Weathering and moss details */}
+          <mesh position={[0, 0.5, b.depth / 2 + 0.01]}>
+            <boxGeometry args={[b.width * 0.8, 1.5, 0.05]} />
+            <meshPhysicalMaterial 
+              color="#2a3a2a"
+              roughness={0.95}
+              transparent
+              opacity={0.6}
+            />
+          </mesh>
+          
+          {/* Crumbling top with detailed debris */}
+          <mesh position={[(Math.random() - 0.5) * b.width * 0.3, b.height + 0.5, 0]} castShadow>
+            <boxGeometry args={[b.width * 0.4, 1.2, b.depth * 0.4]} />
+            <meshPhysicalMaterial color={b.color} roughness={0.95} />
+          </mesh>
+          {/* Fallen debris */}
+          <mesh position={[b.width * 0.4, 0.3, b.depth * 0.3]} rotation={[0.2, 0.5, 0.1]}>
+            <boxGeometry args={[0.8, 0.5, 0.6]} />
+            <meshPhysicalMaterial color="#3d4550" roughness={0.92} />
           </mesh>
         </group>
       ))}
@@ -902,12 +1281,12 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
   );
 };
 
-// STEAMPUNK HENLEY - Brass towers, clockwork mechanisms, steam vents
+// STEAMPUNK HENLEY - Brass towers with photorealistic metallic materials
 const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xOffset = side === 'left' ? -30 : 30;
   
   const structures = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'platform' | 'gear' }> = [];
+    const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'platform' | 'gear'; patina: number }> = [];
     for (let z = -400; z < 400; z += 25) {
       const type = Math.random() > 0.6 ? 'tower' : (Math.random() > 0.5 ? 'platform' : 'gear');
       result.push({
@@ -915,6 +1294,7 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
         z: z + (Math.random() - 0.5) * 12,
         height: 8 + Math.random() * 18,
         type,
+        patina: Math.random(), // For verdigris/weathering variation
       });
     }
     return result;
@@ -926,50 +1306,162 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
         <group key={i} position={[s.x, 0, s.z]}>
           {s.type === 'tower' && (
             <>
-              {/* Brass tower */}
-              <mesh position={[0, s.height / 2, 0]} castShadow>
-                <cylinderGeometry args={[2, 3, s.height, 8]} />
-                <meshStandardMaterial color="#b87333" metalness={0.6} roughness={0.4} />
+              {/* Photorealistic brass tower */}
+              <mesh position={[0, s.height / 2, 0]} castShadow receiveShadow>
+                <cylinderGeometry args={[1.8, 2.8, s.height, 12]} />
+                <meshPhysicalMaterial 
+                  color="#b87333"
+                  metalness={0.85}
+                  roughness={0.25}
+                  clearcoat={0.4}
+                  clearcoatRoughness={0.3}
+                  reflectivity={0.9}
+                  envMapIntensity={1.2}
+                />
               </mesh>
-              {/* Copper dome top */}
-              <mesh position={[0, s.height + 1, 0]}>
-                <sphereGeometry args={[2.5, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                <meshStandardMaterial color="#cd7f32" metalness={0.7} roughness={0.3} />
+              {/* Decorative brass bands */}
+              {[0.25, 0.5, 0.75].map((yPos, j) => (
+                <mesh key={j} position={[0, s.height * yPos, 0]}>
+                  <torusGeometry args={[2.2, 0.15, 8, 24]} />
+                  <meshPhysicalMaterial 
+                    color="#daa520"
+                    metalness={0.9}
+                    roughness={0.2}
+                    clearcoat={0.5}
+                  />
+                </mesh>
+              ))}
+              {/* Copper dome with verdigris */}
+              <mesh position={[0, s.height + 1.2, 0]}>
+                <sphereGeometry args={[2.6, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshPhysicalMaterial 
+                  color={s.patina > 0.5 ? "#4a8066" : "#cd7f32"}
+                  metalness={0.8}
+                  roughness={s.patina > 0.5 ? 0.5 : 0.25}
+                  clearcoat={0.3}
+                  clearcoatRoughness={0.4}
+                />
               </mesh>
-              {/* Steam vent */}
+              {/* Steam vent with metallic finish */}
               <mesh position={[0, s.height + 3, 0]}>
-                <cylinderGeometry args={[0.3, 0.5, 2, 6]} />
-                <meshStandardMaterial color="#8b7355" metalness={0.5} roughness={0.5} />
+                <cylinderGeometry args={[0.25, 0.45, 2, 8]} />
+                <meshPhysicalMaterial 
+                  color="#8b7355"
+                  metalness={0.7}
+                  roughness={0.4}
+                  clearcoat={0.2}
+                />
+              </mesh>
+              {/* Steam effect (subtle glow) */}
+              <mesh position={[0, s.height + 4.2, 0]}>
+                <sphereGeometry args={[0.6, 8, 8]} />
+                <meshPhysicalMaterial 
+                  color="#ffffff"
+                  transparent
+                  opacity={0.25}
+                  emissive="#ffffff"
+                  emissiveIntensity={0.15}
+                />
               </mesh>
             </>
           )}
           {s.type === 'platform' && (
             <>
-              {/* Iron platform */}
-              <mesh position={[0, s.height * 0.3, 0]} castShadow>
-                <boxGeometry args={[8, 1, 6]} />
-                <meshStandardMaterial color="#8b7355" metalness={0.4} roughness={0.6} />
+              {/* Iron platform with realistic weathered metal */}
+              <mesh position={[0, s.height * 0.3, 0]} castShadow receiveShadow>
+                <boxGeometry args={[8, 0.8, 6]} />
+                <meshPhysicalMaterial 
+                  color="#5a4a40"
+                  metalness={0.6}
+                  roughness={0.55}
+                  clearcoat={0.15}
+                  clearcoatRoughness={0.7}
+                />
               </mesh>
-              {/* Support legs */}
+              {/* Riveted edge details */}
+              <mesh position={[0, s.height * 0.3 + 0.5, 0]}>
+                <boxGeometry args={[8.2, 0.15, 6.2]} />
+                <meshPhysicalMaterial color="#4a3a30" metalness={0.65} roughness={0.5} />
+              </mesh>
+              {/* Support legs with realistic iron */}
               {[[-3, -2], [-3, 2], [3, -2], [3, 2]].map(([x, z], j) => (
                 <mesh key={j} position={[x, s.height * 0.15, z]}>
-                  <cylinderGeometry args={[0.3, 0.4, s.height * 0.3, 6]} />
-                  <meshStandardMaterial color="#6b5344" metalness={0.3} roughness={0.7} />
+                  <cylinderGeometry args={[0.25, 0.35, s.height * 0.3, 8]} />
+                  <meshPhysicalMaterial 
+                    color="#4a3a30"
+                    metalness={0.55}
+                    roughness={0.6}
+                    clearcoat={0.1}
+                  />
                 </mesh>
               ))}
+              {/* Cross-bracing */}
+              <mesh position={[-3, s.height * 0.15, 0]} rotation={[0, 0, 0.3]}>
+                <cylinderGeometry args={[0.08, 0.08, 5, 6]} />
+                <meshPhysicalMaterial color="#3a2a20" metalness={0.5} roughness={0.65} />
+              </mesh>
+              <mesh position={[3, s.height * 0.15, 0]} rotation={[0, 0, -0.3]}>
+                <cylinderGeometry args={[0.08, 0.08, 5, 6]} />
+                <meshPhysicalMaterial color="#3a2a20" metalness={0.5} roughness={0.65} />
+              </mesh>
             </>
           )}
           {s.type === 'gear' && (
             <>
-              {/* Giant gear */}
+              {/* Giant gear with photorealistic gold/brass */}
               <mesh position={[0, s.height * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry args={[4, 0.8, 8, 16]} />
-                <meshStandardMaterial color="#daa520" metalness={0.7} roughness={0.3} />
+                <torusGeometry args={[4, 0.7, 12, 20]} />
+                <meshPhysicalMaterial 
+                  color="#daa520"
+                  metalness={0.9}
+                  roughness={0.18}
+                  clearcoat={0.5}
+                  clearcoatRoughness={0.25}
+                  reflectivity={1.0}
+                  envMapIntensity={1.3}
+                />
               </mesh>
-              {/* Gear center */}
+              {/* Gear teeth (simplified) */}
+              {[...Array(12)].map((_, j) => {
+                const angle = (j / 12) * Math.PI * 2;
+                return (
+                  <mesh 
+                    key={j} 
+                    position={[
+                      Math.cos(angle) * 4.6,
+                      s.height * 0.4,
+                      Math.sin(angle) * 4.6
+                    ]}
+                    rotation={[Math.PI / 2, 0, angle]}
+                  >
+                    <boxGeometry args={[0.8, 0.6, 0.7]} />
+                    <meshPhysicalMaterial 
+                      color="#c9a520"
+                      metalness={0.88}
+                      roughness={0.22}
+                      clearcoat={0.4}
+                    />
+                  </mesh>
+                );
+              })}
+              {/* Gear center hub */}
               <mesh position={[0, s.height * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[2, 2, 1, 8]} />
-                <meshStandardMaterial color="#cd853f" metalness={0.6} roughness={0.4} />
+                <cylinderGeometry args={[1.8, 1.8, 0.9, 12]} />
+                <meshPhysicalMaterial 
+                  color="#cd853f"
+                  metalness={0.85}
+                  roughness={0.25}
+                  clearcoat={0.4}
+                />
+              </mesh>
+              {/* Center axle */}
+              <mesh position={[0, s.height * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.4, 0.4, 1.5, 8]} />
+                <meshPhysicalMaterial 
+                  color="#8b7355"
+                  metalness={0.75}
+                  roughness={0.35}
+                />
               </mesh>
             </>
           )}
@@ -979,13 +1471,12 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
   );
 };
 
-// DYSTOPIAN THAMES - Ruined skyscrapers, military fortifications, fog
+// DYSTOPIAN THAMES - Ruined skyscrapers with photorealistic weathered materials
 const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
   const xOffset = side === 'left' ? -35 : 35;
   
   const ruins = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; width: number; damaged: boolean }> = [];
-    const colors = ['#1a1a2e', '#16213e', '#0f3460', '#162447'];
+    const result: Array<{ x: number; z: number; height: number; width: number; damaged: boolean; rustLevel: number }> = [];
     for (let z = -500; z < 500; z += 30) {
       result.push({
         x: xOffset + (Math.random() - 0.5) * 20,
@@ -993,6 +1484,7 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
         height: 15 + Math.random() * 35,
         width: 4 + Math.random() * 6,
         damaged: Math.random() > 0.4,
+        rustLevel: Math.random(), // For varied weathering
       });
     }
     return result;
@@ -1000,36 +1492,130 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
   
   return (
     <group position={[0, 0, boatZ]}>
-      {ruins.map((r, i) => (
-        <group key={i} position={[r.x, 0, r.z]}>
-          {/* Ruined skyscraper */}
-          <mesh position={[0, (r.damaged ? r.height * 0.7 : r.height) / 2, 0]} castShadow>
-            <boxGeometry args={[r.width, r.damaged ? r.height * 0.7 : r.height, r.width]} />
-            <meshStandardMaterial color="#1a1a2e" roughness={0.9} />
-          </mesh>
-          {/* Dark windows */}
-          {[0.2, 0.4, 0.6, 0.8].map((yPos, j) => (
-            <mesh key={j} position={[r.width / 2 + 0.01, (r.damaged ? r.height * 0.7 : r.height) * yPos, 0]}>
-              <boxGeometry args={[0.1, 1, r.width * 0.7]} />
-              <meshStandardMaterial color="#0f3460" emissive="#ff006e" emissiveIntensity={Math.random() > 0.7 ? 0.3 : 0} />
+      {ruins.map((r, i) => {
+        const actualHeight = r.damaged ? r.height * 0.7 : r.height;
+        const concreteColor = r.rustLevel > 0.6 ? '#1a1a28' : '#1e1e2a';
+        
+        return (
+          <group key={i} position={[r.x, 0, r.z]}>
+            {/* Ruined skyscraper with weathered concrete */}
+            <mesh position={[0, actualHeight / 2, 0]} castShadow receiveShadow>
+              <boxGeometry args={[r.width, actualHeight, r.width]} />
+              <meshPhysicalMaterial 
+                color={concreteColor}
+                roughness={0.94}
+                metalness={0.03}
+                clearcoat={0.02}
+                clearcoatRoughness={0.95}
+              />
             </mesh>
-          ))}
-          {/* Damage debris */}
-          {r.damaged && (
-            <mesh position={[(Math.random() - 0.5) * r.width, r.height * 0.35 + 1, (Math.random() - 0.5) * r.width]}>
-              <boxGeometry args={[r.width * 0.3, 2, r.width * 0.3]} />
-              <meshStandardMaterial color="#16213e" roughness={0.95} />
+            
+            {/* Rust streaks and weathering */}
+            <mesh position={[r.width / 2 + 0.02, actualHeight * 0.6, 0]}>
+              <boxGeometry args={[0.05, actualHeight * 0.5, r.width * 0.3]} />
+              <meshPhysicalMaterial 
+                color="#3a2820"
+                roughness={0.98}
+                transparent
+                opacity={0.4 + r.rustLevel * 0.3}
+              />
             </mesh>
-          )}
-          {/* Searchlight on some buildings */}
-          {Math.random() > 0.7 && (
-            <mesh position={[0, r.height + 2, 0]}>
-              <cylinderGeometry args={[0.2, 0.4, 3, 6]} />
-              <meshStandardMaterial color="#ffd60a" emissive="#ffd60a" emissiveIntensity={0.5} />
-            </mesh>
-          )}
-        </group>
-      ))}
+            
+            {/* Exposed rebar/steel beams */}
+            {r.damaged && (
+              <>
+                <mesh position={[r.width * 0.3, actualHeight + 0.5, 0]} rotation={[0, 0, 0.3]}>
+                  <cylinderGeometry args={[0.08, 0.08, 3, 6]} />
+                  <meshPhysicalMaterial 
+                    color="#4a3530"
+                    roughness={0.7}
+                    metalness={0.6}
+                  />
+                </mesh>
+                <mesh position={[-r.width * 0.2, actualHeight + 0.8, r.width * 0.2]} rotation={[0.2, 0, -0.4]}>
+                  <cylinderGeometry args={[0.06, 0.06, 2.5, 6]} />
+                  <meshPhysicalMaterial color="#3a2a25" roughness={0.75} metalness={0.55} />
+                </mesh>
+              </>
+            )}
+            
+            {/* Windows with broken glass and emergency lighting */}
+            {[0.2, 0.4, 0.6, 0.8].map((yPos, j) => {
+              const isBroken = Math.random() > 0.6;
+              const hasLight = !isBroken && Math.random() > 0.7;
+              return (
+                <group key={j}>
+                  {/* Window frame */}
+                  <mesh position={[r.width / 2 + 0.02, actualHeight * yPos, 0]}>
+                    <boxGeometry args={[0.08, 1.4, r.width * 0.65]} />
+                    <meshPhysicalMaterial color="#0a0a12" roughness={0.8} metalness={0.2} />
+                  </mesh>
+                  {/* Glass - either broken or reflective */}
+                  {!isBroken && (
+                    <mesh position={[r.width / 2 + 0.05, actualHeight * yPos, 0]}>
+                      <boxGeometry args={[0.02, 1.2, r.width * 0.6]} />
+                      <meshPhysicalMaterial 
+                        color="#0f1525"
+                        roughness={0.08}
+                        metalness={0.92}
+                        reflectivity={1.0}
+                        clearcoat={1.0}
+                        clearcoatRoughness={0.03}
+                        emissive={hasLight ? "#ff3030" : "#0a1520"}
+                        emissiveIntensity={hasLight ? 0.5 : 0.08}
+                        transparent
+                        opacity={0.9}
+                      />
+                    </mesh>
+                  )}
+                </group>
+              );
+            })}
+            
+            {/* Damage debris pile */}
+            {r.damaged && (
+              <group>
+                <mesh position={[(Math.random() - 0.5) * r.width, actualHeight * 0.35 + 1, (Math.random() - 0.5) * r.width]} rotation={[0.3, 0.5, 0.2]}>
+                  <boxGeometry args={[r.width * 0.35, 2.5, r.width * 0.35]} />
+                  <meshPhysicalMaterial color="#16213e" roughness={0.96} />
+                </mesh>
+                {/* Rubble at base */}
+                <mesh position={[r.width * 0.5, 0.4, r.width * 0.3]} rotation={[0.1, 0.4, 0.2]}>
+                  <dodecahedronGeometry args={[0.8, 0]} />
+                  <meshPhysicalMaterial color="#1a1a28" roughness={0.95} />
+                </mesh>
+                <mesh position={[-r.width * 0.3, 0.3, -r.width * 0.4]} rotation={[0.2, 0.1, 0.3]}>
+                  <dodecahedronGeometry args={[0.6, 0]} />
+                  <meshPhysicalMaterial color="#161620" roughness={0.94} />
+                </mesh>
+              </group>
+            )}
+            
+            {/* Searchlight on some buildings */}
+            {Math.random() > 0.75 && !r.damaged && (
+              <group position={[0, r.height + 1.5, 0]}>
+                <mesh>
+                  <cylinderGeometry args={[0.15, 0.35, 2.5, 8]} />
+                  <meshPhysicalMaterial 
+                    color="#2a2a30"
+                    roughness={0.6}
+                    metalness={0.4}
+                  />
+                </mesh>
+                <mesh position={[0, 1.5, 0]}>
+                  <sphereGeometry args={[0.3, 8, 8]} />
+                  <meshPhysicalMaterial 
+                    color="#ffd60a"
+                    emissive="#ffd60a"
+                    emissiveIntensity={0.7}
+                    roughness={0.2}
+                  />
+                </mesh>
+              </group>
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 };
@@ -1302,19 +1888,20 @@ interface CloudConfig {
 }
 
 const getCloudConfig = (theme: RouteTheme): CloudConfig => {
+  // Reduced cloud cover for clearer skies and better sunlight visibility
   switch (theme) {
     case 'crystal-bled':
-      return { enabled: true, count: 15, opacity: 0.6, speed: 0.2, color: '#ffffff', segments: 30 };
+      return { enabled: true, count: 6, opacity: 0.35, speed: 0.15, color: '#ffffff', segments: 25 };
     case 'gothic-venice':
-      return { enabled: true, count: 25, opacity: 0.9, speed: 0.1, color: '#4a5568', segments: 40 };
+      return { enabled: true, count: 10, opacity: 0.55, speed: 0.08, color: '#6b7280', segments: 30 };
     case 'steampunk-henley':
-      return { enabled: true, count: 20, opacity: 0.7, speed: 0.15, color: '#d4a574', segments: 35 };
+      return { enabled: true, count: 8, opacity: 0.4, speed: 0.12, color: '#e8d5c4', segments: 28 };
     case 'dystopian-thames':
-      return { enabled: true, count: 30, opacity: 0.95, speed: 0.08, color: '#2d3436', segments: 45 };
+      return { enabled: true, count: 12, opacity: 0.6, speed: 0.06, color: '#4a4a4a', segments: 32 };
     case 'scifi-boston':
-      return { enabled: false, count: 5, opacity: 0.3, speed: 0.3, color: '#1e3a5f', segments: 20 };
+      return { enabled: true, count: 3, opacity: 0.2, speed: 0.25, color: '#2a4a6a', segments: 18 };
     default:
-      return { enabled: true, count: 18, opacity: 0.5, speed: 0.2, color: '#e8e8e8', segments: 30 };
+      return { enabled: true, count: 7, opacity: 0.3, speed: 0.18, color: '#f0f0f0', segments: 24 };
   }
 };
 
@@ -1381,22 +1968,22 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
         </group>
       )}
       
-      {/* Secondary distant cloud layer for depth */}
+      {/* Secondary distant cloud layer for depth - sparse wispy clouds */}
       {cloudConfig.enabled && (
-        <group position={[0, 120, boatZ - 200]}>
-          {[...Array(5)].map((_, i) => (
+        <group position={[0, 140, boatZ - 250]}>
+          {[...Array(3)].map((_, i) => (
             <Cloud
               key={`distant-${i}`}
               position={[
-                (i - 2) * 150,
+                (i - 1) * 200,
                 0,
-                -100 + Math.random() * 50
+                -120 + Math.random() * 40
               ]}
-              opacity={cloudConfig.opacity * 0.4}
-              speed={cloudConfig.speed * 0.5}
-              segments={20}
+              opacity={cloudConfig.opacity * 0.25}
+              speed={cloudConfig.speed * 0.4}
+              segments={15}
               color={cloudConfig.color}
-              scale={40 + Math.random() * 30}
+              scale={50 + Math.random() * 25}
               depthWrite={false}
             />
           ))}
