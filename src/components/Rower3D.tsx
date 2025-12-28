@@ -4,10 +4,139 @@ import { Environment, Sky, Cloud } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
-import type { WaterRoute } from '../types/index';
-import { routeTotalDistanceMeters } from '../utils/geoUtils';
+import type { WaterRoute, Coordinate } from '../types/index';
+import { routeTotalDistanceMeters, latLngToMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import './Rower3D.css';
+
+// ============================================================================
+// GPS TO 3D PATH CONVERSION - Converts GPS coordinates to smooth 3D curve
+// ============================================================================
+
+// Convert GPS coordinates to 3D scene points
+const gpsToScenePoints = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.Vector3[] => {
+  if (coordinates.length < 2) return [];
+  
+  // Use first coordinate as origin
+  const origin = coordinates[0];
+  const points: THREE.Vector3[] = [];
+  
+  for (const coord of coordinates) {
+    const meters = latLngToMeters(coord.lat, coord.lng, origin.lat, origin.lng);
+    // Convert to scene coordinates: x = east/west, z = north/south (inverted for -Z forward)
+    points.push(new THREE.Vector3(
+      meters.x * sceneScale,
+      0,
+      -meters.y * sceneScale  // Negative because boat moves in -Z direction
+    ));
+  }
+  
+  return points;
+};
+
+// Create a smooth Catmull-Rom spline from GPS points
+const createRouteCurve = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.CatmullRomCurve3 | null => {
+  const points = gpsToScenePoints(coordinates, sceneScale);
+  if (points.length < 2) return null;
+  
+  // Create smooth curve with closed=false (not a loop)
+  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
+};
+
+// Get position and tangent at a given progress (0-1) along the route
+interface RoutePosition {
+  position: THREE.Vector3;
+  tangent: THREE.Vector3;
+  angle: number;  // Rotation angle in radians (around Y axis)
+}
+
+const getRoutePositionAtProgress = (
+  curve: THREE.CatmullRomCurve3 | null, 
+  progress: number
+): RoutePosition => {
+  if (!curve) {
+    // Fallback to straight line
+    return {
+      position: new THREE.Vector3(0, 0, -progress * 100),
+      tangent: new THREE.Vector3(0, 0, -1),
+      angle: 0
+    };
+  }
+  
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const position = curve.getPointAt(clampedProgress);
+  const tangent = curve.getTangentAt(clampedProgress).normalize();
+  
+  // Calculate angle from tangent (rotation around Y axis)
+  // The boat's bow (front) is at local -Z, so we rotate to align local -Z with tangent
+  // atan2(x, z) gives angle where tangent aligns with boat's forward direction
+  const angle = Math.atan2(tangent.x, tangent.z);
+  
+  return { position, tangent, angle };
+};
+
+// Get cumulative distances along the curve for accurate distance-to-progress mapping
+const getCurveDistances = (curve: THREE.CatmullRomCurve3, samples: number = 200): number[] => {
+  const distances: number[] = [0];
+  let totalDist = 0;
+  
+  for (let i = 1; i <= samples; i++) {
+    const t0 = (i - 1) / samples;
+    const t1 = i / samples;
+    const p0 = curve.getPointAt(t0);
+    const p1 = curve.getPointAt(t1);
+    totalDist += p0.distanceTo(p1);
+    distances.push(totalDist);
+  }
+  
+  return distances;
+};
+
+// Convert distance traveled to progress (0-1) on the curve
+const distanceToProgress = (
+  distanceMeters: number, 
+  totalDistanceMeters: number,
+  curveDistances: number[],
+  curveLength: number
+): number => {
+  if (totalDistanceMeters <= 0 || curveLength <= 0) return 0;
+  
+  // Map real-world distance to curve distance
+  const curveDistance = (distanceMeters / totalDistanceMeters) * curveLength;
+  
+  // Binary search to find progress
+  let low = 0;
+  let high = curveDistances.length - 1;
+  
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (curveDistances[mid] < curveDistance) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  
+  // Interpolate for smoother result
+  const idx = Math.max(0, low - 1);
+  const nextIdx = Math.min(curveDistances.length - 1, low);
+  const segmentStart = curveDistances[idx];
+  const segmentEnd = curveDistances[nextIdx];
+  const segmentLength = segmentEnd - segmentStart;
+  
+  let t = idx / (curveDistances.length - 1);
+  if (segmentLength > 0) {
+    const within = (curveDistance - segmentStart) / segmentLength;
+    t += within / (curveDistances.length - 1);
+  }
+  
+  return Math.max(0, Math.min(1, t));
+};
+
+// Water channel width constant - keeps water wider than single scull (~1.5m wide)
+const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)
+const RIVERBANK_WIDTH = 60; // width of each riverbank
+const LANDSCAPE_OFFSET = 50; // minimum distance from water center to landscape objects
 
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
@@ -151,6 +280,389 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
         side={THREE.DoubleSide}
       />
     </mesh>
+  );
+};
+
+// ============================================================================
+// CURVED WATER CHANNEL - Follows GPS path with constant width
+// ============================================================================
+interface CurvedWaterChannelProps {
+  curve: THREE.CatmullRomCurve3 | null;
+  theme: RouteTheme;
+  boatProgress: number;
+}
+
+const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, boatProgress }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  
+  // Theme-based water colors
+  const waterConfig = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled':
+        return { color: '#4a8fa8', emissive: '#00d9ff', emissiveIntensity: 0.08 };
+      case 'gothic-venice':
+        return { color: '#2a4a4a', emissive: '#0a3d62', emissiveIntensity: 0.02 };
+      case 'steampunk-henley':
+        return { color: '#4a5a41', emissive: '#4a6741', emissiveIntensity: 0.01 };
+      case 'dystopian-thames':
+        return { color: '#1a2a3a', emissive: '#162447', emissiveIntensity: 0.03 };
+      case 'scifi-boston':
+        return { color: '#1a4a5a', emissive: '#00ced1', emissiveIntensity: 0.1 };
+      default:
+        return { color: '#4a5a50', emissive: '#3a4a40', emissiveIntensity: 0.01 };
+    }
+  }, [theme]);
+  
+  // Generate curved water geometry following the path
+  const waterGeometry = useMemo(() => {
+    if (!curve) return null;
+    
+    const segments = 200;
+    const halfWidth = WATER_CHANNEL_WIDTH / 2;
+    
+    // Create geometry vertices following the curve
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const point = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t).normalize();
+      
+      // Calculate perpendicular direction (cross product with up vector)
+      const up = new THREE.Vector3(0, 1, 0);
+      const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      
+      // Left and right vertices
+      const left = new THREE.Vector3().copy(point).addScaledVector(perp, -halfWidth);
+      const right = new THREE.Vector3().copy(point).addScaledVector(perp, halfWidth);
+      
+      // Set Y position slightly below water level
+      left.y = -0.1;
+      right.y = -0.1;
+      
+      // Add vertices (left then right)
+      positions.push(left.x, left.y, left.z);
+      positions.push(right.x, right.y, right.z);
+      
+      // Normals pointing up
+      normals.push(0, 1, 0);
+      normals.push(0, 1, 0);
+      
+      // UVs
+      uvs.push(0, t);
+      uvs.push(1, t);
+      
+      // Create triangles (two per segment)
+      if (i < segments) {
+        const base = i * 2;
+        // First triangle
+        indices.push(base, base + 2, base + 1);
+        // Second triangle
+        indices.push(base + 1, base + 2, base + 3);
+      }
+    }
+    
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    
+    return geometry;
+  }, [curve]);
+  
+  if (!curve || !waterGeometry) {
+    return null;
+  }
+  
+  return (
+    <mesh ref={meshRef} geometry={waterGeometry} receiveShadow>
+      <meshPhysicalMaterial
+        color={waterConfig.color}
+        metalness={0.1}
+        roughness={0.12}
+        transmission={0.35}
+        thickness={2.0}
+        ior={1.33}
+        reflectivity={0.9}
+        clearcoat={0.3}
+        clearcoatRoughness={0.4}
+        envMapIntensity={1.5}
+        transparent
+        opacity={0.92}
+        emissive={waterConfig.emissive}
+        emissiveIntensity={waterConfig.emissiveIntensity}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+};
+
+// ============================================================================
+// CURVED RIVERBANKS - Follow GPS path on both sides, outside water channel
+// ============================================================================
+interface CurvedRiverbanksProps {
+  curve: THREE.CatmullRomCurve3 | null;
+  theme: RouteTheme;
+}
+
+const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => {
+  // Theme-based bank colors
+  const bankConfig = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled':
+        return { color: '#6b8e4a', roughness: 0.9 };
+      case 'gothic-venice':
+        return { color: '#3d4a3a', roughness: 0.95 };
+      case 'steampunk-henley':
+        return { color: '#8b7355', roughness: 0.85 };
+      case 'dystopian-thames':
+        return { color: '#2a2a2a', roughness: 0.95 };
+      case 'scifi-boston':
+        return { color: '#1a2a3a', roughness: 0.8 };
+      default:
+        return { color: '#4a7c32', roughness: 0.95 };
+    }
+  }, [theme]);
+  
+  // Generate curved riverbank geometry
+  const { leftBankGeometry, rightBankGeometry } = useMemo(() => {
+    if (!curve) return { leftBankGeometry: null, rightBankGeometry: null };
+    
+    const segments = 200;
+    const waterHalfWidth = WATER_CHANNEL_WIDTH / 2;
+    const bankWidth = RIVERBANK_WIDTH;
+    
+    const createBankGeometry = (side: 'left' | 'right') => {
+      const positions: number[] = [];
+      const normals: number[] = [];
+      const uvs: number[] = [];
+      const indices: number[] = [];
+      
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const point = curve.getPointAt(t);
+        const tangent = curve.getTangentAt(t).normalize();
+        
+        // Perpendicular direction
+        const up = new THREE.Vector3(0, 1, 0);
+        const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+        
+        // Inner edge (at water boundary) and outer edge
+        const innerOffset = side === 'left' ? -waterHalfWidth : waterHalfWidth;
+        const outerOffset = side === 'left' ? -(waterHalfWidth + bankWidth) : (waterHalfWidth + bankWidth);
+        
+        const inner = new THREE.Vector3().copy(point).addScaledVector(perp, innerOffset);
+        const outer = new THREE.Vector3().copy(point).addScaledVector(perp, outerOffset);
+        
+        // Bank is at ground level
+        inner.y = -0.5;
+        outer.y = -0.5;
+        
+        // Add vertices
+        positions.push(inner.x, inner.y, inner.z);
+        positions.push(outer.x, outer.y, outer.z);
+        
+        normals.push(0, 1, 0);
+        normals.push(0, 1, 0);
+        
+        uvs.push(0, t * 10);
+        uvs.push(1, t * 10);
+        
+        if (i < segments) {
+          const base = i * 2;
+          indices.push(base, base + 2, base + 1);
+          indices.push(base + 1, base + 2, base + 3);
+        }
+      }
+      
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      
+      return geometry;
+    };
+    
+    return {
+      leftBankGeometry: createBankGeometry('left'),
+      rightBankGeometry: createBankGeometry('right')
+    };
+  }, [curve]);
+  
+  if (!curve || !leftBankGeometry || !rightBankGeometry) {
+    return null;
+  }
+  
+  return (
+    <group>
+      <mesh geometry={leftBankGeometry} receiveShadow>
+        <meshStandardMaterial color={bankConfig.color} roughness={bankConfig.roughness} />
+      </mesh>
+      <mesh geometry={rightBankGeometry} receiveShadow>
+        <meshStandardMaterial color={bankConfig.color} roughness={bankConfig.roughness} />
+      </mesh>
+    </group>
+  );
+};
+
+// ============================================================================
+// CURVED LANDSCAPE ELEMENTS - Trees and objects placed along curved path
+// ============================================================================
+interface CurvedLandscapeProps {
+  curve: THREE.CatmullRomCurve3 | null;
+  theme: RouteTheme;
+  boatProgress: number;
+}
+
+const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme, boatProgress }) => {
+  // Generate landscape element positions along the curved path
+  const landscapeElements = useMemo(() => {
+    if (!curve) return { leftElements: [], rightElements: [] };
+    
+    const leftElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number }> = [];
+    const rightElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number }> = [];
+    
+    const elementSpacing = 0.02; // Progress spacing between elements
+    const waterHalfWidth = WATER_CHANNEL_WIDTH / 2;
+    const minOffset = LANDSCAPE_OFFSET; // Minimum distance from water center
+    
+    for (let t = 0; t < 1; t += elementSpacing) {
+      const point = curve.getPointAt(t);
+      const tangent = curve.getTangentAt(t).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      
+      // Random offset beyond the minimum landscape offset
+      const leftOffset = minOffset + Math.random() * 30;
+      const rightOffset = minOffset + Math.random() * 30;
+      
+      // Element type based on theme and randomness
+      const getElementType = (): 'tree' | 'mountain' | 'building' => {
+        const rand = Math.random();
+        switch (theme) {
+          case 'dystopian-thames':
+          case 'scifi-boston':
+            return rand < 0.3 ? 'building' : rand < 0.6 ? 'mountain' : 'tree';
+          case 'crystal-bled':
+          case 'willowbrook':
+            return rand < 0.4 ? 'mountain' : 'tree';
+          default:
+            return rand < 0.2 ? 'building' : rand < 0.4 ? 'mountain' : 'tree';
+        }
+      };
+      
+      // Only add elements with some probability to avoid overcrowding
+      if (Math.random() < 0.6) {
+        const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
+        leftPos.y = 0;
+        leftElements.push({
+          position: leftPos,
+          type: getElementType(),
+          scale: 0.8 + Math.random() * 0.8,
+          rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2
+        });
+      }
+      
+      if (Math.random() < 0.6) {
+        const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
+        rightPos.y = 0;
+        rightElements.push({
+          position: rightPos,
+          type: getElementType(),
+          scale: 0.8 + Math.random() * 0.8,
+          rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2
+        });
+      }
+    }
+    
+    return { leftElements, rightElements };
+  }, [curve, theme]);
+  
+  // Get theme colors for elements
+  const colors = useMemo(() => {
+    switch (theme) {
+      case 'crystal-bled':
+        return { tree: '#2d5a3d', mountain: '#5a7247', building: '#8fa4b8' };
+      case 'gothic-venice':
+        return { tree: '#1a2a1a', mountain: '#3d4a3a', building: '#4a5568' };
+      case 'steampunk-henley':
+        return { tree: '#4a5a41', mountain: '#8b7355', building: '#b8860b' };
+      case 'dystopian-thames':
+        return { tree: '#1a1a1a', mountain: '#2a2a2a', building: '#4a4a4a' };
+      case 'scifi-boston':
+        return { tree: '#1a3a2a', mountain: '#2a3a4a', building: '#4a5a6a' };
+      default:
+        return { tree: '#2d5a3d', mountain: '#5a7247', building: '#8b7355' };
+    }
+  }, [theme]);
+  
+  if (!curve) return null;
+  
+  // Render only elements near the boat for performance
+  const visibleRange = 0.15; // Show elements within 15% of path around boat
+  const filteredLeft = landscapeElements.leftElements.filter((_, i) => {
+    const elementProgress = i * 0.02 / 0.6; // Approximate progress
+    return Math.abs(elementProgress - boatProgress) < visibleRange || elementProgress < 0.1;
+  });
+  const filteredRight = landscapeElements.rightElements.filter((_, i) => {
+    const elementProgress = i * 0.02 / 0.6;
+    return Math.abs(elementProgress - boatProgress) < visibleRange || elementProgress < 0.1;
+  });
+  
+  const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string) => {
+    switch (el.type) {
+      case 'tree':
+        return (
+          <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]}>
+            {/* Trunk */}
+            <mesh position={[0, 2 * el.scale, 0]} castShadow>
+              <cylinderGeometry args={[0.3 * el.scale, 0.5 * el.scale, 4 * el.scale, 8]} />
+              <meshStandardMaterial color="#4a3728" roughness={0.9} />
+            </mesh>
+            {/* Foliage */}
+            <mesh position={[0, 5 * el.scale, 0]} castShadow>
+              <coneGeometry args={[2.5 * el.scale, 6 * el.scale, 8]} />
+              <meshStandardMaterial color={colors.tree} roughness={0.8} />
+            </mesh>
+          </group>
+        );
+      case 'mountain':
+        return (
+          <mesh 
+            key={`${side}-mountain-${index}`} 
+            position={[el.position.x, 8 * el.scale, el.position.z]} 
+            castShadow 
+            receiveShadow
+          >
+            <coneGeometry args={[10 * el.scale, 20 * el.scale, 6]} />
+            <meshStandardMaterial color={colors.mountain} roughness={0.9} />
+          </mesh>
+        );
+      case 'building':
+        return (
+          <mesh 
+            key={`${side}-building-${index}`} 
+            position={[el.position.x, 6 * el.scale, el.position.z]} 
+            rotation={[0, el.rotation, 0]}
+            castShadow
+          >
+            <boxGeometry args={[4 * el.scale, 12 * el.scale, 4 * el.scale]} />
+            <meshStandardMaterial color={colors.building} roughness={0.7} />
+          </mesh>
+        );
+    }
+  };
+  
+  return (
+    <group>
+      {filteredLeft.map((el, i) => renderElement(el, i, 'left'))}
+      {filteredRight.map((el, i) => renderElement(el, i, 'right'))}
+    </group>
   );
 };
 
@@ -919,8 +1431,9 @@ const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
 // ============================================================================
 const RowingScull: React.FC<{ 
   position: [number, number, number]; 
+  rotation?: [number, number, number];
   cadence: number;
-}> = ({ position, cadence }) => {
+}> = ({ position, rotation = [0, 0, 0], cadence }) => {
   const leftOarRef = useRef<THREE.Group>(null);
   const rightOarRef = useRef<THREE.Group>(null);
   const rowerRef = useRef<THREE.Group>(null);
@@ -1031,7 +1544,7 @@ const RowingScull: React.FC<{
   const shortsColor = "#1e3a5f";
   
   return (
-    <group position={position}>
+    <group position={position} rotation={rotation}>
       {/* Main hull - long narrow racing shell with fiberglass finish */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
@@ -1355,7 +1868,7 @@ const RowingScull: React.FC<{
 };
 
 // ============================================================================
-// MAIN SCENE - Handles boat movement, camera following, and scenery
+// MAIN SCENE - Handles boat movement along curved GPS path, camera following, and scenery
 // ============================================================================
 const RowerScene: React.FC<Rower3DProps> = ({ 
   route, 
@@ -1371,16 +1884,32 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const atmosphere = useMemo(() => getThemeAtmosphere(routeTheme), [routeTheme]);
   
-  // Boat position ref - boat moves along -Z axis
-  const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
-  const [boatZ, setBoatZ] = useState(0);
+  // Create curved path from GPS coordinates
+  const routeCurve = useMemo(() => {
+    return createRouteCurve(route.coordinates, 0.1);
+  }, [route.coordinates]);
   
-  // Calculate total route distance
+  // Pre-calculate curve distances for accurate progress mapping
+  const curveData = useMemo(() => {
+    if (!routeCurve) return { distances: [], length: 0 };
+    const distances = getCurveDistances(routeCurve);
+    const length = distances[distances.length - 1] || 0;
+    return { distances, length };
+  }, [routeCurve]);
+  
+  // Boat state - progress along curve (0-1) and rotation angle
+  const boatProgressRef = useRef<number>(0);
+  const boatRotationRef = useRef<number>(0);
+  const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const [boatProgress, setBoatProgress] = useState(0);
+  const [boatZ, setBoatZ] = useState(0); // For scenery positioning (legacy compatibility)
+  
+  // Calculate total route distance in meters
   const totalDistance = useMemo(() => {
     return routeTotalDistanceMeters(route.coordinates);
   }, [route.coordinates]);
   
-  // Animation loop - move boat forward and camera follows
+  // Animation loop - move boat along curved path and camera follows
   useFrame((_, delta) => {
     // Calculate speed from pace (seconds per 500m -> meters per second)
     let speedMps = 0;
@@ -1393,30 +1922,57 @@ const RowerScene: React.FC<Rower3DProps> = ({
       speedMps *= intensityFactor;
     }
     
-    // Move boat forward along -Z axis when playing
-    if (isPlaying && speedMps > 0) {
-      // Convert real speed to scene units (1 unit ~= 2 meters, but we use 1:1 for simplicity)
-      const sceneSpeed = speedMps * 0.5; // Scale down for visual comfort
-      boatPositionRef.current.z -= sceneSpeed * delta;
+    // Calculate target progress
+    let targetProgress = boatProgressRef.current;
+    
+    if (isPlaying && speedMps > 0 && totalDistance > 0 && curveData.length > 0) {
+      // Convert speed to curve progress rate
+      // Real speed (m/s) -> progress per second = speed / totalDistance
+      const progressRate = (speedMps / totalDistance);
+      targetProgress = Math.min(1, boatProgressRef.current + progressRate * delta);
+      boatProgressRef.current = targetProgress;
     } else if (distanceMeters !== null && distanceMeters !== undefined && totalDistance > 0) {
       // When not playing, position based on distance traveled
-      const progress = Math.min(1, distanceMeters / totalDistance);
-      const targetZ = -progress * totalDistance * 0.1; // Scale route to scene
-      boatPositionRef.current.z += (targetZ - boatPositionRef.current.z) * delta * 3;
+      targetProgress = distanceToProgress(
+        distanceMeters,
+        totalDistance,
+        curveData.distances,
+        curveData.length
+      );
+      // Smooth transition to target
+      boatProgressRef.current += (targetProgress - boatProgressRef.current) * delta * 3;
     }
     
+    // Get boat position and rotation from curve
+    const routePos = getRoutePositionAtProgress(routeCurve, boatProgressRef.current);
+    boatPositionRef.current.copy(routePos.position);
+    boatRotationRef.current = routePos.angle;
+    
     // Update state for scenery positioning (throttled)
+    if (Math.abs(boatProgressRef.current - boatProgress) > 0.001) {
+      setBoatProgress(boatProgressRef.current);
+    }
+    
+    // Update boatZ for legacy scenery components (throttled)
     const currentZ = boatPositionRef.current.z;
     if (Math.abs(currentZ - boatZ) > 5) {
       setBoatZ(currentZ);
     }
     
-    // Camera follows boat with fixed offset (chase view)
-    // Camera at (0, 2.5, 6) relative to boat = behind and above
+    // Camera follows boat from behind (relative to boat heading)
+    // Camera offset: 6 units behind, 2.5 units above
+    const cameraDistance = 6;
+    const cameraHeight = 2.5;
+    
+    // Calculate camera position behind the boat using its rotation
+    // The boat's tangent direction is where it's heading
+    // Camera should be BEHIND the boat (opposite of tangent direction)
+    const tangent = routePos.tangent;
+    
     camera.position.set(
-      boatPositionRef.current.x,
-      boatPositionRef.current.y + 2.5,
-      boatPositionRef.current.z + 6
+      boatPositionRef.current.x - tangent.x * cameraDistance,
+      boatPositionRef.current.y + cameraHeight,
+      boatPositionRef.current.z - tangent.z * cameraDistance
     );
     
     // Camera looks at the boat
@@ -1433,10 +1989,16 @@ const RowerScene: React.FC<Rower3DProps> = ({
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
           z: boatPositionRef.current.z,
-          progress: totalDistance > 0 ? Math.abs(boatPositionRef.current.z * 10) / totalDistance : 0
+          progress: boatProgressRef.current,
+          angle: boatRotationRef.current
         };
         (window as any).__ROWER3D_CAMERA = {
           position: [camera.position.x, camera.position.y, camera.position.z]
+        };
+        (window as any).__ROWER3D_ROUTE = {
+          hasCurve: !!routeCurve,
+          totalDistance,
+          curveLength: curveData.length
         };
       }
     } catch {}
@@ -1590,25 +2152,41 @@ const RowerScene: React.FC<Rower3DProps> = ({
         environmentIntensity={skyConfig.exposure}
       />
       
-      {/* Photorealistic water with PBR materials */}
-      <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
+      {/* Water - curved if we have GPS curve, otherwise straight */}
+      {routeCurve ? (
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} boatProgress={boatProgress} />
+      ) : (
+        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
+      )}
+      
+      {/* Curved riverbanks following the GPS path */}
+      {routeCurve && (
+        <CurvedRiverbanks curve={routeCurve} theme={routeTheme} />
+      )}
       
       {/* Mist layer for atmospheric depth */}
       <MistLayer boatZ={boatZ} theme={routeTheme} />
       
-      {/* Themed riverbanks */}
-      <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
+      {/* Themed riverbanks - use straight banks only when no curve */}
+      {!routeCurve && (
+        <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
+      )}
       
-      {/* Themed landscape elements */}
-      {renderThemedLandscape()}
+      {/* Themed landscape elements - along curve or straight */}
+      {routeCurve ? (
+        <CurvedLandscapeElements curve={routeCurve} theme={routeTheme} boatProgress={boatProgress} />
+      ) : (
+        renderThemedLandscape()
+      )}
       
-      {/* The rowing scull - positioned at current boat location */}
+      {/* The rowing scull - positioned and rotated along curved path */}
       <RowingScull 
         position={[
           boatPositionRef.current.x, 
           boatPositionRef.current.y, 
           boatPositionRef.current.z
-        ]} 
+        ]}
+        rotation={[0, boatRotationRef.current, 0]}
         cadence={cadence || 30}
       />
       
