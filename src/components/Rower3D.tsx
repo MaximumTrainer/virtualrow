@@ -179,38 +179,146 @@ interface Rower3DProps {
 }
 
 // ============================================================================
-// PHOTOREALISTIC WATER - PBR water with reflections, waves, and depth
+// HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
+// subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
 const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  const geometryRef = useRef<THREE.PlaneGeometry>(null);
   
-  // Theme-based water colors matching reference image (grey-green murky)
+  // HD Theme-based water configurations with enhanced realism
   const waterConfig = useMemo(() => {
     switch (theme) {
       case 'crystal-bled':
-        return { color: '#4a8fa8', transmission: 0.5, roughness: 0.08, emissive: '#00d9ff', emissiveIntensity: 0.08 };
+        // Crystal-clear alpine lake - high visibility, turquoise tint
+        return { 
+          color: '#3a9db8', 
+          transmission: 0.65, 
+          roughness: 0.04, 
+          thickness: 3.5,
+          emissive: '#00e5ff', 
+          emissiveIntensity: 0.06,
+          attenuationColor: '#00a8cc',
+          attenuationDistance: 8.0,
+          specularIntensity: 1.2,
+          sheenColor: '#80deea'
+        };
       case 'gothic-venice':
-        return { color: '#2a4a4a', transmission: 0.3, roughness: 0.15, emissive: '#0a3d62', emissiveIntensity: 0.02 };
+        // Murky canal water - low visibility, greenish-brown, mysterious
+        return { 
+          color: '#1e3a3a', 
+          transmission: 0.22, 
+          roughness: 0.18, 
+          thickness: 1.5,
+          emissive: '#0a3d62', 
+          emissiveIntensity: 0.015,
+          attenuationColor: '#1a2f2f',
+          attenuationDistance: 2.0,
+          specularIntensity: 0.6,
+          sheenColor: '#2a4a4a'
+        };
       case 'steampunk-henley':
-        return { color: '#4a5a41', transmission: 0.25, roughness: 0.2, emissive: '#4a6741', emissiveIntensity: 0.01 };
+        // English river - slightly murky, warm green-brown tones
+        return { 
+          color: '#3a4a38', 
+          transmission: 0.28, 
+          roughness: 0.15, 
+          thickness: 2.0,
+          emissive: '#4a6741', 
+          emissiveIntensity: 0.008,
+          attenuationColor: '#3a4a38',
+          attenuationDistance: 3.0,
+          specularIntensity: 0.8,
+          sheenColor: '#5a7a58'
+        };
       case 'dystopian-thames':
-        return { color: '#1a2a3a', transmission: 0.2, roughness: 0.25, emissive: '#162447', emissiveIntensity: 0.03 };
+        // Polluted industrial water - dark, oily surface, toxic sheen
+        return { 
+          color: '#0a1a2a', 
+          transmission: 0.15, 
+          roughness: 0.22, 
+          thickness: 1.0,
+          emissive: '#1a2a4a', 
+          emissiveIntensity: 0.025,
+          attenuationColor: '#0a1520',
+          attenuationDistance: 1.0,
+          specularIntensity: 1.4, // Oily sheen
+          sheenColor: '#2a3a5a'
+        };
       case 'scifi-boston':
-        return { color: '#1a4a5a', transmission: 0.4, roughness: 0.1, emissive: '#00ced1', emissiveIntensity: 0.1 };
-      default: // Realistic river like reference image
-        return { color: '#4a5a50', transmission: 0.35, roughness: 0.12, emissive: '#3a4a40', emissiveIntensity: 0.01 };
+        // Futuristic water with neon reflections - dark with luminous quality
+        return { 
+          color: '#0a3a4a', 
+          transmission: 0.45, 
+          roughness: 0.06, 
+          thickness: 2.5,
+          emissive: '#00ced1', 
+          emissiveIntensity: 0.12,
+          attenuationColor: '#006080',
+          attenuationDistance: 5.0,
+          specularIntensity: 1.0,
+          sheenColor: '#40e0d0'
+        };
+      default: // Realistic contemporary river (Willowbrook)
+        // Natural river water - balanced visibility, green-blue tones
+        return { 
+          color: '#3a5a55', 
+          transmission: 0.38, 
+          roughness: 0.10, 
+          thickness: 2.5,
+          emissive: '#2a4a40', 
+          emissiveIntensity: 0.008,
+          attenuationColor: '#2a4a45',
+          attenuationDistance: 4.0,
+          specularIntensity: 0.9,
+          sheenColor: '#4a6a60'
+        };
     }
   }, [theme]);
   
-  // Animate water surface with procedural waves
+  // Animate water surface with realistic procedural waves
   useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    
     if (materialRef.current) {
-      // Subtle wave-like roughness variation over time
-      const time = state.clock.elapsedTime;
-      materialRef.current.roughness = waterConfig.roughness + Math.sin(time * 0.5) * 0.02;
+      // Dynamic roughness simulating wind-driven micro-ripples
+      const windVariation = Math.sin(time * 0.3) * 0.015 + Math.sin(time * 0.7) * 0.008;
+      materialRef.current.roughness = waterConfig.roughness + windVariation;
+      
+      // Subtle emissive pulsing for light caustic simulation
+      const causticPulse = (Math.sin(time * 1.2) * 0.5 + 0.5) * 0.02;
+      materialRef.current.emissiveIntensity = waterConfig.emissiveIntensity + causticPulse;
     }
-    // NOTE: Vertex displacement disabled for performance - use shader-based waves in future
+    
+    // Vertex-based wave animation for realistic surface movement
+    if (meshRef.current && geometryRef.current) {
+      const positions = geometryRef.current.attributes.position;
+      const originalPositions = geometryRef.current.userData.originalPositions;
+      
+      // Store original positions on first frame
+      if (!originalPositions) {
+        geometryRef.current.userData.originalPositions = positions.array.slice();
+      } else {
+        const posArray = positions.array as Float32Array;
+        const origArray = originalPositions as Float32Array;
+        
+        for (let i = 0; i < posArray.length; i += 3) {
+          const x = origArray[i];
+          const y = origArray[i + 1];
+          
+          // Multi-frequency wave pattern for realistic water
+          const wave1 = Math.sin(x * 0.02 + time * 0.8) * 0.15;
+          const wave2 = Math.sin(y * 0.025 + time * 0.6) * 0.12;
+          const wave3 = Math.sin((x + y) * 0.015 + time * 1.1) * 0.08;
+          const wave4 = Math.sin(x * 0.05 + y * 0.04 + time * 1.5) * 0.04; // High-freq ripples
+          
+          posArray[i + 2] = wave1 + wave2 + wave3 + wave4;
+        }
+        positions.needsUpdate = true;
+        geometryRef.current.computeVertexNormals();
+      }
+    }
   });
   
   return (
@@ -220,23 +328,29 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
       position={[0, -0.1, boatZ]}
       receiveShadow
     >
-      <planeGeometry args={[1000, 1000, 128, 128]} />
+      <planeGeometry ref={geometryRef} args={[1000, 1000, 192, 192]} />
       <meshPhysicalMaterial
         ref={materialRef}
         color={waterConfig.color}
-        metalness={0.1}
+        metalness={0.05}
         roughness={waterConfig.roughness}
         transmission={waterConfig.transmission}
-        thickness={2.0}
-        ior={1.33} // Water refraction index
-        reflectivity={0.9}
-        clearcoat={0.3}
-        clearcoatRoughness={0.4}
-        envMapIntensity={1.5}
+        thickness={waterConfig.thickness}
+        ior={1.333} // Accurate water IOR
+        reflectivity={0.95}
+        clearcoat={0.4}
+        clearcoatRoughness={0.25}
+        envMapIntensity={1.8}
         transparent
-        opacity={0.92}
+        opacity={0.94}
         emissive={waterConfig.emissive}
         emissiveIntensity={waterConfig.emissiveIntensity}
+        attenuationColor={waterConfig.attenuationColor}
+        attenuationDistance={waterConfig.attenuationDistance}
+        specularIntensity={waterConfig.specularIntensity}
+        sheen={0.15}
+        sheenColor={waterConfig.sheenColor}
+        sheenRoughness={0.3}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -244,47 +358,115 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
 };
 
 // ============================================================================
-// MIST LAYER - Low-lying fog near water surface for atmosphere
+// HD MIST LAYER - Multi-layered volumetric fog for atmospheric depth
 // ============================================================================
 const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
-  const mistOpacity = useMemo(() => {
+  const layer1Ref = useRef<THREE.Mesh>(null);
+  const layer2Ref = useRef<THREE.Mesh>(null);
+  
+  // HD mist configuration with multiple layers
+  const mistConfig = useMemo(() => {
     switch (theme) {
-      case 'gothic-venice': return 0.25;  // Heavy mist
-      case 'dystopian-thames': return 0.2; // Toxic haze
-      case 'steampunk-henley': return 0.15; // Steam
-      case 'crystal-bled': return 0.08;    // Light alpine mist
-      case 'scifi-boston': return 0.1;     // Light neon haze
-      default: return 0.12;                // Standard morning mist
+      case 'gothic-venice': 
+        return { 
+          baseOpacity: 0.22, 
+          color1: '#1e272e', 
+          color2: '#2a3a4a',
+          height1: 0.6, 
+          height2: 2.5,
+          density: 1.4
+        };
+      case 'dystopian-thames': 
+        return { 
+          baseOpacity: 0.18, 
+          color1: '#1a1a2e', 
+          color2: '#2a2a3e',
+          height1: 0.5, 
+          height2: 3.0,
+          density: 1.2
+        };
+      case 'steampunk-henley': 
+        return { 
+          baseOpacity: 0.14, 
+          color1: '#8b7355', 
+          color2: '#a08565',
+          height1: 0.8, 
+          height2: 2.0,
+          density: 0.9
+        };
+      case 'crystal-bled': 
+        return { 
+          baseOpacity: 0.06, 
+          color1: '#e8f4f8', 
+          color2: '#d0e8f0',
+          height1: 0.3, 
+          height2: 1.5,
+          density: 0.5
+        };
+      case 'scifi-boston': 
+        return { 
+          baseOpacity: 0.08, 
+          color1: '#162447', 
+          color2: '#1a3a5a',
+          height1: 0.4, 
+          height2: 2.0,
+          density: 0.7
+        };
+      default: 
+        return { 
+          baseOpacity: 0.10, 
+          color1: '#c8d4dc', 
+          color2: '#d8e4ec',
+          height1: 0.5, 
+          height2: 1.8,
+          density: 0.8
+        };
     }
   }, [theme]);
   
-  const mistColor = useMemo(() => {
-    switch (theme) {
-      case 'gothic-venice': return '#1e272e';
-      case 'dystopian-thames': return '#1a1a2e';
-      case 'steampunk-henley': return '#8b7355';
-      case 'crystal-bled': return '#e8f4f8';
-      case 'scifi-boston': return '#162447';
-      default: return '#c8d4dc';
+  // Animate mist drift for realism
+  useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    if (layer1Ref.current) {
+      layer1Ref.current.position.x = Math.sin(time * 0.05) * 3;
+      layer1Ref.current.position.z = boatZ + Math.cos(time * 0.03) * 2;
     }
-  }, [theme]);
+    if (layer2Ref.current) {
+      layer2Ref.current.position.x = Math.sin(time * 0.04 + 1) * 5;
+      layer2Ref.current.position.z = boatZ + Math.cos(time * 0.025 + 0.5) * 3;
+    }
+  });
   
   return (
-    <mesh position={[0, 0.8, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[800, 800]} />
-      <meshBasicMaterial
-        color={mistColor}
-        transparent
-        opacity={mistOpacity}
-        depthWrite={false}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+    <group>
+      {/* Ground-hugging mist layer */}
+      <mesh ref={layer1Ref} position={[0, mistConfig.height1, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[900, 900]} />
+        <meshBasicMaterial
+          color={mistConfig.color1}
+          transparent
+          opacity={mistConfig.baseOpacity * mistConfig.density}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {/* Higher atmospheric haze layer */}
+      <mesh ref={layer2Ref} position={[0, mistConfig.height2, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1200, 1200]} />
+        <meshBasicMaterial
+          color={mistConfig.color2}
+          transparent
+          opacity={mistConfig.baseOpacity * 0.4}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
   );
 };
 
 // ============================================================================
-// CURVED WATER CHANNEL - Follows GPS path with constant width
+// HD CURVED WATER CHANNEL - Follows GPS path with realistic water rendering
 // ============================================================================
 interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
@@ -294,24 +476,82 @@ interface CurvedWaterChannelProps {
 
 const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, boatProgress }) => {
   const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
   
-  // Theme-based water colors
+  // HD Theme-based water colors with enhanced realism (matches PhotorealisticWater)
   const waterConfig = useMemo(() => {
     switch (theme) {
       case 'crystal-bled':
-        return { color: '#4a8fa8', emissive: '#00d9ff', emissiveIntensity: 0.08 };
+        return { 
+          color: '#3a9db8', 
+          emissive: '#00e5ff', 
+          emissiveIntensity: 0.06,
+          transmission: 0.65,
+          thickness: 3.5,
+          attenuationColor: '#00a8cc',
+          roughness: 0.04
+        };
       case 'gothic-venice':
-        return { color: '#2a4a4a', emissive: '#0a3d62', emissiveIntensity: 0.02 };
+        return { 
+          color: '#1e3a3a', 
+          emissive: '#0a3d62', 
+          emissiveIntensity: 0.015,
+          transmission: 0.22,
+          thickness: 1.5,
+          attenuationColor: '#1a2f2f',
+          roughness: 0.18
+        };
       case 'steampunk-henley':
-        return { color: '#4a5a41', emissive: '#4a6741', emissiveIntensity: 0.01 };
+        return { 
+          color: '#3a4a38', 
+          emissive: '#4a6741', 
+          emissiveIntensity: 0.008,
+          transmission: 0.28,
+          thickness: 2.0,
+          attenuationColor: '#3a4a38',
+          roughness: 0.15
+        };
       case 'dystopian-thames':
-        return { color: '#1a2a3a', emissive: '#162447', emissiveIntensity: 0.03 };
+        return { 
+          color: '#0a1a2a', 
+          emissive: '#1a2a4a', 
+          emissiveIntensity: 0.025,
+          transmission: 0.15,
+          thickness: 1.0,
+          attenuationColor: '#0a1520',
+          roughness: 0.22
+        };
       case 'scifi-boston':
-        return { color: '#1a4a5a', emissive: '#00ced1', emissiveIntensity: 0.1 };
+        return { 
+          color: '#0a3a4a', 
+          emissive: '#00ced1', 
+          emissiveIntensity: 0.12,
+          transmission: 0.45,
+          thickness: 2.5,
+          attenuationColor: '#006080',
+          roughness: 0.06
+        };
       default:
-        return { color: '#4a5a50', emissive: '#3a4a40', emissiveIntensity: 0.01 };
+        return { 
+          color: '#3a5a55', 
+          emissive: '#2a4a40', 
+          emissiveIntensity: 0.008,
+          transmission: 0.38,
+          thickness: 2.5,
+          attenuationColor: '#2a4a45',
+          roughness: 0.10
+        };
     }
   }, [theme]);
+  
+  // Animate water material for dynamic surface
+  useFrame((state) => {
+    if (materialRef.current) {
+      const time = state.clock.elapsedTime;
+      const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
+      materialRef.current.roughness = waterConfig.roughness + windVariation;
+    }
+  });
   
   // Generate curved water geometry following the path
   const waterGeometry = useMemo(() => {
@@ -381,20 +621,23 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, b
   return (
     <mesh ref={meshRef} geometry={waterGeometry} receiveShadow>
       <meshPhysicalMaterial
+        ref={materialRef}
         color={waterConfig.color}
-        metalness={0.1}
-        roughness={0.12}
-        transmission={0.35}
-        thickness={2.0}
-        ior={1.33}
-        reflectivity={0.9}
-        clearcoat={0.3}
-        clearcoatRoughness={0.4}
-        envMapIntensity={1.5}
+        metalness={0.05}
+        roughness={waterConfig.roughness}
+        transmission={waterConfig.transmission}
+        thickness={waterConfig.thickness}
+        ior={1.333}
+        reflectivity={0.95}
+        clearcoat={0.4}
+        clearcoatRoughness={0.25}
+        envMapIntensity={1.8}
         transparent
-        opacity={0.92}
+        opacity={0.94}
         emissive={waterConfig.emissive}
         emissiveIntensity={waterConfig.emissiveIntensity}
+        attenuationColor={waterConfig.attenuationColor}
+        attenuationDistance={waterConfig.thickness * 1.5}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -404,27 +647,84 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, b
 // ============================================================================
 // CURVED RIVERBANKS - Follow GPS path on both sides, outside water channel
 // ============================================================================
+// ============================================================================
+// HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
+// ============================================================================
 interface CurvedRiverbanksProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
 }
 
 const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => {
-  // Theme-based bank colors
+  // HD Theme-based bank materials with realistic PBR properties
   const bankConfig = useMemo(() => {
     switch (theme) {
       case 'crystal-bled':
-        return { color: '#6b8e4a', roughness: 0.9 };
+        // Alpine meadow - lush green grass with rocky edges
+        return { 
+          color: '#5a8a42', 
+          roughness: 0.88,
+          metalness: 0.0,
+          emissive: '#2a4a22',
+          emissiveIntensity: 0.01,
+          sheen: 0.25,
+          sheenColor: '#7ab05a'
+        };
       case 'gothic-venice':
-        return { color: '#3d4a3a', roughness: 0.95 };
+        // Weathered stone embankments with moss
+        return { 
+          color: '#2a3a2a', 
+          roughness: 0.95,
+          metalness: 0.02,
+          emissive: '#1a2a1a',
+          emissiveIntensity: 0.005,
+          sheen: 0.1,
+          sheenColor: '#3a4a3a'
+        };
       case 'steampunk-henley':
-        return { color: '#8b7355', roughness: 0.85 };
+        // Manicured grass with golden-brown edges
+        return { 
+          color: '#6a7a48', 
+          roughness: 0.82,
+          metalness: 0.0,
+          emissive: '#4a5a30',
+          emissiveIntensity: 0.008,
+          sheen: 0.35,
+          sheenColor: '#8a9a68'
+        };
       case 'dystopian-thames':
-        return { color: '#2a2a2a', roughness: 0.95 };
+        // Industrial concrete and muddy ground
+        return { 
+          color: '#1a1a18', 
+          roughness: 0.96,
+          metalness: 0.05,
+          emissive: '#0a0a08',
+          emissiveIntensity: 0.002,
+          sheen: 0.05,
+          sheenColor: '#2a2a28'
+        };
       case 'scifi-boston':
-        return { color: '#1a2a3a', roughness: 0.8 };
+        // High-tech walkway materials
+        return { 
+          color: '#1a2a3a', 
+          roughness: 0.75,
+          metalness: 0.15,
+          emissive: '#0a1a2a',
+          emissiveIntensity: 0.015,
+          sheen: 0.2,
+          sheenColor: '#2a4a5a'
+        };
       default:
-        return { color: '#4a7c32', roughness: 0.95 };
+        // Natural river grass - Willowbrook
+        return { 
+          color: '#4a7a32', 
+          roughness: 0.9,
+          metalness: 0.0,
+          emissive: '#2a4a18',
+          emissiveIntensity: 0.006,
+          sheen: 0.3,
+          sheenColor: '#6a9a52'
+        };
     }
   }, [theme]);
   
@@ -501,10 +801,28 @@ const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => 
   return (
     <group>
       <mesh geometry={leftBankGeometry} receiveShadow>
-        <meshStandardMaterial color={bankConfig.color} roughness={bankConfig.roughness} />
+        <meshPhysicalMaterial 
+          color={bankConfig.color} 
+          roughness={bankConfig.roughness}
+          metalness={bankConfig.metalness}
+          emissive={bankConfig.emissive}
+          emissiveIntensity={bankConfig.emissiveIntensity}
+          sheen={bankConfig.sheen}
+          sheenColor={bankConfig.sheenColor}
+          sheenRoughness={0.8}
+        />
       </mesh>
       <mesh geometry={rightBankGeometry} receiveShadow>
-        <meshStandardMaterial color={bankConfig.color} roughness={bankConfig.roughness} />
+        <meshPhysicalMaterial 
+          color={bankConfig.color} 
+          roughness={bankConfig.roughness}
+          metalness={bankConfig.metalness}
+          emissive={bankConfig.emissive}
+          emissiveIntensity={bankConfig.emissiveIntensity}
+          sheen={bankConfig.sheen}
+          sheenColor={bankConfig.sheenColor}
+          sheenRoughness={0.8}
+        />
       </mesh>
     </group>
   );
@@ -583,21 +901,45 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
     return { leftElements, rightElements };
   }, [curve, theme]);
   
-  // Get theme colors for elements
+  // Get HD theme colors for elements with enhanced detail
   const colors = useMemo(() => {
     switch (theme) {
       case 'crystal-bled':
-        return { tree: '#2d5a3d', mountain: '#5a7247', building: '#8fa4b8' };
+        return { 
+          tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
+          mountain: '#5a7247', mountainSnow: '#f8faff', 
+          building: '#8fa4b8', buildingAccent: '#6a8098', windowGlow: '#e8f4ff'
+        };
       case 'gothic-venice':
-        return { tree: '#1a2a1a', mountain: '#3d4a3a', building: '#4a5568' };
+        return { 
+          tree: '#1a2818', treeBark: '#2a1810', treeHighlight: '#2a3a28',
+          mountain: '#3d4a3a', mountainSnow: '#c0c8d0', 
+          building: '#3a4552', buildingAccent: '#2a3542', windowGlow: '#ff8844'
+        };
       case 'steampunk-henley':
-        return { tree: '#4a5a41', mountain: '#8b7355', building: '#b8860b' };
+        return { 
+          tree: '#4a5a3a', treeBark: '#5a4030', treeHighlight: '#6a7a5a',
+          mountain: '#8b7355', mountainSnow: '#e8dcd0', 
+          building: '#c49a32', buildingAccent: '#8b6914', windowGlow: '#ffcc44'
+        };
       case 'dystopian-thames':
-        return { tree: '#1a1a1a', mountain: '#2a2a2a', building: '#4a4a4a' };
+        return { 
+          tree: '#151512', treeBark: '#1a1510', treeHighlight: '#252520',
+          mountain: '#2a2a2a', mountainSnow: '#4a4a4a', 
+          building: '#3a3a3a', buildingAccent: '#2a2a2a', windowGlow: '#ff4422'
+        };
       case 'scifi-boston':
-        return { tree: '#1a3a2a', mountain: '#2a3a4a', building: '#4a5a6a' };
+        return { 
+          tree: '#152a20', treeBark: '#1a2018', treeHighlight: '#2a4a3a',
+          mountain: '#2a3a4a', mountainSnow: '#4a6a8a', 
+          building: '#3a5a7a', buildingAccent: '#2a4a6a', windowGlow: '#00e0ff'
+        };
       default:
-        return { tree: '#2d5a3d', mountain: '#5a7247', building: '#8b7355' };
+        return { 
+          tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
+          mountain: '#5a7247', mountainSnow: '#f5f8fa', 
+          building: '#8b7355', buildingAccent: '#6a5a45', windowGlow: '#ffcc88'
+        };
     }
   }, [theme]);
   
@@ -619,54 +961,87 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
       case 'tree':
         return (
           <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]} rotation={[0, el.rotation, 0]}>
-            {/* Photorealistic trunk with bark texture */}
+            {/* HD Photorealistic trunk with detailed bark texture simulation */}
             <mesh position={[0, 2 * el.scale, 0]} castShadow>
-              <cylinderGeometry args={[0.25 * el.scale, 0.45 * el.scale, 4 * el.scale, 12]} />
+              <cylinderGeometry args={[0.22 * el.scale, 0.42 * el.scale, 4.2 * el.scale, 16]} />
               <meshPhysicalMaterial 
-                color="#3d2817"
-                roughness={0.95}
+                color={colors.treeBark}
+                roughness={0.96}
                 metalness={0.0}
-                clearcoat={0.03}
-                clearcoatRoughness={0.95}
+                clearcoat={0.02}
+                clearcoatRoughness={0.98}
+                sheen={0.05}
+                sheenColor="#2a1a10"
               />
             </mesh>
-            {/* Root flare */}
-            <mesh position={[0, 0.2 * el.scale, 0]} castShadow>
-              <cylinderGeometry args={[0.4 * el.scale, 0.6 * el.scale, 0.5 * el.scale, 8]} />
-              <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
-            </mesh>
-            {/* Multi-layer foliage with subsurface scattering */}
-            <mesh position={[0, 4.5 * el.scale, 0]} castShadow>
-              <coneGeometry args={[2.8 * el.scale, 5 * el.scale, 12]} />
+            {/* Detailed root flare with organic shape */}
+            <mesh position={[0, 0.15 * el.scale, 0]} castShadow>
+              <cylinderGeometry args={[0.38 * el.scale, 0.65 * el.scale, 0.45 * el.scale, 10]} />
               <meshPhysicalMaterial 
-                color={colors.tree}
-                roughness={0.82}
+                color={colors.treeBark}
+                roughness={0.97}
                 metalness={0.0}
-                transmission={0.06}
-                thickness={0.5}
-                sheen={0.4}
-                sheenColor="#4a7a4a"
+                sheen={0.03}
+                sheenColor="#1a1008"
               />
             </mesh>
-            <mesh position={[0, 6 * el.scale, 0]} castShadow>
-              <coneGeometry args={[2 * el.scale, 3.5 * el.scale, 12]} />
+            {/* Secondary roots spreading */}
+            {[0, 1.2, 2.4, 3.6, 4.8].map((angle, j) => (
+              <mesh key={j} position={[Math.cos(angle) * 0.5 * el.scale, 0.05, Math.sin(angle) * 0.5 * el.scale]} rotation={[0.3, angle, 0.4]} castShadow>
+                <cylinderGeometry args={[0.06 * el.scale, 0.1 * el.scale, 0.6 * el.scale, 6]} />
+                <meshPhysicalMaterial color={colors.treeBark} roughness={0.98} />
+              </mesh>
+            ))}
+            {/* HD Multi-layer conifer foliage with realistic light transmission */}
+            <mesh position={[0, 4.2 * el.scale, 0]} castShadow>
+              <coneGeometry args={[2.8 * el.scale, 4.8 * el.scale, 16]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
                 roughness={0.78}
+                metalness={0.0}
                 transmission={0.08}
-                thickness={0.4}
-                sheen={0.5}
-                sheenColor="#5a8a5a"
+                thickness={0.6}
+                sheen={0.45}
+                sheenColor={colors.treeHighlight}
+                sheenRoughness={0.7}
               />
             </mesh>
-            <mesh position={[0, 7.2 * el.scale, 0]} castShadow>
-              <coneGeometry args={[1.2 * el.scale, 2.5 * el.scale, 10]} />
+            <mesh position={[0, 5.8 * el.scale, 0]} castShadow>
+              <coneGeometry args={[2.1 * el.scale, 3.8 * el.scale, 16]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
-                roughness={0.75}
-                transmission={0.1}
-                sheen={0.6}
-                sheenColor="#6a9a6a"
+                roughness={0.74}
+                metalness={0.0}
+                transmission={0.10}
+                thickness={0.5}
+                sheen={0.52}
+                sheenColor={colors.treeHighlight}
+                sheenRoughness={0.65}
+              />
+            </mesh>
+            <mesh position={[0, 7.0 * el.scale, 0]} castShadow>
+              <coneGeometry args={[1.4 * el.scale, 3.0 * el.scale, 14]} />
+              <meshPhysicalMaterial 
+                color={colors.tree}
+                roughness={0.70}
+                metalness={0.0}
+                transmission={0.12}
+                thickness={0.4}
+                sheen={0.58}
+                sheenColor={colors.treeHighlight}
+                sheenRoughness={0.6}
+              />
+            </mesh>
+            {/* Spire top */}
+            <mesh position={[0, 8.0 * el.scale, 0]} castShadow>
+              <coneGeometry args={[0.6 * el.scale, 2.0 * el.scale, 12]} />
+              <meshPhysicalMaterial 
+                color={colors.tree}
+                roughness={0.68}
+                transmission={0.14}
+                thickness={0.3}
+                sheen={0.65}
+                sheenColor={colors.treeHighlight}
               />
             </mesh>
           </group>
@@ -674,34 +1049,45 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
       case 'mountain':
         return (
           <group key={`${side}-mountain-${index}`} position={[el.position.x, 0, el.position.z]}>
-            {/* Main mountain with realistic rock */}
+            {/* HD Main mountain with realistic rock surfaces */}
             <mesh position={[0, 8 * el.scale, 0]} castShadow receiveShadow>
-              <coneGeometry args={[10 * el.scale, 20 * el.scale, 8]} />
+              <coneGeometry args={[10 * el.scale, 20 * el.scale, 10]} />
               <meshPhysicalMaterial 
                 color={colors.mountain}
-                roughness={0.92}
-                metalness={0.04}
-                clearcoat={0.02}
-                clearcoatRoughness={0.95}
+                roughness={0.94}
+                metalness={0.03}
+                clearcoat={0.015}
+                clearcoatRoughness={0.96}
+                sheen={0.05}
+                sheenColor="#4a5540"
               />
             </mesh>
-            {/* Snow cap */}
+            {/* HD Snow cap with realistic ice/snow material */}
             <mesh position={[0, 14 * el.scale, 0]} castShadow>
-              <coneGeometry args={[4 * el.scale, 8 * el.scale, 8]} />
+              <coneGeometry args={[4.2 * el.scale, 8.5 * el.scale, 10]} />
               <meshPhysicalMaterial 
-                color="#f5f8fa"
-                roughness={0.38}
+                color={colors.mountainSnow}
+                roughness={0.32}
                 metalness={0.0}
-                clearcoat={0.35}
-                clearcoatRoughness={0.55}
-                sheen={0.8}
-                sheenColor="#e0e8f0"
+                clearcoat={0.42}
+                clearcoatRoughness={0.48}
+                sheen={0.9}
+                sheenColor="#d8e8f8"
+                sheenRoughness={0.4}
               />
             </mesh>
-            {/* Rocky outcrops */}
+            {/* Multiple rocky outcrops for natural appearance */}
             <mesh position={[3 * el.scale, 5 * el.scale, 2 * el.scale]} castShadow>
-              <dodecahedronGeometry args={[1.5 * el.scale, 0]} />
-              <meshPhysicalMaterial color="#4a5545" roughness={0.94} />
+              <dodecahedronGeometry args={[1.6 * el.scale, 0]} />
+              <meshPhysicalMaterial color="#4a5545" roughness={0.95} metalness={0.02} />
+            </mesh>
+            <mesh position={[-2 * el.scale, 7 * el.scale, 3 * el.scale]} castShadow>
+              <dodecahedronGeometry args={[1.2 * el.scale, 0]} />
+              <meshPhysicalMaterial color="#525a4a" roughness={0.94} metalness={0.02} />
+            </mesh>
+            <mesh position={[1 * el.scale, 4 * el.scale, -2.5 * el.scale]} castShadow>
+              <dodecahedronGeometry args={[1.8 * el.scale, 0]} />
+              <meshPhysicalMaterial color="#4a5040" roughness={0.96} metalness={0.01} />
             </mesh>
           </group>
         );
@@ -712,38 +1098,74 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
             position={[el.position.x, 0, el.position.z]} 
             rotation={[0, el.rotation, 0]}
           >
-            {/* Main building with realistic materials */}
+            {/* HD Main building with detailed architectural materials */}
             <mesh position={[0, 6 * el.scale, 0]} castShadow receiveShadow>
-              <boxGeometry args={[4 * el.scale, 12 * el.scale, 4 * el.scale]} />
+              <boxGeometry args={[4.2 * el.scale, 12.5 * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial 
                 color={colors.building}
-                roughness={0.75}
-                metalness={0.1}
-                clearcoat={0.1}
-                clearcoatRoughness={0.8}
+                roughness={0.72}
+                metalness={0.08}
+                clearcoat={0.12}
+                clearcoatRoughness={0.75}
+                sheen={0.1}
+                sheenColor={colors.buildingAccent}
               />
             </mesh>
-            {/* Roof detail */}
-            <mesh position={[0, 12.2 * el.scale, 0]} castShadow>
-              <boxGeometry args={[4.3 * el.scale, 0.4 * el.scale, 4.3 * el.scale]} />
-              <meshPhysicalMaterial color="#3a3a3a" roughness={0.85} metalness={0.15} />
+            {/* Detailed roof with cornices */}
+            <mesh position={[0, 12.5 * el.scale, 0]} castShadow>
+              <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
+              <meshPhysicalMaterial 
+                color={colors.buildingAccent}
+                roughness={0.78}
+                metalness={0.12}
+                clearcoat={0.08}
+              />
             </mesh>
-            {/* Windows with reflections */}
-            {[0.25, 0.45, 0.65, 0.85].map((yPos, j) => (
-              <mesh key={j} position={[2.02 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
-                <boxGeometry args={[0.05 * el.scale, 1.2 * el.scale, 2.5 * el.scale]} />
-                <meshPhysicalMaterial 
-                  color="#1a2a3a"
-                  roughness={0.08}
-                  metalness={0.95}
-                  reflectivity={1.0}
-                  clearcoat={1.0}
-                  clearcoatRoughness={0.02}
-                  emissive="#ffa500"
-                  emissiveIntensity={Math.random() > 0.6 ? 0.3 : 0.05}
-                />
-              </mesh>
+            {/* Secondary roof detail */}
+            <mesh position={[0, 12.8 * el.scale, 0]} castShadow>
+              <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
+              <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
+            </mesh>
+            {/* HD Windows with realistic glass reflections and interior glow */}
+            {[0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
+              <React.Fragment key={j}>
+                {/* Front windows */}
+                <mesh position={[2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
+                  <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
+                  <meshPhysicalMaterial 
+                    color="#0a1a2a"
+                    roughness={0.04}
+                    metalness={0.98}
+                    reflectivity={1.0}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.01}
+                    emissive={colors.windowGlow}
+                    emissiveIntensity={Math.random() > 0.5 ? 0.35 : 0.08}
+                    ior={1.5}
+                  />
+                </mesh>
+                {/* Back windows */}
+                <mesh position={[-2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
+                  <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
+                  <meshPhysicalMaterial 
+                    color="#0a1a2a"
+                    roughness={0.04}
+                    metalness={0.98}
+                    reflectivity={1.0}
+                    clearcoat={1.0}
+                    clearcoatRoughness={0.01}
+                    emissive={colors.windowGlow}
+                    emissiveIntensity={Math.random() > 0.6 ? 0.3 : 0.06}
+                    ior={1.5}
+                  />
+                </mesh>
+              </React.Fragment>
             ))}
+            {/* Window frames for detail */}
+            <mesh position={[2.14 * el.scale, 6 * el.scale, 0]} castShadow>
+              <boxGeometry args={[0.02 * el.scale, 10 * el.scale, 2.8 * el.scale]} />
+              <meshPhysicalMaterial color="#1a1a1a" roughness={0.9} metalness={0.15} />
+            </mesh>
           </group>
         );
     }
@@ -1768,27 +2190,75 @@ const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, th
 };
 
 // ============================================================================
-// THEMED SKY/FOG - Atmosphere varies by route theme  
+// HD THEMED SKY/FOG - Enhanced atmosphere with realistic fog gradients
 // ============================================================================
 const getThemeAtmosphere = (theme: RouteTheme) => {
   switch (theme) {
     case 'crystal-bled':
-      return { fogColor: '#a0cdfa', fogNear: 50, fogFar: 600, skyColor: '#87ceeb' }; // Clear alpine
+      // Crystal-clear alpine atmosphere - minimal fog, vibrant blue
+      return { 
+        fogColor: '#b0ddfa', 
+        fogNear: 80, 
+        fogFar: 800, 
+        skyColor: '#87ceeb',
+        ambientColor: '#c0e0ff',
+        ambientIntensity: 0.45
+      };
     case 'gothic-venice':
-      return { fogColor: '#2c3e50', fogNear: 20, fogFar: 300, skyColor: '#1e272e' }; // Heavy mist
+      // Heavy venetian mist - mysterious, atmospheric
+      return { 
+        fogColor: '#2a3a4a', 
+        fogNear: 15, 
+        fogFar: 250, 
+        skyColor: '#1e272e',
+        ambientColor: '#4a5a6a',
+        ambientIntensity: 0.25
+      };
     case 'steampunk-henley':
-      return { fogColor: '#8b7355', fogNear: 40, fogFar: 400, skyColor: '#c9a227' }; // Sepia steam
+      // Golden-hour sepia haze - warm, dusty
+      return { 
+        fogColor: '#9a8365', 
+        fogNear: 35, 
+        fogFar: 450, 
+        skyColor: '#d4a857',
+        ambientColor: '#c9a227',
+        ambientIntensity: 0.4
+      };
     case 'dystopian-thames':
-      return { fogColor: '#1a1a2e', fogNear: 30, fogFar: 350, skyColor: '#0f172a' }; // Toxic smog
+      // Toxic industrial smog - oppressive, dark
+      return { 
+        fogColor: '#1a1a28', 
+        fogNear: 20, 
+        fogFar: 300, 
+        skyColor: '#0f172a',
+        ambientColor: '#2a2a3a',
+        ambientIntensity: 0.2
+      };
     case 'scifi-boston':
-      return { fogColor: '#0f172a', fogNear: 60, fogFar: 500, skyColor: '#162447' }; // Neon night
-    default:
-      return { fogColor: '#a0cdfa', fogNear: 50, fogFar: 500, skyColor: '#a0cdfa' }; // Default
+      // Neon-lit night - cool, futuristic
+      return { 
+        fogColor: '#0a1428', 
+        fogNear: 50, 
+        fogFar: 550, 
+        skyColor: '#162447',
+        ambientColor: '#1a3a5a',
+        ambientIntensity: 0.3
+      };
+    default: // Willowbrook - realistic contemporary
+      // Natural morning atmosphere - balanced, realistic
+      return { 
+        fogColor: '#a8d0f0', 
+        fogNear: 60, 
+        fogFar: 600, 
+        skyColor: '#a0cdfa',
+        ambientColor: '#b0d0e0',
+        ambientIntensity: 0.38
+      };
   }
 };
 
 // ============================================================================
-// SKY CONFIGURATION - Sun position and atmosphere by theme
+// HD SKY CONFIGURATION - Enhanced physically-accurate sun and atmosphere
 // ============================================================================
 interface SkyConfig {
   sunPosition: [number, number, number];
@@ -1799,85 +2269,99 @@ interface SkyConfig {
   inclination: number;       // Sun elevation (0-1, 0.5 = horizon)
   azimuth: number;           // Sun compass direction (0-1)
   exposure: number;          // Overall brightness
+  sunIntensity: number;      // Direct sun light intensity
+  sunColor: string;          // Sun light color tint
 }
 
 const getSkyConfig = (theme: RouteTheme): SkyConfig => {
   switch (theme) {
     case 'crystal-bled':
-      // Clear alpine morning - bright blue sky, high sun
+      // Crystal-clear alpine morning - bright blue sky, high sun, crisp light
       return {
-        sunPosition: [100, 80, 50],
-        turbidity: 1.5,
-        rayleigh: 2.0,
-        mieCoefficient: 0.005,
-        mieDirectionalG: 0.8,
-        inclination: 0.65,
+        sunPosition: [120, 100, 60],
+        turbidity: 1.2,
+        rayleigh: 2.2,
+        mieCoefficient: 0.003,
+        mieDirectionalG: 0.75,
+        inclination: 0.70,
         azimuth: 0.25,
-        exposure: 0.5
+        exposure: 0.55,
+        sunIntensity: 2.2,
+        sunColor: '#fffaf0'
       };
     case 'gothic-venice':
-      // Overcast twilight - low sun, heavy atmosphere
+      // Overcast twilight - low sun, heavy atmosphere, mysterious
       return {
-        sunPosition: [50, 15, -100],
-        turbidity: 10,
-        rayleigh: 3.0,
-        mieCoefficient: 0.05,
-        mieDirectionalG: 0.95,
-        inclination: 0.35,
-        azimuth: 0.75,
-        exposure: 0.3
+        sunPosition: [40, 12, -120],
+        turbidity: 12,
+        rayleigh: 3.5,
+        mieCoefficient: 0.06,
+        mieDirectionalG: 0.96,
+        inclination: 0.32,
+        azimuth: 0.78,
+        exposure: 0.28,
+        sunIntensity: 0.8,
+        sunColor: '#ff9966'
       };
     case 'steampunk-henley':
-      // Golden hour - warm sunset colors, dusty atmosphere
+      // Golden hour - warm sunset colors, dusty Victorian atmosphere
       return {
-        sunPosition: [80, 25, 60],
-        turbidity: 8,
-        rayleigh: 1.5,
-        mieCoefficient: 0.03,
-        mieDirectionalG: 0.9,
-        inclination: 0.42,
-        azimuth: 0.15,
-        exposure: 0.45
+        sunPosition: [90, 28, 70],
+        turbidity: 9,
+        rayleigh: 1.4,
+        mieCoefficient: 0.035,
+        mieDirectionalG: 0.92,
+        inclination: 0.40,
+        azimuth: 0.12,
+        exposure: 0.48,
+        sunIntensity: 1.6,
+        sunColor: '#ffcc66'
       };
     case 'dystopian-thames':
-      // Polluted dusk - red/orange haze, obscured sun
+      // Polluted dusk - red/orange haze, obscured sun, industrial
       return {
-        sunPosition: [30, 8, -80],
+        sunPosition: [25, 6, -90],
         turbidity: 20,
-        rayleigh: 0.5,
-        mieCoefficient: 0.1,
+        rayleigh: 0.4,
+        mieCoefficient: 0.12,
         mieDirectionalG: 0.99,
-        inclination: 0.28,
-        azimuth: 0.85,
-        exposure: 0.25
+        inclination: 0.25,
+        azimuth: 0.88,
+        exposure: 0.22,
+        sunIntensity: 0.5,
+        sunColor: '#ff6633'
       };
     case 'scifi-boston':
-      // Night with artificial light - moon-like glow
+      // Night with artificial moonlight - cool, futuristic glow
       return {
-        sunPosition: [-50, 60, 100],
-        turbidity: 0.5,
-        rayleigh: 0.2,
-        mieCoefficient: 0.001,
-        mieDirectionalG: 0.7,
-        inclination: 0.58,
-        azimuth: 0.6,
-        exposure: 0.2
+        sunPosition: [-60, 70, 120],
+        turbidity: 0.4,
+        rayleigh: 0.15,
+        mieCoefficient: 0.0008,
+        mieDirectionalG: 0.65,
+        inclination: 0.62,
+        azimuth: 0.55,
+        exposure: 0.18,
+        sunIntensity: 0.6,
+        sunColor: '#aaccff'
       };
-    default: // willowbrook - realistic overcast morning
+    default: // Willowbrook - realistic contemporary morning
       return {
-        sunPosition: [80, 50, 30],
-        turbidity: 4,
-        rayleigh: 2.5,
-        mieCoefficient: 0.01,
-        mieDirectionalG: 0.85,
-        inclination: 0.55,
-        azimuth: 0.2,
-        exposure: 0.4
+        sunPosition: [90, 55, 35],
+        turbidity: 3.5,
+        rayleigh: 2.8,
+        mieCoefficient: 0.008,
+        mieDirectionalG: 0.82,
+        inclination: 0.58,
+        azimuth: 0.18,
+        exposure: 0.42,
+        sunIntensity: 1.8,
+        sunColor: '#fff8e8'
       };
   }
 };
 
-// Cloud configuration by theme
+// HD Cloud configuration - enhanced volumetric cloud settings by theme
 interface CloudConfig {
   enabled: boolean;
   count: number;
@@ -1885,64 +2369,139 @@ interface CloudConfig {
   speed: number;
   color: string;
   segments: number;
+  scale: number;
+  depth: number;
 }
 
 const getCloudConfig = (theme: RouteTheme): CloudConfig => {
-  // Reduced cloud cover for clearer skies and better sunlight visibility
   switch (theme) {
     case 'crystal-bled':
-      return { enabled: true, count: 6, opacity: 0.35, speed: 0.15, color: '#ffffff', segments: 25 };
+      // Sparse, bright white alpine clouds - crisp and defined
+      return { 
+        enabled: true, 
+        count: 5, 
+        opacity: 0.42, 
+        speed: 0.18, 
+        color: '#ffffff', 
+        segments: 32,
+        scale: 1.3,
+        depth: 0.8
+      };
     case 'gothic-venice':
-      return { enabled: true, count: 10, opacity: 0.55, speed: 0.08, color: '#6b7280', segments: 30 };
+      // Heavy, brooding storm clouds - dark and atmospheric
+      return { 
+        enabled: true, 
+        count: 14, 
+        opacity: 0.65, 
+        speed: 0.06, 
+        color: '#5a6268', 
+        segments: 38,
+        scale: 1.5,
+        depth: 1.2
+      };
     case 'steampunk-henley':
-      return { enabled: true, count: 8, opacity: 0.4, speed: 0.12, color: '#e8d5c4', segments: 28 };
+      // Warm, golden-tinged clouds - dusty Victorian atmosphere
+      return { 
+        enabled: true, 
+        count: 9, 
+        opacity: 0.48, 
+        speed: 0.12, 
+        color: '#f0e0c8', 
+        segments: 30,
+        scale: 1.2,
+        depth: 0.9
+      };
     case 'dystopian-thames':
-      return { enabled: true, count: 12, opacity: 0.6, speed: 0.06, color: '#4a4a4a', segments: 32 };
+      // Heavy smog and pollution clouds - dark and oppressive
+      return { 
+        enabled: true, 
+        count: 16, 
+        opacity: 0.72, 
+        speed: 0.04, 
+        color: '#3a3a42', 
+        segments: 42,
+        scale: 1.6,
+        depth: 1.4
+      };
     case 'scifi-boston':
-      return { enabled: true, count: 3, opacity: 0.2, speed: 0.25, color: '#2a4a6a', segments: 18 };
-    default:
-      return { enabled: true, count: 7, opacity: 0.3, speed: 0.18, color: '#f0f0f0', segments: 24 };
+      // Minimal, wispy night clouds - futuristic and sparse
+      return { 
+        enabled: true, 
+        count: 3, 
+        opacity: 0.22, 
+        speed: 0.28, 
+        color: '#2a4a6a', 
+        segments: 22,
+        scale: 0.9,
+        depth: 0.6
+      };
+    default: // Willowbrook - natural realistic clouds
+      return { 
+        enabled: true, 
+        count: 8, 
+        opacity: 0.38, 
+        speed: 0.16, 
+        color: '#f8f8ff', 
+        segments: 28,
+        scale: 1.1,
+        depth: 0.85
+      };
   }
 };
 
 // ============================================================================
-// PHOTOREALISTIC SKYDOME - Physically-based sky with sun, clouds, atmosphere
+// HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
 // ============================================================================
 const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({ theme, boatZ }) => {
   const skyConfig = useMemo(() => getSkyConfig(theme), [theme]);
   const cloudConfig = useMemo(() => getCloudConfig(theme), [theme]);
   
-  // Cloud positions - spread around the sky, moving with time
+  // HD Cloud positions with varied heights and distribution
   const cloudPositions = useMemo(() => {
-    const positions: Array<{ x: number; y: number; z: number; scale: number }> = [];
+    const positions: Array<{ x: number; y: number; z: number; scale: number; variation: number }> = [];
     for (let i = 0; i < cloudConfig.count; i++) {
-      const angle = (i / cloudConfig.count) * Math.PI * 2;
-      const radius = 150 + Math.random() * 200;
-      const height = 60 + Math.random() * 80;
+      // Golden ratio distribution for natural cloud spacing
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const angle = i * goldenAngle;
+      const radiusVariation = 0.7 + Math.random() * 0.6;
+      const radius = (120 + i * 25) * radiusVariation;
+      const heightBase = 55 + (i % 3) * 30;
+      const heightVariation = Math.random() * 45;
+      
       positions.push({
         x: Math.cos(angle) * radius,
-        y: height,
+        y: heightBase + heightVariation,
         z: Math.sin(angle) * radius,
-        scale: 15 + Math.random() * 25
+        scale: (12 + Math.random() * 28) * cloudConfig.scale,
+        variation: Math.random()
       });
     }
     return positions;
-  }, [cloudConfig.count]);
+  }, [cloudConfig.count, cloudConfig.scale]);
   
-  // Animate clouds drifting
+  // Animate clouds with natural drift patterns
   const cloudGroupRef = useRef<THREE.Group>(null);
+  const layer2Ref = useRef<THREE.Group>(null);
+  
   useFrame((state) => {
+    const time = state.clock.elapsedTime;
     if (cloudGroupRef.current) {
-      // Slow rotation of cloud layer
-      cloudGroupRef.current.rotation.y = state.clock.elapsedTime * cloudConfig.speed * 0.01;
+      // Primary cloud layer - gentle rotation with wind simulation
+      cloudGroupRef.current.rotation.y = time * cloudConfig.speed * 0.008;
+      cloudGroupRef.current.position.x = Math.sin(time * 0.015) * 8;
+    }
+    if (layer2Ref.current) {
+      // Secondary layer - moves at different rate for parallax
+      layer2Ref.current.rotation.y = time * cloudConfig.speed * 0.004;
+      layer2Ref.current.position.x = Math.sin(time * 0.012 + 1) * 12;
     }
   });
   
   return (
     <group>
-      {/* Physically-based sky with atmospheric scattering */}
+      {/* Physically-based sky with enhanced atmospheric scattering */}
       <Sky
-        distance={450000}
+        distance={500000}
         sunPosition={skyConfig.sunPosition}
         turbidity={skyConfig.turbidity}
         rayleigh={skyConfig.rayleigh}
@@ -1950,15 +2509,15 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
         mieDirectionalG={skyConfig.mieDirectionalG}
       />
       
-      {/* Volumetric cloud layer */}
+      {/* Primary volumetric cloud layer */}
       {cloudConfig.enabled && (
         <group ref={cloudGroupRef} position={[0, 0, boatZ]}>
           {cloudPositions.map((pos, i) => (
             <Cloud
               key={i}
               position={[pos.x, pos.y, pos.z]}
-              opacity={cloudConfig.opacity * (0.7 + Math.random() * 0.3)}
-              speed={cloudConfig.speed}
+              opacity={cloudConfig.opacity * (0.65 + pos.variation * 0.35)}
+              speed={cloudConfig.speed * (0.8 + pos.variation * 0.4)}
               segments={cloudConfig.segments}
               color={cloudConfig.color}
               scale={pos.scale}
@@ -1968,22 +2527,40 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
         </group>
       )}
       
-      {/* Secondary distant cloud layer for depth - sparse wispy clouds */}
+      {/* Secondary distant cloud layer for HD depth and parallax */}
       {cloudConfig.enabled && (
-        <group position={[0, 140, boatZ - 250]}>
-          {[...Array(3)].map((_, i) => (
+        <group ref={layer2Ref} position={[0, 160, boatZ - 350]}>
+          {[...Array(Math.ceil(cloudConfig.count * 0.4))].map((_, i) => (
             <Cloud
               key={`distant-${i}`}
               position={[
-                (i - 1) * 200,
-                0,
-                -120 + Math.random() * 40
+                (i - Math.ceil(cloudConfig.count * 0.2)) * 180 + Math.random() * 60,
+                Math.random() * 30,
+                -150 + Math.random() * 60
               ]}
-              opacity={cloudConfig.opacity * 0.25}
-              speed={cloudConfig.speed * 0.4}
-              segments={15}
+              opacity={cloudConfig.opacity * 0.22 * cloudConfig.depth}
+              speed={cloudConfig.speed * 0.35}
+              segments={Math.floor(cloudConfig.segments * 0.6)}
               color={cloudConfig.color}
-              scale={50 + Math.random() * 25}
+              scale={(45 + Math.random() * 30) * cloudConfig.scale}
+              depthWrite={false}
+            />
+          ))}
+        </group>
+      )}
+      
+      {/* Tertiary wispy high-altitude clouds for atmosphere */}
+      {cloudConfig.enabled && cloudConfig.depth > 0.7 && (
+        <group position={[0, 220, boatZ - 500]}>
+          {[...Array(2)].map((_, i) => (
+            <Cloud
+              key={`wispy-${i}`}
+              position={[(i - 0.5) * 400, 0, 0]}
+              opacity={cloudConfig.opacity * 0.12}
+              speed={cloudConfig.speed * 0.2}
+              segments={12}
+              color={cloudConfig.color}
+              scale={80 + Math.random() * 40}
               depthWrite={false}
             />
           ))}
@@ -2014,8 +2591,12 @@ const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
 };
 
 // ============================================================================
-// ROWING SCULL (BOAT) with animated oars
+// HIGH-DEFINITION ROWING SCULL (BOAT) with animated oars and realistic rower
 // ============================================================================
+// This is the always-on HD implementation with realistic proportions and PBR materials.
+// Based on modern racing single scull dimensions (~8.2m length, ~0.3m beam).
+// All animation refs preserved for seamless gameplay integration.
+
 const RowingScull: React.FC<{ 
   position: [number, number, number]; 
   rotation?: [number, number, number];
@@ -2052,7 +2633,7 @@ const RowingScull: React.FC<{
     // Smooth easing function
     const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     
-    let drivePhase: number;
+    let _drivePhase: number; // Unused but kept for reference
     let legCompression: number;
     let armPull: number;
     let bodyLean: number;
@@ -2061,7 +2642,7 @@ const RowingScull: React.FC<{
     if (phase < 0.4) {
       // Drive phase - legs extend, arms pull, body swings back
       const t = easeInOut(phase / 0.4);
-      drivePhase = t;
+      _drivePhase = t;
       legCompression = 1 - t; // 1 (compressed) -> 0 (extended)
       armPull = t; // 0 (arms extended) -> 1 (arms pulled in)
       bodyLean = -0.3 + t * 0.5; // lean forward -> lean back
@@ -2069,7 +2650,7 @@ const RowingScull: React.FC<{
     } else {
       // Recovery phase - legs compress, arms extend, body leans forward
       const t = easeInOut((phase - 0.4) / 0.6);
-      drivePhase = 1 - t;
+      _drivePhase = 1 - t;
       legCompression = t; // 0 (extended) -> 1 (compressed)
       armPull = 1 - t; // 1 (arms pulled in) -> 0 (arms extended)
       bodyLean = 0.2 - t * 0.5; // lean back -> lean forward
@@ -2124,330 +2705,637 @@ const RowingScull: React.FC<{
     if (rightForearmRef.current) rightForearmRef.current.rotation.x = forearmAngle;
   });
   
-  // Skin tone and athletic wear colors
+  // HD Skin material with subsurface scattering simulation
   const skinColor = "#e0b89d";
+  const skinHighlight = "#f0c8ad";
   const hairColor = "#3d2314";
   const shirtColor = "#1e40af";
+  const shirtAccent = "#2563eb";
   const shortsColor = "#1e3a5f";
   
   return (
     <group position={position} rotation={rotation}>
-      {/* Main hull - long narrow racing shell with fiberglass finish */}
+      {/* HD Main hull - racing shell with high-gloss fiberglass finish */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
         <meshPhysicalMaterial 
-          color="#e8d78a"           // Cream/yellow fiberglass
+          color="#f0e4a8"           // Premium cream/gold fiberglass
           metalness={0.0}
-          roughness={0.15}
-          clearcoat={1.0}           // Glossy gel coat finish
-          clearcoatRoughness={0.05} // Very smooth clearcoat
-          reflectivity={0.8}
-          envMapIntensity={1.2}
-          sheen={0.3}
+          roughness={0.08}
+          clearcoat={1.0}           // High-gloss gel coat finish
+          clearcoatRoughness={0.02} // Mirror-smooth clearcoat
+          reflectivity={0.95}
+          envMapIntensity={1.5}
+          sheen={0.4}
+          sheenColor="#fffef0"
+          sheenRoughness={0.2}
+          ior={1.45}
+        />
+      </mesh>
+      
+      {/* HD Hull deck with visible grain pattern simulation */}
+      <mesh position={[0, 0.08, 0]} castShadow>
+        <boxGeometry args={[0.4, 0.02, 7.5]} />
+        <meshPhysicalMaterial 
+          color="#faf5d8" 
+          metalness={0.0} 
+          roughness={0.12}
+          clearcoat={0.95}
+          clearcoatRoughness={0.05}
+          sheen={0.25}
           sheenColor="#ffffff"
         />
       </mesh>
       
-      {/* Hull deck detail */}
-      <mesh position={[0, 0.08, 0]} castShadow>
-        <boxGeometry args={[0.4, 0.02, 7.5]} />
-        <meshPhysicalMaterial 
-          color="#f5eacc" 
-          metalness={0.0} 
-          roughness={0.2}
-          clearcoat={0.8}
-          clearcoatRoughness={0.1}
-        />
-      </mesh>
-      
-      {/* Bow (front) - pointed cone toward -Z */}
+      {/* HD Bow (front) - aerodynamic point */}
       <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[0.22, 1.0, 12]} />
+        <coneGeometry args={[0.22, 1.0, 16]} />
         <meshPhysicalMaterial 
-          color="#e8d78a" 
+          color="#f0e4a8" 
           metalness={0.0} 
-          roughness={0.15}
+          roughness={0.08}
           clearcoat={1.0}
-          clearcoatRoughness={0.05}
-          reflectivity={0.8}
+          clearcoatRoughness={0.02}
+          reflectivity={0.95}
+          sheen={0.4}
+          sheenColor="#fffef0"
         />
       </mesh>
       
-      {/* Stern (back) - tapered toward +Z */}
+      {/* HD Stern (back) - tapered stern with racing graphics */}
       <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[0.2, 0.8, 12]} />
+        <coneGeometry args={[0.2, 0.8, 16]} />
         <meshPhysicalMaterial 
-          color="#e8d78a" 
+          color="#f0e4a8" 
           metalness={0.0} 
-          roughness={0.15}
+          roughness={0.08}
           clearcoat={1.0}
-          clearcoatRoughness={0.05}
-          reflectivity={0.8}
+          clearcoatRoughness={0.02}
+          reflectivity={0.95}
         />
       </mesh>
       
-      {/* Sliding seat track */}
+      {/* HD Racing stripe on hull */}
+      <mesh position={[0, 0.076, 0]}>
+        <boxGeometry args={[0.42, 0.005, 7.2]} />
+        <meshPhysicalMaterial 
+          color="#1e40af"
+          metalness={0.0}
+          roughness={0.15}
+          clearcoat={1.0}
+          clearcoatRoughness={0.02}
+        />
+      </mesh>
+      
+      {/* HD Sliding seat track - precision machined aluminum */}
       <mesh position={[0, 0.12, 0]}>
         <boxGeometry args={[0.25, 0.02, 1.2]} />
-        <meshStandardMaterial color="#444444" metalness={0.7} roughness={0.3} />
+        <meshPhysicalMaterial 
+          color="#8a8a8a" 
+          metalness={0.92} 
+          roughness={0.12}
+          clearcoat={0.6}
+          clearcoatRoughness={0.15}
+        />
       </mesh>
       
-      {/* Sliding seat */}
+      {/* HD Track rails */}
+      <mesh position={[-0.1, 0.125, 0]}>
+        <boxGeometry args={[0.015, 0.015, 1.25]} />
+        <meshPhysicalMaterial color="#606060" metalness={0.95} roughness={0.08} />
+      </mesh>
+      <mesh position={[0.1, 0.125, 0]}>
+        <boxGeometry args={[0.015, 0.015, 1.25]} />
+        <meshPhysicalMaterial color="#606060" metalness={0.95} roughness={0.08} />
+      </mesh>
+      
+      {/* HD Sliding seat - ergonomic racing seat */}
       <mesh ref={seatRef} position={[0, 0.18, 0]} castShadow>
-        <boxGeometry args={[0.22, 0.04, 0.2]} />
-        <meshStandardMaterial color="#333333" metalness={0.5} roughness={0.4} />
+        <boxGeometry args={[0.24, 0.045, 0.22]} />
+        <meshPhysicalMaterial 
+          color="#1a1a1a" 
+          metalness={0.2} 
+          roughness={0.55}
+          clearcoat={0.3}
+          clearcoatRoughness={0.4}
+        />
       </mesh>
       
-      {/* Foot stretchers */}
+      {/* HD Seat wheels */}
+      {[[-0.08, 0.14, -0.08], [0.08, 0.14, -0.08], [-0.08, 0.14, 0.08], [0.08, 0.14, 0.08]].map((pos, i) => (
+        <mesh key={`wheel-${i}`} position={pos as [number, number, number]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.02, 12]} />
+          <meshPhysicalMaterial color="#303030" metalness={0.8} roughness={0.2} />
+        </mesh>
+      ))}
+      
+      {/* HD Foot stretchers - carbon fiber composite */}
       <mesh position={[0, 0.15, -0.6]} rotation={[0.4, 0, 0]}>
         <boxGeometry args={[0.35, 0.03, 0.25]} />
-        <meshStandardMaterial color="#222222" />
+        <meshPhysicalMaterial 
+          color="#1a1a1a"
+          metalness={0.15}
+          roughness={0.45}
+          clearcoat={0.7}
+          clearcoatRoughness={0.25}
+        />
+      </mesh>
+      
+      {/* HD Foot straps */}
+      <mesh position={[-0.1, 0.17, -0.55]} rotation={[0.4, 0, 0]}>
+        <boxGeometry args={[0.08, 0.02, 0.18]} />
+        <meshPhysicalMaterial color="#2a2a2a" roughness={0.85} />
+      </mesh>
+      <mesh position={[0.1, 0.17, -0.55]} rotation={[0.4, 0, 0]}>
+        <boxGeometry args={[0.08, 0.02, 0.18]} />
+        <meshPhysicalMaterial color="#2a2a2a" roughness={0.85} />
       </mesh>
       
       {/* ============================================ */}
-      {/* REALISTIC HUMANOID ROWER */}
+      {/* HD PHOTOREALISTIC HUMANOID ROWER */}
       {/* ============================================ */}
       <group ref={rowerRef} position={[0, 0.35, 0]}>
         
         {/* TORSO GROUP - rotates for body swing */}
         <group ref={torsoRef} position={[0, 0.15, 0]}>
           
-          {/* Lower torso / hips */}
+          {/* HD Lower torso / hips - athletic compression shorts */}
           <mesh position={[0, 0, 0]} castShadow>
             <boxGeometry args={[0.28, 0.15, 0.18]} />
-            <meshStandardMaterial color={shortsColor} />
+            <meshPhysicalMaterial 
+              color={shortsColor}
+              roughness={0.72}
+              metalness={0.0}
+              sheen={0.35}
+              sheenColor="#3a5a8a"
+              sheenRoughness={0.6}
+            />
           </mesh>
           
-          {/* Mid torso / abdomen */}
+          {/* HD Mid torso / abdomen - athletic fabric */}
           <mesh position={[0, 0.12, 0]} castShadow>
             <boxGeometry args={[0.26, 0.12, 0.16]} />
-            <meshStandardMaterial color={shirtColor} />
+            <meshPhysicalMaterial 
+              color={shirtColor}
+              roughness={0.68}
+              metalness={0.0}
+              sheen={0.45}
+              sheenColor={shirtAccent}
+              sheenRoughness={0.55}
+            />
           </mesh>
           
-          {/* Upper torso / chest */}
+          {/* HD Upper torso / chest - detailed athletic jersey */}
           <mesh position={[0, 0.26, 0]} castShadow>
             <boxGeometry args={[0.32, 0.16, 0.18]} />
-            <meshStandardMaterial color={shirtColor} />
+            <meshPhysicalMaterial 
+              color={shirtColor}
+              roughness={0.65}
+              metalness={0.0}
+              sheen={0.5}
+              sheenColor={shirtAccent}
+              sheenRoughness={0.5}
+            />
           </mesh>
           
-          {/* Shoulders */}
+          {/* HD Shoulders - muscular definition */}
           <mesh position={[0, 0.36, 0]} castShadow>
             <boxGeometry args={[0.4, 0.08, 0.14]} />
-            <meshStandardMaterial color={shirtColor} />
+            <meshPhysicalMaterial 
+              color={shirtColor}
+              roughness={0.68}
+              sheen={0.45}
+              sheenColor={shirtAccent}
+            />
           </mesh>
           
-          {/* Neck */}
+          {/* HD Neck - realistic skin with subsurface hint */}
           <mesh position={[0, 0.44, 0]} castShadow>
-            <cylinderGeometry args={[0.05, 0.06, 0.08, 12]} />
-            <meshStandardMaterial color={skinColor} />
+            <cylinderGeometry args={[0.05, 0.06, 0.08, 16]} />
+            <meshPhysicalMaterial 
+              color={skinColor}
+              roughness={0.58}
+              metalness={0.0}
+              sheen={0.25}
+              sheenColor={skinHighlight}
+              sheenRoughness={0.7}
+              clearcoat={0.08}
+              clearcoatRoughness={0.85}
+            />
           </mesh>
           
-          {/* HEAD */}
+          {/* HD HEAD */}
           <group position={[0, 0.56, 0]}>
-            {/* Head - ellipsoid shape */}
+            {/* HD Head - realistic skin material */}
             <mesh ref={headRef} castShadow>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color={skinColor} />
+              <sphereGeometry args={[0.1, 24, 24]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.55}
+                metalness={0.0}
+                sheen={0.3}
+                sheenColor={skinHighlight}
+                sheenRoughness={0.65}
+                clearcoat={0.1}
+                clearcoatRoughness={0.8}
+              />
             </mesh>
             
-            {/* Hair */}
+            {/* HD Hair - natural texture */}
             <mesh position={[0, 0.04, -0.02]} castShadow>
-              <sphereGeometry args={[0.095, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
-              <meshStandardMaterial color={hairColor} />
+              <sphereGeometry args={[0.095, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+              <meshPhysicalMaterial 
+                color={hairColor}
+                roughness={0.88}
+                metalness={0.0}
+                sheen={0.15}
+                sheenColor="#5a3a24"
+                sheenRoughness={0.9}
+              />
             </mesh>
             
-            {/* Face features - subtle */}
+            {/* HD Face features */}
             {/* Nose */}
             <mesh position={[0, -0.01, 0.09]}>
               <boxGeometry args={[0.02, 0.03, 0.02]} />
-              <meshStandardMaterial color={skinColor} />
+              <meshPhysicalMaterial color={skinColor} roughness={0.55} sheen={0.2} sheenColor={skinHighlight} />
             </mesh>
             
-            {/* Eyes */}
+            {/* HD Eyes with realistic reflection */}
             <mesh position={[-0.03, 0.02, 0.085]}>
-              <sphereGeometry args={[0.012, 8, 8]} />
-              <meshStandardMaterial color="#2c1810" />
+              <sphereGeometry args={[0.012, 12, 12]} />
+              <meshPhysicalMaterial 
+                color="#1a1008"
+                roughness={0.12}
+                metalness={0.0}
+                clearcoat={1.0}
+                clearcoatRoughness={0.02}
+                reflectivity={0.95}
+              />
             </mesh>
             <mesh position={[0.03, 0.02, 0.085]}>
-              <sphereGeometry args={[0.012, 8, 8]} />
-              <meshStandardMaterial color="#2c1810" />
+              <sphereGeometry args={[0.012, 12, 12]} />
+              <meshPhysicalMaterial 
+                color="#1a1008"
+                roughness={0.12}
+                metalness={0.0}
+                clearcoat={1.0}
+                clearcoatRoughness={0.02}
+                reflectivity={0.95}
+              />
             </mesh>
             
-            {/* Ears */}
+            {/* HD Ears with realistic skin */}
             <mesh position={[-0.1, 0, 0]}>
-              <sphereGeometry args={[0.025, 8, 8]} />
-              <meshStandardMaterial color={skinColor} />
+              <sphereGeometry args={[0.025, 12, 12]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.58}
+                sheen={0.2}
+                sheenColor={skinHighlight}
+              />
             </mesh>
             <mesh position={[0.1, 0, 0]}>
-              <sphereGeometry args={[0.025, 8, 8]} />
-              <meshStandardMaterial color={skinColor} />
+              <sphereGeometry args={[0.025, 12, 12]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.58}
+                sheen={0.2}
+                sheenColor={skinHighlight}
+              />
             </mesh>
           </group>
           
-          {/* LEFT ARM */}
+          {/* HD LEFT ARM - athletic musculature */}
           <group ref={leftUpperArmRef} position={[-0.22, 0.32, 0]}>
-            {/* Upper arm */}
+            {/* Upper arm with muscle definition */}
             <mesh position={[0, -0.1, 0]} castShadow>
-              <capsuleGeometry args={[0.035, 0.15, 8, 12]} />
-              <meshStandardMaterial color={skinColor} />
+              <capsuleGeometry args={[0.038, 0.15, 12, 16]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.56}
+                sheen={0.28}
+                sheenColor={skinHighlight}
+                sheenRoughness={0.68}
+                clearcoat={0.08}
+                clearcoatRoughness={0.85}
+              />
             </mesh>
             
             {/* Forearm group - pivots at elbow */}
             <group ref={leftForearmRef} position={[0, -0.2, 0]}>
               <mesh position={[0, -0.1, 0]} castShadow>
-                <capsuleGeometry args={[0.03, 0.14, 8, 12]} />
-                <meshStandardMaterial color={skinColor} />
+                <capsuleGeometry args={[0.032, 0.14, 12, 16]} />
+                <meshPhysicalMaterial 
+                  color={skinColor}
+                  roughness={0.55}
+                  sheen={0.26}
+                  sheenColor={skinHighlight}
+                  sheenRoughness={0.7}
+                  clearcoat={0.07}
+                  clearcoatRoughness={0.85}
+                />
               </mesh>
               
-              {/* Hand */}
+              {/* Hand with realistic skin */}
               <mesh position={[0, -0.22, 0]} castShadow>
-                <sphereGeometry args={[0.035, 8, 8]} />
-                <meshStandardMaterial color={skinColor} />
+                <sphereGeometry args={[0.038, 12, 12]} />
+                <meshPhysicalMaterial 
+                  color={skinColor}
+                  roughness={0.58}
+                  sheen={0.22}
+                  sheenColor={skinHighlight}
+                />
               </mesh>
             </group>
           </group>
           
-          {/* RIGHT ARM */}
+          {/* HD RIGHT ARM - athletic musculature */}
           <group ref={rightUpperArmRef} position={[0.22, 0.32, 0]}>
-            {/* Upper arm */}
+            {/* Upper arm with muscle definition */}
             <mesh position={[0, -0.1, 0]} castShadow>
-              <capsuleGeometry args={[0.035, 0.15, 8, 12]} />
-              <meshStandardMaterial color={skinColor} />
+              <capsuleGeometry args={[0.038, 0.15, 12, 16]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.56}
+                sheen={0.28}
+                sheenColor={skinHighlight}
+                sheenRoughness={0.68}
+                clearcoat={0.08}
+                clearcoatRoughness={0.85}
+              />
             </mesh>
             
             {/* Forearm group - pivots at elbow */}
             <group ref={rightForearmRef} position={[0, -0.2, 0]}>
               <mesh position={[0, -0.1, 0]} castShadow>
-                <capsuleGeometry args={[0.03, 0.14, 8, 12]} />
-                <meshStandardMaterial color={skinColor} />
+                <capsuleGeometry args={[0.032, 0.14, 12, 16]} />
+                <meshPhysicalMaterial 
+                  color={skinColor}
+                  roughness={0.55}
+                  sheen={0.26}
+                  sheenColor={skinHighlight}
+                  sheenRoughness={0.7}
+                  clearcoat={0.07}
+                  clearcoatRoughness={0.85}
+                />
               </mesh>
               
-              {/* Hand */}
+              {/* Hand with realistic skin */}
               <mesh position={[0, -0.22, 0]} castShadow>
-                <sphereGeometry args={[0.035, 8, 8]} />
-                <meshStandardMaterial color={skinColor} />
+                <sphereGeometry args={[0.038, 12, 12]} />
+                <meshPhysicalMaterial 
+                  color={skinColor}
+                  roughness={0.58}
+                  sheen={0.22}
+                  sheenColor={skinHighlight}
+                />
               </mesh>
             </group>
           </group>
         </group>
         
-        {/* LEGS - attached to hips, independent of torso rotation */}
-        {/* LEFT LEG */}
+        {/* HD LEGS - attached to hips, independent of torso rotation */}
+        {/* HD LEFT LEG - athletic musculature */}
         <group ref={leftThighRef} position={[-0.08, 0.1, 0]}>
-          {/* Thigh */}
+          {/* Thigh with muscular definition */}
           <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
-            <capsuleGeometry args={[0.05, 0.22, 8, 12]} />
-            <meshStandardMaterial color={shortsColor} />
+            <capsuleGeometry args={[0.052, 0.22, 12, 16]} />
+            <meshPhysicalMaterial 
+              color={shortsColor}
+              roughness={0.7}
+              sheen={0.35}
+              sheenColor="#3a5a8a"
+              sheenRoughness={0.6}
+            />
           </mesh>
           
           {/* Shin group - pivots at knee */}
           <group ref={leftShinRef} position={[0, 0, 0.28]}>
             <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
-              <capsuleGeometry args={[0.04, 0.2, 8, 12]} />
-              <meshStandardMaterial color={skinColor} />
+              <capsuleGeometry args={[0.042, 0.2, 12, 16]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.56}
+                sheen={0.25}
+                sheenColor={skinHighlight}
+                sheenRoughness={0.7}
+                clearcoat={0.06}
+                clearcoatRoughness={0.85}
+              />
             </mesh>
             
-            {/* Foot */}
+            {/* HD Foot - racing shoe */}
             <mesh position={[0, -0.02, 0.3]} castShadow>
-              <boxGeometry args={[0.06, 0.03, 0.12]} />
-              <meshStandardMaterial color="#222222" />
+              <boxGeometry args={[0.065, 0.035, 0.13]} />
+              <meshPhysicalMaterial 
+                color="#1a1a1a"
+                roughness={0.65}
+                metalness={0.05}
+                clearcoat={0.25}
+                clearcoatRoughness={0.5}
+              />
+            </mesh>
+            {/* Shoe accent */}
+            <mesh position={[0, -0.015, 0.32]}>
+              <boxGeometry args={[0.06, 0.02, 0.06]} />
+              <meshPhysicalMaterial color={shirtAccent} roughness={0.5} />
             </mesh>
           </group>
         </group>
         
-        {/* RIGHT LEG */}
+        {/* HD RIGHT LEG - athletic musculature */}
         <group ref={rightThighRef} position={[0.08, 0.1, 0]}>
-          {/* Thigh */}
+          {/* Thigh with muscular definition */}
           <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
-            <capsuleGeometry args={[0.05, 0.22, 8, 12]} />
-            <meshStandardMaterial color={shortsColor} />
+            <capsuleGeometry args={[0.052, 0.22, 12, 16]} />
+            <meshPhysicalMaterial 
+              color={shortsColor}
+              roughness={0.7}
+              sheen={0.35}
+              sheenColor="#3a5a8a"
+              sheenRoughness={0.6}
+            />
           </mesh>
           
           {/* Shin group - pivots at knee */}
           <group ref={rightShinRef} position={[0, 0, 0.28]}>
             <mesh position={[0, 0, 0.12]} rotation={[Math.PI/2, 0, 0]} castShadow>
-              <capsuleGeometry args={[0.04, 0.2, 8, 12]} />
-              <meshStandardMaterial color={skinColor} />
+              <capsuleGeometry args={[0.042, 0.2, 12, 16]} />
+              <meshPhysicalMaterial 
+                color={skinColor}
+                roughness={0.56}
+                sheen={0.25}
+                sheenColor={skinHighlight}
+                sheenRoughness={0.7}
+                clearcoat={0.06}
+                clearcoatRoughness={0.85}
+              />
             </mesh>
             
-            {/* Foot */}
+            {/* HD Foot - racing shoe */}
             <mesh position={[0, -0.02, 0.3]} castShadow>
-              <boxGeometry args={[0.06, 0.03, 0.12]} />
-              <meshStandardMaterial color="#222222" />
+              <boxGeometry args={[0.065, 0.035, 0.13]} />
+              <meshPhysicalMaterial 
+                color="#1a1a1a"
+                roughness={0.65}
+                metalness={0.05}
+                clearcoat={0.25}
+                clearcoatRoughness={0.5}
+              />
+            </mesh>
+            {/* Shoe accent */}
+            <mesh position={[0, -0.015, 0.32]}>
+              <boxGeometry args={[0.06, 0.02, 0.06]} />
+              <meshPhysicalMaterial color={shirtAccent} roughness={0.5} />
             </mesh>
           </group>
         </group>
       </group>
       
-      {/* Left oar group */}
+      {/* HD Left oar group - professional racing equipment */}
       <group ref={leftOarRef} position={[-0.3, 0.15, 0.5]}>
-        {/* Rigger - metal outrigger */}
+        {/* HD Rigger - aerospace aluminum outrigger */}
         <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshPhysicalMaterial color="#777777" metalness={0.9} roughness={0.15} clearcoat={0.6} />
+          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
+          <meshPhysicalMaterial 
+            color="#9a9a9a" 
+            metalness={0.95} 
+            roughness={0.08}
+            clearcoat={0.75}
+            clearcoatRoughness={0.12}
+            reflectivity={0.9}
+          />
         </mesh>
-        {/* Oarlock */}
+        {/* Rigger support struts */}
+        <mesh position={[-0.3, -0.08, 0]} rotation={[0, 0, 0.4]}>
+          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
+          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
+        </mesh>
+        {/* HD Oarlock - precision stainless steel */}
         <mesh position={[-1.15, 0, 0]}>
-          <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshPhysicalMaterial color="#555555" metalness={0.9} roughness={0.2} clearcoat={0.5} />
+          <torusGeometry args={[0.045, 0.018, 12, 20]} />
+          <meshPhysicalMaterial 
+            color="#b8b8b8" 
+            metalness={0.98} 
+            roughness={0.06}
+            clearcoat={0.85}
+            clearcoatRoughness={0.08}
+            reflectivity={0.95}
+          />
         </mesh>
-        {/* Oar shaft - Carbon fiber look */}
+        {/* HD Oar shaft - premium carbon fiber */}
         <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
+          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
           <meshPhysicalMaterial 
-            color="#1a1a1a" 
-            metalness={0.3} 
-            roughness={0.4}
-            clearcoat={0.8}
-            clearcoatRoughness={0.2}
+            color="#0a0a0a" 
+            metalness={0.15} 
+            roughness={0.28}
+            clearcoat={0.92}
+            clearcoatRoughness={0.08}
+            sheen={0.2}
+            sheenColor="#303030"
           />
         </mesh>
-        {/* Oar blade - Composite material */}
-        <mesh position={[-3.3, 0, 0]}>
-          <boxGeometry args={[0.55, 0.015, 0.18]} />
+        {/* Grip area */}
+        <mesh position={[-0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
           <meshPhysicalMaterial 
-            color="#2563eb" 
-            metalness={0.0} 
-            roughness={0.3}
-            clearcoat={0.5}
-            clearcoatRoughness={0.15}
+            color="#1a1a1a"
+            roughness={0.85}
+            metalness={0.0}
           />
+        </mesh>
+        {/* HD Oar blade - competition composite with team colors */}
+        <mesh position={[-3.3, 0, 0]}>
+          <boxGeometry args={[0.58, 0.018, 0.2]} />
+          <meshPhysicalMaterial 
+            color="#1e40af" 
+            metalness={0.0} 
+            roughness={0.18}
+            clearcoat={0.85}
+            clearcoatRoughness={0.08}
+            sheen={0.35}
+            sheenColor="#3b82f6"
+          />
+        </mesh>
+        {/* Blade edge detail */}
+        <mesh position={[-3.55, 0, 0]}>
+          <boxGeometry args={[0.08, 0.016, 0.19]} />
+          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
         </mesh>
       </group>
       
-      {/* Right oar group */}
+      {/* HD Right oar group - professional racing equipment */}
       <group ref={rightOarRef} position={[0.3, 0.15, 0.5]}>
-        {/* Rigger */}
+        {/* HD Rigger - aerospace aluminum outrigger */}
         <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.025, 0.025, 1.2, 12]} />
-          <meshPhysicalMaterial color="#777777" metalness={0.9} roughness={0.15} clearcoat={0.6} />
+          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
+          <meshPhysicalMaterial 
+            color="#9a9a9a" 
+            metalness={0.95} 
+            roughness={0.08}
+            clearcoat={0.75}
+            clearcoatRoughness={0.12}
+            reflectivity={0.9}
+          />
         </mesh>
-        {/* Oarlock */}
+        {/* Rigger support struts */}
+        <mesh position={[0.3, -0.08, 0]} rotation={[0, 0, -0.4]}>
+          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
+          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
+        </mesh>
+        {/* HD Oarlock - precision stainless steel */}
         <mesh position={[1.15, 0, 0]}>
-          <torusGeometry args={[0.04, 0.015, 8, 16]} />
-          <meshPhysicalMaterial color="#555555" metalness={0.9} roughness={0.2} clearcoat={0.5} />
+          <torusGeometry args={[0.045, 0.018, 12, 20]} />
+          <meshPhysicalMaterial 
+            color="#b8b8b8" 
+            metalness={0.98} 
+            roughness={0.06}
+            clearcoat={0.85}
+            clearcoatRoughness={0.08}
+            reflectivity={0.95}
+          />
         </mesh>
-        {/* Oar shaft - Carbon fiber look */}
+        {/* HD Oar shaft - premium carbon fiber */}
         <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.02, 0.025, 2.8, 12]} />
+          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
           <meshPhysicalMaterial 
-            color="#1a1a1a" 
-            metalness={0.3} 
-            roughness={0.4}
-            clearcoat={0.8}
-            clearcoatRoughness={0.2}
+            color="#0a0a0a" 
+            metalness={0.15} 
+            roughness={0.28}
+            clearcoat={0.92}
+            clearcoatRoughness={0.08}
+            sheen={0.2}
+            sheenColor="#303030"
           />
         </mesh>
-        {/* Oar blade - Composite material */}
-        <mesh position={[3.3, 0, 0]}>
-          <boxGeometry args={[0.55, 0.015, 0.18]} />
+        {/* Grip area */}
+        <mesh position={[0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
           <meshPhysicalMaterial 
-            color="#2563eb" 
-            metalness={0.0} 
-            roughness={0.3}
-            clearcoat={0.5}
-            clearcoatRoughness={0.15}
+            color="#1a1a1a"
+            roughness={0.85}
+            metalness={0.0}
           />
+        </mesh>
+        {/* HD Oar blade - competition composite with team colors */}
+        <mesh position={[3.3, 0, 0]}>
+          <boxGeometry args={[0.58, 0.018, 0.2]} />
+          <meshPhysicalMaterial 
+            color="#1e40af" 
+            metalness={0.0} 
+            roughness={0.18}
+            clearcoat={0.85}
+            clearcoatRoughness={0.08}
+            sheen={0.35}
+            sheenColor="#3b82f6"
+          />
+        </mesh>
+        {/* Blade edge detail */}
+        <mesh position={[3.55, 0, 0]}>
+          <boxGeometry args={[0.08, 0.016, 0.19]} />
+          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
         </mesh>
       </group>
     </group>
@@ -2766,7 +3654,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
         renderThemedLandscape()
       )}
       
-      {/* The rowing scull - positioned and rotated along curved path */}
+      {/* The rowing scull - high-definition procedural model with animated oars and rower */}
       <RowingScull 
         position={[
           boatPositionRef.current.x, 

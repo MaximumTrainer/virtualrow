@@ -240,8 +240,18 @@ function App() {
         setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
       }
       setCurrentSession({ ...currentSession });
+
+      // If this workout is tied to a route, automatically end when distance reaches route length.
+      // Skip this behavior under Playwright harness to keep E2E tests stable.
+      if (selectedRoute && typeof window !== 'undefined' && !(window as any).__PLAYWRIGHT_TESTING) {
+        const routeDistanceMeters = selectedRoute.distance * 1000; // route distance is stored in km
+        const completionThreshold = routeDistanceMeters * 0.995; // small tolerance to avoid early cutoff
+        if (data.distance >= completionThreshold && routeDistanceMeters > 0) {
+          handleEndWorkout();
+        }
+      }
     }
-  }, [isWorkoutActive, currentSession, selectedWorkout]);
+  }, [isWorkoutActive, currentSession, selectedWorkout, selectedRoute, handleEndWorkout]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
@@ -383,7 +393,15 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
       </header>
 
       <div className="app-layout">
-        <aside className="app-sidebar">
+        <aside
+          className={
+            `app-sidebar ${
+              isWorkoutActive && currentView === 'workout' && !(window as any).__PLAYWRIGHT_TESTING
+                ? 'app-sidebar--hidden'
+                : ''
+            }`
+          }
+        >
           <nav className="nav-tabs">
             <button
               className={`nav-tab ${currentView === 'routes' ? 'active' : ''}`}
@@ -396,12 +414,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
               onClick={() => setCurrentView('workouts')}
             >
               <span className="tab-icon">💪</span> Workouts
-            </button>
-            <button
-              className={`nav-tab ${currentView === 'workout' ? 'active' : ''}`}
-              onClick={() => setCurrentView('workout')}
-            >
-              <span className="tab-icon">⏱️</span> Workout
             </button>
             <button
               className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}

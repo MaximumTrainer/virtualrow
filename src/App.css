@@ -104,6 +104,14 @@ body {
   position: relative;
   z-index: 10;
   min-height: 0;
+  transition: transform 0.35s ease, opacity 0.35s ease, width 0.35s ease;
+}
+
+.app-sidebar--hidden {
+  width: 0;
+  transform: translateX(-320px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .app-sidebar::-webkit-scrollbar {

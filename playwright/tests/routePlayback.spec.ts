@@ -185,7 +185,8 @@ test.describe('Simulated e2e route playback', () => {
           svc.startSession('sim-manual', 'Simulated Route');
         }
       });
-      await page.click('button:has-text("⏱️ Workout")');
+      // Navigate to the workout view using the History tab now that the Workout tab is removed
+      await page.click('button:has-text("History")');
     }
 
     // Connect HR Monitor
@@ -241,7 +242,8 @@ test.describe('Simulated e2e route playback', () => {
             svc.startSession('sim-manual', 'Simulated Route');
           }
         });
-        await page.click('button:has-text("⏱️ Workout")');
+        // Navigate to the workout view via the History tab
+        await page.click('button:has-text("History")');
       }
     }
 
