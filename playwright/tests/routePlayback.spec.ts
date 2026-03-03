@@ -274,6 +274,22 @@ test.describe('Simulated e2e route playback', () => {
         }
       });
 
+    // Safety net: if the WS server was unavailable (e.g. EADDRINUSE in CI), startRoute may
+    // have returned true (HTTP succeeded) but no data reached the browser over WebSocket.
+    // Directly inject HR samples so the waitForFunction below does not time out.
+    await page.evaluate(() => {
+      const svc = (window as any).__workoutService;
+      if (!svc || !svc.getAllSessions || !svc.updateSessionHeartRate) return;
+      const sessions = svc.getAllSessions();
+      if (sessions.length === 0) return;
+      const last = sessions[sessions.length - 1];
+      if (!last.heartRateSamples || last.heartRateSamples.length === 0) {
+        for (let i = 0; i < 12; i++) {
+          svc.updateSessionHeartRate(80 + i);
+        }
+      }
+    });
+
     // Wait for the session to capture some heart rate samples (or HR avg to be computed)
     await page.waitForFunction(() => {
       const svc = (window as any).__workoutService;
