@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maximum Trainer – Free Indoor Cycling Software</title>
+  <meta name="description" content="Maximum Trainer was a pioneering free indoor cycling platform with advanced features like ERG mode, L/R power balance, Moxy sensor support, and studio multi-rider functionality. Now open source under GPL-3.0." />
+  <meta property="og:title" content="Maximum Trainer – Free Indoor Cycling Software" />
+  <meta property="og:description" content="A pioneering open-source indoor cycling platform. ERG mode, BLE trainer support, Moxy muscle oxygen sensors, and more." />
+  <meta property="og:type" content="website" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ─── Navigation ──────────────────────────────────────────────────────── -->
+<nav>
+  <a href="#hero" class="nav-logo">
+    <div class="logo-icon">🚴</div>
+    Maximum Trainer
+  </a>
+  <ul class="nav-links" id="nav-links">
+    <li><a href="#story">Story</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#gallery">Gallery</a></li>
+    <li><a href="#download">Download</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="https://github.com/MaximumTrainer/virtualrow" target="_blank" rel="noopener" class="nav-cta">GitHub ↗</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Toggle navigation" aria-expanded="false">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+</nav>
+
+<!-- ─── Hero ────────────────────────────────────────────────────────────── -->
+<section id="hero">
+  <div>
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Open Source · GPL-3.0 · Community Driven
+    </div>
+    <h1>
+      The Free <span class="highlight">Indoor Cycling</span><br />
+      Platform, Reborn
+    </h1>
+    <p class="hero-subtitle">
+      Maximum Trainer was one of the first free, feature-rich indoor cycling software platforms—
+      rivaling paid tools like TrainerRoad and Zwift. Now open source and back for the community.
+    </p>
+    <div class="hero-actions">
+      <a href="#download" class="btn-primary">⬇ Download</a>
+      <a href="#story" class="btn-secondary">Read the Story</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-value">C++</div>
+        <div class="stat-label">Core Language</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">BLE</div>
+        <div class="stat-label">Trainer Protocol</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">Free</div>
+        <div class="stat-label">Always &amp; Forever</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">GPL‑3</div>
+        <div class="stat-label">Open Source</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Story ───────────────────────────────────────────────────────────── -->
+<section id="story">
+  <div class="container">
+    <span class="section-label">The Story</span>
+    <h2 class="section-title">From Pioneering Platform<br />to Open-Source Legacy</h2>
+    <p class="section-desc">
+      Maximum Trainer was built by one developer with a vision: bring professional-grade
+      indoor cycling training to everyone for free.
+    </p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-date">Origins</div>
+        <h3>Built by Maxime Blais (Max)</h3>
+        <p>
+          Maximum Trainer was a pioneering free indoor cycling platform developed primarily by
+          <strong>Maxime Blais</strong>, known as Max. At a time when apps like TrainerRoad and
+          Zwift were charging monthly subscriptions, Maximum Trainer offered an equivalent—or
+          often superior—feature set completely free of charge. It was one of the earliest platforms
+          to adopt open trainer communication standards using Bluetooth Smart (BLE).
+        </p>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-date">Key Innovations</div>
+        <h3>Advanced Features, Zero Cost</h3>
+        <p>
+          The platform featured an advanced workout editor, ERG mode for automatic resistance
+          control, real-time left/right power balance, native Moxy Muscle Oxygen Monitor support
+          with live Near-Infrared Spectroscopy data, a studio mode for multiple concurrent riders,
+          and full offline functionality. These capabilities were ahead of their time for a free
+          application.
+        </p>
+      </div>
+
+      <div class="timeline-item closed">
+        <div class="timeline-date">September 7, 2019</div>
+        <h3>The Closure</h3>
+        <p>
+          On September 7, 2019, Maximum Trainer officially ceased operations and support. According
+          to <a href="https://www.smartbiketrainers.com/maximumtrainer-is-closing-8971" target="_blank" rel="noopener">SmartBikeTrainers</a>,
+          the developer cited a <strong>lack of external developer help</strong> and
+          <strong>insufficient donations</strong> to cover site hosting as the primary reasons for
+          the shutdown. A brilliant platform went dark—but its code lived on.
+        </p>
+      </div>
+
+      <div class="timeline-item reborn">
+        <div class="timeline-date">The Rebirth</div>
+        <h3>Open Source &amp; Community Driven</h3>
+        <p>
+          This site marks the beginning of a new chapter for Maximum Trainer. The codebase has
+          been preserved and open-sourced under the GPL-3.0 license. The community can now build
+          upon this foundation, revive the platform, and ensure that one of cycling's most
+          innovative free tools continues to serve riders around the world.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Features ────────────────────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <span class="section-label">Technical Specifications</span>
+    <h2 class="section-title">Built for Serious Cyclists</h2>
+    <p class="section-desc">
+      Maximum Trainer was engineered with a rich feature set covering hardware integration,
+      training protocols, and advanced analytics.
+    </p>
+
+    <div class="tech-stack">
+      <span class="tech-badge">⚙️ C++ (95%)</span>
+      <span class="tech-badge">🔧 Qt Framework</span>
+      <span class="tech-badge">📐 .pro Build Files</span>
+      <span class="tech-badge">🌍 Qt Linguist (.qm)</span>
+      <span class="tech-badge">📡 Bluetooth Smart (BLE)</span>
+      <span class="tech-badge">📄 .ERG &amp; .FIT Workouts</span>
+    </div>
+
+    <div class="features-grid" style="margin-top: 2.5rem;">
+      <div class="feature-card">
+        <div class="feature-icon">📡</div>
+        <h3>Bluetooth Smart (BLE)</h3>
+        <p>
+          One of the earliest adopters of open trainer communication standards. Connects seamlessly
+          to BLE-enabled smart trainers for full two-way communication, resistance control, and
+          real-time data streaming.
+        </p>
+        <span class="feature-tag">Hardware Protocol</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>ERG Mode</h3>
+        <p>
+          Automatic resistance control that locks your trainer to a target power output. Whether
+          you're climbing or sprinting, ERG mode adjusts resistance so you hit your target watt
+          regardless of cadence.
+        </p>
+        <span class="feature-tag">Training</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🦵</div>
+        <h3>Moxy Muscle Oxygen Monitor</h3>
+        <p>
+          Native support for Moxy sensors using Near-Infrared Spectroscopy (NIRS). Live SmO₂
+          and tHb data display during workouts with full .FIT file integration for post-workout
+          analysis.
+        </p>
+        <span class="feature-tag">Specialized Sensor</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">⚖️</div>
+        <h3>L/R Power Balance</h3>
+        <p>
+          Real-time left/right power balance feedback lets you identify and correct pedaling
+          asymmetries. A powerful tool for improving efficiency and diagnosing muscular imbalances.
+        </p>
+        <span class="feature-tag">Analytics</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🏋️</div>
+        <h3>Advanced Workout Editor</h3>
+        <p>
+          Design, edit, and manage structured training plans with a full-featured workout editor.
+          Supports standard interval formats including <code>.erg</code> and <code>.fit</code> for
+          interoperability with other platforms.
+        </p>
+        <span class="feature-tag">Workout Support</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">👥</div>
+        <h3>Studio Function</h3>
+        <p>
+          Support for multiple simultaneous riders makes Maximum Trainer ideal for cycling studios
+          and group training environments. Manage concurrent sessions without additional licensing
+          fees.
+        </p>
+        <span class="feature-tag">Multi-Rider</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">✈️</div>
+        <h3>Offline Mode</h3>
+        <p>
+          Fully functional without active server communication—a critical capability for the
+          archived version. No subscription, no cloud dependency, no connectivity required.
+          Your workouts, your hardware, your data.
+        </p>
+        <span class="feature-tag">Offline</span>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3>Multi-Language Support</h3>
+        <p>
+          Internationalization built in from the ground up using Qt Linguist (<code>.qm</code>
+          files). The community can add and maintain translations for any language.
+        </p>
+        <span class="feature-tag">Localization</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Gallery ─────────────────────────────────────────────────────────── -->
+<section id="gallery">
+  <div class="container">
+    <span class="section-label">Gallery</span>
+    <h2 class="section-title">See It in Action</h2>
+    <p class="section-desc">
+      Visual documentation of Maximum Trainer's interface and unique "Power &amp; Goal Band" UI.
+    </p>
+
+    <div class="gallery-note">
+      <span class="note-icon">ℹ️</span>
+      <span>
+        Screenshots are sourced from the original
+        <a href="https://www.youtube.com/watch?v=nAhDABkaHmw" target="_blank" rel="noopener" style="color: var(--secondary);">SmartBikeTrainers YouTube walkthrough</a>
+        and the application's resource files. The walkthrough provides a comprehensive overview
+        of the Power &amp; Goal Band UI and core training interface.
+      </span>
+    </div>
+
+    <div class="gallery-grid">
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">📊</div>
+            <span>Power &amp; Goal Band UI</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>Power &amp; Goal Band</h3>
+          <p>
+            The signature UI element of Maximum Trainer — a real-time power band showing
+            current output against target zones with visual zone indicators.
+          </p>
+          <a href="https://www.youtube.com/watch?v=nAhDABkaHmw" target="_blank" rel="noopener" class="gallery-video-link">
+            ▶ Watch Walkthrough
+          </a>
+        </div>
+      </div>
+
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">🎯</div>
+            <span>ERG Mode Training</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>ERG Mode Interface</h3>
+          <p>
+            Structured interval training with automatic resistance control. Target power displayed
+            alongside real-time output for instant feedback.
+          </p>
+        </div>
+      </div>
+
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">🦵</div>
+            <span>Moxy NIRS Dashboard</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>Moxy Sensor Dashboard</h3>
+          <p>
+            Live SmO₂ (muscle oxygen saturation) and tHb (total hemoglobin) readings from
+            Moxy NIRS sensors displayed alongside standard cycling metrics.
+          </p>
+        </div>
+      </div>
+
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">📝</div>
+            <span>Workout Editor</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>Workout Editor</h3>
+          <p>
+            The full-featured workout editor with interval builder, supporting .erg and .fit
+            import/export for cross-platform compatibility.
+          </p>
+        </div>
+      </div>
+
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">👥</div>
+            <span>Studio Mode</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>Studio Mode</h3>
+          <p>
+            Multi-rider studio functionality — manage multiple concurrent sessions for
+            group training environments and cycling studios.
+          </p>
+        </div>
+      </div>
+
+      <div class="gallery-card">
+        <div class="gallery-thumb">
+          <div class="gallery-thumb-placeholder">
+            <div class="thumb-icon">⚖️</div>
+            <span>L/R Power Balance</span>
+          </div>
+        </div>
+        <div class="gallery-card-body">
+          <h3>L/R Power Balance</h3>
+          <p>
+            Real-time left/right power balance visualization helps identify and correct
+            muscular imbalances and pedaling asymmetries.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Download ─────────────────────────────────────────────────────────── -->
+<section id="download">
+  <div class="container">
+    <span class="section-label">Download &amp; Build</span>
+    <h2 class="section-title">Get Maximum Trainer</h2>
+    <p class="section-desc">
+      Pre-built binaries and source code are available for all major platforms.
+      Licensed under GPL-3.0 — free to use, modify, and distribute.
+    </p>
+
+    <div class="download-grid">
+      <div class="download-card">
+        <div class="download-card-header">
+          <div class="download-os-icon">🪟</div>
+          <div>
+            <h3>Windows</h3>
+            <span>Windows 7 / 8 / 10 / 11</span>
+          </div>
+        </div>
+        <p>
+          Full-featured Windows installer. Includes all BLE trainer drivers and
+          Moxy sensor support out of the box.
+        </p>
+        <a href="https://github.com/MaximumTrainer/virtualrow/releases" target="_blank" rel="noopener" class="download-btn">
+          ⬇ Download for Windows
+        </a>
+      </div>
+
+      <div class="download-card">
+        <div class="download-card-header">
+          <div class="download-os-icon">🍎</div>
+          <div>
+            <h3>macOS</h3>
+            <span>macOS 10.13+</span>
+          </div>
+        </div>
+        <p>
+          Native macOS application bundle. Supports BLE via the CoreBluetooth
+          framework with no additional drivers required.
+        </p>
+        <a href="https://github.com/MaximumTrainer/virtualrow/releases" target="_blank" rel="noopener" class="download-btn">
+          ⬇ Download for macOS
+        </a>
+      </div>
+
+      <div class="download-card">
+        <div class="download-card-header">
+          <div class="download-os-icon">🐧</div>
+          <div>
+            <h3>Linux</h3>
+            <span>Ubuntu / Debian / Fedora</span>
+          </div>
+        </div>
+        <p>
+          Linux AppImage and source packages available. Requires BlueZ for
+          Bluetooth Low Energy support on Linux systems.
+        </p>
+        <a href="https://github.com/MaximumTrainer/virtualrow/releases" target="_blank" rel="noopener" class="download-btn">
+          ⬇ Download for Linux
+        </a>
+      </div>
+    </div>
+
+    <div class="dev-section">
+      <h3>🔧 Build from Source</h3>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">
+        Maximum Trainer is built with C++ and the Qt Framework. Follow these steps to compile
+        from source:
+      </p>
+      <div class="code-block">
+        <span class="comment"># Clone the repository</span><br />
+        <span class="cmd">git clone https://github.com/MaximumTrainer/virtualrow.git</span><br />
+        <span class="cmd">cd virtualrow</span><br />
+        <br />
+        <span class="comment"># Open the project file in Qt Creator</span><br />
+        <span class="cmd">qtcreator MaximumTrainer.pro</span><br />
+        <br />
+        <span class="comment"># Or build from the command line</span><br />
+        <span class="cmd">qmake MaximumTrainer.pro</span><br />
+        <span class="cmd">make -j$(nproc)</span>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.75rem;">
+        Build requirements:
+      </p>
+      <div class="build-requirements">
+        <span class="req-badge">Qt 5.x or Qt 6.x</span>
+        <span class="req-badge">C++14 Compiler</span>
+        <span class="req-badge">Qt Bluetooth Module</span>
+        <span class="req-badge">Qt Linguist (for translations)</span>
+        <span class="req-badge">BlueZ (Linux only)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── License ──────────────────────────────────────────────────────────── -->
+<section id="license">
+  <div class="container">
+    <span class="section-label">Open Source</span>
+    <h2 class="section-title">Free as in Freedom</h2>
+    <p class="section-desc">
+      Maximum Trainer is and will always be free and open source.
+    </p>
+
+    <div class="license-card">
+      <div class="license-icon">📜</div>
+      <div>
+        <h3>GNU General Public License v3.0</h3>
+        <p>
+          Maximum Trainer is explicitly licensed under the
+          <strong>GNU General Public License version 3 (GPL-3.0)</strong>.
+          This means you are free to use, study, share, and modify the software.
+          Any derivative works must also be released under the GPL-3.0 license,
+          ensuring that Maximum Trainer and all improvements built upon it remain
+          free and open for the cycling community forever.
+        </p>
+        <p>
+          This copyleft license was a deliberate choice to prevent the software from
+          being taken proprietary—ensuring that the work of the original developer
+          and the community continues to benefit everyone.
+        </p>
+        <a href="https://github.com/MaximumTrainer/virtualrow/blob/main/LICENSE" target="_blank" rel="noopener" class="license-link">
+          Read the full GPL-3.0 license →
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ───────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <h3>🚴 Maximum Trainer</h3>
+        <p>
+          A pioneering free indoor cycling platform. Open source under GPL-3.0.
+          Community maintained and preserved for cyclists everywhere.
+        </p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-links-group">
+          <h4>Navigate</h4>
+          <ul>
+            <li><a href="#story">Story</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#gallery">Gallery</a></li>
+            <li><a href="#download">Download</a></li>
+            <li><a href="#license">License</a></li>
+          </ul>
+        </div>
+        <div class="footer-links-group">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="https://github.com/MaximumTrainer/virtualrow" target="_blank" rel="noopener">GitHub Repository</a></li>
+            <li><a href="https://github.com/MaximumTrainer/virtualrow/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/MaximumTrainer/virtualrow/issues" target="_blank" rel="noopener">Report an Issue</a></li>
+            <li><a href="https://www.youtube.com/watch?v=nAhDABkaHmw" target="_blank" rel="noopener">Video Walkthrough</a></li>
+            <li><a href="https://www.smartbiketrainers.com/maximumtrainer-is-closing-8971" target="_blank" rel="noopener">SmartBikeTrainers Article</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© Maximum Trainer Contributors. Licensed under <a href="https://github.com/MaximumTrainer/virtualrow/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a>.</p>
+      <p>Originally developed by Maxime Blais (Max).</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Mobile navigation toggle
+  const hamburger = document.getElementById('hamburger');
+  const navLinks = document.getElementById('nav-links');
+
+  hamburger.addEventListener('click', () => {
+    const isOpen = navLinks.classList.toggle('open');
+    hamburger.setAttribute('aria-expanded', isOpen.toString());
+  });
+
+  // Close mobile nav when a link is clicked
+  navLinks.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      navLinks.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  // Active nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinkEls = document.querySelectorAll('.nav-links a[href^="#"]');
+
+  function updateActiveNav() {
+    const scrollPos = window.scrollY + 80;
+    sections.forEach(section => {
+      if (
+        scrollPos >= section.offsetTop &&
+        scrollPos < section.offsetTop + section.offsetHeight
+      ) {
+        navLinkEls.forEach(link => {
+          link.style.color = '';
+          if (link.getAttribute('href') === '#' + section.id) {
+            link.style.color = 'var(--primary)';
+          }
+        });
+      }
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveNav, { passive: true });
+</script>
+
+</body>
+</html>
