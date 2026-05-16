@@ -240,7 +240,7 @@ function createEnvironmentParts() {
   addMeshPart(parts, {
     name: 'BuildingRoof',
     geometry: new THREE.BoxGeometry(8.4, 0.6, 6.4),
-    material: 6,
+    material: 4, // BuildingConcrete
     matrix: translationMatrix(0, 14.3, -15),
   });
 
