@@ -1,6 +1,8 @@
-import { beforeAll, describe, it, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App, { formatPace } from '../App';
+
+const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
 beforeAll(() => {
   const gradient = { addColorStop: vi.fn() };
@@ -35,6 +37,10 @@ beforeAll(() => {
   HTMLCanvasElement.prototype.getContext = vi.fn(
     () => context as unknown as CanvasRenderingContext2D,
   );
+});
+
+afterAll(() => {
+  HTMLCanvasElement.prototype.getContext = originalGetContext;
 });
 
 describe('App component', () => {
