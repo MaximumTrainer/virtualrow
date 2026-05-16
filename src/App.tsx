@@ -415,7 +415,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
         </div>
       </header>
 
-      <div className="app-layout">
+      <div className={`app-layout app-layout--${currentView}`}>
         <aside
           className={
             `app-sidebar ${
@@ -511,7 +511,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
 
         <main className="app-main">
           {currentView === 'routes' && selectedRoute && (
-            <div className="view-container">
+            <div className="view-container view-container--routes">
               <div className="map-container">
                 <RouteMap route={selectedRoute} />
               </div>

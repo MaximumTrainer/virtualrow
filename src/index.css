@@ -5,39 +5,39 @@
 /* CSS Custom Properties - Dark Theme */
 :root {
   /* Primary Colors */
-  --color-primary: #57a8ff;
-  --color-primary-dark: #3a86d9;
-  --color-primary-rgb: 87, 168, 255;
-  --color-primary-glow: rgba(87, 168, 255, 0.35);
+  --color-primary: #2474d9;
+  --color-primary-dark: #1758ab;
+  --color-primary-rgb: 36, 116, 217;
+  --color-primary-glow: rgba(36, 116, 217, 0.18);
   
   /* Accent Colors */
-  --color-accent-pink: #ff8458;
-  --color-accent-yellow: #f4c56b;
-  --color-accent-red: #ff6b6b;
-  --color-accent-red-rgb: 255, 107, 107;
-  --color-accent-green: #6fd0a2;
+  --color-accent-pink: #f97363;
+  --color-accent-yellow: #d9a429;
+  --color-accent-red: #de5d61;
+  --color-accent-red-rgb: 222, 93, 97;
+  --color-accent-green: #4fa97d;
   
   /* Background Colors */
-  --color-bg-primary: #08131f;
-  --color-bg-secondary: #102437;
-  --color-bg-tertiary: #050d17;
-  --color-bg-radial-highlight: #112840;
-  --color-bg-header: rgba(8, 19, 31, 0.9);
-  --color-bg-tabs: rgba(8, 19, 31, 0.86);
-  --color-bg-panel-start: rgba(8, 19, 31, 0.93);
-  --color-bg-panel-end: rgba(16, 36, 55, 0.78);
-  --color-bg-card: rgba(8, 19, 31, 0.95);
-  --color-bg-glass: rgba(8, 19, 31, 0.86);
+  --color-bg-primary: #edf4fa;
+  --color-bg-secondary: #dfeaf4;
+  --color-bg-tertiary: #f8fbfe;
+  --color-bg-radial-highlight: #d8e7f6;
+  --color-bg-header: rgba(248, 251, 254, 0.92);
+  --color-bg-tabs: rgba(255, 255, 255, 0.88);
+  --color-bg-panel-start: rgba(255, 255, 255, 0.98);
+  --color-bg-panel-end: rgba(243, 248, 252, 0.96);
+  --color-bg-card: rgba(255, 255, 255, 0.98);
+  --color-bg-glass: rgba(233, 241, 249, 0.74);
   
   /* Text Colors */
-  --color-text-primary: #e8f1fc;
-  --color-text-secondary: #a2bad3;
-  --color-text-muted: #6f88a3;
-  --color-primary-lightest: #d6e8fb;
+  --color-text-primary: #10263d;
+  --color-text-secondary: #58708a;
+  --color-text-muted: #7c90a5;
+  --color-primary-lightest: #7fb0ea;
   
   /* Border Colors */
-  --color-border: rgba(130, 164, 195, 0.2);
-  --color-border-hover: rgba(var(--color-primary-rgb), 0.45);
+  --color-border: rgba(91, 126, 160, 0.18);
+  --color-border-hover: rgba(var(--color-primary-rgb), 0.3);
   
   /* Typography */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -45,7 +45,7 @@
   font-weight: 400;
   
   /* Color Scheme */
-  color-scheme: dark;
+  color-scheme: light;
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
   
@@ -79,7 +79,7 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 45%, var(--color-bg-tertiary) 100%);
+  background: radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 40%, var(--color-bg-tertiary) 100%);
 }
 
 /* Links */
@@ -106,14 +106,14 @@ button {
   font-family: inherit;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
 }
 
 button:hover {
   transform: translateY(-2px);
   border-color: var(--color-border-hover);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
 }
 
 button:active {
