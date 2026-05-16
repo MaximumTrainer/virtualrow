@@ -273,7 +273,7 @@ test.describe('Simulated e2e route playback', () => {
               await window.__simulator.emitHR({ bpm: 80 + i });
             } catch (e) {
               // @ts-ignore
-              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { }
+              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { /* ignore fallback errors in test-only simulation path */ }
             }
             // small delay
             // eslint-disable-next-line no-await-in-loop
@@ -568,7 +568,7 @@ test.describe('Simulated e2e route playback', () => {
               await window.__simulator.emitHR({ bpm: 110 + i });
             } catch (e) {
               // @ts-ignore
-              try { window.__workoutService?.updateSessionHeartRate?.(110 + i); } catch (e) { }
+              try { window.__workoutService?.updateSessionHeartRate?.(110 + i); } catch (e) { /* ignore fallback errors in test-only simulation path */ }
             }
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));
@@ -686,7 +686,7 @@ test.describe('Simulated e2e route playback', () => {
               await window.__simulator.emitHR({ bpm: 80 + i });
             } catch (e) {
               // @ts-ignore
-              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { }
+              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { /* ignore fallback errors in test-only simulation path */ }
             }
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));

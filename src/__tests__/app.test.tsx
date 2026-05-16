@@ -24,13 +24,17 @@ beforeAll(() => {
     createLinearGradient: vi.fn(() => gradient),
     createRadialGradient: vi.fn(() => gradient),
   };
+  // RouteMap uses a broad Canvas2D API surface; unknown members become no-op spies
+  // so jsdom can render App without requiring a full canvas implementation.
   const context = new Proxy(baseContext as Record<string, unknown>, {
     get(target, prop) {
       if (!(prop in target)) target[prop as string] = vi.fn();
       return target[prop as string];
     },
   });
-  HTMLCanvasElement.prototype.getContext = vi.fn(() => context as any) as any;
+  HTMLCanvasElement.prototype.getContext = vi.fn(
+    () => context as unknown as CanvasRenderingContext2D,
+  );
 });
 
 describe('App component', () => {
