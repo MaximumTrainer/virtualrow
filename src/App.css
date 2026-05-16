@@ -242,6 +242,12 @@ body {
   margin-bottom: 0;
 }
 
+.app-layout--routes .app-sidebar .device-panel {
+  grid-column: 1 / -1;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
 .device-panel--selection {
   display: flex;
   flex-direction: column;
@@ -938,6 +944,7 @@ body {
   gap: 20px;
   width: 100%;
   min-height: 0;
+  height: 100%;
 }
 
 .activity-route-stage {
@@ -1054,14 +1061,22 @@ body {
 
 .activity-controls {
   display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  padding: 8px 0 4px;
 }
 
 .btn-activity-control {
-  min-width: 160px;
-  border-radius: 16px;
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: #ffffff;
 }
@@ -1693,7 +1708,8 @@ body {
   }
 
   .btn-activity-control {
-    width: 100%;
+    padding: 8px 8px;
+    font-size: 11px;
   }
 }
 
