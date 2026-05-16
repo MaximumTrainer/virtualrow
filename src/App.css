@@ -1462,16 +1462,16 @@ body {
    ROWNATIVE LOOK & FEEL OVERRIDES
    ============================================================================ */
 .app-container {
-  background: radial-gradient(circle at top, #112840 0%, var(--color-bg-primary) 50%, var(--color-bg-tertiary) 100%);
+  background: radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 50%, var(--color-bg-tertiary) 100%);
 }
 
 .app-header {
-  background: rgba(8, 19, 31, 0.9);
+  background: var(--color-bg-header);
   border-bottom: 1px solid var(--color-border);
 }
 
 .app-title {
-  background: linear-gradient(135deg, #d6e8fb 0%, var(--color-primary) 60%, var(--color-primary-dark) 100%);
+  background: linear-gradient(135deg, var(--color-primary-lightest) 0%, var(--color-primary) 60%, var(--color-primary-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1494,13 +1494,13 @@ body {
 .performance-chart,
 .workout-progress-display,
 .workout-generator {
-  background: linear-gradient(150deg, rgba(8, 19, 31, 0.93), rgba(16, 36, 55, 0.78));
+  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
   border-color: var(--color-border);
   box-shadow: 0 14px 35px rgba(2, 8, 15, 0.38);
 }
 
 .nav-tabs {
-  background: rgba(8, 19, 31, 0.86);
+  background: var(--color-bg-tabs);
   border-color: var(--color-border);
 }
 
@@ -1535,7 +1535,7 @@ body {
 .segment-progress-fill,
 .route-map-loading-spinner {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: #08131f;
+  color: var(--color-bg-primary);
 }
 
 .app-main button:hover,

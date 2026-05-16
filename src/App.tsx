@@ -411,7 +411,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
-          <p className="app-subtitle">Row-native inspired virtual rowing on iconic water routes</p>
+          <p className="app-subtitle">Rownative-inspired virtual rowing on iconic water routes</p>
         </div>
       </header>
 

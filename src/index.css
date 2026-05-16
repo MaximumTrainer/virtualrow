@@ -21,6 +21,11 @@
   --color-bg-primary: #08131f;
   --color-bg-secondary: #102437;
   --color-bg-tertiary: #050d17;
+  --color-bg-radial-highlight: #112840;
+  --color-bg-header: rgba(8, 19, 31, 0.9);
+  --color-bg-tabs: rgba(8, 19, 31, 0.86);
+  --color-bg-panel-start: rgba(8, 19, 31, 0.93);
+  --color-bg-panel-end: rgba(16, 36, 55, 0.78);
   --color-bg-card: rgba(8, 19, 31, 0.95);
   --color-bg-glass: rgba(8, 19, 31, 0.86);
   
@@ -28,6 +33,7 @@
   --color-text-primary: #e8f1fc;
   --color-text-secondary: #a2bad3;
   --color-text-muted: #6f88a3;
+  --color-primary-lightest: #d6e8fb;
   
   /* Border Colors */
   --color-border: rgba(130, 164, 195, 0.2);
@@ -73,7 +79,7 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at top, #112840 0%, var(--color-bg-primary) 45%, var(--color-bg-tertiary) 100%);
+  background: radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 45%, var(--color-bg-tertiary) 100%);
 }
 
 /* Links */
