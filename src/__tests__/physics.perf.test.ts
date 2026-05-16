@@ -13,12 +13,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dir = dirname(__filename);
+const __dirname = dirname(__filename);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let PhysicsEngine: any, PhysicsConfig: any, RowingMetrics: any;
-const physicsJsPath = resolve(__dir, '../wasm-pkg/virtualrow_physics.js');
-const physicsWasmPath = resolve(__dir, '../wasm-pkg/virtualrow_physics_bg.wasm');
+const physicsJsPath = resolve(__dirname, '../wasm-pkg/virtualrow_physics.js');
+const physicsWasmPath = resolve(__dirname, '../wasm-pkg/virtualrow_physics_bg.wasm');
 const hasPhysicsWasmArtifacts = existsSync(physicsJsPath) && existsSync(physicsWasmPath);
 
 beforeAll(async () => {
@@ -34,9 +34,9 @@ beforeAll(async () => {
   RowingMetrics = mod.RowingMetrics;
 });
 
-const describePhysicsPerf = hasPhysicsWasmArtifacts ? describe : describe.skip;
+const describeIfWasmPresent = hasPhysicsWasmArtifacts ? describe : describe.skip;
 
-describePhysicsPerf('PhysicsEngine.tick() performance', () => {
+describeIfWasmPresent('PhysicsEngine.tick() performance', () => {
   it('single tick completes in < 0.5 ms (steady-state engine)', () => {
     const cfg = new PhysicsConfig();
     const engine = new PhysicsEngine(cfg);
