@@ -1521,7 +1521,7 @@ body {
 .stat,
 .stat-item,
 .stat-compact {
-  border-color: var(--color-border) !important;
+  border-color: var(--color-border);
 }
 
 .app-main button,
@@ -1534,8 +1534,8 @@ body {
 .segment-progress-bar,
 .segment-progress-fill,
 .route-map-loading-spinner {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%) !important;
-  color: #08131f !important;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: #08131f;
 }
 
 .app-main button:hover,
@@ -1544,21 +1544,21 @@ body {
 .btn-start:hover,
 .btn-primary:hover,
 .control-btn.start:hover {
-  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb), 0.32) !important;
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb), 0.32);
 }
 
 .btn-disconnect,
 .control-btn.end,
 .device-status.disconnected,
 .error-message {
-  color: var(--color-accent-red) !important;
+  color: var(--color-accent-red);
 }
 
 .btn-disconnect,
 .control-btn.end,
 .error-message {
-  border-color: rgba(255, 107, 107, 0.35) !important;
-  background: rgba(255, 107, 107, 0.14) !important;
+  border-color: rgba(var(--color-accent-red-rgb), 0.35);
+  background: rgba(var(--color-accent-red-rgb), 0.14);
 }
 
 .stat-value,
@@ -1569,8 +1569,8 @@ body {
 .target-item,
 .overall-progress,
 .timeline-segment.active {
-  color: var(--color-primary) !important;
-  border-color: rgba(var(--color-primary-rgb), 0.35) !important;
+  color: var(--color-primary);
+  border-color: rgba(var(--color-primary-rgb), 0.35);
   box-shadow: none;
 }
 
@@ -1587,5 +1587,5 @@ body {
 .graph-label,
 .graph-placeholder,
 .description {
-  color: var(--color-text-secondary) !important;
+  color: var(--color-text-secondary);
 }
