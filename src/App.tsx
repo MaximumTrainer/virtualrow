@@ -660,15 +660,15 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                       <span className="activity-stat-value">{formatTime(workoutElapsedTimeMs)}</span>
                     </div>
                     <div className="activity-stat-card">
-                      <span className="activity-stat-label">Distance</span>
-                      <span className="activity-stat-value">{(currentSession.distance / 1000).toFixed(2)} km</span>
+                      <span className="activity-stat-label">Meters</span>
+                      <span className="activity-stat-value">{Math.round(currentSession.distance)} m</span>
                     </div>
                     <div className="activity-stat-card">
-                      <span className="activity-stat-label">Pace</span>
+                      <span className="activity-stat-label">Split (/500m)</span>
                       <span className="activity-stat-value">{formatPace(pm5Data?.pace ? pm5Data.pace / 100 : null)}</span>
                     </div>
                     <div className="activity-stat-card">
-                      <span className="activity-stat-label">Stroke Rate</span>
+                      <span className="activity-stat-label">SPM</span>
                       <span className="activity-stat-value">{pm5Data?.cadence ?? '--'} spm</span>
                     </div>
                     <div className="activity-stat-card">

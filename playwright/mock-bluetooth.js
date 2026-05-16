@@ -34,6 +34,16 @@
     return dv;
   }
 
+  function buildFTMSDataView({ flags = 0x0001, bytes = [] } = {}) {
+    const buffer = new ArrayBuffer(2 + bytes.length);
+    const dv = new DataView(buffer);
+    dv.setUint16(0, flags, true);
+    for (let i = 0; i < bytes.length; i++) {
+      dv.setUint8(2 + i, bytes[i] & 0xff);
+    }
+    return dv;
+  }
+
   // Simplified event emitter for characteristic
   function createCharacteristic(type) {
     const listeners = new Map();
@@ -70,10 +80,18 @@
       const dv = buildPM5DataView(msg.payload);
       // call both PM5 characteristic handlers if present
       if (window.__pm5Char) window.__pm5Char._dispatch(dv);
+    } else if (msg.type === 'ftms') {
+      const dv = buildFTMSDataView(msg.payload);
+      if (window.__ftmsChar) window.__ftmsChar._dispatch(dv);
     } else if (msg.type === 'hr') {
       const dv = buildHRDataView(msg.payload.bpm, !!msg.payload.uint16);
       if (window.__hrChar) window.__hrChar._dispatch(dv);
     }
+  }
+
+  function uuidMatches(value, hex) {
+    const v = String(value).toLowerCase();
+    return v.includes(hex) || Number(value) === parseInt(hex, 16);
   }
 
   // Expose a simulated navigator.bluetooth override
@@ -81,6 +99,7 @@
   // Pre-create characteristic instances so they are shared across getCharacteristic calls
   if (!window.__pm5Char) window.__pm5Char = createCharacteristic('pm5');
   if (!window.__hrChar) window.__hrChar = createCharacteristic('hr');
+  if (!window.__ftmsChar) window.__ftmsChar = createCharacteristic('ftms');
 
   const mockBluetooth = {
     requestDevice: async function (options) {
@@ -88,9 +107,10 @@
       const services = options?.filters?.flatMap(f => f.services || []) || [];
       // Determine device name based on requested services
       // PM5 uses ce060000-43e5-11e4-916c-0800200c9a66, HR uses 0000180d-0000-1000-8000-00805f9b34fb
-      const isPM5 = services.some(s => String(s).includes('ce060000'));
-      const isHR = services.some(s => String(s).includes('180d'));
-      const deviceName = isPM5 ? 'Concept2 PM5' : (isHR ? 'Heart Rate Monitor' : 'SimulatorDevice');
+      const isPM5 = services.some(s => uuidMatches(s, 'ce060000'));
+      const isHR = services.some(s => uuidMatches(s, '180d'));
+      const isFTMS = services.some(s => uuidMatches(s, '1826'));
+      const deviceName = isPM5 ? 'Concept2 PM5' : (isFTMS ? 'FTMS Rower' : (isHR ? 'Heart Rate Monitor' : 'SimulatorDevice'));
       // Build a device that simulates the Web Bluetooth API minimal surface
       const device = {
         name: deviceName,
@@ -117,8 +137,11 @@
                 return {
                   getCharacteristic: async (charUuid) => {
                     const s = String(charUuid).toLowerCase();
-                    if (s.includes('2a37') || s === '0x2a37') {
+                    if (uuidMatches(charUuid, '2a37')) {
                       return window.__hrChar;
+                    }
+                    if (uuidMatches(charUuid, '2ad1')) {
+                      return window.__ftmsChar;
                     }
                     return window.__pm5Char;
                   }
@@ -143,6 +166,7 @@
   // Define a simple global simulator API to be used by Playwright tests
   window.__simulator = {
     emitPM5: (payload) => ws.send(JSON.stringify({ type: 'pm5', payload })),
+    emitFTMS: (payload) => ws.send(JSON.stringify({ type: 'ftms', payload })),
     emitHR: (payload) => ws.send(JSON.stringify({ type: 'hr', payload })),
     startSequence: async (id, sequence) => {
       // POST to control HTTP endpoint to start a sequence on the simulator
@@ -169,6 +193,19 @@
         return true;
       } catch (e) {
         console.error('Failed to start route', e);
+        return false;
+      }
+    },
+    startFtmsRoute: async (id, options) => {
+      try {
+        await fetch(`http://localhost:9002/ftms/route`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...options }),
+        });
+        return true;
+      } catch (e) {
+        console.error('Failed to start FTMS route', e);
         return false;
       }
     },
