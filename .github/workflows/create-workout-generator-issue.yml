@@ -21,7 +21,13 @@ jobs:
             const fs = require('fs');
             const path = '.github/issue-content/workout-generator-implementation.md';
             const title = 'Implement Workout Generator with Structured Intervals, Target Compliance, and intervals.icu Import';
-            const body = fs.readFileSync(path, 'utf8');
+            let body;
+            try {
+              body = fs.readFileSync(path, 'utf8');
+            } catch (error) {
+              core.setFailed(`Failed to read issue markdown at ${path}: ${error.message}`);
+              return;
+            }
 
             const { owner, repo } = context.repo;
             const issues = await github.paginate(github.rest.issues.listForRepo, {

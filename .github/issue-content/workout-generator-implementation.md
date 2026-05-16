@@ -148,4 +148,5 @@ Users need guided rowing workouts (warmup/work/interval/rest/cooldown) similar t
 ## Notes
 - Keep architecture aligned with existing hexagonal boundaries: domain/application ports must stay independent of infrastructure adapters, and new adapters must be registered through dependency injection in the composition root.
 - Follow Red-Green-Refactor for workout behavior changes; add/extend tests first for progression logic, compliance logic, and import mapping, then implement to pass.
+- Treat intervals.icu integration as untrusted external input: validate and constrain imported fields, avoid sensitive data in logs, and include threat modeling for import adapters and API interaction paths.
 - Ensure no regressions to existing route/session flow.
