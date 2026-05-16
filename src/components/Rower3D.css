@@ -18,8 +18,9 @@
   pointer-events: none;
 }
 
-/* In fullscreen workout view, enable canvas pointer events */
-.workout-view-fullscreen .rower3d-canvas-container canvas {
+/* In activity/workout views, enable canvas pointer events */
+.workout-view-fullscreen .rower3d-canvas-container canvas,
+.activity-view .rower3d-canvas-container canvas {
   pointer-events: auto;
 }
 
