@@ -35,7 +35,10 @@ beforeAll(() => {
     },
   });
   HTMLCanvasElement.prototype.getContext = vi.fn(
-    () => context as unknown as CanvasRenderingContext2D,
+    ((contextType: string) =>
+      contextType === '2d'
+        ? (context as unknown as CanvasRenderingContext2D)
+        : null) as HTMLCanvasElement['getContext'],
   );
 });
 

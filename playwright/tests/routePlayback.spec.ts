@@ -283,7 +283,7 @@ test.describe('Simulated e2e route playback', () => {
         }
       });
 
-    // Wait for the session to capture persisted heart-rate data
+    // Wait for active-session heart-rate persistence signals before ending workout
     await page.waitForFunction(() => {
       const svc = (window as any).__workoutService;
       if (!svc?.getAllSessions) return false;
@@ -292,8 +292,7 @@ test.describe('Simulated e2e route playback', () => {
       const last = sessions[sessions.length - 1];
       return (
         (last.heartRateSamples?.length ?? 0) > 0 ||
-        (last.heartRateAvg ?? 0) > 0 ||
-        (last.heartRateMax ?? 0) > 0
+        (last.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false)
       );
     }, { timeout: 10000 });
     
