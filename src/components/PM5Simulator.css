@@ -102,13 +102,13 @@
 
 .btn-start {
   width: 100%;
-  background: linear-gradient(135deg, #00f5d4 0%, #00d4aa 100%);
-  color: #0a0f1a;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: var(--color-bg-primary);
 }
 
 .btn-start:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 245, 212, 0.4);
+  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.4);
 }
 
 .rowing-toggle {
@@ -122,8 +122,8 @@
 }
 
 .btn-rowing.stopped {
-  background: linear-gradient(135deg, #00f5d4 0%, #00d4aa 100%);
-  color: #0a0f1a;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: var(--color-bg-primary);
 }
 
 .btn-rowing.rowing {
@@ -213,7 +213,7 @@
 .metric-value {
   font-size: 14px;
   font-weight: 700;
-  color: #00f5d4;
+  color: var(--color-primary);
 }
 
 /* Metrics Display */
@@ -223,8 +223,9 @@
   gap: 10px;
   margin-bottom: 16px;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-bg-glass);
   border-radius: 8px;
+  border: 1px solid var(--color-border);
 }
 
 .metric-item {
@@ -233,7 +234,7 @@
 
 .metric-item .label {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
@@ -242,7 +243,7 @@
 .metric-item .value {
   font-size: 18px;
   font-weight: 700;
-  color: #00f5d4;
+  color: var(--color-primary);
 }
 
 /* Connection status */

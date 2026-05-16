@@ -8,10 +8,10 @@
   height: 100%;
   border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(145deg, #0a0e14, #0d1421);
-  border: 1px solid rgba(0, 245, 212, 0.15);
+  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
+  border: 1px solid var(--color-border);
   box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 14px 35px rgba(2, 8, 15, 0.38),
     inset 0 0 60px rgba(0, 0, 0, 0.3);
 }
 
@@ -42,14 +42,14 @@
 }
 
 .route-info-card {
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(10, 14, 20, 0.98));
+  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
   border-radius: 16px;
   padding: 20px;
-  border: 1px solid rgba(0, 245, 212, 0.2);
+  border: 1px solid var(--color-border);
   backdrop-filter: blur(16px);
   box-shadow: 
-    0 12px 36px rgba(0, 0, 0, 0.5),
-    0 0 30px rgba(0, 245, 212, 0.05);
+    0 14px 35px rgba(2, 8, 15, 0.38),
+    0 0 30px rgba(var(--color-primary-rgb), 0.05);
 }
 
 .route-info-card h3 {
@@ -57,7 +57,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 18px;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--color-text-primary);
 }
 
 /* Route Stats */
@@ -73,9 +73,9 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px;
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--color-bg-glass);
   border-radius: 10px;
-  border: 1px solid rgba(100, 116, 139, 0.15);
+  border: 1px solid var(--color-border);
 }
 
 .stat .label {
@@ -84,15 +84,15 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .stat .value {
   font-family: 'Inter', sans-serif;
   font-size: 16px;
   font-weight: 700;
-  color: #00f5d4;
-  text-shadow: 0 0 10px rgba(0, 245, 212, 0.2);
+  color: var(--color-primary);
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.2);
 }
 
 /* Difficulty Badges */
@@ -130,7 +130,7 @@
 .description {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   margin: 14px 0;
   line-height: 1.5;
 }
