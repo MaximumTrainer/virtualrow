@@ -5,31 +5,32 @@
 /* CSS Custom Properties - Dark Theme */
 :root {
   /* Primary Colors */
-  --color-primary: #00f5d4;
-  --color-primary-dark: #00d4aa;
-  --color-primary-glow: rgba(0, 245, 212, 0.3);
+  --color-primary: #57a8ff;
+  --color-primary-dark: #3a86d9;
+  --color-primary-rgb: 87, 168, 255;
+  --color-primary-glow: rgba(87, 168, 255, 0.35);
   
   /* Accent Colors */
-  --color-accent-pink: #ff006e;
-  --color-accent-yellow: #ffd60a;
-  --color-accent-red: #ff4757;
-  --color-accent-green: #22c55e;
+  --color-accent-pink: #ff8458;
+  --color-accent-yellow: #f4c56b;
+  --color-accent-red: #ff6b6b;
+  --color-accent-green: #6fd0a2;
   
   /* Background Colors */
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #0a0e14;
-  --color-bg-card: rgba(15, 23, 42, 0.95);
-  --color-bg-glass: rgba(15, 23, 42, 0.85);
+  --color-bg-primary: #08131f;
+  --color-bg-secondary: #102437;
+  --color-bg-tertiary: #050d17;
+  --color-bg-card: rgba(8, 19, 31, 0.95);
+  --color-bg-glass: rgba(8, 19, 31, 0.86);
   
   /* Text Colors */
-  --color-text-primary: #e2e8f0;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
+  --color-text-primary: #e8f1fc;
+  --color-text-secondary: #a2bad3;
+  --color-text-muted: #6f88a3;
   
   /* Border Colors */
-  --color-border: rgba(100, 116, 139, 0.2);
-  --color-border-hover: rgba(0, 245, 212, 0.4);
+  --color-border: rgba(130, 164, 195, 0.2);
+  --color-border-hover: rgba(var(--color-primary-rgb), 0.45);
   
   /* Typography */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -71,7 +72,7 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--color-bg-primary) 0%, var(--color-bg-tertiary) 100%);
+  background: radial-gradient(circle at top, #112840 0%, var(--color-bg-primary) 45%, var(--color-bg-tertiary) 100%);
 }
 
 /* Links */

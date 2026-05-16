@@ -1457,3 +1457,135 @@ body {
   background: rgba(0, 245, 212, 0.3);
   border-radius: 3px;
 }
+
+/* ============================================================================
+   ROWNATIVE LOOK & FEEL OVERRIDES
+   ============================================================================ */
+.app-container {
+  background: radial-gradient(circle at top, #112840 0%, var(--color-bg-primary) 50%, var(--color-bg-tertiary) 100%);
+}
+
+.app-header {
+  background: rgba(8, 19, 31, 0.9);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-title {
+  background: linear-gradient(135deg, #d6e8fb 0%, var(--color-primary) 60%, var(--color-primary-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  color: var(--color-text-secondary);
+}
+
+.app-main,
+.device-panel,
+.workout-stats-panel,
+.history-stats-panel,
+.import-panel,
+.route-info-overlay,
+.routes-list,
+.overlay-map,
+.route-info-card,
+.performance-chart,
+.workout-progress-display,
+.workout-generator {
+  background: linear-gradient(150deg, rgba(8, 19, 31, 0.93), rgba(16, 36, 55, 0.78));
+  border-color: var(--color-border);
+  box-shadow: 0 14px 35px rgba(2, 8, 15, 0.38);
+}
+
+.nav-tabs {
+  background: rgba(8, 19, 31, 0.86);
+  border-color: var(--color-border);
+}
+
+.nav-tab.active {
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.2), rgba(var(--color-primary-rgb), 0.08));
+  color: var(--color-primary);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.35);
+}
+
+.route-map-container,
+.map-container,
+.route-info-card,
+.workout-card,
+.current-segment,
+.chart-container,
+.metrics-display,
+.metric,
+.stat,
+.stat-item,
+.stat-compact {
+  border-color: var(--color-border) !important;
+}
+
+.app-main button,
+.btn-connect,
+.btn-scan,
+.btn-start,
+.btn-rowing.stopped,
+.btn-primary,
+.control-btn.start,
+.segment-progress-bar,
+.segment-progress-fill,
+.route-map-loading-spinner {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%) !important;
+  color: #08131f !important;
+}
+
+.app-main button:hover,
+.btn-connect:hover,
+.btn-scan:hover,
+.btn-start:hover,
+.btn-primary:hover,
+.control-btn.start:hover {
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb), 0.32) !important;
+}
+
+.btn-disconnect,
+.control-btn.end,
+.device-status.disconnected,
+.error-message {
+  color: var(--color-accent-red) !important;
+}
+
+.btn-disconnect,
+.control-btn.end,
+.error-message {
+  border-color: rgba(255, 107, 107, 0.35) !important;
+  background: rgba(255, 107, 107, 0.14) !important;
+}
+
+.stat-value,
+.metric-value,
+.device-status.connected,
+.segment-name,
+.workout-type,
+.target-item,
+.overall-progress,
+.timeline-segment.active {
+  color: var(--color-primary) !important;
+  border-color: rgba(var(--color-primary-rgb), 0.35) !important;
+  box-shadow: none;
+}
+
+.tab-icon,
+.panel-title,
+.stat-label,
+.metric-label,
+.label,
+.value,
+.workout-description,
+.route-location,
+.route-description,
+.device-status,
+.graph-label,
+.graph-placeholder,
+.description {
+  color: var(--color-text-secondary) !important;
+}
