@@ -292,7 +292,7 @@ test.describe('Simulated e2e route playback', () => {
       const last = sessions[sessions.length - 1];
       return (
         (last.heartRateSamples?.length ?? 0) > 0 ||
-        (last.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false)
+        (last.splits?.some((split) => (split.heartRate ?? 0) > 0) ?? false)
       );
     }, { timeout: 10000 });
     
