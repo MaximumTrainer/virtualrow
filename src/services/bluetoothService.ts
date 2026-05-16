@@ -57,9 +57,9 @@ export class Concept2BluetoothService {
       }
 
       // Register for parsed events we care about
+      // Note: multiplexed-information is already registered by doConnect() via the cb_message constructor arg
       await this.pm5Wrapper.addEventListener('additional-status', (e: any) => this.handlePM5Message({ type: 'additional-status', data: e.data }));
       await this.pm5Wrapper.addEventListener('general-status', (e: any) => this.handlePM5Message({ type: 'general-status', data: e.data }));
-      await this.pm5Wrapper.addEventListener('multiplexed-information', (e: any) => this.handlePM5Message({ type: 'multiplexed-information', data: e.data }));
       
       // Listen for disconnect events from the device
       await this.pm5Wrapper.addEventListener('disconnect', () => {

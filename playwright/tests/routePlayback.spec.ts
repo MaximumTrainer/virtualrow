@@ -148,8 +148,12 @@ test.describe('Simulated e2e route playback', () => {
   });
 
   test('plays a single route with PM5 & HR simulators and persists HR aggregates', async ({ page }, testInfo) => {
+    const pageErrors: string[] = [];
     page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
-    page.on('pageerror', (err) => console.log('PAGE ERROR:', err.message));
+    page.on('pageerror', (err) => {
+      pageErrors.push(err.message);
+      console.log('PAGE ERROR:', err.message);
+    });
     // inject mock Bluetooth script so that requestDevice returns simulated characteristics bound to the WS server
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
@@ -175,6 +179,8 @@ test.describe('Simulated e2e route playback', () => {
         return !!(status && String(status.textContent).includes('Connected'));
       }, { timeout: 5000 });
       pm5Connected = true;
+      // Fail fast on JS crashes that indicate recursive update loops
+      expect(pageErrors.filter(e => e.includes('call stack'))).toHaveLength(0);
       // Capture PM5 connected state
       await highlightElement(page, '.device-status', 'green');
       await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
@@ -255,6 +261,15 @@ test.describe('Simulated e2e route playback', () => {
     }
 
       // Trigger the simulator server to run a PM5/HR sequence (or route playlist)
+      // Wait for the workout session to be active before starting the route so the
+      // service handler processes data with isWorkoutActive=true
+      await page.waitForFunction(() => {
+        const svc = (window as any).__workoutService;
+        return svc?.getCurrentSession?.() != null;
+      }, { timeout: 5000 }).catch(() => {
+        console.warn('No active session found before startRoute; proceeding anyway');
+      });
+
       const started = await page.evaluate(async () => {
         try {
           // @ts-ignore
@@ -262,20 +277,12 @@ test.describe('Simulated e2e route playback', () => {
               return !!res;
         } catch (e) {
           // fallback - update session directly if simulator fetch isn't allowed
-          // Fallback: emit PM5 packets to the mock so the UI updates
           const steps = 12;
           for (let i = 0; i < steps; i++) {
+            // Direct service write is the reliable fallback — emitPM5/emitHR send WS
+            // messages that are only processed when the server echoes them back.
             // @ts-ignore
-            await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
-            // Also emit HR to ensure HR aggregates update
-            // @ts-ignore
-            try {
-              await window.__simulator.emitHR({ bpm: 80 + i });
-            } catch (e) {
-              // @ts-ignore
-              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { console.warn('HR fallback update failed in simulation path', e); }
-            }
-            // small delay
+            try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (_) { /* ignore */ }
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));
           }

@@ -17,6 +17,11 @@ export class HeartRateBluetoothService {
   async connect(): Promise<boolean> {
     try {
       if (!navigator.bluetooth) throw new Error('Web Bluetooth API not supported');
+      // Guard against duplicate registration if already connected
+      if (this.hrChar && this.device?.gatt?.connected) {
+        this.emit('connected', { name: this.device.name });
+        return true;
+      }
       this.device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [this.HR_SERVICE_UUID] }],
         optionalServices: ['device_information'],

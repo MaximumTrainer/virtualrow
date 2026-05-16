@@ -141,7 +141,7 @@ function App() {
     setCurrentView('workout');
   };
 
-  const handleEndWorkout = () => {
+  const handleEndWorkout = useCallback(() => {
     const completed = workoutService.endSession();
     if (completed) {
       setWorkoutHistory(workoutService.getAllSessions());
@@ -152,7 +152,7 @@ function App() {
     setSessionState('idle');
     workoutGeneratorService.endWorkout();
     setCurrentView('routes');
-  };
+  }, []);
 
   const handlePauseWorkout = () => {
     setSessionState('paused');
@@ -192,9 +192,11 @@ function App() {
 
   const handlePM5Data = useCallback((data: PM5Data) => {
     setPM5Data(data);
-    if (isWorkoutActive && currentSession) {
-      workoutService.updateSessionWithPM5Data(data);
-      
+    // Always update the service — it guards against no-session internally.
+    // This avoids stale-closure issues where the React effect hasn't re-registered
+    // the listener yet after workout start, but the service session is already live.
+    workoutService.updateSessionWithPM5Data(data);
+    if (isWorkoutActive) {
       // Update structured workout progress if active
       if (selectedWorkout) {
         const progress = workoutGeneratorService.updateProgress(data);
@@ -209,7 +211,7 @@ function App() {
         const updated = workoutService.getCurrentSession();
         setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
       }
-      setCurrentSession({ ...currentSession });
+      setCurrentSession(prev => prev ? { ...prev } : null);
 
       // If this workout is tied to a route, automatically end when distance reaches route length.
       // Skip this behavior under Playwright harness to keep E2E tests stable.
@@ -221,7 +223,7 @@ function App() {
         }
       }
     }
-  }, [isWorkoutActive, currentSession, selectedWorkout, selectedRoute, handleEndWorkout]);
+  }, [isWorkoutActive, selectedWorkout, selectedRoute, handleEndWorkout]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
