@@ -17,7 +17,12 @@ function parseGlbJson(glb: Buffer) {
 
   // GLB JSON data starts after 12-byte header + 8-byte first chunk header.
   const jsonStartOffset = 20;
-  const jsonRaw = glb.subarray(jsonStartOffset, jsonStartOffset + jsonChunkLength).toString('utf8').replaceAll('\0', '').trimEnd();
+  const jsonChunkRaw = glb.subarray(jsonStartOffset, jsonStartOffset + jsonChunkLength);
+  let jsonEndOffset = jsonChunkRaw.length;
+  while (jsonEndOffset > 0 && jsonChunkRaw[jsonEndOffset - 1] === 0) {
+    jsonEndOffset -= 1;
+  }
+  const jsonRaw = jsonChunkRaw.subarray(0, jsonEndOffset).toString('utf8');
   return JSON.parse(jsonRaw);
 }
 
@@ -27,7 +32,11 @@ describe('generated scull model asset', () => {
     const glb = fs.readFileSync(modelPath);
     const gltf = parseGlbJson(glb);
 
-    const nodeNames = new Set((gltf.nodes ?? []).flatMap((node: { name?: string }) => (node.name ? [node.name] : [])));
+    const nodeNames = new Set(
+      (gltf.nodes ?? [])
+        .filter((node: { name?: string }) => Boolean(node.name))
+        .map((node: { name?: string }) => node.name)
+    );
     [
       'ScullBoatGroup',
       'Hull',

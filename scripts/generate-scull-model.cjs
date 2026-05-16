@@ -71,6 +71,8 @@ function createBoatGLB() {
   // Rower in mid-drive pose (legs extended, torso leaning back, arms drawing in)
   const rowerVertices = [];
   const rowerIndices = [];
+  // addCuboid(minX,maxX,minY,maxY,minZ,maxZ) appends a closed box in model-local coordinates
+  // and mutates rowerVertices/rowerIndices with the new geometry.
   const addCuboid = (minX, maxX, minY, maxY, minZ, maxZ) => {
     const base = rowerVertices.length / 3;
     rowerVertices.push(
@@ -345,7 +347,7 @@ function createBoatGLB() {
       { name: 'BowBallMaterial', pbrMetallicRoughness: { baseColorFactor: [1.0, 0.95, 0.2, 1.0], metallicFactor: 0.0, roughnessFactor: 0.6 } },
     ],
     accessors: [
-      { bufferView: 0, componentType: 5126, count: hullVertices.length / 3, type: 'VEC3', min: [-0.12, -0.060, -4.2], max: [0.12, 0.065, 4.2] },
+      { bufferView: 0, componentType: 5126, count: hullVertices.length / 3, type: 'VEC3', min: [-0.12, -0.06, -4.2], max: [0.12, 0.065, 4.2] },
       { bufferView: 1, componentType: 5125, count: hullIndices.length, type: 'SCALAR' },
       { bufferView: 2, componentType: 5126, count: rowerVertices.length / 3, type: 'VEC3', min: [-0.21, 0.07, -0.16], max: [0.21, 0.72, 0.46] },
       { bufferView: 3, componentType: 5125, count: rowerIndices.length, type: 'SCALAR' },
