@@ -73,7 +73,7 @@ body {
   color: var(--color-text-secondary);
   font-weight: 600;
   margin-top: 2px;
-  text-align: right;
+  text-align: left;
 }
 
 /* ============================================================================
@@ -1345,6 +1345,8 @@ body {
   
   .nav-tabs {
     grid-column: 1 / -1;
+    width: max-content;
+    max-width: 100%;
   }
   
   .nav-tab {
@@ -1399,10 +1401,6 @@ body {
     font-size: 26px;
   }
 
-  .app-subtitle {
-    text-align: left;
-  }
-  
   .app-layout {
     padding: 12px;
   }
