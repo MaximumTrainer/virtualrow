@@ -1331,12 +1331,12 @@ body {
    ============================================================================ */
 @media (max-width: 1200px) {
   .app-layout {
-    padding: 16px;
-    gap: 16px;
+    padding: 14px;
+    gap: 14px;
   }
   
   .app-sidebar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   
   .nav-tabs {
