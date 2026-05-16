@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
@@ -76,8 +76,12 @@ function App() {
     setWorkoutHistory(workoutService.getAllSessions());
   }, []);
 
-  const activeRowerLabel = activeRowerType === 'pm5' ? 'PM5' : 'FTMS';
-  const selectedRowerConnected = activeRowerType === 'pm5' ? pm5Connected : ftmsConnected;
+  const activeRowerLabel = useMemo(() => (
+    activeRowerType === 'pm5' ? 'PM5' : 'FTMS'
+  ), [activeRowerType]);
+  const selectedRowerConnected = useMemo(() => (
+    activeRowerType === 'pm5' ? pm5Connected : ftmsConnected
+  ), [activeRowerType, ftmsConnected, pm5Connected]);
 
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
@@ -367,19 +371,39 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
   }, [workoutHistory]);
 
   const stats = workoutService.getStats();
-  const latestHeartRate = heartRateSamples.length > 0
-    ? heartRateSamples[heartRateSamples.length - 1].bpm
-    : (pm5Data?.heartRate ?? null);
-  const averageHeartRate = currentSession?.heartRateSamples && currentSession.heartRateSamples.length > 0
-    ? Math.round(currentSession.heartRateSamples.reduce((sum, sample) => sum + sample.bpm, 0) / currentSession.heartRateSamples.length)
-    : null;
-  const maxHeartRate = currentSession?.heartRateSamples && currentSession.heartRateSamples.length > 0
-    ? currentSession.heartRateSamples.reduce((max, sample) => Math.max(max, sample.bpm), currentSession.heartRateSamples[0].bpm)
-    : null;
-  const workoutElapsedTimeMs = pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs;
-  const activityProgressPercent = pm5Data && selectedRoute
-    ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100)
-    : 0;
+  const latestHeartRate = useMemo(() => (
+    heartRateSamples.length > 0
+      ? heartRateSamples[heartRateSamples.length - 1].bpm
+      : (pm5Data?.heartRate ?? null)
+  ), [heartRateSamples, pm5Data]);
+  const averageHeartRate = useMemo(() => {
+    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
+      return null;
+    }
+
+    return Math.round(
+      currentSession.heartRateSamples.reduce((sum, sample) => sum + sample.bpm, 0)
+      / currentSession.heartRateSamples.length
+    );
+  }, [currentSession]);
+  const maxHeartRate = useMemo(() => {
+    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
+      return null;
+    }
+
+    return currentSession.heartRateSamples.reduce(
+      (max, sample) => Math.max(max, sample.bpm),
+      currentSession.heartRateSamples[0].bpm
+    );
+  }, [currentSession]);
+  const workoutElapsedTimeMs = useMemo(() => (
+    pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs
+  ), [activityElapsedMs, pm5Data]);
+  const activityProgressPercent = useMemo(() => (
+    pm5Data && selectedRoute
+      ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100)
+      : 0
+  ), [pm5Data, selectedRoute]);
 
   return (
     <div className="app-container">
@@ -872,7 +896,7 @@ function formatTime(ms: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function formatPace(paceSeconds: number | null): string {
+export function formatPace(paceSeconds: number | null): string {
   if (!paceSeconds || paceSeconds <= 0) {
     return '--:--';
   }
