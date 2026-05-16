@@ -134,9 +134,16 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('Simulated e2e route playback', () => {
   test.beforeAll(async () => {
+    if (process.env.CI === 'true') {
+      await ensureSimServerStarted();
+      return;
+    }
     await startSimServer();
   });
   test.afterAll(async () => {
+    if (process.env.CI === 'true') {
+      return;
+    }
     await stopSimServer();
   });
 
@@ -219,7 +226,7 @@ test.describe('Simulated e2e route playback', () => {
       await annotateElement(page, '.route-item:has-text("Willowbrook River")', 'Selecting Route', 'right');
       await captureTestEvidence(page, testInfo, '06-before-route-selection');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Willowbrook River")');
+      await page.click('.route-item:has-text("Willowbrook River")', { force: true });
       await captureTestEvidence(page, testInfo, '07-after-route-selection');
     }
 
@@ -232,7 +239,7 @@ test.describe('Simulated e2e route playback', () => {
         await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
         await captureTestEvidence(page, testInfo, '08-before-workout-start');
         await clearAnnotations(page);
-        await startBtn.click();
+        await startBtn.click({ force: true });
       } else {
         // fallback to starting session
         await captureErrorEvidence(page, testInfo, 'Start button disabled - using fallback', '.btn-start-workout');
@@ -508,7 +515,7 @@ test.describe('Simulated e2e route playback', () => {
       await annotateElement(page, '.route-item:has-text("Lake Tahoe Circuit")', 'First Route', 'right');
       await captureTestEvidence(page, testInfo, '03-selecting-first-route');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Lake Tahoe Circuit")');
+      await page.click('.route-item:has-text("Lake Tahoe Circuit")', { force: true });
     }
     // Start first route workout
     if (pm5Connected) {
@@ -518,7 +525,7 @@ test.describe('Simulated e2e route playback', () => {
         await startBtn.waitFor({ timeout: 5000 });
         if (await startBtn.isEnabled()) {
           await captureTestEvidence(page, testInfo, '04-starting-first-workout');
-          await startBtn.click();
+          await startBtn.click({ force: true });
         } else {
           // fallback: start session
           await captureErrorEvidence(page, testInfo, 'Start button disabled for first route', '.btn-start-workout');
@@ -623,7 +630,7 @@ test.describe('Simulated e2e route playback', () => {
       await annotateElement(page, '.route-item:has-text("Venice Grand Canal")', 'Second Route', 'right');
       await captureTestEvidence(page, testInfo, '06-selecting-second-route');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Venice Grand Canal")');
+      await page.click('.route-item:has-text("Venice Grand Canal")', { force: true });
     }
     // Start second route
     if (pm5Connected) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
@@ -12,16 +12,8 @@ import Rower3D from './components/Rower3D';
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
-import { PerformanceChart } from './components/PerformanceChart';
-import { RowingOverlay } from './components/RowingOverlay';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
-
-// Performance data point interface
-interface PerformanceDataPoint {
-  time: number;
-  value: number;
-}
 
 // Session state type for workout controls
 type SessionState = 'idle' | 'active' | 'paused';
@@ -39,14 +31,11 @@ function App() {
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
   const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
+  const [activeRowerType, setActiveRowerType] = useState<'pm5' | 'ftms'>('pm5');
   // Filter state for routes
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
-  const [distanceMin, setDistanceMin] = useState<number>(0);
-  const [distanceMax, setDistanceMax] = useState<number>(100);
-  // Real-time performance data
-  const [paceHistory, setPaceHistory] = useState<PerformanceDataPoint[]>([]);
-  const [heartRateHistory, setHeartRateHistory] = useState<PerformanceDataPoint[]>([]);
-  const [showPerformanceChart, setShowPerformanceChart] = useState(false);
+  const distanceMin = 0;
+  const distanceMax = 100;
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
   const activityTimerRef = useRef<number | null>(null);
@@ -54,8 +43,6 @@ function App() {
   const [debugMode, setDebugMode] = useState(false);
   // Session state for the overlay UI
   const [sessionState, setSessionState] = useState<SessionState>('idle');
-  // Use new overlay mode (toggle for transition)
-  const [useNewOverlay, setUseNewOverlay] = useState(true);
 
   // Start/stop activity timer when workout state changes
   useEffect(() => {
@@ -89,6 +76,13 @@ function App() {
     setWorkoutHistory(workoutService.getAllSessions());
   }, []);
 
+  const activeRowerLabel = useMemo(() => (
+    activeRowerType === 'pm5' ? 'PM5' : 'FTMS'
+  ), [activeRowerType]);
+  const selectedRowerConnected = useMemo(() => (
+    activeRowerType === 'pm5' ? pm5Connected : ftmsConnected
+  ), [activeRowerType, ftmsConnected, pm5Connected]);
+
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
     const onStartup = (e: any) => {
@@ -104,7 +98,7 @@ function App() {
     const onEnd = () => {
       setIsWorkoutActive(false);
       setCurrentSession(null);
-      setCurrentView('history');
+      setCurrentView('routes');
       setWorkoutHistory(workoutService.getAllSessions());
     };
     try {
@@ -124,9 +118,8 @@ function App() {
   };
 
   const handleStartWorkout = () => {
-    const rowerConnected = pm5Connected || ftmsConnected;
-    if (!selectedRoute || !rowerConnected) {
-      alert('Please connect a rowing device (PM5 or FTMS) and select a route');
+    if (!selectedRoute || !selectedRowerConnected) {
+      alert(`Please connect your selected rowing device (${activeRowerLabel}) and select a route`);
       return;
     }
 
@@ -156,11 +149,9 @@ function App() {
     setIsWorkoutActive(false);
     setCurrentSession(null);
     setWorkoutProgress(null);
-    setPaceHistory([]);
-    setHeartRateHistory([]);
     setSessionState('idle');
     workoutGeneratorService.endWorkout();
-    setCurrentView('history');
+    setCurrentView('routes');
   };
 
   const handlePauseWorkout = () => {
@@ -175,8 +166,6 @@ function App() {
 
   const handleResetWorkout = () => {
     // Reset metrics but keep session
-    setPaceHistory([]);
-    setHeartRateHistory([]);
     setActivityElapsedMs(0);
     // Note: Full reset logic would need to clear workoutService data
   };
@@ -213,29 +202,6 @@ function App() {
           setWorkoutProgress(progress);
           workoutService.updateWorkoutProgress(progress);
         }
-      }
-      
-      // Collect performance history for charts
-      const elapsedTime = Math.floor(data.elapsedTime / 1000);
-      if (data.pace) {
-        setPaceHistory(prev => {
-          const newPoint = { time: elapsedTime, value: data.pace! };
-          // Only slice if we exceed the limit to avoid unnecessary array operations
-          if (prev.length >= 300) {
-            return [...prev.slice(-299), newPoint];
-          }
-          return [...prev, newPoint];
-        });
-      }
-      if (data.heartRate) {
-        setHeartRateHistory(prev => {
-          const newPoint = { time: elapsedTime, value: data.heartRate! };
-          // Only slice if we exceed the limit to avoid unnecessary array operations
-          if (prev.length >= 300) {
-            return [...prev.slice(-299), newPoint];
-          }
-          return [...prev, newPoint];
-        });
       }
       
       // If PM5 gives HR, ensure samples state updates from session source
@@ -405,17 +371,50 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
   }, [workoutHistory]);
 
   const stats = workoutService.getStats();
+  const latestHeartRate = useMemo(() => (
+    heartRateSamples.length > 0
+      ? heartRateSamples[heartRateSamples.length - 1].bpm
+      : (pm5Data?.heartRate ?? null)
+  ), [heartRateSamples, pm5Data]);
+  const averageHeartRate = useMemo(() => {
+    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
+      return null;
+    }
+
+    return Math.round(
+      currentSession.heartRateSamples.reduce((sum, sample) => sum + sample.bpm, 0)
+      / currentSession.heartRateSamples.length
+    );
+  }, [currentSession]);
+  const maxHeartRate = useMemo(() => {
+    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
+      return null;
+    }
+
+    return currentSession.heartRateSamples.reduce(
+      (max, sample) => Math.max(max, sample.bpm),
+      currentSession.heartRateSamples[0].bpm
+    );
+  }, [currentSession]);
+  const workoutElapsedTimeMs = useMemo(() => (
+    pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs
+  ), [activityElapsedMs, pm5Data]);
+  const activityProgressPercent = useMemo(() => (
+    pm5Data && selectedRoute
+      ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100)
+      : 0
+  ), [pm5Data, selectedRoute]);
 
   return (
     <div className="app-container">
       <header className="app-header">
         <div className="header-content">
-          <h1 className="app-title">🚣 VirtualRow</h1>
-          <p className="app-subtitle">Virtual rowing on water routes around the world</p>
+          <h1 className="app-title">VirtualRow</h1>
+          <p className="app-subtitle">RowNative-inspired virtual rowing on iconic water routes</p>
         </div>
       </header>
 
-      <div className="app-layout">
+      <div className={`app-layout app-layout--${currentView}`}>
         <aside
           className={
             `app-sidebar ${
@@ -446,72 +445,75 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             </button>
           </nav>
 
-          <div className="device-panel">
-            <h3 className="panel-title">PM5 Device</h3>
-            <BluetoothDevice
-              onConnected={handlePM5Connected}
-              onDisconnected={handlePM5Disconnected}
-              onDataReceived={handlePM5Data}
-            />
-          </div>
-          <div className="device-panel">
-            <h3 className="panel-title">FTMS Device</h3>
-            <FTMSDevice
-              onConnected={handleFtmsConnected}
-              onDisconnected={handleFtmsDisconnected}
-              onDataReceived={handleFtmsData}
-            />
-          </div>
-          <div className="device-panel">
-            <HeartRateMonitor onSample={handleHeartRateSample} />
-          </div>
-
-          {isWorkoutActive && currentSession && (
-            <div className="workout-stats-panel">
-              <h3 className="panel-title">Current Workout</h3>
-              <div className="stats-grid">
-                <div className="stat-item">
-                  <span className="stat-label">Distance</span>
-                  <span className="stat-value">{(currentSession.distance / 1000).toFixed(2)}</span>
-                  <span className="stat-unit">km</span>
+          {currentView === 'routes' && (
+            <>
+              <div className="device-panel device-panel--selection">
+                <div className="device-panel-heading">
+                  <h3 className="panel-title">Rower Device</h3>
+                  <span className={`device-panel-status ${selectedRowerConnected ? 'connected' : 'disconnected'}`}>
+                    {selectedRowerConnected ? 'Connected' : 'Not connected'}
+                  </span>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-label">Time</span>
-                  <span className="stat-value">{formatDuration(currentSession.duration)}</span>
+                <div className="device-selector-tabs" role="tablist" aria-label="Rower type">
+                  <button
+                    className={`device-selector-tab ${activeRowerType === 'pm5' ? 'active' : ''}`}
+                    onClick={() => setActiveRowerType('pm5')}
+                    type="button"
+                  >
+                    PM5
+                  </button>
+                  <button
+                    className={`device-selector-tab ${activeRowerType === 'ftms' ? 'active' : ''}`}
+                    onClick={() => setActiveRowerType('ftms')}
+                    type="button"
+                  >
+                    FTMS
+                  </button>
                 </div>
-                {currentSession.heartRateSamples && currentSession.heartRateSamples.length > 0 && (
-                  <div className="stat-item">
-                    <span className="stat-label">Avg HR</span>
-                    <span className="stat-value">{Math.round(currentSession.heartRateSamples.reduce((sum, s) => sum + s.bpm, 0) / currentSession.heartRateSamples.length)}</span>
-                    <span className="stat-unit">bpm</span>
-                  </div>
+                {activeRowerType === 'pm5' ? (
+                  <BluetoothDevice
+                    onConnected={handlePM5Connected}
+                    onDisconnected={handlePM5Disconnected}
+                    onDataReceived={handlePM5Data}
+                  />
+                ) : (
+                  <FTMSDevice
+                    onConnected={handleFtmsConnected}
+                    onDisconnected={handleFtmsDisconnected}
+                    onDataReceived={handleFtmsData}
+                  />
                 )}
+              </div>
+              <div className="device-panel">
+                <HeartRateMonitor onSample={handleHeartRateSample} />
+              </div>
+            </>
+          )}
+
+          {currentView === 'history' && (
+            <div className="history-stats-panel">
+              <h3 className="panel-title">Stats</h3>
+              <div className="stats-compact">
+                <div className="stat-compact">
+                  <span className="label">Workouts</span>
+                  <span className="value">{stats.totalWorkouts}</span>
+                </div>
+                <div className="stat-compact">
+                  <span className="label">Distance</span>
+                  <span className="value">{(stats.totalDistance / 1000).toFixed(1)} km</span>
+                </div>
+                <div className="stat-compact">
+                  <span className="label">Time</span>
+                  <span className="value">{formatDuration(stats.totalTime)}</span>
+                </div>
               </div>
             </div>
           )}
-
-          <div className="history-stats-panel">
-            <h3 className="panel-title">Stats</h3>
-            <div className="stats-compact">
-              <div className="stat-compact">
-                <span className="label">Workouts</span>
-                <span className="value">{stats.totalWorkouts}</span>
-              </div>
-              <div className="stat-compact">
-                <span className="label">Distance</span>
-                <span className="value">{(stats.totalDistance / 1000).toFixed(1)} km</span>
-              </div>
-              <div className="stat-compact">
-                <span className="label">Time</span>
-                <span className="value">{formatDuration(stats.totalTime)}</span>
-              </div>
-            </div>
-          </div>
         </aside>
 
         <main className="app-main">
           {currentView === 'routes' && selectedRoute && (
-            <div className="view-container">
+            <div className="view-container view-container--routes">
               <div className="map-container">
                 <RouteMap route={selectedRoute} />
               </div>
@@ -623,133 +625,103 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
           )}
 
           {currentView === 'workout' && isWorkoutActive && currentSession && (
-            <div className="view-container workout-view-fullscreen">
-              {/* Fullscreen 3D scene with overlays */}
-              <div className="fullscreen-3d-container">
-                <Rower3D 
-                  route={selectedRoute!} 
-                  paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
-                  distanceMeters={pm5Data?.distance} 
-                  isPlaying={isWorkoutActive && sessionState === 'active'} 
-                  cadence={pm5Data?.cadence} 
-                  performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
-                  intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
-                  debugMode={debugMode}
-                />
-                
-                {/* New Rowing Overlay UI */}
-                {useNewOverlay ? (
-                  <RowingOverlay
-                    pm5Data={pm5Data}
-                    heartRate={heartRateSamples.length > 0 ? heartRateSamples[heartRateSamples.length - 1].bpm : null}
-                    elapsedTimeMs={pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs}
-                    isPlaying={isWorkoutActive && sessionState === 'active'}
-                    workoutProgress={workoutProgress}
-                    onStart={handleStartWorkout}
-                    onPause={handlePauseWorkout}
-                    onResume={handleResumeWorkout}
-                    onEnd={handleEndWorkout}
-                    onReset={handleResetWorkout}
-                    paceHistory={paceHistory}
-                    powerHistory={paceHistory.map(p => ({ time: p.time, value: pm5Data?.power || 0 }))}
+            <div className="view-container activity-view">
+              <div className="activity-screen">
+                <div className="activity-route-stage">
+                  <Rower3D 
+                    route={selectedRoute!} 
+                    paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
+                    distanceMeters={pm5Data?.distance} 
+                    isPlaying={isWorkoutActive && sessionState === 'active'} 
+                    cadence={pm5Data?.cadence} 
+                    performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                    intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
+                    debugMode={debugMode}
                   />
-                ) : (
-                  <>
-                    {/* Legacy Overlay - Workout Progress Display Overlay (top-left) */}
-                    {selectedWorkout && workoutProgress && (
-                      <div className="workout-progress-overlay">
-                        <WorkoutProgressDisplay
-                          progress={workoutProgress}
-                          allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Legacy Overlay - Performance Chart Toggle Button */}
+
+                  <div className="activity-route-summary">
+                    <h2>{selectedRoute?.name}</h2>
+                    <p>{selectedRoute?.location}</p>
+                  </div>
+
+                  <div className="activity-map-overlay">
+                    <RouteMap 
+                      route={selectedRoute!} 
+                      highlightMode={true}
+                      progressPercent={activityProgressPercent}
+                    />
+                  </div>
+                </div>
+
+                <div className="activity-stats-panel">
+                  <div className="activity-stats-grid">
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Time</span>
+                      <span className="activity-stat-value">{formatTime(workoutElapsedTimeMs)}</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Distance</span>
+                      <span className="activity-stat-value">{(currentSession.distance / 1000).toFixed(2)} km</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Pace</span>
+                      <span className="activity-stat-value">{formatPace(pm5Data?.pace ? pm5Data.pace / 100 : null)}</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Stroke Rate</span>
+                      <span className="activity-stat-value">{pm5Data?.cadence ?? '--'} spm</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Power</span>
+                      <span className="activity-stat-value">{pm5Data?.power ?? '--'} W</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Heart Rate</span>
+                      <span className="activity-stat-value">{latestHeartRate ?? '--'} bpm</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Avg HR</span>
+                      <span className="activity-stat-value">{averageHeartRate ?? '--'} bpm</span>
+                    </div>
+                    <div className="activity-stat-card">
+                      <span className="activity-stat-label">Max HR</span>
+                      <span className="activity-stat-value">{maxHeartRate ?? '--'} bpm</span>
+                    </div>
+                  </div>
+
+                  {selectedWorkout && workoutProgress && (
+                    <div className="activity-progress-panel">
+                      <WorkoutProgressDisplay
+                        progress={workoutProgress}
+                        allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
+                      />
+                    </div>
+                  )}
+
+                  <div className="activity-controls">
                     <button
-                      className="btn-toggle-chart"
-                      onClick={() => setShowPerformanceChart(!showPerformanceChart)}
-                      title={showPerformanceChart ? 'Hide Performance Chart' : 'Show Performance Chart'}
+                      className="btn btn-activity-control"
+                      onClick={sessionState === 'paused' ? handleResumeWorkout : handlePauseWorkout}
+                      type="button"
                     >
-                      📈
+                      {sessionState === 'paused' ? '▶ Resume' : '⏸ Pause'}
                     </button>
-                    
-                    {/* Legacy Overlay - Performance Chart Overlay (bottom-left, above heart rate) */}
-                    {showPerformanceChart && (paceHistory.length > 0 || heartRateHistory.length > 0) && (
-                      <div className="performance-chart-overlay">
-                        <PerformanceChart
-                          paceData={paceHistory}
-                          heartRateData={heartRateHistory}
-                          showPace={true}
-                          showHeartRate={true}
-                          maxPoints={60}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Legacy Overlay - Bottom left: Heart rate */}
-                    <div className="overlay-bottom-left">
-                      <div className="overlay-metric">
-                        <span className="overlay-label">Heart rate</span>
-                        {heartRateSamples.length > 0 && (
-                          <span className="overlay-value-large">{heartRateSamples[heartRateSamples.length - 1].bpm}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Legacy Overlay - Bottom center: Time / metrics */}
-                    <div className="overlay-bottom-center">
-                      <div className="overlay-metric-inline">
-                        <span className="overlay-label">time:</span>
-                        <span className="overlay-value">{formatTime(pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs)}</span>
-                      </div>
-                      <div className="overlay-metric-inline">
-                        <span className="overlay-label">pace:</span>
-                        <span className="overlay-value">{pm5Data?.pace ? (pm5Data.pace / 100).toFixed(1) : '--'}</span>
-                      </div>
-                      <div className="overlay-metric-inline">
-                        <span className="overlay-label">distance:</span>
-                        <span className="overlay-value">{pm5Data ? (pm5Data.distance / 1000).toFixed(2) : '0.00'} km</span>
-                      </div>
-                    </div>
-
-                    {/* Legacy Overlay - Top right: End workout button and route map */}
-                    <div className="overlay-top-right-panel">
-                      <button className="btn-overlay-end" onClick={handleEndWorkout}>
-                        ⏹ End Workout
-                      </button>
-                      <div className="overlay-mini-map">
-                        <RouteMap 
-                          route={selectedRoute!} 
-                          highlightMode={true}
-                          progressPercent={pm5Data && selectedRoute ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100) : 0}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-                
-                {/* Overlay toggle button */}
-                <button
-                  className="btn-toggle-overlay-mode"
-                  onClick={() => setUseNewOverlay(!useNewOverlay)}
-                  title={useNewOverlay ? 'Switch to Crisp Display' : 'Switch to Data Rich'}
-                  style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    zIndex: 150,
-                    padding: '6px 12px',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontSize: '11px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {useNewOverlay ? '🎨 Data Rich' : '📊 Crisp Display'}
-                </button>
+                    <button
+                      className="btn btn-activity-control btn-activity-control--subtle"
+                      onClick={handleResetWorkout}
+                      type="button"
+                    >
+                      ↺ Reset
+                    </button>
+                    <button
+                      className="btn btn-activity-control btn-activity-control--danger"
+                      onClick={handleEndWorkout}
+                      type="button"
+                    >
+                      ⏹ End Workout
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -922,6 +894,16 @@ function formatTime(ms: number): string {
     return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+export function formatPace(paceSeconds: number | null): string {
+  if (!paceSeconds || paceSeconds <= 0) {
+    return '--:--';
+  }
+
+  const minutes = Math.floor(paceSeconds / 60);
+  const seconds = Math.floor(paceSeconds % 60);
+  return `${minutes}:${String(seconds).padStart(2, '0')}/500m`;
 }
 
 function formatDuration(seconds: number): string {
