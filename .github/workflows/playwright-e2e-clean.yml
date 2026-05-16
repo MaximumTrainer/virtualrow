@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     strategy:
@@ -71,9 +74,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Get-NetTCPConnection -LocalPort 9001,9002 -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty OwningProcess -Unique |
-            ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+          $connections = Get-NetTCPConnection -LocalPort 9001,9002 -ErrorAction SilentlyContinue
+          if ($connections) {
+            $connections |
+              Select-Object -ExpandProperty OwningProcess -Unique |
+              ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+          }
       - name: Start simulator server (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -84,7 +90,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath node -ArgumentList "./playwright/simulators/sim-server.cjs" -PassThru
+          $proc = Start-Process -FilePath npm -ArgumentList "run","start:sim" -PassThru
           $proc.Id | Out-File -FilePath "$env:RUNNER_TEMP\sim.pid" -Encoding ascii
           npx wait-on http://localhost:9002
       - name: Run tests (unit + e2e)

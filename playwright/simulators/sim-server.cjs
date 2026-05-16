@@ -148,8 +148,6 @@ const server = http.createServer((req, res) => {
         let idx = 0;
         function runNext() {
           if (idx >= sequence.length) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ ok: true }));
             delete sequences[id];
             return;
           }
@@ -158,6 +156,8 @@ const server = http.createServer((req, res) => {
           sequences[id].timer = setTimeout(runNext, item.delay || 100);
         }
         sequences[id] = { timer: null };
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true }));
         runNext();
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -232,6 +232,7 @@ const server = http.createServer((req, res) => {
           return;
         }
         const steps = Math.max(1, Math.ceil(distance / step));
+        const totalElapsedSeconds = steps * elapsedStepSeconds;
         const sequence = [];
         for (let i = 0; i < steps; i++) {
           const distanceVal = Math.min(distance, i * step);
@@ -251,7 +252,7 @@ const server = http.createServer((req, res) => {
             heartRate: 120,
             metabolicEquivalent: 8,
             elapsedTime: elapsed,
-            remainingTime: Math.max(0, Math.round(distance / Math.max(1, step)) - elapsed),
+            remainingTime: Math.max(0, totalElapsedSeconds - elapsed),
           });
           sequence.push({
             delay: 0,

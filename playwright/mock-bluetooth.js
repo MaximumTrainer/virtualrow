@@ -90,8 +90,25 @@
   }
 
   function uuidMatches(value, hex) {
-    const v = String(value).toLowerCase();
-    return v.includes(hex) || Number(value) === parseInt(hex, 16);
+    const normalizedHex = String(hex).toLowerCase().replace(/^0x/, '').replace(/-/g, '');
+    if (typeof value === 'number') {
+      return value === parseInt(normalizedHex, 16);
+    }
+
+    const normalizedValue = String(value).toLowerCase().replace(/^0x/, '').replace(/-/g, '');
+    if (normalizedValue === normalizedHex) return true;
+
+    // Standard Bluetooth base UUID (e.g. 00001826-0000-1000-8000-00805f9b34fb)
+    if (normalizedValue.length === 32) {
+      if (normalizedHex.length === 4) {
+        return normalizedValue.slice(4, 8) === normalizedHex;
+      }
+      if (normalizedHex.length === 8) {
+        return normalizedValue.slice(0, 8) === normalizedHex;
+      }
+    }
+
+    return false;
   }
 
   // Expose a simulated navigator.bluetooth override
