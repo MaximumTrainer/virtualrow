@@ -27,7 +27,7 @@ describe('generated scull model asset', () => {
     const glb = fs.readFileSync(modelPath);
     const gltf = parseGlbJson(glb);
 
-    const nodeNames = new Set((gltf.nodes ?? []).map((node: { name?: string }) => node.name));
+    const nodeNames = new Set((gltf.nodes ?? []).flatMap((node: { name?: string }) => (node.name ? [node.name] : [])));
     [
       'ScullBoatGroup',
       'Hull',
@@ -45,6 +45,7 @@ describe('generated scull model asset', () => {
     const leftOar = (gltf.nodes ?? []).find((node: { name?: string }) => node.name === 'LeftOar');
     const rightOar = (gltf.nodes ?? []).find((node: { name?: string }) => node.name === 'RightOar');
 
+    // matrix[12] holds X translation in a 4x4 node transform matrix.
     expect(leftOar?.matrix?.[12]).toBeLessThan(0);
     expect(rightOar?.matrix?.[12]).toBeGreaterThan(0);
     expect(Math.abs(leftOar?.matrix?.[12])).toBeCloseTo(Math.abs(rightOar?.matrix?.[12]), 6);
