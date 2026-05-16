@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import App, { formatPace } from '../App';
 
 beforeAll(() => {
-  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+  const gradient = { addColorStop: vi.fn() };
+  const baseContext = {
     canvas: document.createElement('canvas'),
     getExtension: vi.fn(),
     createShader: vi.fn(),
@@ -20,7 +21,16 @@ beforeAll(() => {
     viewport: vi.fn(),
     clearColor: vi.fn(),
     clear: vi.fn(),
-  })) as any;
+    createLinearGradient: vi.fn(() => gradient),
+    createRadialGradient: vi.fn(() => gradient),
+  };
+  const context = new Proxy(baseContext as Record<string, unknown>, {
+    get(target, prop) {
+      if (!(prop in target)) target[prop as string] = vi.fn();
+      return target[prop as string];
+    },
+  });
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => context as any) as any;
 });
 
 describe('App component', () => {
