@@ -36,4 +36,24 @@ describe('WorkoutService heart rate integration', () => {
     expect(completed!.heartRateAvg).toBe(90);
     expect(completed!.heartRateMax).toBe(100);
   });
+
+  it('records split heart-rate during active sessions when PM5 data reaches split distance', () => {
+    const svc = new WorkoutService();
+    svc.startSession('r4', 'Route 4');
+
+    svc.updateSessionWithPM5Data({
+      distance: 500,
+      elapsedTime: 120000,
+      pace: 120,
+      power: 200,
+      cadence: 30,
+      heartRate: 95,
+    });
+
+    const current = svc.getCurrentSession();
+    expect(current?.isActive).toBe(true);
+    expect(current?.splits.length).toBe(1);
+    expect(current?.splits[0].heartRate).toBe(95);
+    expect(current?.heartRateSamples?.length).toBe(1);
+  });
 });
