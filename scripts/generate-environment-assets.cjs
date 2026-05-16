@@ -144,7 +144,7 @@ function addMeshPart(parts, {
   const index = toUint32Indices(geometry.getIndex());
 
   if (!index) {
-    throw new Error(`Geometry for ${name} must be indexed.`);
+    throw new Error(`Geometry for ${name} must be indexed. Ensure geometry has indices before calling addMeshPart.`);
   }
 
   const bounds = computeMinMax(pos);
@@ -497,9 +497,24 @@ function createEnvironmentGLB() {
   return glbBuffer;
 }
 
-const glb = createEnvironmentGLB();
-const outputPath = path.join(__dirname, '../public/models/virtualrow-environment.glb');
-fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, glb);
+const defaultOutputPath = path.join(__dirname, '../public/models/virtualrow-environment.glb');
 
-console.log(`✓ Generated VirtualRow environment kit at ${outputPath} (${glb.length} bytes)`);
+function writeEnvironmentGLB(outputPath = defaultOutputPath) {
+  const glb = createEnvironmentGLB();
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, glb);
+  return { outputPath, bytes: glb.length };
+}
+
+if (require.main === module) {
+  const result = writeEnvironmentGLB();
+  console.log(`✓ Generated VirtualRow environment kit at ${result.outputPath} (${result.bytes} bytes)`);
+}
+
+module.exports = {
+  align4,
+  createEnvironmentParts,
+  createEnvironmentGLB,
+  writeEnvironmentGLB,
+  defaultOutputPath,
+};
