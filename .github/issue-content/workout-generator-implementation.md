@@ -146,6 +146,6 @@ Users need guided rowing workouts (warmup/work/interval/rest/cooldown) similar t
 5. Start route without selected workout and confirm normal rowing behavior unchanged.
 
 ## Notes
-- Keep architecture aligned with existing domain/application/infrastructure boundaries.
-- Add/extend tests for workout progression logic, compliance logic, and import mapping.
+- Keep architecture aligned with existing hexagonal boundaries: domain/application ports must stay independent of infrastructure adapters, and new adapters must be registered through dependency injection in the composition root.
+- Follow Red-Green-Refactor for workout behavior changes; add/extend tests first for progression logic, compliance logic, and import mapping, then implement to pass.
 - Ensure no regressions to existing route/session flow.

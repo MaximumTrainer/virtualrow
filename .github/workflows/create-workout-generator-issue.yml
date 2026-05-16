@@ -24,7 +24,7 @@ jobs:
             const body = fs.readFileSync(path, 'utf8');
 
             const { owner, repo } = context.repo;
-            const { data: issues } = await github.rest.issues.listForRepo({
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner,
               repo,
               state: 'open',
