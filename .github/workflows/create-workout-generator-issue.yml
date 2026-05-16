@@ -1,0 +1,47 @@
+name: Create Workout Generator Issue
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create issue from markdown
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '.github/issue-content/workout-generator-implementation.md';
+            const title = 'Implement Workout Generator with Structured Intervals, Target Compliance, and intervals.icu Import';
+            const body = fs.readFileSync(path, 'utf8');
+
+            const { owner, repo } = context.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              core.notice(`Issue already exists: #${existing.number}`);
+              return;
+            }
+
+            const created = await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body
+            });
+
+            core.notice(`Created issue #${created.data.number}`);
