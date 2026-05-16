@@ -39,6 +39,11 @@ function u24le(value: number): [number, number, number] {
   return [value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff];
 }
 
+function i16le(value: number): [number, number] {
+  const u = value & 0xffff;
+  return [u & 0xff, (u >> 8) & 0xff];
+}
+
 let service: FTMSBluetoothService;
 
 beforeEach(() => {
@@ -71,6 +76,24 @@ describe('FTMSBluetoothService.parseRowerData – basic data', () => {
     const data = service.parseRowerData(view);
     // Should return the existing latestData (all zeros on fresh service) without throwing
     expect(data.pace).toBe(0);
+  });
+
+  it('supports all-zero packet values when fields are present', () => {
+    const seeded = buildRowerData({
+      flags: 0x0009,
+      bytes: [...u16le(10500)],
+    });
+    service.parseRowerData(seeded);
+
+    const zeroed = buildRowerData({
+      // More Data + instantaneous pace + instantaneous power
+      flags: 0x0029,
+      bytes: [...u16le(0), ...i16le(0)],
+    });
+    const data = service.parseRowerData(zeroed);
+
+    expect(data.pace).toBe(0);
+    expect(data.power).toBe(0);
   });
 });
 
@@ -186,5 +209,36 @@ describe('FTMSBluetoothService.parseRowerData – optional fields', () => {
 
     expect(data.distance).toBe(500);  // retained from first packet
     expect(data.pace).toBe(10500);    // updated from second packet
+  });
+
+  it('handles all FTMS rower data flags in one packet', () => {
+    const flags = 0x1fff;
+    const view = buildRowerData({
+      flags,
+      bytes: [
+        50,                 // avg stroke rate raw => 25 spm
+        ...u24le(4321),     // total distance
+        ...u16le(12234),    // instant pace
+        ...u16le(13000),    // avg pace
+        ...i16le(245),      // instant power
+        ...i16le(220),      // avg power
+        ...i16le(12),       // resistance
+        ...u16le(420),      // total energy
+        ...u16le(0),        // kcal/hr
+        0,                  // kcal/min
+        155,                // heart rate
+        9,                  // metabolic equivalent
+        ...u16le(1800),     // elapsed time
+        ...u16le(300),      // remaining time
+      ],
+    });
+
+    const data = service.parseRowerData(view);
+    expect(data.distance).toBe(4321);
+    expect(data.pace).toBe(12234);
+    expect(data.power).toBe(245);
+    expect(data.heartRate).toBe(155);
+    expect(data.calories).toBe(420);
+    expect(data.elapsedTime).toBe(1800);
   });
 });

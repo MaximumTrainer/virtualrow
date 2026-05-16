@@ -25,8 +25,8 @@
 
 import type { PM5Data } from '../types/index';
 
-const FTMS_SERVICE_UUID = 0x1826;
-const ROWER_DATA_CHAR_UUID = 0x2AD1;
+const FTMS_SERVICE_UUID = '00001826-0000-1000-8000-00805f9b34fb';
+const ROWER_DATA_CHAR_UUID = '00002ad1-0000-1000-8000-00805f9b34fb';
 
 export class FTMSBluetoothService {
   private device: BluetoothDevice | null = null;
@@ -239,15 +239,15 @@ export class FTMSBluetoothService {
 
     void strokeCount;
 
-    // Update accumulated state (prefer non-zero values so sporadic fields don't zero out)
+    // Update accumulated state based on field-presence flags; explicit zeroes are preserved when a field is present
     this.latestData = {
-      pace: instantPace || this.latestData.pace,
-      distance: totalDistance || this.latestData.distance,
-      elapsedTime: elapsedTime || this.latestData.elapsedTime,
-      power: instantPower || this.latestData.power,
-      cadence: Math.round(strokeRate) || this.latestData.cadence,
-      heartRate: heartRate || this.latestData.heartRate,
-      calories: calories || this.latestData.calories,
+      pace: hasInstPace ? instantPace : this.latestData.pace,
+      distance: hasTotalDist ? totalDistance : this.latestData.distance,
+      elapsedTime: hasElapsedTime ? elapsedTime : this.latestData.elapsedTime,
+      power: hasInstPower ? instantPower : this.latestData.power,
+      cadence: !hasMoreData ? Math.round(strokeRate) : this.latestData.cadence,
+      heartRate: hasHeartRate ? heartRate : this.latestData.heartRate,
+      calories: hasEnergy ? calories : this.latestData.calories,
     };
 
     this.emit('data', this.latestData);
