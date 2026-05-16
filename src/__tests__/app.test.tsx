@@ -1,6 +1,50 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App, { formatPace } from '../App';
+
+const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+beforeAll(() => {
+  const gradient = { addColorStop: vi.fn() };
+  const baseContext = {
+    canvas: document.createElement('canvas'),
+    getExtension: vi.fn(),
+    createShader: vi.fn(),
+    createProgram: vi.fn(),
+    shaderSource: vi.fn(),
+    compileShader: vi.fn(),
+    attachShader: vi.fn(),
+    linkProgram: vi.fn(),
+    useProgram: vi.fn(),
+    getShaderParameter: vi.fn(() => true),
+    getProgramParameter: vi.fn(() => true),
+    getShaderInfoLog: vi.fn(() => ''),
+    getProgramInfoLog: vi.fn(() => ''),
+    viewport: vi.fn(),
+    clearColor: vi.fn(),
+    clear: vi.fn(),
+    createLinearGradient: vi.fn(() => gradient),
+    createRadialGradient: vi.fn(() => gradient),
+  };
+  // RouteMap uses a broad Canvas2D API surface; unknown members become no-op spies
+  // so jsdom can render App without requiring a full canvas implementation.
+  const context = new Proxy(baseContext as Record<string, unknown>, {
+    get(target, prop) {
+      if (!(prop in target)) target[prop as string] = vi.fn();
+      return target[prop as string];
+    },
+  });
+  HTMLCanvasElement.prototype.getContext = vi.fn(
+    ((contextType: string) =>
+      contextType === '2d'
+        ? (context as unknown as CanvasRenderingContext2D)
+        : null) as HTMLCanvasElement['getContext'],
+  );
+});
+
+afterAll(() => {
+  HTMLCanvasElement.prototype.getContext = originalGetContext;
+});
 
 describe('App component', () => {
   it('renders title, routes list, and heart rate panel', () => {
