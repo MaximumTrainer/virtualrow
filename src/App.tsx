@@ -76,6 +76,9 @@ function App() {
     setWorkoutHistory(workoutService.getAllSessions());
   }, []);
 
+  const activeRowerLabel = activeRowerType === 'pm5' ? 'PM5' : 'FTMS';
+  const selectedRowerConnected = activeRowerType === 'pm5' ? pm5Connected : ftmsConnected;
+
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
     const onStartup = (e: any) => {
@@ -111,9 +114,8 @@ function App() {
   };
 
   const handleStartWorkout = () => {
-    const selectedRowerConnected = activeRowerType === 'pm5' ? pm5Connected : ftmsConnected;
     if (!selectedRoute || !selectedRowerConnected) {
-      alert(`Please connect your selected rowing device (${activeRowerType.toUpperCase()}) and select a route`);
+      alert(`Please connect your selected rowing device (${activeRowerLabel}) and select a route`);
       return;
     }
 
@@ -365,7 +367,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
   }, [workoutHistory]);
 
   const stats = workoutService.getStats();
-  const selectedRowerConnected = activeRowerType === 'pm5' ? pm5Connected : ftmsConnected;
   const latestHeartRate = heartRateSamples.length > 0
     ? heartRateSamples[heartRateSamples.length - 1].bpm
     : (pm5Data?.heartRate ?? null);
