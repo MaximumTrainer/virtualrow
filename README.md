@@ -100,6 +100,18 @@ npm test
 npm run test:e2e
 ```
 
+### 3D Environment Asset Kit
+
+Generate the reusable environment GLB kit (riverbed, water surface, riverbanks, trees, buildings, bridge, dock, buoy):
+
+```bash
+npm run generate:environment-assets
+```
+
+Output file:
+
+- `public/models/virtualrow-environment.glb`
+
 ## Troubleshooting
 
 See [PM5_TROUBLESHOOTING.md](./PM5_TROUBLESHOOTING.md) for PM5 connection issues.
