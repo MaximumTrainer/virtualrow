@@ -1,5 +1,24 @@
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
 
+/** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
+export interface KMLImportCandidate {
+  name: string;
+  description: string;
+  coordinates: Coordinate[];
+}
+
+/**
+ * Discriminated union returned by importRouteFromKML:
+ * - success: exactly one route was found and created
+ * - error: the file could not be parsed or contained no valid routes
+ * - selectionRequired: multiple placemarks found; caller must let the user choose one
+ *   via finalizeKMLImport()
+ */
+export type KMLImportResult =
+  | { status: 'success'; route: WaterRoute }
+  | { status: 'error'; error: string }
+  | { status: 'selectionRequired'; candidates: KMLImportCandidate[] };
+
 // ==========================================
 // FANTASY ROUTES BASED ON REAL-WORLD LOCATIONS
 // ==========================================
@@ -440,6 +459,159 @@ export class RouteService {
         Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  // ── KML import ──────────────────────────────────────────────────────────
+
+  /**
+   * Parse the text content of a KML <coordinates> element into Coordinate[].
+   * Each tuple is "lng,lat[,alt]"; altitude is ignored.
+   * Tuples that are not finite numbers or are out of valid lat/lng range are skipped.
+   */
+  private parseKMLCoordinates(text: string): Coordinate[] {
+    const tuples = text.trim().split(/\s+/).filter((s) => s.length > 0);
+    const coords: Coordinate[] = [];
+    for (const tuple of tuples) {
+      const parts = tuple.split(',');
+      if (parts.length < 2) continue;
+      const lngStr = parts[0].trim();
+      const latStr = parts[1].trim();
+      if (!this.isValidNumericString(lngStr) || !this.isValidNumericString(latStr)) continue;
+      const lng = parseFloat(lngStr);
+      const lat = parseFloat(latStr);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+      coords.push({ lat, lng });
+    }
+    return coords;
+  }
+
+  /** Strict check: string represents a valid decimal or scientific-notation number. */
+  private isValidNumericString(s: string): boolean {
+    return /^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/.test(s.trim());
+  }
+
+  /**
+   * Parse a KML 2.2 file and return import candidates.
+   * Each Placemark containing at least one LineString becomes one candidate.
+   *
+   * - Single candidate  → status 'success', route created immediately.
+   * - Multiple candidates → status 'selectionRequired'; call finalizeKMLImport() after the
+   *   user has chosen.
+   * - Parse/validation failure → status 'error'.
+   */
+  importRouteFromKML(
+    kmlString: string,
+    meta: {
+      name?: string;
+      difficulty?: 'easy' | 'moderate' | 'hard';
+      location?: string;
+      tags?: string[];
+    }
+  ): KMLImportResult {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(kmlString, 'application/xml');
+
+      // DOMParser returns a parseerror element instead of throwing
+      if (doc.getElementsByTagName('parsererror').length > 0) {
+        return { status: 'error', error: 'Invalid XML: the file could not be parsed.' };
+      }
+
+      const root = doc.documentElement;
+      if (!root || root.localName.toLowerCase() !== 'kml') {
+        return { status: 'error', error: 'Not a KML file: the root element must be <kml>.' };
+      }
+
+      // Document-level fallback name/description (used when Placemark has none)
+      const docEl = doc.getElementsByTagNameNS('*', 'Document')[0];
+      const docName = docEl?.getElementsByTagNameNS('*', 'name')[0]?.textContent?.trim() ?? '';
+      const docDesc = docEl?.getElementsByTagNameNS('*', 'description')[0]?.textContent?.trim() ?? '';
+
+      const placemarkEls = Array.from(doc.getElementsByTagNameNS('*', 'Placemark'));
+      if (placemarkEls.length === 0) {
+        return { status: 'error', error: 'No <Placemark> elements found in the KML file.' };
+      }
+
+      const candidates: KMLImportCandidate[] = [];
+
+      for (const placemark of placemarkEls) {
+        const lineStrings = Array.from(placemark.getElementsByTagNameNS('*', 'LineString'));
+        if (lineStrings.length === 0) continue;
+
+        const name =
+          placemark.getElementsByTagNameNS('*', 'name')[0]?.textContent?.trim() ||
+          docName ||
+          meta.name ||
+          'KML Route';
+        const description =
+          placemark.getElementsByTagNameNS('*', 'description')[0]?.textContent?.trim() ||
+          docDesc ||
+          '';
+
+        // Merge coordinates from all LineStrings within this single Placemark
+        const coords: Coordinate[] = [];
+        for (const ls of lineStrings) {
+          const coordsText =
+            ls.getElementsByTagNameNS('*', 'coordinates')[0]?.textContent ?? '';
+          coords.push(...this.parseKMLCoordinates(coordsText));
+        }
+
+        if (coords.length >= 2) {
+          candidates.push({ name, description, coordinates: coords });
+        }
+      }
+
+      if (candidates.length === 0) {
+        return {
+          status: 'error',
+          error:
+            'No valid route found in the KML file. Each <LineString> must contain at least 2 coordinate points with valid lat/lng values.',
+        };
+      }
+
+      if (candidates.length === 1) {
+        const route = this.createRoute({
+          name: meta.name || candidates[0].name,
+          description: candidates[0].description,
+          location: meta.location || 'Imported',
+          difficulty: meta.difficulty || 'moderate',
+          coordinates: candidates[0].coordinates,
+          tags: meta.tags ?? ['imported', 'kml'],
+        });
+        return { status: 'success', route };
+      }
+
+      return { status: 'selectionRequired', candidates };
+    } catch (e) {
+      return {
+        status: 'error',
+        error: 'Failed to parse KML file: ' + (e instanceof Error ? e.message : String(e)),
+      };
+    }
+  }
+
+  /**
+   * Create a WaterRoute from a KML candidate selected by the user after a
+   * selectionRequired result.
+   */
+  finalizeKMLImport(
+    candidate: KMLImportCandidate,
+    meta: {
+      name?: string;
+      difficulty?: 'easy' | 'moderate' | 'hard';
+      location?: string;
+      tags?: string[];
+    }
+  ): WaterRoute {
+    return this.createRoute({
+      name: meta.name || candidate.name,
+      description: candidate.description,
+      location: meta.location || 'Imported',
+      difficulty: meta.difficulty || 'moderate',
+      coordinates: candidate.coordinates,
+      tags: meta.tags ?? ['imported', 'kml'],
+    });
   }
 
   updateRoute(id: string, data: Partial<RouteFormData>): WaterRoute | undefined {

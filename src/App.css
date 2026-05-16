@@ -502,6 +502,47 @@ body {
   margin-bottom: 12px;
 }
 
+.routes-list-header {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-btn {
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-btn:hover {
+  border-color: rgba(0, 245, 212, 0.4);
+  color: rgba(0, 245, 212, 0.8);
+}
+
+.filter-btn--active {
+  background: rgba(0, 245, 212, 0.15);
+  border-color: rgba(0, 245, 212, 0.5);
+  color: #00f5d4;
+}
+
 .route-item {
   padding: 12px;
   border-radius: 8px;

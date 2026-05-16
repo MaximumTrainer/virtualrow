@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
+import { RouteImport } from './components/RouteImport';
+import { FTMSDevice } from './components/FTMSDevice';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import { workoutGeneratorService } from './services/workoutGeneratorService';
@@ -32,6 +34,7 @@ function App() {
   const [currentSession, setCurrentSession] = useState<WorkoutSession | null>(null);
   const [pm5Connected, setPM5Connected] = useState(false);
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
+  const [ftmsConnected, setFtmsConnected] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
@@ -121,8 +124,9 @@ function App() {
   };
 
   const handleStartWorkout = () => {
-    if (!selectedRoute || !pm5Connected) {
-      alert('Please connect PM5 device and select a route');
+    const rowerConnected = pm5Connected || ftmsConnected;
+    if (!selectedRoute || !rowerConnected) {
+      alert('Please connect a rowing device (PM5 or FTMS) and select a route');
       return;
     }
 
@@ -276,6 +280,25 @@ function App() {
 
   const handlePM5Disconnected = useCallback(() => {
     setPM5Connected(false);
+  }, []);
+
+  const handleFtmsConnected = useCallback(() => {
+    setFtmsConnected(true);
+  }, []);
+
+  const handleFtmsDisconnected = useCallback(() => {
+    setFtmsConnected(false);
+  }, []);
+
+  // FTMS data arrives in the same PM5Data shape; merge into shared rower data state
+  const handleFtmsData = useCallback((data: PM5Data) => {
+    // Re-use the PM5 data pipeline so all workout tracking works regardless of device type
+    handlePM5Data(data);
+  }, [handlePM5Data]);
+
+  const handleRouteImported = useCallback((route: WaterRoute) => {
+    setRoutes(routeService.getAllRoutes());
+    setSelectedRoute(route);
   }, []);
 
   // Export session as GPX format
@@ -432,6 +455,14 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             />
           </div>
           <div className="device-panel">
+            <h3 className="panel-title">FTMS Device</h3>
+            <FTMSDevice
+              onConnected={handleFtmsConnected}
+              onDisconnected={handleFtmsDisconnected}
+              onDataReceived={handleFtmsData}
+            />
+          </div>
+          <div className="device-panel">
             <HeartRateMonitor onSample={handleHeartRateSample} />
           </div>
 
@@ -532,14 +563,30 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   <button
                     className="btn btn-start-workout"
                     onClick={handleStartWorkout}
-                    disabled={!pm5Connected}
+                    disabled={!pm5Connected && !ftmsConnected}
                   >
-                    {pm5Connected ? '▶ Start Workout' : '⚠ Connect PM5 First'}
+                    {(pm5Connected || ftmsConnected) ? '▶ Start Workout' : '⚠ Connect Rower First'}
                   </button>
                 </div>
 
                 <div className="routes-list">
-                  <h3>Other Routes</h3>
+                  <div className="routes-list-header">
+                    <h3>Routes</h3>
+                    <RouteImport onRouteImported={handleRouteImported} />
+                    <div className="route-filters">
+                      <div className="filter-group">
+                        {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
+                          <button
+                            key={d}
+                            className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
+                            onClick={() => setDifficultyFilter(d)}
+                          >
+                            {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                   {filteredRoutes.map((route) => (
                     <div
                       key={route.id}

@@ -1,12 +1,13 @@
 ﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Sky, Cloud } from '@react-three/drei';
-import { EffectComposer, Bloom, ToneMapping } from '@react-three/postprocessing';
+import { Environment, Sky, Cloud, useCubeCamera } from '@react-three/drei';
+import { EffectComposer, Bloom, ToneMapping, ChromaticAberration, Vignette, DepthOfField } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
 import type { WaterRoute, Coordinate } from '../types/index';
 import { routeTotalDistanceMeters, latLngToMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
+import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import './Rower3D.css';
 
 // ============================================================================
@@ -179,14 +180,296 @@ interface Rower3DProps {
 }
 
 // ============================================================================
+// GPU GERSTNER WAVE SHADER — injected into MeshPhysicalMaterial via
+// onBeforeCompile so all PBR features (IOR, transmission, env reflections)
+// are preserved while waves run entirely on the GPU.
+// ============================================================================
+
+/**
+ * Attach Gerstner wave vertex shader injection to a MeshPhysicalMaterial.
+ *
+ * @param mat          The material to modify (mutated in place).
+ * @param timeUniform  Shared `{ value: number }` uniform updated each frame.
+ * @param heightAxis   'z' → PlaneGeometry rotated -PI/2 (height is local Z);
+ *                     'y' → horizontal custom geometry (height is local Y).
+ * @param cacheKey     Unique string so Three.js recompiles when theme changes.
+ */
+function attachGerstnerShader(
+  mat: THREE.MeshPhysicalMaterial,
+  timeUniform: { value: number },
+  heightAxis: 'y' | 'z',
+  cacheKey: string,
+): void {
+  // Horizontal position axes in local vertex space
+  const waveXY = heightAxis === 'z'
+    ? 'vec2(position.x, position.y)'   // PlaneGeometry: local XY = horizontal
+    : 'vec2(position.x, position.z)';  // Custom horiz geometry: local XZ
+
+  const glslFunctions = `
+    uniform float uTime;
+    // Gerstner wave height contribution
+    float gWave(vec2 p, vec2 dir, float amp, float freq, float spd) {
+      vec2 nd = normalize(dir);
+      return amp * sin(dot(nd, p) * freq - spd * uTime);
+    }
+    // Gerstner wave surface gradient (dh/dX, dh/dY)
+    vec2 gWaveGrad(vec2 p, vec2 dir, float amp, float freq, float spd) {
+      vec2 nd = normalize(dir);
+      return amp * freq * nd * cos(dot(nd, p) * freq - spd * uTime);
+    }
+  `;
+
+  // Normal injection — must come BEFORE begin_vertex in Three.js chunk order
+  const normalChunk = `
+    vec2 wXY = ${waveXY};
+    vec2 wGrad = gWaveGrad(wXY, vec2( 1.0,  0.3), 0.15, 0.020, 0.80)
+               + gWaveGrad(wXY, vec2(-0.3,  1.0), 0.12, 0.025, 0.60)
+               + gWaveGrad(wXY, vec2( 0.7,  0.7), 0.08, 0.015, 1.10)
+               + gWaveGrad(wXY, vec2( 0.5, -0.5), 0.04, 0.050, 1.50);
+    vec3 objectNormal = normalize(vec3(-wGrad.x, -wGrad.y, 1.0));
+    #ifdef USE_TANGENT
+      vec3 objectTangent = vec3(tangent.xyz);
+    #endif
+  `;
+
+  // Position injection — wXY is already in scope from the normal chunk above
+  const heightDisplace = heightAxis === 'z'
+    ? 'vec3(position.x, position.y, position.z + wH)'
+    : 'vec3(position.x, position.y + wH, position.z)';
+
+  const positionChunk = `
+    float wH = gWave(wXY, vec2( 1.0,  0.3), 0.15, 0.020, 0.80)
+             + gWave(wXY, vec2(-0.3,  1.0), 0.12, 0.025, 0.60)
+             + gWave(wXY, vec2( 0.7,  0.7), 0.08, 0.015, 1.10)
+             + gWave(wXY, vec2( 0.5, -0.5), 0.04, 0.050, 1.50);
+    vec3 transformed = ${heightDisplace};
+  `;
+
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = timeUniform;
+    // Prepend helper functions before void main()
+    shader.vertexShader = glslFunctions + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <beginnormal_vertex>', normalChunk)
+      .replace('#include <begin_vertex>',      positionChunk);
+  };
+  mat.customProgramCacheKey = () => `gerstner-${cacheKey}`;
+}
+
+// ============================================================================
+// WAKE EFFECT — V-shaped Kelvin wake trailing behind the boat, velocity-scaled
+// ============================================================================
+const WakeEffect: React.FC<{
+  positionRef: React.MutableRefObject<THREE.Vector3>;
+  rotationRef: React.MutableRefObject<number>;
+  velocityRef: React.MutableRefObject<number>;
+}> = ({ positionRef, rotationRef, velocityRef }) => {
+  const groupRef    = useRef<THREE.Group>(null);
+  const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
+  const rightMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const sternMatRef = useRef<THREE.MeshBasicMaterial>(null);
+
+  // Kelvin wake half-angle ≈ 19.47°
+  const HALF_ANGLE = Math.PI / 9.2; // ~19.6°
+  const WAKE_LEN = 5;               // scene units (= metres)
+
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g) return;
+
+    const vel = velocityRef.current;
+    g.position.copy(positionRef.current);
+    g.rotation.y = rotationRef.current;
+
+    // Opacity proportional to speed; invisible when nearly stopped
+    const alpha = Math.min(vel / 2.5, 1.0) * 0.3;
+    const visible = vel > 0.15;
+    for (const matRef of [leftMatRef, rightMatRef, sternMatRef]) {
+      if (matRef.current) {
+        matRef.current.opacity  = alpha;
+        matRef.current.visible  = visible;
+      }
+    }
+    // Scale wake length with velocity
+    const s = Math.min(vel / 4.17, 1.0);
+    g.scale.set(s, 1, s);
+  });
+
+  // Arm geometry: thin plane oriented along the wake arm direction
+  const armAngle = HALF_ANGLE;
+  const halfLen  = WAKE_LEN / 2;
+
+  return (
+    <group ref={groupRef}>
+      {/* Left V-arm (spreads to local -X, extends in local -Z behind boat) */}
+      <mesh
+        position={[-Math.sin(armAngle) * halfLen, -0.07, -Math.cos(armAngle) * halfLen]}
+        rotation={[-Math.PI / 2, 0, armAngle]}
+      >
+        <planeGeometry args={[0.35, WAKE_LEN, 1, 8]} />
+        <meshBasicMaterial
+          ref={leftMatRef}
+          color="white"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Right V-arm */}
+      <mesh
+        position={[Math.sin(armAngle) * halfLen, -0.07, -Math.cos(armAngle) * halfLen]}
+        rotation={[-Math.PI / 2, 0, -armAngle]}
+      >
+        <planeGeometry args={[0.35, WAKE_LEN, 1, 8]} />
+        <meshBasicMaterial
+          ref={rightMatRef}
+          color="white"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Central stern wash — turbulent water directly behind boat */}
+      <mesh position={[0, -0.07, -halfLen * 0.6]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1.2, halfLen * 1.2, 1, 4]} />
+        <meshBasicMaterial
+          ref={sternMatRef}
+          color="white"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// ============================================================================
+// BLADE ENTRY FOAM — white foam sprites at oar-blade entry on the catch phase
+// ============================================================================
+const BladeEntryFoam: React.FC<{
+  positionRef: React.MutableRefObject<THREE.Vector3>;
+  rotationRef: React.MutableRefObject<number>;
+  strokePhase: string;
+}> = ({ positionRef, rotationRef, strokePhase }) => {
+  const leftRef  = useRef<THREE.Mesh>(null);
+  const rightRef = useRef<THREE.Mesh>(null);
+  const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
+  const rightMatRef = useRef<THREE.MeshBasicMaterial>(null);
+
+  // Foam life: decays from 1 → 0 over ~0.6 s, reset on each catch
+  const foamLifeRef = useRef(0);
+  const prevPhaseRef = useRef('recovery');
+
+  useFrame((_, delta) => {
+    const left  = leftRef.current;
+    const right = rightRef.current;
+    const lMat  = leftMatRef.current;
+    const rMat  = rightMatRef.current;
+    if (!left || !right || !lMat || !rMat) return;
+
+    // Detect transition to catch phase → reset foam life
+    if (strokePhase === 'catch' && prevPhaseRef.current !== 'catch') {
+      foamLifeRef.current = 1.0;
+    }
+    prevPhaseRef.current = strokePhase;
+
+    // Decay foam
+    foamLifeRef.current = Math.max(0, foamLifeRef.current - delta / 0.6);
+    const alpha = foamLifeRef.current * 0.65;
+
+    // Position foam at oar-blade entry (oar span ≈ ±3.2 units from boat centre)
+    const pos = positionRef.current;
+    const rot = rotationRef.current;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    const span = 3.2;
+
+    left.position.set(
+      pos.x - cosR * span,
+      pos.y - 0.05,
+      pos.z + sinR * span,
+    );
+    right.position.set(
+      pos.x + cosR * span,
+      pos.y - 0.05,
+      pos.z - sinR * span,
+    );
+
+    lMat.opacity = alpha;
+    rMat.opacity = alpha;
+    lMat.visible = alpha > 0.01;
+    rMat.visible = alpha > 0.01;
+  });
+
+  return (
+    <>
+      <mesh ref={leftRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.55, 12]} />
+        <meshBasicMaterial
+          ref={leftMatRef}
+          color="white"
+          transparent
+          opacity={0}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh ref={rightRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.55, 12]} />
+        <meshBasicMaterial
+          ref={rightMatRef}
+          color="white"
+          transparent
+          opacity={0}
+          depthWrite={false}
+        />
+      </mesh>
+    </>
+  );
+};
+
+// ============================================================================
+// WATER REFLECTION PROBE — CubeCamera that provides real-time env reflections
+// Updates every 30 frames so performance cost is amortised. The water mesh is
+// temporarily hidden during the render pass to prevent self-reflection artefacts.
+// ============================================================================
+const WaterReflectionProbe: React.FC<{
+  materialRef: React.MutableRefObject<THREE.MeshPhysicalMaterial | null>;
+  meshRef: React.MutableRefObject<THREE.Mesh | null>;
+}> = ({ materialRef, meshRef }) => {
+  const { fbo, update } = useCubeCamera({ resolution: 64, near: 0.5, far: 600 });
+  const frameRef = useRef(0);
+
+  useFrame(() => {
+    frameRef.current++;
+    if (frameRef.current % 30 !== 0) return;
+    // Hide water surface so it doesn't self-reflect
+    if (meshRef.current) meshRef.current.visible = false;
+    update();
+    if (meshRef.current) meshRef.current.visible = true;
+    if (materialRef.current) {
+      materialRef.current.envMap = fbo.texture;
+      materialRef.current.envMapIntensity = 0.35;
+    }
+  });
+
+  return null;
+};
+
+// ============================================================================
 // HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
 // subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
 const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
-  const geometryRef = useRef<THREE.PlaneGeometry>(null);
-  
+  const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
+  const meshRef        = useRef<THREE.Mesh>(null);
+  const timeUniformRef = useRef({ value: 0 });
+
   // HD Theme-based water configurations with enhanced realism
   const waterConfig = useMemo(() => {
     switch (theme) {
@@ -277,83 +560,71 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
     }
   }, [theme]);
   
-  // Animate water surface with realistic procedural waves
+  // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
+  // Skipped in Playwright: shader recompilation after context-restore stalls the page.
+  useEffect(() => {
+    if ((window as any).__PLAYWRIGHT_TESTING) return;
+    const mat = materialRef.current;
+    if (!mat) return;
+    attachGerstnerShader(mat, timeUniformRef.current, 'z', theme);
+    mat.needsUpdate = true;
+  }, [theme]);
+
+  // Update time uniform and material animation properties each frame
   useFrame((state) => {
     const time = state.clock.elapsedTime;
-    
+    timeUniformRef.current.value = time;
+
     if (materialRef.current) {
-      // Dynamic roughness simulating wind-driven micro-ripples
+      // Dynamic roughness — wind-driven micro-ripples
       const windVariation = Math.sin(time * 0.3) * 0.015 + Math.sin(time * 0.7) * 0.008;
       materialRef.current.roughness = waterConfig.roughness + windVariation;
-      
-      // Subtle emissive pulsing for light caustic simulation
+
+      // Subtle emissive pulsing simulating light caustics
       const causticPulse = (Math.sin(time * 1.2) * 0.5 + 0.5) * 0.02;
       materialRef.current.emissiveIntensity = waterConfig.emissiveIntensity + causticPulse;
     }
-    
-    // Vertex-based wave animation for realistic surface movement
-    if (meshRef.current && geometryRef.current) {
-      const positions = geometryRef.current.attributes.position;
-      const originalPositions = geometryRef.current.userData.originalPositions;
-      
-      // Store original positions on first frame
-      if (!originalPositions) {
-        geometryRef.current.userData.originalPositions = positions.array.slice();
-      } else {
-        const posArray = positions.array as Float32Array;
-        const origArray = originalPositions as Float32Array;
-        
-        for (let i = 0; i < posArray.length; i += 3) {
-          const x = origArray[i];
-          const y = origArray[i + 1];
-          
-          // Multi-frequency wave pattern for realistic water
-          const wave1 = Math.sin(x * 0.02 + time * 0.8) * 0.15;
-          const wave2 = Math.sin(y * 0.025 + time * 0.6) * 0.12;
-          const wave3 = Math.sin((x + y) * 0.015 + time * 1.1) * 0.08;
-          const wave4 = Math.sin(x * 0.05 + y * 0.04 + time * 1.5) * 0.04; // High-freq ripples
-          
-          posArray[i + 2] = wave1 + wave2 + wave3 + wave4;
-        }
-        positions.needsUpdate = true;
-        geometryRef.current.computeVertexNormals();
-      }
-    }
   });
-  
+
   return (
-    <mesh 
-      ref={meshRef}
-      rotation={[-Math.PI / 2, 0, 0]} 
-      position={[0, -0.1, boatZ]}
-      receiveShadow
-    >
-      <planeGeometry ref={geometryRef} args={[1000, 1000, 192, 192]} />
-      <meshPhysicalMaterial
-        ref={materialRef}
-        color={waterConfig.color}
-        metalness={0.05}
-        roughness={waterConfig.roughness}
-        transmission={waterConfig.transmission}
-        thickness={waterConfig.thickness}
-        ior={1.333} // Accurate water IOR
-        reflectivity={0.95}
-        clearcoat={0.4}
-        clearcoatRoughness={0.25}
-        envMapIntensity={1.8}
-        transparent
-        opacity={0.94}
-        emissive={waterConfig.emissive}
-        emissiveIntensity={waterConfig.emissiveIntensity}
-        attenuationColor={waterConfig.attenuationColor}
-        attenuationDistance={waterConfig.attenuationDistance}
-        specularIntensity={waterConfig.specularIntensity}
-        sheen={0.15}
-        sheenColor={waterConfig.sheenColor}
-        sheenRoughness={0.3}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+    <>
+      <mesh
+        ref={meshRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.1, boatZ]}
+        receiveShadow
+      >
+        {/* 128×128 segments — enough tessellation for Gerstner waves on the GPU */}
+        <planeGeometry args={[1000, 1000, 128, 128]} />
+        <meshPhysicalMaterial
+          ref={materialRef}
+          color={waterConfig.color}
+          metalness={0.05}
+          roughness={waterConfig.roughness}
+          transmission={waterConfig.transmission}
+          thickness={waterConfig.thickness}
+          ior={1.333}
+          reflectivity={0.95}
+          clearcoat={0.4}
+          clearcoatRoughness={0.25}
+          envMapIntensity={2.2}
+          transparent
+          opacity={0.94}
+          emissive={waterConfig.emissive}
+          emissiveIntensity={waterConfig.emissiveIntensity}
+          attenuationColor={waterConfig.attenuationColor}
+          attenuationDistance={waterConfig.attenuationDistance}
+          specularIntensity={waterConfig.specularIntensity}
+          sheen={0.15}
+          sheenColor={waterConfig.sheenColor}
+          sheenRoughness={0.3}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {!(window as any).__PLAYWRIGHT_TESTING && (
+        <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} />
+      )}
+    </>
   );
 };
 
@@ -475,8 +746,9 @@ interface CurvedWaterChannelProps {
 }
 
 const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, boatProgress }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
+  const meshRef        = useRef<THREE.Mesh>(null);
+  const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
+  const timeUniformRef = useRef({ value: 0 });
   
   // HD Theme-based water colors with enhanced realism (matches PhotorealisticWater)
   const waterConfig = useMemo(() => {
@@ -544,10 +816,22 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, b
     }
   }, [theme]);
   
+  // Attach GPU Gerstner wave shader when theme changes.
+  // Skipped in Playwright: shader recompilation after context-restore stalls the page.
+  useEffect(() => {
+    if ((window as any).__PLAYWRIGHT_TESTING) return;
+    const mat = materialRef.current;
+    if (!mat) return;
+    // Curved channel geometry uses Y as height axis (no -PI/2 rotation)
+    attachGerstnerShader(mat, timeUniformRef.current, 'y', `curved-${theme}`);
+    mat.needsUpdate = true;
+  }, [theme]);
+
   // Animate water material for dynamic surface
   useFrame((state) => {
+    const time = state.clock.elapsedTime;
+    timeUniformRef.current.value = time;
     if (materialRef.current) {
-      const time = state.clock.elapsedTime;
       const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
       materialRef.current.roughness = waterConfig.roughness + windVariation;
     }
@@ -3343,6 +3627,43 @@ const RowingScull: React.FC<{
 };
 
 // ============================================================================
+// DYNAMIC POST-PROCESSING — velocity-gated chromatic aberration + depth-of-field
+// + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
+// it can access useFrame for per-frame effect updates without React state churn.
+// ============================================================================
+const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number> }> = ({ velocityRef }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const caRef = useRef<any>(null);
+
+  // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
+  useFrame(() => {
+    if (!caRef.current) return;
+    const vel = velocityRef.current;
+    const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
+    caRef.current.offset.set(aberration, aberration * 0.6);
+  });
+
+  return (
+    <EffectComposer>
+      {/* Bloom — highlights water speculars and emissive caustics */}
+      <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+
+      {/* Chromatic aberration — scales with velocity for camera-lens feel */}
+      <ChromaticAberration ref={caRef} offset={[0, 0] as unknown as THREE.Vector2} />
+
+      {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
+      <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
+
+      {/* Cinematic vignette to draw focus to the scene centre */}
+      <Vignette eskil={false} offset={0.3} darkness={0.5} />
+
+      {/* Filmic tone mapping for realistic HDR colour response */}
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+    </EffectComposer>
+  );
+};
+
+// ============================================================================
 // MAIN SCENE - Handles boat movement along curved GPS path, camera following, and scenery
 // ============================================================================
 const RowerScene: React.FC<Rower3DProps> = ({ 
@@ -3383,14 +3704,28 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const totalDistance = useMemo(() => {
     return routeTotalDistanceMeters(route.coordinates);
   }, [route.coordinates]);
-  
+
+  // Wasm physics engine (falls back to JS pace→speed if unavailable)
+  const { boatState, dispatchTick } = usePhysicsEngine();
+
+  // Expose stroke phase and velocity via refs for child components (avoids re-renders)
+  const strokeCycleTRef = useRef(0);
+  strokeCycleTRef.current = boatState.strokeCycleT;
+  const velocityRef = useRef(0);
+  velocityRef.current = boatState.velocityMps;
+
   // Animation loop - move boat along curved path and camera follows
   useFrame((_, delta) => {
-    // Calculate speed from pace (seconds per 500m -> meters per second)
-    let speedMps = 0;
-    if (paceSPer500 && paceSPer500 > 0) {
-      speedMps = 500 / paceSPer500;
-    }
+    // Get speed from Wasm physics engine (or JS fallback).
+    // Build a minimal PM5Data-compatible object from available props.
+    const pm5Data = {
+      pace: paceSPer500 ?? null,
+      power: undefined,     // PM5 power not plumbed through here yet
+      cadence: cadence ?? undefined,
+      distance: distanceMeters ?? 0,
+      elapsedTime: 0,
+    };
+    let speedMps = dispatchTick(delta, pm5Data);
     
     // Apply intensity factor if provided
     if (intensityFactor && intensityFactor > 0) {
@@ -3406,8 +3741,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
       const progressRate = (speedMps / totalDistance);
       targetProgress = Math.min(1, boatProgressRef.current + progressRate * delta);
       boatProgressRef.current = targetProgress;
-    } else if (distanceMeters !== null && distanceMeters !== undefined && totalDistance > 0) {
-      // When not playing, position based on distance traveled
+    } else if (!isPlaying && distanceMeters !== null && distanceMeters !== undefined && totalDistance > 0) {
+      // When not playing, smooth position to distance-based progress.
+      // Guard: never enter this branch while playing — it can cause progress to regress
+      // if speedMps is momentarily 0 (e.g. during Wasm engine warm-up).
       targetProgress = distanceToProgress(
         distanceMeters,
         totalDistance,
@@ -3457,7 +3794,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       boatPositionRef.current.z
     );
     
-    // Expose boat position for Playwright testing
+    // Expose boat position and physics telemetry for Playwright testing
     try {
       if ((window as any).__PLAYWRIGHT_TESTING) {
         (window as any).__ROWER3D_POS = {
@@ -3475,6 +3812,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
           totalDistance,
           curveLength: curveData.length
         };
+        // Additional telemetry for visual gameplay validation
+        (window as any).__ROWER3D_SPEED_MPS = speedMps;
+        (window as any).__ROWER3D_STROKE_PHASE = boatState.strokePhase;
+        (window as any).__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
       }
     } catch {}
   });
@@ -3664,21 +4005,27 @@ const RowerScene: React.FC<Rower3DProps> = ({
         rotation={[0, boatRotationRef.current, 0]}
         cadence={cadence || 30}
       />
-      
-      {/* Post-processing effects for photorealism - disabled in test mode */}
+
+      {/* V-shaped Kelvin wake trailing behind the boat — disabled in test mode */}
       {!(window as any).__PLAYWRIGHT_TESTING && (
-        <EffectComposer>
-          {/* Subtle bloom for water highlights and reflections */}
-          <Bloom
-            intensity={0.15}
-            luminanceThreshold={0.85}
-            luminanceSmoothing={0.9}
-          />
-          
-          {/* Filmic tone mapping for realistic color response */}
-          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        </EffectComposer>
+        <WakeEffect
+          positionRef={boatPositionRef}
+          rotationRef={boatRotationRef}
+          velocityRef={velocityRef}
+        />
       )}
+
+      {/* White foam sprites at oar blade-entry point — disabled in test mode */}
+      {!(window as any).__PLAYWRIGHT_TESTING && (
+        <BladeEntryFoam
+          positionRef={boatPositionRef}
+          rotationRef={boatRotationRef}
+          strokePhase={boatState.strokePhase}
+        />
+      )}
+
+      {/* Post-processing effects for photorealism - disabled in test mode */}
+      {!(window as any).__PLAYWRIGHT_TESTING && <DynamicPostFx velocityRef={velocityRef} />}
     </>
   );
 };

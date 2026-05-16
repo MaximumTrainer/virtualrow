@@ -266,3 +266,125 @@ describe('RouteService import routines', () => {
     expect(imported!.coordinates.length).toBe(2);
   });
 });
+
+describe('RouteService KML import', () => {
+  it('imports a single-placemark KML route', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><Placemark><name>Test Route</name><LineString><coordinates>-73.962,40.786 -73.961,40.787 -73.960,40.788</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, { difficulty: 'easy' });
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.coordinates.length).toBe(3);
+      expect(result.route.name).toBe('Test Route');
+    }
+  });
+
+  it('extracts name from <name> element and ignores altitude', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><Placemark><name>Altitude Route</name><LineString><coordinates>-73.962,40.786,10 -73.961,40.787,20</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.coordinates.length).toBe(2);
+      expect(result.route.name).toBe('Altitude Route');
+    }
+  });
+
+  it('parses KML with xml namespace declaration', () => {
+    const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark><name>Namespaced</name><LineString><coordinates>-73.962,40.786 -73.961,40.787</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.coordinates.length).toBe(2);
+    }
+  });
+
+  it('returns selectionRequired for multi-placemark KML', () => {
+    const kml = `<?xml version="1.0"?><kml><Document>
+      <Placemark><name>Leg 1</name><LineString><coordinates>-73.962,40.786 -73.961,40.787</coordinates></LineString></Placemark>
+      <Placemark><name>Leg 2</name><LineString><coordinates>-73.960,40.788 -73.959,40.789</coordinates></LineString></Placemark>
+    </Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('selectionRequired');
+    if (result.status === 'selectionRequired') {
+      expect(result.candidates.length).toBe(2);
+      expect(result.candidates[0].name).toBe('Leg 1');
+      expect(result.candidates[1].name).toBe('Leg 2');
+    }
+  });
+
+  it('finalizeKMLImport creates a route from a candidate', () => {
+    const candidate = { name: 'Selected', description: 'desc', coordinates: [{ lat: 40.786, lng: -73.962 }, { lat: 40.787, lng: -73.961 }] };
+    const route = routeService.finalizeKMLImport(candidate, { difficulty: 'hard' });
+    expect(route.name).toBe('Selected');
+    expect(route.difficulty).toBe('hard');
+    expect(route.coordinates.length).toBe(2);
+  });
+
+  it('returns error for invalid XML', () => {
+    const result = routeService.importRouteFromKML('<not valid xml <<<', {});
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(result.error).toMatch(/invalid xml/i);
+    }
+  });
+
+  it('returns error for non-KML XML', () => {
+    const result = routeService.importRouteFromKML('<?xml version="1.0"?><gpx><trk></trk></gpx>', {});
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(result.error).toMatch(/kml/i);
+    }
+  });
+
+  it('returns error when no Placemark elements present', () => {
+    const result = routeService.importRouteFromKML('<?xml version="1.0"?><kml><Document></Document></kml>', {});
+    expect(result.status).toBe('error');
+    if (result.status === 'error') {
+      expect(result.error).toMatch(/placemark/i);
+    }
+  });
+
+  it('returns error when no LineString with ≥2 valid points found', () => {
+    const result = routeService.importRouteFromKML('<?xml version="1.0"?><kml><Document><Placemark><name>Bad</name><LineString><coordinates>-73.962,40.786</coordinates></LineString></Placemark></Document></kml>', {});
+    expect(result.status).toBe('error');
+  });
+
+  it('skips malformed coordinate tuples (e.g. -122.1,abc,0)', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><Placemark><name>Mixed</name><LineString><coordinates>-73.962,40.786 -73.961,abc,0 -73.960,40.788</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      // Malformed tuple is skipped; valid points remain
+      expect(result.route.coordinates.length).toBe(2);
+    }
+  });
+
+  it('handles coordinates with tabs and multiple spaces', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><Placemark><name>Whitespace</name><LineString><coordinates>
+      -73.962,40.786,0\t\t-73.961,40.787,0
+      -73.960,40.788,0
+    </coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.coordinates.length).toBe(3);
+    }
+  });
+
+  it('overrides KML name with meta.name when provided', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><Placemark><name>KML Name</name><LineString><coordinates>-73.962,40.786 -73.961,40.787</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, { name: 'Custom Name' });
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.name).toBe('Custom Name');
+    }
+  });
+
+  it('uses Document-level name as fallback when Placemark has no name', () => {
+    const kml = `<?xml version="1.0"?><kml><Document><name>Doc Name</name><Placemark><LineString><coordinates>-73.962,40.786 -73.961,40.787</coordinates></LineString></Placemark></Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.route.name).toBe('Doc Name');
+    }
+  });
+});
