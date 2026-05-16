@@ -235,7 +235,7 @@ const server = http.createServer((req, res) => {
         const totalElapsedSeconds = steps * elapsedStepSeconds;
         const sequence = [];
         for (let i = 0; i < steps; i++) {
-          const distanceVal = Math.min(distance, i * step);
+          const distanceVal = Math.min(distance, (i + 1) * step);
           const elapsed = i * elapsedStepSeconds;
           const packet = buildFtmsRowerPacket({
             moreData: false,
@@ -264,16 +264,16 @@ const server = http.createServer((req, res) => {
         let idx = 0;
         function runNext() {
           if (idx >= sequence.length) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ ok: true }));
             delete sequences[id];
             return;
           }
           const item = sequence[idx++];
           if (item.payload) broadcast(JSON.stringify(item.payload));
-          sequences[id].timer = setTimeout(runNext, item.delay || 100);
+          sequences[id].timer = setTimeout(runNext, item.delay ?? 0);
         }
         sequences[id] = { timer: null };
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true }));
         runNext();
       } catch (e) {
         res.writeHead(400, { 'Content-Type': 'application/json' });

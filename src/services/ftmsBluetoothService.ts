@@ -239,7 +239,7 @@ export class FTMSBluetoothService {
 
     void strokeCount;
 
-    // Update accumulated state (prefer non-zero values so sporadic fields don't zero out)
+    // Update accumulated state based on field-presence flags; explicit zeroes are preserved when a field is present
     this.latestData = {
       pace: hasInstPace ? instantPace : this.latestData.pace,
       distance: hasTotalDist ? totalDistance : this.latestData.distance,

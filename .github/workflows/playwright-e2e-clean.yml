@@ -45,16 +45,16 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           # Kill any processes bound to simulator ports to prevent EADDRINUSE errors
-          sudo lsof -ti :9001 | xargs -r sudo kill -9 || true
-          sudo lsof -ti :9002 | xargs -r sudo kill -9 || true
+          PIDS=$(sudo lsof -ti :9001 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
+          PIDS=$(sudo lsof -ti :9002 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
       - name: Extra port cleanup and diagnostics (pre-sim, Unix)
         if: runner.os != 'Windows'
         run: |
           echo 'Processes listening on ports before cleanup:'
           sudo lsof -i :9001 -i :9002 || true
           echo 'Killing processes on ports 9001/9002 (if any)'
-          sudo lsof -ti :9001 | xargs -r sudo kill -9 || true
-          sudo lsof -ti :9002 | xargs -r sudo kill -9 || true
+          PIDS=$(sudo lsof -ti :9001 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
+          PIDS=$(sudo lsof -ti :9002 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
           echo 'Processes listening on ports after cleanup:'
           sudo lsof -i :9001 -i :9002 || true
           sleep 2
