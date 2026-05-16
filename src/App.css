@@ -234,6 +234,10 @@ body {
   min-width: 0;
 }
 
+.app-sidebar .device-panel {
+  padding: 12px;
+}
+
 .app-sidebar .device-note {
   margin-bottom: 0;
 }
