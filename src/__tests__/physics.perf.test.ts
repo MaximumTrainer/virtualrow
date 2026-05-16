@@ -8,8 +8,8 @@
  * Target: engine.tick() must complete in < 0.1 ms per call at 60 fps.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, dirname } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,17 +17,26 @@ const __dir = dirname(__filename);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let PhysicsEngine: any, PhysicsConfig: any, RowingMetrics: any;
+const physicsJsPath = resolve(__dir, '../wasm-pkg/virtualrow_physics.js');
+const physicsWasmPath = resolve(__dir, '../wasm-pkg/virtualrow_physics_bg.wasm');
+const hasPhysicsWasmArtifacts = existsSync(physicsJsPath) && existsSync(physicsWasmPath);
 
 beforeAll(async () => {
-  const mod = await import('../wasm-pkg/virtualrow_physics.js');
-  const wasmBytes = readFileSync(resolve(__dir, '../wasm-pkg/virtualrow_physics_bg.wasm'));
+  if (!hasPhysicsWasmArtifacts) {
+    return;
+  }
+
+  const mod = await import(/* @vite-ignore */ pathToFileURL(physicsJsPath).href);
+  const wasmBytes = readFileSync(physicsWasmPath);
   mod.initSync({ module: wasmBytes });
   PhysicsEngine = mod.PhysicsEngine;
   PhysicsConfig = mod.PhysicsConfig;
   RowingMetrics = mod.RowingMetrics;
 });
 
-describe('PhysicsEngine.tick() performance', () => {
+const describePhysicsPerf = hasPhysicsWasmArtifacts ? describe : describe.skip;
+
+describePhysicsPerf('PhysicsEngine.tick() performance', () => {
   it('single tick completes in < 0.5 ms (steady-state engine)', () => {
     const cfg = new PhysicsConfig();
     const engine = new PhysicsEngine(cfg);
