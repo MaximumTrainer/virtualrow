@@ -8,6 +8,7 @@ import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
+import { heartRateBluetoothService } from './services/heartRateBluetoothService';
 import Rower3D from './components/Rower3D';
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
@@ -241,6 +242,20 @@ function App() {
       if (currentSession) setCurrentSession({ ...currentSession });
     }
   }, [isWorkoutActive, currentSession]);
+
+  // Persistent HR listener — HeartRateMonitor is only mounted on the 'routes' view, so
+  // its listener is cleaned up when the workout starts and the view switches.  This effect
+  // stays alive for the lifetime of the App and ensures HR samples are written to the
+  // workout session regardless of which view is active.
+  useEffect(() => {
+    const onHR = ({ bpm }: { bpm: number }) => {
+      workoutService.updateSessionHeartRate(bpm);
+      const session = workoutService.getCurrentSession();
+      setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
+    };
+    heartRateBluetoothService.on('heartRate', onHR);
+    return () => heartRateBluetoothService.off('heartRate', onHR);
+  }, []);
 
   const handlePM5Connected = useCallback(() => {
     setPM5Connected(true);

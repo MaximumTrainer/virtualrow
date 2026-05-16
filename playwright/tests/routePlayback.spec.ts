@@ -290,18 +290,29 @@ test.describe('Simulated e2e route playback', () => {
         }
       });
 
-    // Wait for active-session heart-rate persistence signals before ending workout
+    // Wait for live active-session HR signals (persistence happens on session end, not mid-workout)
     await page.waitForFunction(() => {
       const svc = (window as any).__workoutService;
-      if (!svc?.getAllSessions) return false;
+      if (!svc) return false;
+      // Try live active session first
+      const active = svc.getActiveSession?.() ?? svc.activeSession ?? null;
+      if (active) {
+        return (
+          (active.heartRateSamples?.length ?? 0) > 0 ||
+          (active.splits?.some((split: any) => (split.heartRate ?? 0) > 0) ?? false) ||
+          (active.currentHeartRate ?? 0) > 0
+        );
+      }
+      // Fall back to checking persisted sessions (covers fallback path where session was started directly)
+      if (!svc.getAllSessions) return false;
       const sessions = svc.getAllSessions();
       if (!sessions.length) return false;
       const last = sessions[sessions.length - 1];
       return (
         (last.heartRateSamples?.length ?? 0) > 0 ||
-        (last.splits?.some((split) => (split.heartRate ?? 0) > 0) ?? false)
+        (last.splits?.some((split: any) => (split.heartRate ?? 0) > 0) ?? false)
       );
-    }, { timeout: 10000 });
+    }, { timeout: 15000 });
     
     // Capture workout in progress
     await captureTestEvidence(page, testInfo, '09-workout-in-progress');

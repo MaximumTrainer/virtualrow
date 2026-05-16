@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
-import { workoutService } from '../services/workoutService';
 import './BluetoothDevice.css';
 
 interface HeartRateMonitorProps {
@@ -24,7 +23,6 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample }) 
         setAvg(average);
         setMax(values.reduce((m, v) => v > m ? v : m, values[0]));
       }
-      workoutService.updateSessionHeartRate(sample.bpm);
       if (onSample) onSample(sample.bpm);
     };
     const handleConnected = () => setConnected(true);
