@@ -426,6 +426,14 @@
     .delay-2 { animation-delay: 0.2s; }
     .delay-3 { animation-delay: 0.3s; }
 
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .fade-up,
+      .delay-1,
+      .delay-2,
+      .delay-3 { animation: none; }
+    }
+
     /* ─── Scrollbar ──────────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0b1220; }
@@ -436,7 +444,7 @@
 
 <!-- ── NAV ────────────────────────────────────────────────────────────── -->
 <nav aria-label="Site navigation">
-  <div class="nav-logo" aria-label="VirtualRow home">
+  <a class="nav-logo" href="#home" aria-label="VirtualRow home">
     <!-- oar icon -->
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <rect width="28" height="28" rx="8" fill="#2474d9"/>
@@ -445,7 +453,7 @@
       <circle cx="8" cy="20" r="1.8" fill="#fff"/>
     </svg>
     VirtualRow
-  </div>
+  </a>
   <ul class="nav-links" role="list">
     <li><a href="#features">Features</a></li>
     <li><a href="#screenshots">Screenshots</a></li>
@@ -500,11 +508,13 @@
       See Features
     </a>
   </div>
-  <div class="hero-screenshot fade-up delay-3" role="img" aria-label="VirtualRow application showing 3D rowing environment">
+  <div class="hero-screenshot fade-up delay-3">
     <div class="hero-screenshot-glow" aria-hidden="true"></div>
     <img
       src="screenshot-rower-3d.png"
       alt="VirtualRow 3D rowing scene — boat on a winding river with dynamic scenery"
+      width="1280"
+      height="720"
       loading="eager"
     />
   </div>
@@ -648,6 +658,8 @@
         <img
           src="pr-55-route-selection-screen.png"
           alt="VirtualRow route selection screen — choose Willowbrook River or import a custom GPX route"
+          width="1600"
+          height="1200"
           loading="lazy"
         />
         <div class="caption">
@@ -664,6 +676,8 @@
         <img
           src="pr-55-activity-screen.png"
           alt="VirtualRow activity screen showing live metrics panel and 3D river view"
+          width="1600"
+          height="1200"
           loading="lazy"
         />
         <div class="caption">
@@ -680,6 +694,8 @@
         <img
           src="pr-55-rownative-parity.png"
           alt="VirtualRow full-feature view showing workout overlays and route minimap"
+          width="1280"
+          height="720"
           loading="lazy"
         />
         <div class="caption">
@@ -696,6 +712,8 @@
         <img
           src="screenshot-rower-3d.png"
           alt="Close-up of the VirtualRow 3D single scull on the Willowbrook River"
+          width="1280"
+          height="720"
           loading="lazy"
         />
         <div class="caption">
