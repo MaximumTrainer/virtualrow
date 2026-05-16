@@ -68,37 +68,41 @@ function createBoatGLB() {
     12, 7, 16,  7, 15, 16,
   ];
 
-  // Rower torso (simplified figure)
-  const rowerVertices = [
-    // Torso - rectangular
-    -0.12, 0.1, -0.1,  0.12, 0.1, -0.1,
-    -0.12, 0.5, -0.1,  0.12, 0.5, -0.1,
-    -0.1, 0.1, 0.2,    0.1, 0.1, 0.2,
-    -0.1, 0.5, 0.2,    0.1, 0.5, 0.2,
+  // Rower in mid-drive pose (legs extended, torso leaning back, arms drawing in)
+  const rowerVertices = [];
+  const rowerIndices = [];
+  const addCuboid = (minX, maxX, minY, maxY, minZ, maxZ) => {
+    const base = rowerVertices.length / 3;
+    rowerVertices.push(
+      minX, minY, minZ,  maxX, minY, minZ,  minX, maxY, minZ,  maxX, maxY, minZ,
+      minX, minY, maxZ,  maxX, minY, maxZ,  minX, maxY, maxZ,  maxX, maxY, maxZ
+    );
+    rowerIndices.push(
+      base + 0, base + 1, base + 3,  base + 0, base + 3, base + 2, // front
+      base + 4, base + 6, base + 7,  base + 4, base + 7, base + 5, // back
+      base + 0, base + 2, base + 6,  base + 0, base + 6, base + 4, // left
+      base + 1, base + 5, base + 7,  base + 1, base + 7, base + 3, // right
+      base + 2, base + 3, base + 7,  base + 2, base + 7, base + 6, // top
+      base + 0, base + 4, base + 5,  base + 0, base + 5, base + 1  // bottom
+    );
+  };
 
-    // Head - small box on top
-    -0.08, 0.5, 0.05,  0.08, 0.5, 0.05,
-    -0.08, 0.7, 0.05,  0.08, 0.7, 0.05,
-    -0.08, 0.5, 0.15,  0.08, 0.5, 0.15,
-    -0.08, 0.7, 0.15,  0.08, 0.7, 0.15,
-  ];
-  const rowerIndices = [
-    // Torso
-    0, 1, 3,  0, 3, 2,
-    4, 6, 7,  4, 7, 5,
-    0, 2, 6,  0, 6, 4,
-    1, 5, 7,  1, 7, 3,
-    2, 3, 7,  2, 7, 6,
-    0, 4, 5,  0, 5, 1,
-
-    // Head
-    8, 9, 11,  8, 11, 10,
-    12, 14, 15, 12, 15, 13,
-    8, 10, 14,  8, 14, 12,
-    9, 13, 15,  9, 15, 11,
-    10, 11, 15, 10, 15, 14,
-    8, 12, 13,  8, 13, 9,
-  ];
+  // Lower and upper torso (upper section shifted aft to imply layback)
+  addCuboid(-0.12, 0.12, 0.10, 0.35, -0.04, 0.12);
+  addCuboid(-0.11, 0.11, 0.34, 0.54, -0.16, 0.04);
+  // Head
+  addCuboid(-0.075, 0.075, 0.54, 0.72, -0.14, 0.00);
+  // Thighs extended toward foot stretcher
+  addCuboid(-0.09, -0.02, 0.08, 0.14, 0.04, 0.30);
+  addCuboid(0.02, 0.09, 0.08, 0.14, 0.04, 0.30);
+  // Lower legs almost straight
+  addCuboid(-0.085, -0.03, 0.07, 0.12, 0.28, 0.46);
+  addCuboid(0.03, 0.085, 0.07, 0.12, 0.28, 0.46);
+  // Arms pulling inward
+  addCuboid(-0.21, -0.11, 0.35, 0.43, -0.04, 0.05);
+  addCuboid(0.11, 0.21, 0.35, 0.43, -0.04, 0.05);
+  addCuboid(-0.12, -0.02, 0.30, 0.37, -0.02, 0.08);
+  addCuboid(0.02, 0.12, 0.30, 0.37, -0.02, 0.08);
 
   // Seat (sliding seat)
   const seatVertices = [
@@ -330,24 +334,24 @@ function createBoatGLB() {
       },
     ],
     materials: [
-      { name: 'HullMaterial', pbrMetallicRoughness: { baseColorFactor: [0.9, 0.9, 0.9, 1.0], metallicFactor: 0.2, roughnessFactor: 0.4 } },
-      { name: 'RowerMaterial', pbrMetallicRoughness: { baseColorFactor: [0.8, 0.2, 0.1, 1.0], metallicFactor: 0.0, roughnessFactor: 0.8 } },
+      { name: 'HullMaterial', pbrMetallicRoughness: { baseColorFactor: [0.95, 0.95, 0.97, 1.0], metallicFactor: 0.15, roughnessFactor: 0.12 } },
+      { name: 'RowerMaterial', pbrMetallicRoughness: { baseColorFactor: [0.08, 0.14, 0.24, 1.0], metallicFactor: 0.0, roughnessFactor: 0.88 } },
       { name: 'SeatMaterial', pbrMetallicRoughness: { baseColorFactor: [0.2, 0.2, 0.2, 1.0], metallicFactor: 0.1, roughnessFactor: 0.7 } },
-      { name: 'OarMaterial', pbrMetallicRoughness: { baseColorFactor: [0.1, 0.1, 0.1, 1.0], metallicFactor: 0.1, roughnessFactor: 0.5 } },
-      { name: 'RiggerMaterial', pbrMetallicRoughness: { baseColorFactor: [0.7, 0.75, 0.8, 1.0], metallicFactor: 0.6, roughnessFactor: 0.4 } },
+      { name: 'OarMaterial', pbrMetallicRoughness: { baseColorFactor: [0.12, 0.12, 0.13, 1.0], metallicFactor: 0.05, roughnessFactor: 0.82 } },
+      { name: 'RiggerMaterial', pbrMetallicRoughness: { baseColorFactor: [0.72, 0.76, 0.8, 1.0], metallicFactor: 0.9, roughnessFactor: 0.2 } },
       { name: 'RailsMaterial', pbrMetallicRoughness: { baseColorFactor: [0.15, 0.15, 0.15, 1.0], metallicFactor: 0.3, roughnessFactor: 0.5 } },
       { name: 'StretcherMaterial', pbrMetallicRoughness: { baseColorFactor: [0.1, 0.1, 0.1, 1.0], metallicFactor: 0.2, roughnessFactor: 0.7 } },
       { name: 'FinMaterial', pbrMetallicRoughness: { baseColorFactor: [0.05, 0.05, 0.05, 1.0], metallicFactor: 0.1, roughnessFactor: 0.6 } },
       { name: 'BowBallMaterial', pbrMetallicRoughness: { baseColorFactor: [1.0, 0.95, 0.2, 1.0], metallicFactor: 0.0, roughnessFactor: 0.6 } },
     ],
     accessors: [
-      { bufferView: 0, componentType: 5126, count: hullVertices.length / 3, type: 'VEC3', min: [-0.12, -0.06, -4.0], max: [0.12, 0.06, 4.0] },
+      { bufferView: 0, componentType: 5126, count: hullVertices.length / 3, type: 'VEC3', min: [-0.12, -0.06, -4.2], max: [0.12, 0.065, 4.2] },
       { bufferView: 1, componentType: 5125, count: hullIndices.length, type: 'SCALAR' },
-      { bufferView: 2, componentType: 5126, count: rowerVertices.length / 3, type: 'VEC3', min: [-0.12, 0.1, -0.1], max: [0.12, 0.7, 0.2] },
+      { bufferView: 2, componentType: 5126, count: rowerVertices.length / 3, type: 'VEC3', min: [-0.21, 0.07, -0.16], max: [0.21, 0.72, 0.46] },
       { bufferView: 3, componentType: 5125, count: rowerIndices.length, type: 'SCALAR' },
       { bufferView: 4, componentType: 5126, count: seatVertices.length / 3, type: 'VEC3', min: [-0.08, 0.08, -0.05], max: [0.08, 0.11, 0.05] },
       { bufferView: 5, componentType: 5125, count: seatIndices.length, type: 'SCALAR' },
-      { bufferView: 6, componentType: 5126, count: oarVertices.length / 3, type: 'VEC3', min: [-0.08, 0.2, -0.15], max: [0.08, 0.25, 1.35] },
+      { bufferView: 6, componentType: 5126, count: oarVertices.length / 3, type: 'VEC3', min: [-0.09, 0.2, -0.15], max: [0.09, 0.255, 1.45] },
       { bufferView: 7, componentType: 5125, count: oarIndices.length, type: 'SCALAR' },
       { bufferView: 8, componentType: 5126, count: riggerVertices.length / 3, type: 'VEC3' },
       { bufferView: 9, componentType: 5125, count: riggerIndices.length, type: 'SCALAR' },
