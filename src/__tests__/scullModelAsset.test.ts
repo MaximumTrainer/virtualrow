@@ -15,7 +15,9 @@ function parseGlbJson(glb: Buffer) {
   const jsonChunkType = glb.readUInt32LE(16);
   expect(jsonChunkType).toBe(0x4e4f534a);
 
-  const jsonRaw = glb.subarray(20, 20 + jsonChunkLength).toString('utf8').replaceAll('\0', '').trimEnd();
+  // GLB JSON data starts after 12-byte header + 8-byte first chunk header.
+  const jsonStartOffset = 20;
+  const jsonRaw = glb.subarray(jsonStartOffset, jsonStartOffset + jsonChunkLength).toString('utf8').replaceAll('\0', '').trimEnd();
   return JSON.parse(jsonRaw);
 }
 
