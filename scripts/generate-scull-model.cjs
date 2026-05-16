@@ -80,12 +80,12 @@ function createBoatGLB() {
       minX, minY, maxZ,  maxX, minY, maxZ,  minX, maxY, maxZ,  maxX, maxY, maxZ
     );
     rowerIndices.push(
-      base + 0, base + 1, base + 3,  base + 0, base + 3, base + 2, // front
-      base + 4, base + 6, base + 7,  base + 4, base + 7, base + 5, // back
-      base + 0, base + 2, base + 6,  base + 0, base + 6, base + 4, // left
-      base + 1, base + 5, base + 7,  base + 1, base + 7, base + 3, // right
-      base + 2, base + 3, base + 7,  base + 2, base + 7, base + 6, // top
-      base + 0, base + 4, base + 5,  base + 0, base + 5, base + 1  // bottom
+      base + 0, base + 3, base + 1,  base + 0, base + 2, base + 3, // front
+      base + 4, base + 7, base + 6,  base + 4, base + 5, base + 7, // back
+      base + 0, base + 6, base + 2,  base + 0, base + 4, base + 6, // left
+      base + 1, base + 7, base + 5,  base + 1, base + 3, base + 7, // right
+      base + 2, base + 7, base + 3,  base + 2, base + 6, base + 7, // top
+      base + 0, base + 5, base + 4,  base + 0, base + 1, base + 5  // bottom
     );
   };
 

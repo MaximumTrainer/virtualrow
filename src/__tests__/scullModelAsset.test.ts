@@ -1,8 +1,28 @@
+/// <reference types="node" />
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-function parseGlbJson(glb: Buffer) {
+type ScullNode = {
+  name?: string;
+  matrix?: number[];
+};
+
+type ScullMaterial = {
+  name?: string;
+  pbrMetallicRoughness?: {
+    metallicFactor?: number;
+    roughnessFactor?: number;
+  };
+};
+
+type ScullGltf = {
+  nodes?: ScullNode[];
+  materials?: ScullMaterial[];
+};
+
+function parseGlbJson(glb: Buffer): ScullGltf {
   const magic = glb.readUInt32LE(0);
   const version = glb.readUInt32LE(4);
   const length = glb.readUInt32LE(8);
@@ -23,7 +43,7 @@ function parseGlbJson(glb: Buffer) {
     jsonEndOffset -= 1;
   }
   const jsonRaw = jsonChunkRaw.subarray(0, jsonEndOffset).toString('utf8');
-  return JSON.parse(jsonRaw);
+  return JSON.parse(jsonRaw) as ScullGltf;
 }
 
 describe('generated scull model asset', () => {
@@ -34,8 +54,8 @@ describe('generated scull model asset', () => {
 
     const nodeNames = new Set(
       (gltf.nodes ?? [])
-        .filter((node: { name?: string }) => Boolean(node.name))
-        .map((node: { name?: string }) => node.name)
+        .filter((node) => Boolean(node.name))
+        .map((node) => node.name)
     );
     [
       'ScullBoatGroup',
@@ -51,13 +71,17 @@ describe('generated scull model asset', () => {
       'BowBallNode',
     ].forEach((name) => expect(nodeNames.has(name)).toBe(true));
 
-    const leftOar = (gltf.nodes ?? []).find((node: { name?: string }) => node.name === 'LeftOar');
-    const rightOar = (gltf.nodes ?? []).find((node: { name?: string }) => node.name === 'RightOar');
+    const leftOar = (gltf.nodes ?? []).find((node) => node.name === 'LeftOar');
+    const rightOar = (gltf.nodes ?? []).find((node) => node.name === 'RightOar');
+    const leftX = leftOar?.matrix?.[12];
+    const rightX = rightOar?.matrix?.[12];
 
     // matrix[12] holds X translation in a 4x4 node transform matrix.
-    expect(leftOar?.matrix?.[12]).toBeLessThan(0);
-    expect(rightOar?.matrix?.[12]).toBeGreaterThan(0);
-    expect(Math.abs(leftOar?.matrix?.[12])).toBeCloseTo(Math.abs(rightOar?.matrix?.[12]), 6);
+    expect(leftX).toBeDefined();
+    expect(rightX).toBeDefined();
+    expect(leftX!).toBeLessThan(0);
+    expect(rightX!).toBeGreaterThan(0);
+    expect(Math.abs(leftX!)).toBeCloseTo(Math.abs(rightX!), 6);
   });
 
   it('uses PBR factors aligned to hull/riggers/oars/rower material intent', () => {
@@ -66,7 +90,7 @@ describe('generated scull model asset', () => {
     const gltf = parseGlbJson(glb);
 
     const materialByName = new Map(
-      (gltf.materials ?? []).map((material: { name?: string; pbrMetallicRoughness?: { metallicFactor?: number; roughnessFactor?: number } }) => [material.name, material])
+      (gltf.materials ?? []).map((material) => [material.name, material] as const)
     );
 
     const hull = materialByName.get('HullMaterial');
