@@ -1,6 +1,27 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App, { formatPace } from '../App';
+
+beforeAll(() => {
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+    canvas: document.createElement('canvas'),
+    getExtension: vi.fn(),
+    createShader: vi.fn(),
+    createProgram: vi.fn(),
+    shaderSource: vi.fn(),
+    compileShader: vi.fn(),
+    attachShader: vi.fn(),
+    linkProgram: vi.fn(),
+    useProgram: vi.fn(),
+    getShaderParameter: vi.fn(() => true),
+    getProgramParameter: vi.fn(() => true),
+    getShaderInfoLog: vi.fn(() => ''),
+    getProgramInfoLog: vi.fn(() => ''),
+    viewport: vi.fn(),
+    clearColor: vi.fn(),
+    clear: vi.fn(),
+  })) as any;
+});
 
 describe('App component', () => {
   it('renders title, routes list, and heart rate panel', () => {

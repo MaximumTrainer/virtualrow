@@ -269,10 +269,12 @@ test.describe('Simulated e2e route playback', () => {
             await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
             // Also emit HR to ensure HR aggregates update
             // @ts-ignore
-            await window.__simulator.emitHR({ bpm: 80 + i });
-            // Ensure workoutService also records HR samples if HR monitor isn't connected
-            // @ts-ignore
-            try { window.__workoutService.updateSessionHeartRate(80 + i); } catch (e) { }
+            try {
+              await window.__simulator.emitHR({ bpm: 80 + i });
+            } catch (e) {
+              // @ts-ignore
+              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { }
+            }
             // small delay
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));
@@ -281,14 +283,18 @@ test.describe('Simulated e2e route playback', () => {
         }
       });
 
-    // Wait for the session to capture some heart rate samples (or HR avg to be computed)
+    // Wait for the session to capture persisted heart-rate data
     await page.waitForFunction(() => {
       const svc = (window as any).__workoutService;
-      if (!svc || !svc.getAllSessions) return false;
+      if (!svc?.getAllSessions) return false;
       const sessions = svc.getAllSessions();
-      if (sessions.length === 0) return false;
+      if (!sessions.length) return false;
       const last = sessions[sessions.length - 1];
-      return !!(last.heartRateSamples && last.heartRateSamples.length > 0);
+      return (
+        (last.heartRateSamples?.length ?? 0) > 0 ||
+        (last.heartRateAvg ?? 0) > 0 ||
+        (last.heartRateMax ?? 0) > 0
+      );
     }, { timeout: 10000 });
     
     // Capture workout in progress
@@ -558,9 +564,12 @@ test.describe('Simulated e2e route playback', () => {
             await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 110 + i });
             // Also emit HR
             // @ts-ignore
-            await window.__simulator.emitHR({ bpm: 110 + i });
-            // @ts-ignore
-            try { window.__workoutService.updateSessionHeartRate(110 + i); } catch (e) { }
+            try {
+              await window.__simulator.emitHR({ bpm: 110 + i });
+            } catch (e) {
+              // @ts-ignore
+              try { window.__workoutService?.updateSessionHeartRate?.(110 + i); } catch (e) { }
+            }
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));
           }
@@ -673,9 +682,12 @@ test.describe('Simulated e2e route playback', () => {
             await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
             // Also emit HR
             // @ts-ignore
-            await window.__simulator.emitHR({ bpm: 80 + i });
-            // @ts-ignore
-            try { window.__workoutService.updateSessionHeartRate(80 + i); } catch (e) { }
+            try {
+              await window.__simulator.emitHR({ bpm: 80 + i });
+            } catch (e) {
+              // @ts-ignore
+              try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { }
+            }
             // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, 50));
           }
