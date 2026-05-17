@@ -10,8 +10,7 @@
  * 6. Objects are sized relative to rower/boat with real-world proportions
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Vector3 } from 'three';
+import { describe, it, expect, vi } from 'vitest';
 
 // Mock dependencies that require browser APIs
 vi.mock('@react-three/fiber', () => ({

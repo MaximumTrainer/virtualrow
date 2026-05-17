@@ -388,11 +388,11 @@ export class RouteService {
   private extractCoordsFromGeometry(geometry: { type?: string; coordinates?: number[][] | number[][][] }, coords: Coordinate[]) {
     if (!geometry || !geometry.type) return;
     if (geometry.type === 'LineString' && geometry.coordinates) {
-      for (const c of geometry.coordinates) {
+      for (const c of geometry.coordinates as number[][]) {
         coords.push({ lat: c[1], lng: c[0] });
       }
     } else if (geometry.type === 'MultiLineString' && geometry.coordinates) {
-      for (const ln of geometry.coordinates) {
+      for (const ln of geometry.coordinates as number[][][]) {
         for (const c of ln) coords.push({ lat: c[1], lng: c[0] });
       }
     } else if (geometry.type === 'Polygon' && geometry.coordinates) {

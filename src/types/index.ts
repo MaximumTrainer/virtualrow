@@ -179,3 +179,24 @@ export interface WorkoutProgress {
   isOnTarget: boolean; // whether user is meeting target metrics
   deviationPercent?: number; // how far off target (positive = too fast, negative = too slow)
 }
+
+// Global window extensions used by Playwright E2E tests and dev tooling
+declare global {
+  interface Window {
+    __PLAYWRIGHT_TESTING?: boolean;
+    __PM5_DATA?: PM5Data;
+    __workoutService?: unknown;
+    __PM5_SIMULATOR_PORT?: number;
+    // Rower3D telemetry exposed for Playwright assertions
+    __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
+    __ROWER3D_CAMERA?: { position: [number, number, number] };
+    __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number };
+    __ROWER3D_SPEED_MPS?: number;
+    __ROWER3D_STROKE_PHASE?: string;
+    __ROWER3D_DISTANCE_M?: number;
+    __ROWER3D_OAR_ANGLE?: number;
+    __ROWER3D_STROKE_RATE?: number;
+    __ROWER3D_GPU_BACKEND?: string;
+    __ROWER3D_WEBGL_LOST?: boolean;
+  }
+}

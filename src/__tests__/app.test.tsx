@@ -35,9 +35,10 @@ beforeAll(() => {
     },
   });
   HTMLCanvasElement.prototype.getContext = vi.fn(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((contextType: string) =>
       contextType === '2d'
-        ? (context as unknown as CanvasRenderingContext2D)
+        ? (context as any)
         : null) as HTMLCanvasElement['getContext'],
   );
 });

@@ -1,10 +1,12 @@
+const EARTH_RADIUS_M = 6378137;
+const DEG_TO_RAD = Math.PI / 180;
+
 export function latLngToMeters(lat: number, lng: number, originLat: number, originLng: number) {
   // Approximation using equirectangular projection around origin
-  const R = 6378137; // earth radius in meters
-  const dLat = (lat - originLat) * (Math.PI / 180);
-  const dLng = (lng - originLng) * (Math.PI / 180);
-  const x = dLng * R * Math.cos(originLat * Math.PI / 180);
-  const y = dLat * R;
+  const dLat = (lat - originLat) * DEG_TO_RAD;
+  const dLng = (lng - originLng) * DEG_TO_RAD;
+  const x = dLng * EARTH_RADIUS_M * Math.cos(originLat * DEG_TO_RAD);
+  const y = dLat * EARTH_RADIUS_M;
   return { x, y };
 }
 
@@ -20,10 +22,9 @@ export function routeTotalDistanceMeters(coords: Array<{lat:number, lng:number}>
 }
 
 export function distanceBetweenLatLng(lat1:number, lng1:number, lat2:number, lng2:number) {
-  const R = 6378137; // meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2) * Math.sin(dLng/2);
+  const dLat = (lat2 - lat1) * DEG_TO_RAD;
+  const dLng = (lng2 - lng1) * DEG_TO_RAD;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) * Math.sin(dLng/2) * Math.sin(dLng/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
+  return EARTH_RADIUS_M * c;
 }

@@ -567,7 +567,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
   // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
   useEffect(() => {
-    if ((window as any).__PLAYWRIGHT_TESTING) return;
+    if (window.__PLAYWRIGHT_TESTING) return;
     const mat = materialRef.current;
     if (!mat) return;
     attachGerstnerShader(mat, timeUniformRef.current, 'z', theme);
@@ -625,7 +625,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
           side={THREE.DoubleSide}
         />
       </mesh>
-      {!(window as any).__PLAYWRIGHT_TESTING && (
+      {!window.__PLAYWRIGHT_TESTING && (
         <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} />
       )}
     </>
@@ -823,7 +823,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, b
   // Attach GPU Gerstner wave shader when theme changes.
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
   useEffect(() => {
-    if ((window as any).__PLAYWRIGHT_TESTING) return;
+    if (window.__PLAYWRIGHT_TESTING) return;
     const mat = materialRef.current;
     if (!mat) return;
     // Curved channel geometry uses Y as height axis (no -PI/2 rotation)
@@ -1023,7 +1023,6 @@ const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => 
     const segments = 200;
     const waterHalfWidth = WATER_CHANNEL_WIDTH / 2;
     const bankWidth = RIVERBANK_WIDTH;
-    
     const createBankGeometry = (side: 'left' | 'right') => {
       const positions: number[] = [];
       const normals: number[] = [];
@@ -1081,6 +1080,14 @@ const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => 
       rightBankGeometry: createBankGeometry('right')
     };
   }, [curve]);
+
+  // Dispose geometries when curve changes or component unmounts to prevent GPU memory leaks
+  useEffect(() => {
+    return () => {
+      leftBankGeometry?.dispose();
+      rightBankGeometry?.dispose();
+    };
+  }, [leftBankGeometry, rightBankGeometry]);
   
   if (!curve || !leftBankGeometry || !rightBankGeometry) {
     return null;
@@ -2849,9 +2856,9 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
     
     // Expose oar angle and stroke rate for Playwright e2e testing
     try {
-      if ((window as any).__PLAYWRIGHT_TESTING) {
-        (window as any).__ROWER3D_OAR_ANGLE = oarSweep;
-        (window as any).__ROWER3D_STROKE_RATE = strokesPerMinute;
+      if (window.__PLAYWRIGHT_TESTING) {
+        window.__ROWER3D_OAR_ANGLE = oarSweep;
+        window.__ROWER3D_STROKE_RATE = strokesPerMinute;
       }
     } catch {}
     
@@ -3641,8 +3648,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const boatProgressRef = useRef<number>(0);
   const boatRotationRef = useRef<number>(0);
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
-  const [boatProgress, setBoatProgress] = useState(0);
-  const [boatZ, setBoatZ] = useState(0); // For scenery positioning (legacy compatibility)
+  // Batched scenery state — both updates in one object to halve React re-renders
+  const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });
+  const { boatProgress, boatZ } = sceneryState;
 
   // Ref to the boat group used for imperative positioning in Playwright mode
   const boatGroupRef = useRef<THREE.Group>(null);
@@ -3659,9 +3667,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
 
   // Expose stroke phase and velocity via refs for child components (avoids re-renders)
   const strokeCycleTRef = useRef(0);
-  strokeCycleTRef.current = boatState.strokeCycleT;
   const velocityRef = useRef(0);
-  velocityRef.current = boatState.velocityMps;
+  useEffect(() => {
+    strokeCycleTRef.current = boatState.strokeCycleT;
+    velocityRef.current = boatState.velocityMps;
+  }, [boatState.strokeCycleT, boatState.velocityMps]);
 
   // Animation loop - move boat along curved path and camera follows
   useFrame((state, delta) => {
@@ -3710,21 +3720,23 @@ const RowerScene: React.FC<Rower3DProps> = ({
     boatRotationRef.current = routePos.angle;
     
     // Imperatively position boat group (Playwright testing path — no Rapier)
-    if ((window as any).__PLAYWRIGHT_TESTING && boatGroupRef.current) {
+    if (window.__PLAYWRIGHT_TESTING && boatGroupRef.current) {
       boatGroupRef.current.position.copy(boatPositionRef.current);
       boatGroupRef.current.rotation.y = boatRotationRef.current;
     }
 
     // Update state for scenery positioning — throttled to ≤ 10 Hz to reduce React re-renders.
-    // Scenery components (water channel, landscape, mist) don't need sub-100 ms updates.
+    // Batched into a single setState to halve render count.
     const elapsedTime = state.clock.elapsedTime;
     if (elapsedTime - lastSceneryUpdateRef.current > 0.1) {
       lastSceneryUpdateRef.current = elapsedTime;
-      setBoatProgress(boatProgressRef.current);
-      const currentZ = boatPositionRef.current.z;
-      if (Math.abs(currentZ - boatZ) > 1) {
-        setBoatZ(currentZ);
-      }
+      const newProgress = boatProgressRef.current;
+      const newZ = boatPositionRef.current.z;
+      setSceneryState(prev =>
+        Math.abs(newProgress - prev.boatProgress) > 0.0001 || Math.abs(newZ - prev.boatZ) > 1
+          ? { boatProgress: newProgress, boatZ: newZ }
+          : prev
+      );
     }
     
     // Camera follows boat from behind (relative to boat heading)
@@ -3752,26 +3764,25 @@ const RowerScene: React.FC<Rower3DProps> = ({
     
     // Expose boat position and physics telemetry for Playwright testing
     try {
-      if ((window as any).__PLAYWRIGHT_TESTING) {
-        (window as any).__ROWER3D_POS = {
+      if (window.__PLAYWRIGHT_TESTING) {
+        window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
           z: boatPositionRef.current.z,
           progress: boatProgressRef.current,
           angle: boatRotationRef.current
         };
-        (window as any).__ROWER3D_CAMERA = {
+        window.__ROWER3D_CAMERA = {
           position: [camera.position.x, camera.position.y, camera.position.z]
         };
-        (window as any).__ROWER3D_ROUTE = {
+        window.__ROWER3D_ROUTE = {
           hasCurve: !!routeCurve,
           totalDistance,
           curveLength: curveData.length
         };
-        // Additional telemetry for visual gameplay validation
-        (window as any).__ROWER3D_SPEED_MPS = speedMps;
-        (window as any).__ROWER3D_STROKE_PHASE = boatState.strokePhase;
-        (window as any).__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
+        window.__ROWER3D_SPEED_MPS = speedMps;
+        window.__ROWER3D_STROKE_PHASE = boatState.strokePhase;
+        window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
       }
     } catch {}
   });
@@ -3952,7 +3963,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
       
       {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode */}
-      {(window as any).__PLAYWRIGHT_TESTING ? (
+      {window.__PLAYWRIGHT_TESTING ? (
         <group ref={boatGroupRef}>
           <RowingScull cadence={cadence || 30} />
         </group>
@@ -3967,7 +3978,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* V-shaped Kelvin wake trailing behind the boat — disabled in test mode */}
-      {!(window as any).__PLAYWRIGHT_TESTING && (
+      {!window.__PLAYWRIGHT_TESTING && (
         <WakeEffect
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -3976,7 +3987,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* White foam sprites at oar blade-entry point — disabled in test mode */}
-      {!(window as any).__PLAYWRIGHT_TESTING && (
+      {!window.__PLAYWRIGHT_TESTING && (
         <BladeEntryFoam
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -3985,7 +3996,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!(window as any).__PLAYWRIGHT_TESTING && <DynamicPostFx velocityRef={velocityRef} />}
+      {!window.__PLAYWRIGHT_TESTING && <DynamicPostFx velocityRef={velocityRef} />}
     </>
   );
 };
@@ -4093,7 +4104,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             try {
-              (window as any).__ROWER3D_GPU_BACKEND = gpuBackend;
+              window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch {}
             
             // Handle WebGL context lost/restored for Playwright tests
@@ -4103,14 +4114,14 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 ev.preventDefault?.();
                 const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
                 if (marker) marker.style.display = 'block';
-                (window as any).__ROWER3D_WEBGL_LOST = true;
+                window.__ROWER3D_WEBGL_LOST = true;
               } catch {}
             }, false);
             canvas.addEventListener('webglcontextrestored', () => {
               try {
                 const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
                 if (marker) marker.style.display = 'none';
-                (window as any).__ROWER3D_WEBGL_LOST = false;
+                window.__ROWER3D_WEBGL_LOST = false;
               } catch {}
             }, false);
           }}

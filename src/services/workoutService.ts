@@ -35,7 +35,7 @@ export class WorkoutService {
         const event = new CustomEvent('virtualrow:sessionStarted', { detail: session });
         window.dispatchEvent(event);
       }
-    } catch (e) { /* ignore when not in browser */ }
+    } catch { /* ignore when not in browser */ }
     return session;
   }
 
@@ -78,7 +78,7 @@ export class WorkoutService {
         const event = new CustomEvent('virtualrow:sessionEnded', { detail: completedSession });
         window.dispatchEvent(event as any);
       }
-    } catch (e) { /* ignore when not in browser */ }
+    } catch { /* ignore when not in browser */ }
     return completedSession;
   }
 
@@ -124,11 +124,15 @@ export class WorkoutService {
     if (!this.currentSession.heartRateSamples) {
       this.currentSession.heartRateSamples = [];
     }
+    // Maintain only last 600 samples (~10 minutes at 1s interval) to limit memory.
+    // Uses index-based ring buffer for O(1) writes.
     const sample: HeartRateSample = { bpm, timestamp: new Date() };
-    this.currentSession.heartRateSamples.push(sample);
-    // Maintain only last 600 samples (~10 minutes at 1s interval) to limit memory
-    if (this.currentSession.heartRateSamples.length > 600) {
-      this.currentSession.heartRateSamples.shift();
+    const samples = this.currentSession.heartRateSamples;
+    if (samples.length >= 600) {
+      const idx = samples.length % 600;
+      samples[idx] = sample;
+    } else {
+      samples.push(sample);
     }
   }
 
@@ -241,10 +245,9 @@ export const workoutService = new WorkoutService();
 
 // Expose for test harness and runtime inspection in Playwright/tests
 try {
-  if (typeof window !== 'undefined' && (window as any).__PLAYWRIGHT_TESTING) {
-    // @ts-ignore - attach for integration/e2e tests only
-    (window as any).__workoutService = workoutService;
+  if (typeof window !== 'undefined' && window.__PLAYWRIGHT_TESTING) {
+    window.__workoutService = workoutService;
   }
-} catch (e) {
+} catch {
   /* ignore when running in Node */
 }

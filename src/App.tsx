@@ -94,7 +94,8 @@ function App() {
 
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
-    const onStartup = (e: any) => {
+    const onStartup = (e: Event) => {
+      if (!(e instanceof CustomEvent)) return;
       const session = e.detail as WorkoutSession;
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -110,21 +111,18 @@ function App() {
       setCurrentView('routes');
       setWorkoutHistory(workoutService.getAllSessions());
     };
-    try {
-      window.addEventListener('virtualrow:sessionStarted', onStartup as any);
-      window.addEventListener('virtualrow:sessionEnded', onEnd as any);
-    } catch (e) { /* ignore during SSR or when window not present */ }
+    if (typeof window === 'undefined') return;
+    window.addEventListener('virtualrow:sessionStarted', onStartup as EventListener);
+    window.addEventListener('virtualrow:sessionEnded', onEnd as EventListener);
     return () => {
-      try {
-        window.removeEventListener('virtualrow:sessionStarted', onStartup as any);
-        window.removeEventListener('virtualrow:sessionEnded', onEnd as any);
-      } catch (e) { /* ignore */ }
+      window.removeEventListener('virtualrow:sessionStarted', onStartup as EventListener);
+      window.removeEventListener('virtualrow:sessionEnded', onEnd as EventListener);
     };
-  }, [routeService]);
+  }, []);
 
-  const handleRouteSelect = (route: WaterRoute) => {
+  const handleRouteSelect = useCallback((route: WaterRoute) => {
     setSelectedRoute(route);
-  };
+  }, []);
 
   const handleStartWorkout = () => {
     // Guard against double-start (rapid clicks, re-entrant calls, or already-active session)
@@ -172,41 +170,38 @@ function App() {
     setCurrentView('routes');
   }, []);
 
-  const handlePauseWorkout = () => {
+  const handlePauseWorkout = useCallback(() => {
     setSessionState('paused');
     // Note: Full pause logic would need to be added to workoutService
-  };
+  }, []);
 
-  const handleResumeWorkout = () => {
+  const handleResumeWorkout = useCallback(() => {
     setSessionState('active');
     // Note: Full resume logic would need to be added to workoutService
-  };
+  }, []);
 
-  const handleResetWorkout = () => {
+  const handleResetWorkout = useCallback(() => {
     // Reset metrics but keep session
     setActivityElapsedMs(0);
     // Note: Full reset logic would need to clear workoutService data
-  };
+  }, []);
 
-  const handleSelectWorkout = (workout: StructuredWorkout | null) => {
+  const handleSelectWorkout = useCallback((workout: StructuredWorkout | null) => {
     setSelectedWorkout(workout);
-  };
+  }, []);
 
-  const handleClearWorkout = () => {
+  const handleClearWorkout = useCallback(() => {
     setSelectedWorkout(null);
-  };
+  }, []);
 
   // Get filtered routes based on current filter settings
-  const getFilteredRoutes = useCallback(() => {
+  const filteredRoutes = useMemo(() => {
     let filtered = routes;
     if (difficultyFilter !== 'all') {
       filtered = filtered.filter(r => r.difficulty === difficultyFilter);
     }
-    filtered = filtered.filter(r => r.distance >= distanceMin && r.distance <= distanceMax);
-    return filtered;
+    return filtered.filter(r => r.distance >= distanceMin && r.distance <= distanceMax);
   }, [routes, difficultyFilter, distanceMin, distanceMax]);
-
-  const filteredRoutes = getFilteredRoutes();
 
   const handlePM5Data = useCallback((data: PM5Data) => {
     // Always update the service synchronously — no React render triggered here.
@@ -240,7 +235,7 @@ function App() {
           setCurrentSession(prev => prev ? { ...prev } : null);
 
           // Auto-end when distance reaches route length (skip in Playwright harness).
-          if (selectedRoute && typeof window !== 'undefined' && !(window as any).__PLAYWRIGHT_TESTING) {
+          if (selectedRoute && typeof window !== 'undefined' && !window.__PLAYWRIGHT_TESTING) {
             const routeDistanceMeters = selectedRoute.distance * 1000;
             const completionThreshold = routeDistanceMeters * 0.995;
             if (latest.distance >= completionThreshold && routeDistanceMeters > 0) {
@@ -254,14 +249,12 @@ function App() {
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
-    try {
-      // @ts-ignore
-      (window as any).__PM5_DATA = pm5Data;
-    } catch (e) { /* ignore during SSR */ }
+    if (typeof window !== 'undefined') {
+      window.__PM5_DATA = pm5Data ?? undefined;
+    }
   }, [pm5Data]);
 
-  const handleHeartRateSample = useCallback((bpm: number) => {
-    void bpm;
+  const handleHeartRateSample = useCallback((_bpm: number) => {
     if (isWorkoutActive) {
       requestAnimationFrame(() => {
         const session = workoutService.getCurrentSession();
@@ -487,7 +480,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
         <aside
           className={
             `app-sidebar ${
-              isWorkoutActive && currentView === 'workout' && !(window as any).__PLAYWRIGHT_TESTING
+              isWorkoutActive && currentView === 'workout' && !window.__PLAYWRIGHT_TESTING
                 ? 'app-sidebar--hidden'
                 : ''
             }`
@@ -611,11 +604,11 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
-                    {getPersonalBest(selectedRoute.id) && (
+                    {(() => { const pb = getPersonalBest(selectedRoute.id); return pb && (
                       <span className="meta-badge pb-badge">
-                        🏆 PB: {getPersonalBest(selectedRoute.id)?.averagePace}s/500m
+                        🏆 PB: {pb.averagePace}s/500m
                       </span>
-                    )}
+                    ); })()}
                   </div>
 
                   <div className="route-tags">
@@ -711,7 +704,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     distanceMeters={pm5Data?.distance} 
                     isPlaying={isWorkoutActive && sessionState === 'active'} 
                     cadence={pm5Data?.cadence} 
-                    performanceMode={(window as any).__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                    performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
                     intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
                     debugMode={debugMode}
                   />

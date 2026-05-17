@@ -53,6 +53,8 @@ export function usePhysicsEngine() {
   const [boatState, setBoatState] = useState<BoatState>(DEFAULT_STATE);
   const [workerLatency, setWorkerLatency] = useState<WorkerLatency>(DEFAULT_LATENCY);
   const wasmReadyRef = useRef(false);
+  // Keep a ref so dispatchTick can read velocity without being recreated each state update
+  const velocityRef = useRef(0);
 
   // Running JS-fallback position accumulator
   const jsPositionRef = useRef(0);
@@ -67,7 +69,7 @@ export function usePhysicsEngine() {
     // Skip the Wasm Worker during Playwright E2E tests — the JS fallback is
     // sufficient for all E2E assertions and avoids Worker init overhead that
     // would push the test past its 90 s timeout.
-    if ((window as any).__PLAYWRIGHT_TESTING) {
+    if (window.__PLAYWRIGHT_TESTING) {
       wasmReadyRef.current = false;
       return;
     }
@@ -109,6 +111,7 @@ export function usePhysicsEngine() {
             strokeCycleT: msg.strokeCycleT as number,
             acceleration: msg.acceleration as number,
           });
+          velocityRef.current = msg.velocityMps as number;
         }
         // Silently ignore ERROR messages in production; worker logs them.
       });
@@ -152,7 +155,7 @@ export function usePhysicsEngine() {
         // If the Wasm engine has built up velocity, use it.
         // When watts=0 (power not yet plumbed), fall back to JS pace formula so
         // the caller always gets a meaningful speed — identical to pre-Wasm behaviour.
-        const wasmSpeed = boatState.velocityMps;
+        const wasmSpeed = velocityRef.current;
         if (wasmSpeed > 0) return wasmSpeed;
         return jsSpeedFromPm5(pm5Data);
       }
@@ -165,7 +168,7 @@ export function usePhysicsEngine() {
       jsPositionRef.current += speed * dt;
       return speed;
     },
-    [boatState.velocityMps],
+    [],
   );
 
   const resetEngine = useCallback(() => {
