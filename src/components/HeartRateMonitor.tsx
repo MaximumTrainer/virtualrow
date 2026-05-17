@@ -4,9 +4,11 @@ import './BluetoothDevice.css';
 
 interface HeartRateMonitorProps {
   onSample?: (bpm: number) => void;
+  onConnected?: () => void;
+  onDisconnected?: () => void;
 }
 
-export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample }) => {
+export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample, onConnected, onDisconnected }) => {
   const [connected, setConnected] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
   const [avg, setAvg] = useState<number | null>(null);
@@ -25,9 +27,15 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample }) 
       }
       if (onSample) onSample(sample.bpm);
     };
-    const handleConnected = () => setConnected(true);
-    const handleDisconnected = () => setConnected(false);
-    const handleError = (e: any) => setError(e?.message || 'HR error');
+    const handleConnected = () => {
+      setConnected(true);
+      onConnected?.();
+    };
+    const handleDisconnected = () => {
+      setConnected(false);
+      onDisconnected?.();
+    };
+    const handleError = (e: unknown) => setError((e instanceof Error ? e.message : String(e)) || 'HR error');
 
     heartRateBluetoothService.on('heartRate', handleHR);
     heartRateBluetoothService.on('connected', handleConnected);
@@ -39,7 +47,7 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample }) 
       heartRateBluetoothService.off('disconnected', handleDisconnected);
       heartRateBluetoothService.off('error', handleError);
     };
-  }, [onSample]);
+  }, [onSample, onConnected, onDisconnected]);
 
   const connect = async () => {
     setError(null);

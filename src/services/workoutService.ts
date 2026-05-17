@@ -4,7 +4,13 @@ export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
 
-  startSession(routeId: string, routeName: string, structuredWorkoutId?: string): WorkoutSession {
+  startSession(
+    routeId: string,
+    routeName: string,
+    structuredWorkoutId?: string,
+    rowerType?: 'pm5' | 'ftms',
+    hrConnectedAtStart?: boolean,
+  ): WorkoutSession {
     const session: WorkoutSession = {
       id: Date.now().toString(),
       routeId,
@@ -18,6 +24,8 @@ export class WorkoutService {
       isActive: true,
       heartRateSamples: [],
       structuredWorkoutId,
+      rowerType,
+      hrConnectedAtStart,
     };
 
     this.currentSession = session;

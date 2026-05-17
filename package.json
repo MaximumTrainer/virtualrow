@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "wasm:build": "wasm-pack build crates/virtualrow-physics --target web --out-dir ../../src/wasm-pkg",
+    "bench:physics": "node scripts/bench-physics.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -15,6 +17,9 @@
     "test:e2e": "npx playwright test --config=playwright/playwright.config.ts",
     "test:e2e:ci": "npx playwright test --config=playwright/playwright.config.ci.ts --retries=2",
     "start:sim": "node ./playwright/simulators/sim-server.cjs",
+    "start:sim:bg": "node scripts/start-sim-bg.mjs",
+    "stop:sim": "node scripts/stop-sim.mjs",
+    "kill:ports": "node scripts/kill-ports.mjs 9001 9002",
     "generate:environment-assets": "node scripts/generate-environment-assets.cjs"
   },
   "dependencies": {
@@ -50,7 +55,10 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.3",
     "vite": "^7.2.2",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0",
     "vitest": "^1.6.0",
-    "ws": "^8.17.0"
+    "ws": "^8.17.0",
+    "wait-on": "^8.0.1"
   }
 }
