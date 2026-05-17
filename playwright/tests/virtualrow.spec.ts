@@ -395,7 +395,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.click('button:has-text("Connect PM5")');
     let pm5Connected = false;
     try {
-      await waitForPM5Connected(page, 5000);
+      await waitForPM5Connected(page);
       pm5Connected = true;
       await highlightElement(page, '.device-status', 'green');
       await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
@@ -445,7 +445,15 @@ test.describe('Simulated e2e route playback', () => {
 
     if (pm5Connected) {
       const startBtn = page.locator('.btn-start-workout');
-      await expect(startBtn).toBeEnabled({ timeout: 5000 });
+      // Use waitForFunction with extended timeout: the button requires both PM5 and HR to be
+      // connected (React state). CI machines can be slow to propagate RAF-based state updates.
+      await page.waitForFunction(
+        () => {
+          const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
+          return !!(btn && !btn.disabled);
+        },
+        { timeout: 15_000 },
+      );
       await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
       await captureTestEvidence(page, testInfo, '08-before-workout-start');
       await clearAnnotations(page);
@@ -651,7 +659,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.click('button:has-text("Connect PM5")');
     let pm5Connected = false;
     try {
-      await waitForPM5Connected(page, 5000);
+      await waitForPM5Connected(page);
       pm5Connected = true;
     } catch (e) {
       pm5Connected = false;

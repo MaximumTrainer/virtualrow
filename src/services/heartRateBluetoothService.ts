@@ -11,7 +11,7 @@ export class HeartRateBluetoothService {
   private samples: HeartRateSample[] = [];
   // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
   private suppressDisconnectUntil = 0;
-  private readonly DISCONNECT_SUPPRESSION_MS = 750;
+  private readonly DISCONNECT_SUPPRESSION_MS = 2000;
 
   // Standard UUIDs
   private readonly HR_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb'; // Heart Rate Service

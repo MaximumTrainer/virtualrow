@@ -5,6 +5,9 @@ export class Concept2BluetoothService {
   private txChar: BluetoothRemoteGATTCharacteristic | null = null;
   private pm5Wrapper: any | null = null;
   private listeners: Map<string, Function[]> = new Map();
+  // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
+  private suppressDisconnectUntil = 0;
+  private readonly DISCONNECT_SUPPRESSION_MS = 2000;
   private pm5Data: PM5Data = {
     pace: 0,
     distance: 0,
@@ -31,7 +34,10 @@ export class Concept2BluetoothService {
         () => this.emit('connecting', {}),
         // Note: Read device name from pm5Wrapper.device since bluetoothService.device 
         // isn't set until after doConnect() returns
-        () => this.emit('connected', { deviceName: this.pm5Wrapper?.device?.name || 'PM5' }),
+        () => {
+          this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
+          this.emit('connected', { deviceName: this.pm5Wrapper?.device?.name || 'PM5' });
+        },
         () => this.handleDisconnect(),
         // Multiplexed/misc messages
         (msg: any) => this.handlePM5Message(msg)
@@ -88,6 +94,8 @@ export class Concept2BluetoothService {
   }
 
   async disconnect(): Promise<void> {
+    // Suppress spurious disconnects fired shortly after connecting (e.g. React event replay)
+    if (performance.now() < this.suppressDisconnectUntil) return;
     try {
       if (this.pm5Wrapper) {
         await this.pm5Wrapper.doDisconnect();

@@ -31,6 +31,9 @@ const ROWER_DATA_CHAR_UUID = '00002ad1-0000-1000-8000-00805f9b34fb';
 export class FTMSBluetoothService {
   private device: BluetoothDevice | null = null;
   private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
+  // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
+  private suppressDisconnectUntil = 0;
+  private readonly DISCONNECT_SUPPRESSION_MS = 2000;
   private latestData: PM5Data = {
     pace: 0,
     distance: 0,
@@ -83,6 +86,7 @@ export class FTMSBluetoothService {
 
       await rowerChar.startNotifications();
 
+      this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
       this.emit('connected', { deviceName: this.device.name ?? 'FTMS Rower' });
       return true;
     } catch (error) {
@@ -99,6 +103,8 @@ export class FTMSBluetoothService {
   }
 
   async disconnect(): Promise<void> {
+    // Suppress spurious disconnects fired shortly after connecting (e.g. React event replay)
+    if (performance.now() < this.suppressDisconnectUntil) return;
     try {
       if (this.device?.gatt?.connected) {
         this.device.gatt.disconnect();
