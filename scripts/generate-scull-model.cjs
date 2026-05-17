@@ -55,12 +55,12 @@ function addCuboid(part, minX, maxX, minY, maxY, minZ, maxZ) {
   );
   // Each face: two triangles, CCW from outside.
   part.indices.push(
-    base + 0, base + 1, base + 3,  base + 0, base + 3, base + 2, // -Z (front when looking +Z)
-    base + 5, base + 4, base + 6,  base + 5, base + 6, base + 7, // +Z
-    base + 4, base + 0, base + 2,  base + 4, base + 2, base + 6, // -X
-    base + 1, base + 5, base + 7,  base + 1, base + 7, base + 3, // +X
-    base + 2, base + 3, base + 7,  base + 2, base + 7, base + 6, // +Y (top)
-    base + 4, base + 5, base + 1,  base + 4, base + 1, base + 0  // -Y (bottom)
+    base + 0, base + 3, base + 1,  base + 0, base + 2, base + 3, // -Z (front when looking +Z)
+    base + 5, base + 6, base + 4,  base + 5, base + 7, base + 6, // +Z
+    base + 4, base + 2, base + 0,  base + 4, base + 6, base + 2, // -X
+    base + 1, base + 7, base + 5,  base + 1, base + 3, base + 7, // +X
+    base + 2, base + 7, base + 3,  base + 2, base + 6, base + 7, // +Y (top)
+    base + 4, base + 1, base + 5,  base + 4, base + 0, base + 1  // -Y (bottom)
   );
 }
 
@@ -103,7 +103,7 @@ function addCylinder(part, axis, a, b, cu, cv, ru, rv, radialSegments) {
     const b0 = ringB[i];
     const b1 = ringB[i2];
     // Winding: outward normals require this order when going A->B along +axis.
-    part.indices.push(a0, b0, b1,  a0, b1, a1);
+    part.indices.push(a0, b1, b0,  a0, a1, b1);
   }
 
   // Cap centers
@@ -160,7 +160,7 @@ function addEllipsoid(part, cx, cy, cz, rx, ry, rz, lat, lon) {
   for (let j = 0; j < lon; j++) {
     const a = base + 1 + j;
     const b = base + 1 + ((j + 1) % lon);
-    part.indices.push(top, a, b);
+    part.indices.push(top, b, a);
   }
   // Middle quads
   for (let i = 0; i < lat - 1; i++) {
@@ -170,14 +170,14 @@ function addEllipsoid(part, cx, cy, cz, rx, ry, rz, lat, lon) {
       const b = base + 1 + i * lon + j2;
       const c = base + 1 + (i + 1) * lon + j;
       const d = base + 1 + (i + 1) * lon + j2;
-      part.indices.push(a, c, d,  a, d, b);
+      part.indices.push(a, d, c,  a, b, d);
     }
   }
   // Bottom fan
   for (let j = 0; j < lon; j++) {
     const a = base + 1 + (lat - 1) * lon + j;
     const b = base + 1 + (lat - 1) * lon + ((j + 1) % lon);
-    part.indices.push(bottom, b, a);
+    part.indices.push(bottom, a, b);
   }
 }
 
@@ -271,7 +271,7 @@ function buildHull(part) {
     // Traverse the ring in CCW order when looking from +Z: top, starboard,
     // bottom, port. Adjacent ring is one z step astern. With the bow at +Z
     // and stations advancing bow -> stern (decreasing z), the quad winding
-    // (va0, vb0, vb1) + (va0, vb1, va1) produces outward-facing normals.
+    // (va0, vb1, vb0) + (va0, va1, vb1) produces outward-facing normals.
     const ringOrder = [RING_TOP, RING_STARBOARD, RING_BOTTOM, RING_PORT];
     for (let k = 0; k < ringOrder.length; k++) {
       const k2 = (k + 1) % ringOrder.length;
@@ -279,7 +279,7 @@ function buildHull(part) {
       const va1 = a + ringOrder[k2];
       const vb0 = b + ringOrder[k];
       const vb1 = b + ringOrder[k2];
-      part.indices.push(va0, vb0, vb1,  va0, vb1, va1);
+      part.indices.push(va0, vb1, vb0,  va0, va1, vb1);
     }
   }
 
@@ -406,7 +406,7 @@ function buildFootStretcher(part) {
 function buildFin(part) {
   // Triangular profile in XY (CCW from +Z), extruded along Z (small width).
   addPrism(part,
-    [[-0.025, -0.060], [0.025, -0.060], [0.0, -0.150]],
+    [[-0.025, -0.060], [0.0, -0.150], [0.025, -0.060]],
     -4.10, -3.90
   );
 }
@@ -653,8 +653,8 @@ function buildGLB(parts, nodeSpecs, materials) {
 //   - JSON + BIN chunks have correct types and consistent lengths
 //   - Every accessor's count fits within its bufferView
 //   - Every primitive's indices reference valid POSITION vertices
-//   - Each mesh is edge-manifold: every undirected edge is shared by at most
-//     two triangles (i.e. no T-junctions or floating geometry)
+//   - Each mesh is watertight: every undirected edge is shared by exactly
+//     two triangles (i.e. no open boundaries and no non-manifold overlaps)
 // ---------------------------------------------------------------------------
 
 function validateGLB(filePath) {
@@ -709,7 +709,7 @@ function validateGLB(filePath) {
     }
   });
 
-  // Per-primitive checks: indices reference valid vertices; mesh is manifold.
+  // Per-primitive checks: indices reference valid vertices; mesh is watertight.
   gltf.meshes.forEach((mesh, mi) => {
     mesh.primitives.forEach((prim, pi) => {
       const posAcc = gltf.accessors[prim.attributes.POSITION];
@@ -724,7 +724,7 @@ function validateGLB(filePath) {
         throw new Error(`Mesh ${mi}.${pi} indices count ${idxAcc.count} not divisible by 3`);
       }
 
-      // Read indices from BIN and validate range + edge-manifold.
+      // Read indices from BIN and validate range + closed edge sharing.
       const bv = gltf.bufferViews[idxAcc.bufferView];
       const start = binStart + bv.byteOffset;
       const indices = new Array(idxAcc.count);
@@ -747,8 +747,8 @@ function validateGLB(filePath) {
         }
       }
       for (const [key, count] of edgeCount) {
-        if (count > 2) {
-          throw new Error(`Mesh ${mi}.${pi} (${mesh.name}) non-manifold edge ${key} shared by ${count} faces`);
+        if (count !== 2) {
+          throw new Error(`Mesh ${mi}.${pi} (${mesh.name}) non-watertight edge ${key} shared by ${count} faces`);
         }
       }
     });
@@ -927,7 +927,7 @@ function main() {
   console.log(`  meshes:    ${gltf.meshes.length}`);
   console.log(`  vertices:  ${totalVerts}`);
   console.log(`  triangles: ${totalTris}`);
-  console.log(`  GLB 2.0 container, JSON+BIN chunks, all primitives manifold ✓`);
+  console.log(`  GLB 2.0 container, JSON+BIN chunks, all primitives watertight ✓`);
 }
 
 main();
