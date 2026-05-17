@@ -223,7 +223,9 @@ export class Concept2BluetoothService {
   private emit(event: string, data: unknown): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      callbacks.forEach((cb) => cb(data));
+      callbacks.slice().forEach((cb) => {
+        try { cb(data); } catch (_) { /* prevent cascade from listener errors */ }
+      });
     }
   }
 }

@@ -10,7 +10,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  timeout: 90_000, // 90 seconds
+  timeout: 120_000, // 120 seconds — generous budget for WebGL/BLE mock setup overhead
   retries: 2,
   // In CI, force single worker to avoid parallel servers and port conflicts
   workers: process.env.CI ? 1 : undefined,

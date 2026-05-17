@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { BluetoothDeviceState, PM5Data } from '../types/index';
 import { bluetoothService } from '../services/bluetoothService';
 import './BluetoothDevice.css';
@@ -22,41 +22,54 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
 
+  // RAF-based throttle for local PM5 display — avoids renders from inside the WS/CDP stack.
+  const latestPM5DataRef = useRef<PM5Data | null>(null);
+  const pm5RafScheduledRef = useRef(false);
+
   useEffect(() => {
-    // Set up event listeners
     const handleConnected = (data: unknown) => {
       const connectionData = data as { deviceName?: string };
-      setDeviceState((prev) => ({
-        ...prev,
-        isConnected: true,
-        deviceName: connectionData.deviceName,
-      }));
-      setIsConnecting(false);
-      onConnected?.(connectionData.deviceName || 'Concept2 PM5');
+      const deviceName = connectionData.deviceName || 'Concept2 PM5';
+      // Defer state updates to RAF so React renders from a clean call stack,
+      // preventing "Maximum call stack size exceeded" under Playwright CDP.
+      requestAnimationFrame(() => {
+        setDeviceState((prev) => ({ ...prev, isConnected: true, deviceName }));
+        setIsConnecting(false);
+        onConnected?.(deviceName);
+      });
     };
 
     const handleDisconnectedEvent = () => {
-      setDeviceState({
-        isConnected: false,
+      requestAnimationFrame(() => {
+        setDeviceState({ isConnected: false });
+        setPM5Data(null);
+        onDisconnected?.();
       });
-      setPM5Data(null);
-      onDisconnected?.();
     };
 
     const handleData = (data: PM5Data) => {
-      setPM5Data(data);
+      // Notify App synchronously so service-level updates are immediate.
+      // App.tsx's handlePM5Data already defers its own setState to RAF.
       onDataReceived?.(data);
+      // Throttle the local display update to prevent renders inside the WS stack.
+      latestPM5DataRef.current = data;
+      if (!pm5RafScheduledRef.current) {
+        pm5RafScheduledRef.current = true;
+        requestAnimationFrame(() => {
+          pm5RafScheduledRef.current = false;
+          if (latestPM5DataRef.current) setPM5Data(latestPM5DataRef.current);
+        });
+      }
     };
 
     const handleError = (error: unknown) => {
       const errorData = error as { message?: string };
       const errorMsg = errorData.message || 'Unknown error occurred';
-      setDeviceState((prev) => ({
-        ...prev,
-        error: errorMsg,
-      }));
-      setIsConnecting(false);
-      onError?.(errorMsg);
+      requestAnimationFrame(() => {
+        setDeviceState((prev) => ({ ...prev, error: errorMsg }));
+        setIsConnecting(false);
+        onError?.(errorMsg);
+      });
     };
 
     bluetoothService.on('connected', handleConnected);

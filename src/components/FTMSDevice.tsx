@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { BluetoothDeviceState, PM5Data } from '../types/index';
 import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
 import './BluetoothDevice.css';
@@ -29,31 +29,49 @@ export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [rowerData, setRowerData] = useState<PM5Data | null>(null);
 
+  // RAF-based throttle for local FTMS display — avoids renders from inside the WS/CDP stack.
+  const latestRowerDataRef = useRef<PM5Data | null>(null);
+  const ftmsRafScheduledRef = useRef(false);
+
   useEffect(() => {
     const handleConnected = (data: unknown) => {
       const d = data as { deviceName?: string };
-      setDeviceState((prev) => ({ ...prev, isConnected: true, deviceName: d.deviceName }));
-      setIsConnecting(false);
-      onConnected?.(d.deviceName ?? 'FTMS Rower');
+      const deviceName = d.deviceName ?? 'FTMS Rower';
+      requestAnimationFrame(() => {
+        setDeviceState((prev) => ({ ...prev, isConnected: true, deviceName }));
+        setIsConnecting(false);
+        onConnected?.(deviceName);
+      });
     };
 
     const handleDisconnectedEvent = () => {
-      setDeviceState({ isConnected: false });
-      setRowerData(null);
-      onDisconnected?.();
+      requestAnimationFrame(() => {
+        setDeviceState({ isConnected: false });
+        setRowerData(null);
+        onDisconnected?.();
+      });
     };
 
     const handleData = (data: PM5Data) => {
-      setRowerData(data);
       onDataReceived?.(data);
+      latestRowerDataRef.current = data;
+      if (!ftmsRafScheduledRef.current) {
+        ftmsRafScheduledRef.current = true;
+        requestAnimationFrame(() => {
+          ftmsRafScheduledRef.current = false;
+          if (latestRowerDataRef.current) setRowerData(latestRowerDataRef.current);
+        });
+      }
     };
 
     const handleError = (error: unknown) => {
       const e = error as { message?: string };
       const msg = e.message ?? 'Unknown error';
-      setDeviceState((prev) => ({ ...prev, error: msg }));
-      setIsConnecting(false);
-      onError?.(msg);
+      requestAnimationFrame(() => {
+        setDeviceState((prev) => ({ ...prev, error: msg }));
+        setIsConnecting(false);
+        onError?.(msg);
+      });
     };
 
     ftmsBluetoothService.on('connected', handleConnected);

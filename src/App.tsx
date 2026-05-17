@@ -44,6 +44,10 @@ function App() {
   // Re-entrancy guards — prevent recursive session start or HR update loops
   const isStartingSessionRef = useRef(false);
   const isProcessingHrUpdateRef = useRef(false);
+  // RAF-based throttle for PM5/HR state updates — avoids stack overflow when
+  // Playwright CDP adds extra frames to the WS→characteristic notification path.
+  const pm5DataPendingRef = useRef<PM5Data | null>(null);
+  const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
   // Session state for the overlay UI
@@ -205,37 +209,46 @@ function App() {
   const filteredRoutes = getFilteredRoutes();
 
   const handlePM5Data = useCallback((data: PM5Data) => {
-    setPM5Data(data);
-    // Always update the service — it guards against no-session internally.
-    // This avoids stale-closure issues where the React effect hasn't re-registered
-    // the listener yet after workout start, but the service session is already live.
+    // Always update the service synchronously — no React render triggered here.
     workoutService.updateSessionWithPM5Data(data);
-    if (isWorkoutActive) {
-      // Update structured workout progress if active
-      if (selectedWorkout) {
-        const progress = workoutGeneratorService.updateProgress(data);
-        if (progress) {
-          setWorkoutProgress(progress);
-          workoutService.updateWorkoutProgress(progress);
-        }
-      }
-      
-      // If PM5 gives HR, ensure samples state updates from session source
-      if (data.heartRate) {
-        const updated = workoutService.getCurrentSession();
-        setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
-      }
-      setCurrentSession(prev => prev ? { ...prev } : null);
 
-      // If this workout is tied to a route, automatically end when distance reaches route length.
-      // Skip this behavior under Playwright harness to keep E2E tests stable.
-      if (selectedRoute && typeof window !== 'undefined' && !(window as any).__PLAYWRIGHT_TESTING) {
-        const routeDistanceMeters = selectedRoute.distance * 1000; // route distance is stored in km
-        const completionThreshold = routeDistanceMeters * 0.995; // small tolerance to avoid early cutoff
-        if (data.distance >= completionThreshold && routeDistanceMeters > 0) {
-          handleEndWorkout();
+    // Defer React state updates to a requestAnimationFrame so they run from a
+    // clean call-stack instead of deep inside the WS→CDP notification chain.
+    // This prevents "Maximum call stack size exceeded" overflows during testing.
+    pm5DataPendingRef.current = data;
+    if (!pm5RafScheduledRef.current) {
+      pm5RafScheduledRef.current = true;
+      requestAnimationFrame(() => {
+        pm5RafScheduledRef.current = false;
+        const latest = pm5DataPendingRef.current;
+        if (!latest) return;
+
+        setPM5Data(latest);
+
+        if (isWorkoutActive) {
+          if (selectedWorkout) {
+            const progress = workoutGeneratorService.updateProgress(latest);
+            if (progress) {
+              setWorkoutProgress(progress);
+              workoutService.updateWorkoutProgress(progress);
+            }
+          }
+          if (latest.heartRate) {
+            const updated = workoutService.getCurrentSession();
+            setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
+          }
+          setCurrentSession(prev => prev ? { ...prev } : null);
+
+          // Auto-end when distance reaches route length (skip in Playwright harness).
+          if (selectedRoute && typeof window !== 'undefined' && !(window as any).__PLAYWRIGHT_TESTING) {
+            const routeDistanceMeters = selectedRoute.distance * 1000;
+            const completionThreshold = routeDistanceMeters * 0.995;
+            if (latest.distance >= completionThreshold && routeDistanceMeters > 0) {
+              handleEndWorkout();
+            }
+          }
         }
-      }
+      });
     }
   }, [isWorkoutActive, selectedWorkout, selectedRoute, handleEndWorkout]);
 
@@ -248,11 +261,13 @@ function App() {
   }, [pm5Data]);
 
   const handleHeartRateSample = useCallback((bpm: number) => {
-    void bpm; // use value trivial to avoid unused parameter error
+    void bpm;
     if (isWorkoutActive) {
-      const session = workoutService.getCurrentSession();
-      setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
-      setCurrentSession(prev => prev ? { ...prev } : null);
+      requestAnimationFrame(() => {
+        const session = workoutService.getCurrentSession();
+        setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
+        setCurrentSession(prev => prev ? { ...prev } : null);
+      });
     }
   }, [isWorkoutActive]);
 
@@ -262,16 +277,18 @@ function App() {
   // workout session regardless of which view is active.
   useEffect(() => {
     const onHR = ({ bpm }: { bpm: number }) => {
-      // Guard against recursive re-entry (e.g. if updateSessionHeartRate triggers another heartRate event)
+      // Always update the service synchronously; defer state updates to RAF.
       if (isProcessingHrUpdateRef.current) return;
       isProcessingHrUpdateRef.current = true;
       try {
         workoutService.updateSessionHeartRate(bpm);
-        const session = workoutService.getCurrentSession();
-        setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
       } finally {
         isProcessingHrUpdateRef.current = false;
       }
+      requestAnimationFrame(() => {
+        const session = workoutService.getCurrentSession();
+        setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
+      });
     };
     heartRateBluetoothService.on('heartRate', onHR);
     return () => heartRateBluetoothService.off('heartRate', onHR);
@@ -279,8 +296,8 @@ function App() {
 
   // Track HR monitor connectivity for the lifetime of the app
   useEffect(() => {
-    const onConnected = () => setHrConnected(true);
-    const onDisconnected = () => setHrConnected(false);
+    const onConnected = () => requestAnimationFrame(() => setHrConnected(true));
+    const onDisconnected = () => requestAnimationFrame(() => setHrConnected(false));
     heartRateBluetoothService.on('connected', onConnected);
     heartRateBluetoothService.on('disconnected', onDisconnected);
     return () => {

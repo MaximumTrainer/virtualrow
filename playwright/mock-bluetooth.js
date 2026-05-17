@@ -194,9 +194,9 @@
 
   // Define a simple global simulator API to be used by Playwright tests
   window.__simulator = {
-    emitPM5: (payload) => ws.send(JSON.stringify({ type: 'pm5', payload })),
-    emitFTMS: (payload) => ws.send(JSON.stringify({ type: 'ftms', payload })),
-    emitHR: (payload) => ws.send(JSON.stringify({ type: 'hr', payload })),
+    emitPM5: (payload) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'pm5', payload })); },
+    emitFTMS: (payload) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ftms', payload })); },
+    emitHR: (payload) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'hr', payload })); },
     startSequence: async (id, sequence) => {
       // POST to control HTTP endpoint to start a sequence on the simulator
       try {

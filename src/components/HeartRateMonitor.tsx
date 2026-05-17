@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
 import './BluetoothDevice.css';
 
@@ -10,32 +10,56 @@ interface HeartRateMonitorProps {
 
 export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample, onConnected, onDisconnected }) => {
   const [connected, setConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
   const [avg, setAvg] = useState<number | null>(null);
   const [max, setMax] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // RAF-based throttle for HR metric display — avoids renders from inside the WS/CDP stack.
+  const latestBpmRef = useRef<number | null>(null);
+  const hrRafScheduledRef = useRef(false);
+
   useEffect(() => {
     const handleHR = (sample: { bpm: number }) => {
-      setCurrent(sample.bpm);
-      const samples = heartRateBluetoothService.getSamples();
-      const values = samples.map(s => s.bpm);
-      if (values.length) {
-        const average = Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
-        setAvg(average);
-        setMax(values.reduce((m, v) => v > m ? v : m, values[0]));
+      // Notify parent synchronously so App-level service updates are immediate.
+      onSample?.(sample.bpm);
+      // Defer UI state updates to RAF: runs with a clean stack, not inside
+      // the WS→characteristic notification chain that causes stack overflows.
+      latestBpmRef.current = sample.bpm;
+      if (!hrRafScheduledRef.current) {
+        hrRafScheduledRef.current = true;
+        requestAnimationFrame(() => {
+          hrRafScheduledRef.current = false;
+          const bpm = latestBpmRef.current;
+          if (bpm == null) return;
+          setCurrent(bpm);
+          const samples = heartRateBluetoothService.getSamples();
+          const values = samples.map(s => s.bpm);
+          if (values.length) {
+            setAvg(Math.round(values.reduce((sum, v) => sum + v, 0) / values.length));
+            setMax(values.reduce((m, v) => v > m ? v : m, values[0]));
+          }
+        });
       }
-      if (onSample) onSample(sample.bpm);
     };
     const handleConnected = () => {
-      setConnected(true);
-      onConnected?.();
+      requestAnimationFrame(() => {
+        setConnected(true);
+        onConnected?.();
+      });
     };
     const handleDisconnected = () => {
-      setConnected(false);
-      onDisconnected?.();
+      requestAnimationFrame(() => {
+        setConnected(false);
+        onDisconnected?.();
+      });
     };
-    const handleError = (e: unknown) => setError((e instanceof Error ? e.message : String(e)) || 'HR error');
+    const handleError = (e: unknown) => {
+      requestAnimationFrame(() => {
+        setError((e instanceof Error ? e.message : String(e)) || 'HR error');
+      });
+    };
 
     heartRateBluetoothService.on('heartRate', handleHR);
     heartRateBluetoothService.on('connected', handleConnected);
@@ -50,8 +74,14 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample, on
   }, [onSample, onConnected, onDisconnected]);
 
   const connect = async () => {
+    if (isConnecting) return;
+    setIsConnecting(true);
     setError(null);
-    await heartRateBluetoothService.connect();
+    try {
+      await heartRateBluetoothService.connect();
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const disconnect = async () => {
@@ -109,9 +139,11 @@ export const HeartRateMonitor: React.FC<HeartRateMonitorProps> = ({ onSample, on
 
       <div className="device-actions">
         {!connected ? (
-          <button className="btn btn-connect" onClick={connect}>Connect HR Monitor</button>
+          <button key="hr-connect" className="btn btn-connect" onClick={connect} disabled={isConnecting}>
+            {isConnecting ? 'Connecting...' : 'Connect HR Monitor'}
+          </button>
         ) : (
-          <button className="btn btn-disconnect" onClick={disconnect}>Disconnect</button>
+          <button key="hr-disconnect" className="btn btn-disconnect" onClick={disconnect}>Disconnect</button>
         )}
       </div>
     </div>

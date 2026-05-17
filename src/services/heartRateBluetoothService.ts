@@ -9,6 +9,9 @@ export class HeartRateBluetoothService {
   private hrChar: BluetoothRemoteGATTCharacteristic | null = null;
   private listeners: Map<string, Function[]> = new Map();
   private samples: HeartRateSample[] = [];
+  // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
+  private suppressDisconnectUntil = 0;
+  private readonly DISCONNECT_SUPPRESSION_MS = 750;
 
   // Standard UUIDs
   private readonly HR_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb'; // Heart Rate Service
@@ -19,6 +22,7 @@ export class HeartRateBluetoothService {
       if (!navigator.bluetooth) throw new Error('Web Bluetooth API not supported');
       // Guard against duplicate registration if already connected
       if (this.hrChar && this.device?.gatt?.connected) {
+        this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
         this.emit('connected', { name: this.device.name });
         return true;
       }
@@ -37,6 +41,7 @@ export class HeartRateBluetoothService {
       await this.hrChar.startNotifications();
       this.hrChar.addEventListener('characteristicvaluechanged', (e) => this.handleHRNotification(e));
 
+      this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
       this.emit('connected', { name: this.device.name });
       return true;
     } catch (err) {
@@ -47,6 +52,8 @@ export class HeartRateBluetoothService {
   }
 
   async disconnect() {
+    // Suppress spurious disconnects fired shortly after connecting (e.g. React event replay)
+    if (performance.now() < this.suppressDisconnectUntil) return;
     try {
       if (this.hrChar) await this.hrChar.stopNotifications();
       if (this.device?.gatt?.connected) this.device.gatt.disconnect();
