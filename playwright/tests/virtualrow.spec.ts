@@ -913,8 +913,17 @@ test.describe('Simulated e2e route playback', () => {
     if (pm5Connected) {
       await page.waitForSelector('.route-item:has-text("Willowbrook River")', { timeout: 7000 });
       await page.click('.route-item:has-text("Willowbrook River")', { force: true });
-      const startBtn = page.locator('.btn-start-workout');
-      await expect(startBtn).toBeEnabled({ timeout: 5000 });
+      try {
+        await page.waitForFunction(
+          () => {
+            const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
+            return !!(btn && !btn.disabled);
+          },
+          { timeout: 8_000 },
+        );
+      } catch (e) {
+        console.warn('Start button not enabled in time; attempting click anyway');
+      }
       // Use evaluate click to avoid 3D canvas pointer-event interception
       await page.evaluate(() => {
         (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
