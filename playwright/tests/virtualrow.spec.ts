@@ -986,3 +986,164 @@ test.describe('Simulated e2e route playback', () => {
     console.log(`[visual-capture] 5 gameplay frames captured. Final progress: ${(finalProgress * 100).toFixed(1)}%`);
   });
 });
+
+// ===========================================================================
+// Docs screenshots — captures in-game visuals published to docs/
+// ===========================================================================
+test.describe('docs screenshots', () => {
+  const docsDir = path.resolve(__dirname, '../../docs');
+
+  test.beforeEach(async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('/');
+    await page.waitForSelector('.route-item');
+  });
+
+  test('captures and publishes screenshots for documentation', async ({ page }) => {
+    // 1. Route selection screen
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-route-selection.png'), fullPage: true });
+
+    // 2. Connect PM5 and HR
+    await page.waitForSelector('button:has-text("Connect PM5")');
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+
+    // Select Willowbrook River route (fallback to first route if not found)
+    const willowbrookRoute = page.locator('.route-item:has-text("Willowbrook River")');
+    if ((await willowbrookRoute.count()) > 0) {
+      await willowbrookRoute.click({ force: true });
+    } else {
+      await page.locator('.route-item').first().click({ force: true });
+    }
+
+    // Wait for start button to become enabled
+    await page.waitForFunction(
+      () => {
+        const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
+        return !!(btn && !btn.disabled);
+      },
+      { timeout: 10_000 },
+    );
+
+    // Start workout via evaluate to bypass 3D canvas pointer-event interception
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+
+    await page.waitForFunction(
+      () => !!(window as any).__workoutService?.getCurrentSession?.(),
+      { timeout: 5000 },
+    );
+
+    // Inject realistic PM5 + HR data via mock characteristics (no sim server required)
+    await page.evaluate(() => {
+      const buf = new ArrayBuffer(20);
+      const dv = new DataView(buf);
+      dv.setUint16(0, Math.round(118 * 100), true); // pace (s/500m × 100)
+      dv.setUint32(2, 1500, true);                  // distance m
+      dv.setUint32(6, 180, true);                   // elapsedTime s
+      dv.setUint16(10, 195, true);                  // power W
+      dv.setUint8(13, 26);                          // cadence spm
+      dv.setUint8(14, 148);                         // heart rate bpm
+      const w = window as any;
+      if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
+      if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
+
+      // HR characteristic
+      const hrBuf = new ArrayBuffer(2);
+      const hrDv = new DataView(hrBuf);
+      hrDv.setUint8(0, 0x00);
+      hrDv.setUint8(1, 148);
+      if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+    });
+
+    // Wait for RAF-deferred React state update
+    await page.waitForTimeout(500);
+
+    // 3. Activity screen (full page)
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-activity.png'), fullPage: true });
+
+    // 4. 3D canvas close-up
+    try {
+      const container = page.locator('.rower3d-canvas-container');
+      if ((await container.count()) > 0) {
+        await container.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), type: 'png' });
+      } else {
+        await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
+      }
+    } catch {
+      try {
+        await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
+      } catch { /* ignore */ }
+    }
+
+    // 5. End the live session, inject past sessions for a populated history view
+    await page.evaluate(() => {
+      const svc = (window as any).__workoutService;
+      if (svc?.endSession) svc.endSession();
+
+      const base = Date.now();
+      const pastSessions = [
+        {
+          id: 'mock-hist-1',
+          routeId: 'willowbrook',
+          routeName: 'Willowbrook River',
+          startTime: new Date(base - 14 * 86_400_000),
+          endTime:   new Date(base - 14 * 86_400_000 + 2_400_000),
+          duration: 2400, distance: 5120, averagePace: 118, calories: 295,
+          splits: [], isActive: false, heartRateAvg: 151, heartRateMax: 168,
+          rowerType: 'pm5', hrConnectedAtStart: true,
+        },
+        {
+          id: 'mock-hist-2',
+          routeId: 'thames-path',
+          routeName: 'Thames Path',
+          startTime: new Date(base - 7 * 86_400_000),
+          endTime:   new Date(base - 7 * 86_400_000 + 1_800_000),
+          duration: 1800, distance: 4000, averagePace: 112, calories: 248,
+          splits: [], isActive: false, heartRateAvg: 158, heartRateMax: 176,
+          rowerType: 'pm5', hrConnectedAtStart: true,
+        },
+        {
+          id: 'mock-hist-3',
+          routeId: 'lake-tahoe',
+          routeName: 'Lake Tahoe Circuit',
+          startTime: new Date(base - 3 * 86_400_000),
+          endTime:   new Date(base - 3 * 86_400_000 + 3_000_000),
+          duration: 3000, distance: 6500, averagePace: 116, calories: 380,
+          splits: [], isActive: false, heartRateAvg: 162, heartRateMax: 182,
+          rowerType: 'pm5', hrConnectedAtStart: true,
+        },
+      ];
+
+      // Push into in-memory store (private at TypeScript level; accessible at runtime)
+      pastSessions.forEach((s) => (svc as any).sessions.push(s));
+      // Trigger React re-render via the session-ended event the app already listens to
+      pastSessions.forEach((s) =>
+        window.dispatchEvent(new CustomEvent('virtualrow:sessionEnded', { detail: s })),
+      );
+    });
+
+    // Navigate to History tab
+    await page.evaluate(() => {
+      const tabs = Array.from(document.querySelectorAll('.nav-tab'));
+      const historyTab = tabs.find((t) => t.textContent?.includes('History'));
+      (historyTab as HTMLElement)?.click();
+    });
+
+    await page.waitForSelector('.history-item', { timeout: 5000 });
+
+    // 6. History screen
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-history.png'), fullPage: true });
+  });
+});
