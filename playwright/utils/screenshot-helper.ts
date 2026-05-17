@@ -4,6 +4,151 @@ import { Page, TestInfo } from '@playwright/test';
  * Helper utilities for capturing test evidence screenshots with error highlighting
  */
 
+/** Snapshot of all exposed Rower3D telemetry globals at a given moment. */
+export interface GameplayState {
+  speedMps: number;
+  strokePhase: string;
+  distanceM: number;
+  progress: number;
+  oarAngle: number;
+  strokeRate: number;
+  gpuBackend: string;
+  posX: number;
+  posY: number;
+  posZ: number;
+}
+
+/**
+ * Reads live gameplay telemetry from window globals exposed by Rower3D.
+ */
+export async function readGameplayState(page: Page): Promise<GameplayState> {
+  return page.evaluate(() => ({
+    speedMps:    (window as any).__ROWER3D_SPEED_MPS  ?? 0,
+    strokePhase: (window as any).__ROWER3D_STROKE_PHASE ?? 'unknown',
+    distanceM:   (window as any).__ROWER3D_DISTANCE_M  ?? 0,
+    progress:    (window as any).__ROWER3D_POS?.progress ?? 0,
+    oarAngle:    (window as any).__ROWER3D_OAR_ANGLE   ?? 0,
+    strokeRate:  (window as any).__ROWER3D_STROKE_RATE ?? 0,
+    gpuBackend:  (window as any).__ROWER3D_GPU_BACKEND ?? 'unknown',
+    posX:        (window as any).__ROWER3D_POS?.x ?? 0,
+    posY:        (window as any).__ROWER3D_POS?.y ?? 0,
+    posZ:        (window as any).__ROWER3D_POS?.z ?? 0,
+  }));
+}
+
+/**
+ * Injects a semi-transparent telemetry HUD overlay onto the page for gameplay screenshots.
+ * Positioned top-left so it doesn't obscure the boat/water in the centre of the canvas.
+ */
+export async function injectGameplayHUD(
+  page: Page,
+  state: GameplayState,
+  label: string,
+): Promise<void> {
+  const paceStr = state.speedMps > 0
+    ? (() => {
+        const secsPer500 = 500 / state.speedMps;
+        const m = Math.floor(secsPer500 / 60);
+        const s = String(Math.round(secsPer500 % 60)).padStart(2, '0');
+        return `${m}:${s}/500m`;
+      })()
+    : '--:--/500m';
+
+  await page.evaluate(
+    ({ s, lbl, pace }) => {
+      const existing = document.getElementById('pw-gameplay-hud');
+      if (existing) existing.remove();
+
+      const hud = document.createElement('div');
+      hud.id = 'pw-gameplay-hud';
+      hud.style.cssText = `
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        background: rgba(0,0,0,0.82);
+        color: #00ff88;
+        padding: 10px 16px;
+        border-radius: 6px;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 12px;
+        line-height: 1.8;
+        z-index: 999999;
+        border: 1px solid rgba(0,255,136,0.35);
+        min-width: 250px;
+        pointer-events: none;
+      `;
+      hud.innerHTML = `
+        <div style="color:#fff;font-weight:bold;margin-bottom:4px;font-size:13px">🚣 VirtualRow — ${lbl}</div>
+        <div>Speed: <b>${s.speedMps.toFixed(2)} m/s</b> &nbsp;(${pace})</div>
+        <div>Distance: ${s.distanceM.toFixed(0)} m &nbsp;|&nbsp; Progress: ${(s.progress * 100).toFixed(1)}%</div>
+        <div>Stroke Rate: ${s.strokeRate.toFixed(0)} SPM</div>
+        <div>Phase: <b style="color:#ffcc00">${s.strokePhase.toUpperCase()}</b> &nbsp;|&nbsp; Oar: ${s.oarAngle.toFixed(3)} rad</div>
+        <div>GPU: ${s.gpuBackend}</div>
+        <div style="color:#888;font-size:11px">Pos (${s.posX.toFixed(1)}, ${s.posY.toFixed(1)}, ${s.posZ.toFixed(1)})</div>
+      `;
+      document.body.appendChild(hud);
+    },
+    { s: state, lbl: label, pace: paceStr },
+  );
+}
+
+/** Removes the gameplay HUD overlay. */
+export async function removeGameplayHUD(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const hud = document.getElementById('pw-gameplay-hud');
+    if (hud) hud.remove();
+  });
+}
+
+/**
+ * Captures a canvas-only screenshot with a telemetry HUD overlay, then attaches it to the
+ * Playwright HTML report and saves a copy to testInfo.outputDir.
+ *
+ * Use this for gameplay visual validation: each attachment appears inline in the HTML
+ * report so reviewers can inspect rowing models, water shaders, and animation state.
+ *
+ * @param frameIndex - Sequential number used for sort ordering in the report (01, 02, …)
+ * @param label      - Human-readable description of what this frame shows
+ */
+export async function captureGameplayCanvas(
+  page: Page,
+  testInfo: TestInfo,
+  frameIndex: number,
+  label: string,
+): Promise<void> {
+  const state = await readGameplayState(page);
+  await injectGameplayHUD(page, state, label);
+
+  const paddedIndex = String(frameIndex).padStart(2, '0');
+  const sanitized = label.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 60);
+  const timestamp = Date.now();
+  const filePath = `${testInfo.outputDir}/gameplay-${paddedIndex}-${sanitized}-${timestamp}.png`;
+
+  try {
+    const container = page.locator('.rower3d-canvas-container');
+    if (await container.count() > 0) {
+      await container.screenshot({ path: filePath, type: 'png', timeout: 1000 });
+    } else {
+      await page.screenshot({ path: filePath, fullPage: false, timeout: 1000 });
+    }
+  } catch {
+    try {
+      await page.screenshot({ path: filePath, fullPage: false, timeout: 1000 });
+    } catch { /* ignore */ }
+  }
+
+  // Attach inline to Playwright HTML report for visual model/graphics review
+  try {
+    await testInfo.attach(`frame-${paddedIndex} | ${label}`, {
+      path: filePath,
+      contentType: 'image/png',
+    });
+  } catch { /* ignore if file write failed */ }
+
+  await removeGameplayHUD(page);
+}
+
+
 /**
  * Captures a screenshot with a descriptive name based on test context
  * @param page - Playwright page object
