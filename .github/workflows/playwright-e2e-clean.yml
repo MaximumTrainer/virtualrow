@@ -16,112 +16,64 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # Force software rendering for WebGL in headless CI
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       CI: true
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.19'
           cache: 'npm'
+
       - name: Cache node_modules
         uses: actions/cache@v4
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
+
+      - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-      - name: Ensure Playwright browsers installed
+
+      - name: Install Playwright browsers
         run: npm run pretest:e2e
-      - name: Clean up ports 9001 and 9002 (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          # Kill any processes bound to simulator ports to prevent EADDRINUSE errors
-          PIDS=$(sudo lsof -ti :9001 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
-          PIDS=$(sudo lsof -ti :9002 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
-      - name: Extra port cleanup and diagnostics (pre-sim, Unix)
-        if: runner.os != 'Windows'
-        run: |
-          echo 'Processes listening on ports before cleanup:'
-          sudo lsof -i :9001 -i :9002 || true
-          echo 'Killing processes on ports 9001/9002 (if any)'
-          PIDS=$(sudo lsof -ti :9001 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
-          PIDS=$(sudo lsof -ti :9002 2>/dev/null) && [ -n "$PIDS" ] && sudo kill -9 $PIDS || true
-          echo 'Processes listening on ports after cleanup:'
-          sudo lsof -i :9001 -i :9002 || true
-          sleep 2
-      - name: Ensure ports 9001 and 9002 are free (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          echo 'Verifying ports are free before starting simulator...'
-          for port in 9001 9002; do
-            if sudo lsof -i :$port >/dev/null 2>&1; then
-              echo "Port $port is still in use after cleanup. Listing process details:";
-              sudo lsof -i :$port || true
-              echo "Failing the job to avoid spurious EADDRINUSE when starting simulator.";
-              exit 1
-            fi
-          done
-      - name: Clean up ports 9001 and 9002 (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $connections = Get-NetTCPConnection -LocalPort 9001,9002 -ErrorAction SilentlyContinue
-          if ($connections) {
-            $connections |
-              Select-Object -ExpandProperty OwningProcess -Unique |
-              ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
-          }
-      - name: Start simulator server (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          npm run start:sim & echo $! > /tmp/sim.pid
-          # Wait for simulator to be ready
-          npx wait-on http://localhost:9002
-      - name: Start simulator server (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $proc = Start-Process -FilePath npm -ArgumentList "run","start:sim" -PassThru
-          $proc.Id | Out-File -FilePath "$env:RUNNER_TEMP\sim.pid" -Encoding ascii
-          npx wait-on http://localhost:9002
-      - name: Run tests (unit + e2e)
-        run: npm run test && npm run test:e2e:ci
+
+      - name: Clean up simulator ports
+        run: node scripts/kill-ports.mjs 9001 9002
+
+      - name: Start simulator server
+        run: node scripts/start-sim-bg.mjs
+
+      - name: Wait for simulator to be ready
+        run: npx wait-on http://localhost:9002 --timeout 30000
+
+      - name: Run unit tests
+        run: npm run test -- --run
+
+      - name: Run E2E tests
+        run: npm run test:e2e:ci
         timeout-minutes: 30
-      - name: Upload Playwright artifacts (always)
+
+      - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts-${{ github.run_id }}
+          name: playwright-artifacts-${{ matrix.os }}-${{ github.run_id }}
           path: |
             playwright-report
             test-results
             test-results/**/trace.zip
             test-results/**/video
             test-results/**/screenshot
+
       - name: Cleanup simulator
-        if: always() && runner.os != 'Windows'
-        run: |
-          if [ -f /tmp/sim.pid ]; then
-            kill -9 $(cat /tmp/sim.pid) || true
-            rm -f /tmp/sim.pid || true
-          fi
-          ps aux | grep -E "sim-server|start:sim" || true
-      - name: Cleanup simulator (Windows)
-        if: always() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $pidFile = "$env:RUNNER_TEMP\sim.pid"
-          if (Test-Path $pidFile) {
-            $pid = Get-Content $pidFile
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
-          }
+        if: always()
+        run: node scripts/stop-sim.mjs

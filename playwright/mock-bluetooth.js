@@ -78,8 +78,10 @@
   function handleSimulatorMessage(msg) {
     if (msg.type === 'pm5') {
       const dv = buildPM5DataView(msg.payload);
-      // call both PM5 characteristic handlers if present
-      if (window.__pm5Char) window.__pm5Char._dispatch(dv);
+      // Dispatch to all three PM5 characteristic objects so each listener fires exactly once
+      if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
+      if (window.__pm5CharAdditional) window.__pm5CharAdditional._dispatch(dv);
+      if (window.__pm5CharMux) window.__pm5CharMux._dispatch(dv);
     } else if (msg.type === 'ftms') {
       const dv = buildFTMSDataView(msg.payload);
       if (window.__ftmsChar) window.__ftmsChar._dispatch(dv);
@@ -113,8 +115,14 @@
 
   // Expose a simulated navigator.bluetooth override
   const originalBluetooth = navigator.bluetooth;
-  // Pre-create characteristic instances so they are shared across getCharacteristic calls
-  if (!window.__pm5Char) window.__pm5Char = createCharacteristic('pm5');
+  // Pre-create characteristic instances so they are shared across getCharacteristic calls.
+  // Each PM5 UUID gets its own characteristic so that pm5-base.js attaches only one listener
+  // per characteristic — prevents the 3× dispatch accumulation that caused stack overflows.
+  if (!window.__pm5CharGeneral) window.__pm5CharGeneral = createCharacteristic('pm5-general');
+  if (!window.__pm5CharAdditional) window.__pm5CharAdditional = createCharacteristic('pm5-additional');
+  if (!window.__pm5CharMux) window.__pm5CharMux = createCharacteristic('pm5-mux');
+  // Keep __pm5Char as an alias to the multiplexed char for backward compatibility
+  if (!window.__pm5Char) window.__pm5Char = window.__pm5CharMux;
   if (!window.__hrChar) window.__hrChar = createCharacteristic('hr');
   if (!window.__ftmsChar) window.__ftmsChar = createCharacteristic('ftms');
 
@@ -153,14 +161,18 @@
               getPrimaryService: async (uuid) => {
                 return {
                   getCharacteristic: async (charUuid) => {
-                    const s = String(charUuid).toLowerCase();
                     if (uuidMatches(charUuid, '2a37')) {
                       return window.__hrChar;
                     }
                     if (uuidMatches(charUuid, '2ad1')) {
                       return window.__ftmsChar;
                     }
-                    return window.__pm5Char;
+                    // Route PM5 UUIDs to their dedicated characteristic objects so each
+                    // gets exactly one listener instead of all sharing __pm5Char.
+                    if (uuidMatches(charUuid, 'ce060031')) return window.__pm5CharGeneral;
+                    if (uuidMatches(charUuid, 'ce060032')) return window.__pm5CharAdditional;
+                    if (uuidMatches(charUuid, 'ce060080')) return window.__pm5CharMux;
+                    return window.__pm5CharMux;
                   }
                 };
               },

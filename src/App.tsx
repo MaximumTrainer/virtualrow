@@ -28,6 +28,7 @@ function App() {
   const [pm5Connected, setPM5Connected] = useState(false);
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [ftmsConnected, setFtmsConnected] = useState(false);
+  const [hrConnected, setHrConnected] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
@@ -119,15 +120,17 @@ function App() {
   };
 
   const handleStartWorkout = () => {
-    if (!selectedRoute || !selectedRowerConnected) {
-      alert(`Please connect your selected rowing device (${activeRowerLabel}) and select a route`);
+    if (!selectedRoute || !selectedRowerConnected || !hrConnected) {
+      alert(`Please connect your ${activeRowerLabel} and Heart Rate Monitor, and select a route`);
       return;
     }
 
     const session = workoutService.startSession(
       selectedRoute.id, 
       selectedRoute.name,
-      selectedWorkout?.id
+      selectedWorkout?.id,
+      activeRowerType,
+      hrConnected,
     );
     setCurrentSession(session);
     setIsWorkoutActive(true);
@@ -239,9 +242,9 @@ function App() {
     if (isWorkoutActive) {
       const session = workoutService.getCurrentSession();
       setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
-      if (currentSession) setCurrentSession({ ...currentSession });
+      setCurrentSession(prev => prev ? { ...prev } : null);
     }
-  }, [isWorkoutActive, currentSession]);
+  }, [isWorkoutActive]);
 
   // Persistent HR listener — HeartRateMonitor is only mounted on the 'routes' view, so
   // its listener is cleaned up when the workout starts and the view switches.  This effect
@@ -255,6 +258,18 @@ function App() {
     };
     heartRateBluetoothService.on('heartRate', onHR);
     return () => heartRateBluetoothService.off('heartRate', onHR);
+  }, []);
+
+  // Track HR monitor connectivity for the lifetime of the app
+  useEffect(() => {
+    const onConnected = () => setHrConnected(true);
+    const onDisconnected = () => setHrConnected(false);
+    heartRateBluetoothService.on('connected', onConnected);
+    heartRateBluetoothService.on('disconnected', onDisconnected);
+    return () => {
+      heartRateBluetoothService.off('connected', onConnected);
+      heartRateBluetoothService.off('disconnected', onDisconnected);
+    };
   }, []);
 
   const handlePM5Connected = useCallback(() => {
@@ -582,9 +597,13 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   <button
                     className="btn btn-start-workout"
                     onClick={handleStartWorkout}
-                    disabled={!pm5Connected && !ftmsConnected}
+                    disabled={!selectedRowerConnected || !hrConnected}
                   >
-                    {(pm5Connected || ftmsConnected) ? '▶ Start Workout' : '⚠ Connect Rower First'}
+                    {selectedRowerConnected && hrConnected
+                      ? '▶ Start Workout'
+                      : !selectedRowerConnected
+                        ? `⚠ Connect ${activeRowerLabel} First`
+                        : '⚠ Connect HR Monitor First'}
                   </button>
                 </div>
 
@@ -731,7 +750,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                       ↺ Reset
                     </button>
                     <button
-                      className="btn btn-activity-control btn-activity-control--danger"
+                      className="btn btn-activity-control btn-activity-control--danger btn-end-workout"
                       onClick={handleEndWorkout}
                       type="button"
                     >
