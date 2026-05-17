@@ -67,7 +67,6 @@ Ensure you're using a compatible browser with working Bluetooth support.
 - Google Chrome (v56+) - Recommended
 - Microsoft Edge (v79+)
 - Opera (v43+)
-- Samsung Internet (v6+)
 
 **Known limitations:**
 - Firefox: Requires manual flag enabling
@@ -162,4 +161,4 @@ VirtualRow now includes fallback detection and better error messages to help ide
 
 ## Questions?
 
-Check the main README.md file for additional troubleshooting or browse the application's Help section for more information.
+Check the main [README.md](./README.md) file for additional information, or open an issue on GitHub.

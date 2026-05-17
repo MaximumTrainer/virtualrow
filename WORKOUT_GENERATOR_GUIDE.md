@@ -110,12 +110,28 @@ The app automatically advances to the next segment when:
 
 ### Creating Custom Workouts
 
-While the UI doesn't yet support creating workouts, you can:
-1. Create workouts in intervals.icu and import them
-2. Modify the sample workouts in the code
-3. Use the intervals.icu workout builder then import
+The in-app UI does not yet support building workouts from scratch. The recommended approach:
+1. Create a workout in [intervals.icu](https://intervals.icu) using their workout builder
+2. Import it into VirtualRow via the **intervals.icu** import dialog
 
-## intervals.icu Integration
+## Workout History & Export
+
+### Viewing Past Sessions
+
+Navigate to the **History** tab (📊) to see all previous workouts. The tab shows:
+
+- Session date, route name, distance, duration, and average pace
+- Personal best (🏆) for each route — fastest average pace on a completed course
+- Aggregate stats: total workouts, total distance, total time
+
+### Exporting Sessions
+
+Each session in the History tab has export options:
+
+- **Export GPX** — Exports the route track as a GPX file. Contains GPS coordinates for the route, useful for mapping tools and Strava manual upload.
+- **Export FIT** — Exports the session as a JSON-formatted activity file (`.fit.json`). This contains rowing-specific fields (sport: rowing, sub_sport: indoor_rowing) along with pace, power, heart rate, and split data. Note: this is a JSON representation of the FIT structure, not a binary `.fit` file — use a converter tool to produce a true binary FIT file if required by your platform.
+
+
 
 ### What is intervals.icu?
 
@@ -230,19 +246,13 @@ The app checks if your current PM5 metrics fall within target ranges:
 - Check that workout started successfully
 - Verify workout has segments with targets
 
-## Future Enhancements
+## Planned Features
 
-Planned features for workout generator:
+The following enhancements are tracked as open GitHub issues:
 
-- [ ] Workout builder UI (create custom workouts in-app)
-- [ ] Two-way sync with intervals.icu
-- [ ] Automatic workout scheduling based on training plan
-- [ ] TrainingPeaks integration
-- [ ] Audio cues for segment transitions
-- [ ] Real-time coaching feedback
-- [ ] Workout sharing and community library
-- [ ] AI-generated workout suggestions
-- [ ] Adaptive workouts based on performance
+- Workout builder UI (create custom workouts in-app) — see [GitHub Issues](https://github.com/MaximumTrainer/virtualrow/issues)
+- Full intervals.icu OAuth integration (replace API-key import with sign-in flow)
+- Export to binary FIT format (currently exported as JSON-formatted FIT)
 
 ## Resources
 

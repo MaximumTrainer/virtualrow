@@ -41,8 +41,9 @@ External APIs & Hardware
 ```
 src/
  components/
-    Rower3D.tsx              # 3D rowing visualization (2000+ lines)
-    RouteMap.tsx             # 2D route map overlay
+    Rower3D.tsx              # 3D rowing visualization (~2000 lines)
+    RouteMap.tsx             # 2D route map overlay (Leaflet)
+    RowingOverlay.tsx        # In-workout HUD (pace, power, HR, distance)
     BluetoothDevice.tsx      # PM5 connection UI
     HeartRateMonitor.tsx     # HR monitor connection
     HeartRateChart.tsx       # HR visualization
@@ -53,6 +54,10 @@ src/
     MiniMetrics.tsx          # Compact metrics overlay
     PerformanceChart.tsx     # Performance graphs
     Canvas3DErrorBoundary.tsx
+    routeLandmarks/
+       LandmarkRenderer.tsx  # Landmark/scenery placement in 3D scene
+ hooks/
+    usePhysicsEngine.ts      # Rust/Wasm physics engine interface (Web Worker)
  services/
     bluetoothService.ts      # PM5 Bluetooth communication
     heartRateBluetoothService.ts # HR monitor service
@@ -60,6 +65,8 @@ src/
     routeService.ts          # Route data management
     workoutService.ts        # Workout session tracking
     workoutGeneratorService.ts # Structured workouts
+ workers/
+    physicsWorker.ts         # Web Worker host for the Wasm physics engine
  utils/
     geoUtils.ts              # Geographic calculations
     gpuUtils.ts              # WebGL/GPU detection
@@ -67,17 +74,29 @@ src/
  types/
     index.ts                 # Core TypeScript interfaces
     bluetooth.d.ts           # Web Bluetooth API types
- App.tsx                      # Main application
+ App.tsx                      # Root component; all application state lives here
  main.tsx                     # React entry point
 
 playwright/
  tests/                       # E2E test specs
- simulators/                  # PM5/HR simulators
+ simulators/                  # PM5/HR simulators (sim-server.cjs)
  fixtures/                    # Test fixtures
  utils/                       # Test utilities
 ```
 
 ## Key Components
+
+### App.tsx — State Root
+
+`App.tsx` owns all application state. There is no global state library; all data flows via props and callbacks:
+
+- `currentView`: `'routes' | 'workouts' | 'workout' | 'history'`
+- `sessionState`: `'idle' | 'active' | 'paused'`
+- `selectedRoute`, `selectedWorkout`, `currentSession` — active session data
+- `pm5Data`, `heartRateSamples` — live device streams
+- `workoutHistory`, `workoutProgress` — persistence + workout tracking
+
+A session auto-ends when `pm5Data.distance ≥ 99.5% of route.distance`. This auto-end is suppressed under the `window.__PLAYWRIGHT_TESTING` flag used by E2E tests.
 
 ### Rower3D Component
 
@@ -89,12 +108,22 @@ The main 3D visualization component (~2000 lines) using React Three Fiber:
 - View corridor transparency (objects don't obstruct boat view)
 - World rotation with speed limiting
 - Route curve following based on PM5 pace data
+- Gerstner GPU water shaders (4-train GLSL), Kelvin wake, blade foam
+- CubeCamera reflections, ACES tone mapping, chromatic aberration, bloom, DoF
+
+### RowingOverlay Component
+
+Fullscreen HUD rendered on top of the 3D canvas during an active workout:
+
+- Live metrics: pace (s/500m), power (W), distance (m), elapsed time, cadence (SPM), heart rate
+- Workout progress when a structured workout is active (segment type, time remaining, compliance)
+- Pause/Resume control
 
 ### Services
 
 **bluetoothService.ts** - PM5 Bluetooth communication
 
-- Web Bluetooth API connection to PM5
+- Web Bluetooth API connection to PM5 (Concept2 CSAFE BLE profile; Rowing Service UUID `ce060030-43e5-11e4-916c-0800200c9a66`)
 - Real-time metric streaming (pace, distance, power, cadence)
 - Event-based data emission
 
@@ -110,11 +139,21 @@ The main 3D visualization component (~2000 lines) using React Three Fiber:
 - Workout progress tracking
 - Target compliance calculation
 
+**workoutService.ts** - Session persistence
+
+- Session CRUD via `localStorage`
+- Personal best tracking per route (fastest average pace on completed sessions)
+- Aggregate stats (total workouts, total distance, total time)
+- GPX and FIT-JSON export generation
+
 ## Development Commands
 
 ```bash
 # Start development server
 npm run dev
+
+# Build the Rust/Wasm physics engine (required before first `npm run dev` or `npm run build`)
+npm run wasm:build
 
 # Type checking
 npx tsc --noEmit
@@ -128,6 +167,9 @@ npm test
 # Run unit tests in watch mode
 npm test -- --watch
 
+# Run Wasm performance benchmarks
+npx vitest bench --run
+
 # Run E2E tests
 npm run test:e2e
 
@@ -137,6 +179,90 @@ npm run start:sim
 # Lint
 npm run lint
 ```
+
+## Rust / WebAssembly Physics Engine
+
+The physics engine is written in Rust and compiled to WebAssembly.
+
+### Prerequisites
+
+```bash
+# Install Rust (https://rustup.rs)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Add the Wasm target
+rustup target add wasm32-unknown-unknown
+
+# Install wasm-pack
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+# Or on Windows: cargo install wasm-pack
+```
+
+### Wasm Build
+
+```bash
+npm run wasm:build
+# Outputs to src/wasm-pkg/ (gitignored, must be rebuilt after Rust changes)
+```
+
+The crate is at `crates/virtualrow-physics/`. Run Rust unit tests with:
+
+```bash
+cd crates/virtualrow-physics
+cargo test
+```
+
+### Physics Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| `MASS_BOAT_KG` | 14.0 kg | FISA minimum single scull |
+| `MASS_ROWER_KG` | 80.0 kg | Representative rower mass |
+| `K_DRAG` | 2.34 N·s²/m² | Hydrodynamic drag coefficient |
+| `DRIVE_EFFICIENCY` | 0.85 | Mechanical efficiency of power transfer |
+| `DRIVE_RATIO` | 0.35 | Fraction of stroke that is drive phase (animation only) |
+
+**Calibration:** At 200W steady-state, the engine converges to ≈ 4.17 m/s (2:00/500m pace),
+matching Concept2 pace tables within ±2 s.
+
+### Wasm-JS Bridge
+
+The engine runs in a Web Worker (`src/workers/physicsWorker.ts`).
+The React hook `src/hooks/usePhysicsEngine.ts` provides the interface:
+
+```ts
+const { boatState, dispatchTick, resetEngine } = usePhysicsEngine();
+
+// In useFrame:
+const speedMps = dispatchTick(delta, pm5Data);
+// boatState.strokeCycleT → drives oar/body animation
+// boatState.velocityMps → hull speed (async, lags one frame)
+```
+
+A JS fallback (`pace → speed` conversion) is used automatically if the Worker fails to load.
+
+## HD Asset Pipeline
+
+### Boat Model
+
+Place the production `.glb` sculling model at:
+
+```
+public/assets/boat/scull.glb
+```
+
+See `public/assets/boat/README.md` for the required node hierarchy and bounding box constraints.
+
+### Environment Maps
+
+Place equirectangular HDR environment maps at:
+
+```
+public/assets/env/<theme-name>.hdr
+```
+
+Currently using `@react-three/drei`'s built-in presets (`city`, `sunset`, `dawn`, `night`).
+
 
 ## Testing
 
@@ -158,7 +284,7 @@ Tests are in `playwright/tests/` directory:
 - Workout session persistence
 - 3D visualization verification
 
-The E2E tests use a WebSocket-based simulator (`playwright/simulators/sim-server.js`) that provides mock PM5 and heart rate data.
+The E2E tests use a WebSocket-based simulator (`playwright/simulators/sim-server.cjs`) that provides mock PM5 and heart rate data.
 
 ## PM5 Bluetooth Protocol
 
@@ -205,4 +331,39 @@ npm run build
 
 # Output is in dist/ directory
 # Deploy to any static hosting service
+```
+
+---
+
+## GitHub Pages Landing Page
+
+The project website is published to GitHub Pages from the `docs/` directory on every push to `main` via `.github/workflows/pages.yml`.
+
+### Enabling GitHub Pages (one-time repo setup)
+
+1. Go to **Settings → Pages** in the GitHub repository
+2. Under **Source**, select **GitHub Actions**
+3. Push any change to `main` to trigger the first deployment
+
+The landing page will be live at:
+```
+https://<org>.github.io/virtualrow/
+```
+
+### Updating the landing page
+
+Edit `docs/index.html` — it is a self-contained static file with no build step.
+
+To replace the hero screenshot, overwrite `docs/screenshot-rower-3d.png` with a new capture.
+The gameplay E2E test (`captures gameplay visuals for rowing model and graphics validation`)
+produces labeled canvas screenshots in `playwright/playwright-report/` that can be used directly.
+
+### Local preview
+
+```bash
+# Serve docs/ locally (Python)
+python -m http.server 8080 --directory docs
+
+# Or with npx serve
+npx serve docs
 ```

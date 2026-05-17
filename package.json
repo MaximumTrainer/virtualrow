@@ -26,8 +26,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@react-three/postprocessing": "^3.0.4",
-    "@testing-library/dom": "^10.4.1",
-    "axios": "^1.13.2",
+    "@react-three/rapier": "^2.2.0",
     "chart.js": "^4.5.1",
     "postprocessing": "^6.38.2",
     "react": "^19.2.0",
@@ -38,6 +37,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.46.0",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.0",
@@ -58,7 +58,7 @@
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0",
     "vitest": "^1.6.0",
-    "ws": "^8.17.0",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "ws": "^8.17.0"
   }
 }

@@ -1,14 +1,18 @@
 ﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Sky, Cloud, useCubeCamera } from '@react-three/drei';
+import { Environment, Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping, ChromaticAberration, Vignette, DepthOfField } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import * as THREE from 'three';
+import { Physics, RigidBody } from '@react-three/rapier';
 import type { WaterRoute, Coordinate } from '../types/index';
 import { routeTotalDistanceMeters, latLngToMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import './Rower3D.css';
+
+// Preload the scull GLB at module load time so the asset is cached before first render
+useGLTF.preload('/models/scull.glb');
 
 // ============================================================================
 // GPS TO 3D PATH CONVERSION - Converts GPS coordinates to smooth 3D curve
@@ -1130,7 +1134,6 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
     const rightElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number }> = [];
     
     const elementSpacing = 0.02; // Progress spacing between elements
-    const waterHalfWidth = WATER_CHANNEL_WIDTH / 2;
     const minOffset = LANDSCAPE_OFFSET; // Minimum distance from water center
     
     for (let t = 0; t < 1; t += elementSpacing) {
@@ -1463,40 +1466,6 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   );
 };
 
-// ============================================================================
-// ANIMATED WATER PLANE - Creates flowing water effect (legacy fallback)
-// ============================================================================
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const AnimatedWater: React.FC<{ boatZ: number }> = ({ boatZ }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  
-  useFrame((_, delta) => {
-    // Animate water texture offset to simulate flow (opposite to boat movement)
-    if (materialRef.current && materialRef.current.map) {
-      materialRef.current.map.offset.y += delta * 0.05;
-    }
-  });
-  
-  return (
-    <mesh 
-      ref={meshRef}
-      rotation={[-Math.PI / 2, 0, 0]} 
-      position={[0, -0.1, boatZ]}
-      receiveShadow
-    >
-      <planeGeometry args={[1000, 1000, 64, 64]} />
-      <meshStandardMaterial 
-        ref={materialRef}
-        color="#2d7dc9"
-        transparent
-        opacity={0.85}
-        roughness={0.8}
-        metalness={0.2}
-      />
-    </mesh>
-  );
-};
 
 // ============================================================================
 // PROCEDURAL TERRAIN - Mountains along the banks
@@ -2429,49 +2398,6 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
   );
 };
 
-// ============================================================================
-// THEMED WATER - Water color varies by route theme (legacy - now uses PhotorealisticWater)
-// ============================================================================
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const ThemedWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  
-  const waterColor = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled': return '#00d9ff'; // Bioluminescent cyan
-      case 'gothic-venice': return '#0a3d62'; // Dark spectral green
-      case 'steampunk-henley': return '#4a6741'; // Murky industrial
-      case 'dystopian-thames': return '#162447'; // Toxic dark blue
-      case 'scifi-boston': return '#00ced1'; // Glowing teal
-      default: return '#2d7dc9'; // Standard water blue
-    }
-  }, [theme]);
-  
-  const emissiveIntensity = theme === 'crystal-bled' || theme === 'scifi-boston' ? 0.15 : 0;
-  
-  useFrame((_, delta) => {
-    if (materialRef.current && materialRef.current.map) {
-      materialRef.current.map.offset.y += delta * 0.05;
-    }
-  });
-  
-  return (
-    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, boatZ]} receiveShadow>
-      <planeGeometry args={[1000, 1000, 64, 64]} />
-      <meshStandardMaterial 
-        ref={materialRef}
-        color={waterColor}
-        transparent
-        opacity={0.85}
-        roughness={0.8}
-        metalness={0.2}
-        emissive={waterColor}
-        emissiveIntensity={emissiveIntensity}
-      />
-    </mesh>
-  );
-};
 
 // ============================================================================
 // HD THEMED SKY/FOG - Enhanced atmosphere with realistic fog gradients
@@ -2854,25 +2780,6 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
   );
 };
 
-// ============================================================================
-// RIVERBANKS - Ground along the sides
-// ============================================================================
-const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
-  return (
-    <group position={[0, -0.5, boatZ]}>
-      {/* Left bank */}
-      <mesh position={[-40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[60, 1000]} />
-        <meshStandardMaterial color="#4a7c32" roughness={0.95} />
-      </mesh>
-      {/* Right bank */}
-      <mesh position={[40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[60, 1000]} />
-        <meshStandardMaterial color="#4a7c32" roughness={0.95} />
-      </mesh>
-    </group>
-  );
-};
 
 // ============================================================================
 // HIGH-DEFINITION ROWING SCULL (BOAT) with animated oars and realistic rower
@@ -2881,11 +2788,7 @@ const Riverbanks: React.FC<{ boatZ: number }> = ({ boatZ }) => {
 // Based on modern racing single scull dimensions (~8.2m length, ~0.3m beam).
 // All animation refs preserved for seamless gameplay integration.
 
-const RowingScull: React.FC<{ 
-  position: [number, number, number]; 
-  rotation?: [number, number, number];
-  cadence: number;
-}> = ({ position, rotation = [0, 0, 0], cadence }) => {
+const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
   const leftOarRef = useRef<THREE.Group>(null);
   const rightOarRef = useRef<THREE.Group>(null);
   const rowerRef = useRef<THREE.Group>(null);
@@ -2903,11 +2806,11 @@ const RowingScull: React.FC<{
   const rightShinRef = useRef<THREE.Group>(null);
   const seatRef = useRef<THREE.Mesh>(null);
   
-  useFrame(() => {
+  useFrame((state) => {
     // Animate based on cadence
     const strokesPerMinute = Math.max(18, cadence || 24);
     const freqHz = strokesPerMinute / 60;
-    const time = performance.now() * 0.001;
+    const time = state.clock.elapsedTime;
     const phase = (time * freqHz % 1);
     
     // Rowing stroke phases:
@@ -2917,7 +2820,6 @@ const RowingScull: React.FC<{
     // Smooth easing function
     const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     
-    let _drivePhase: number; // Unused but kept for reference
     let legCompression: number;
     let armPull: number;
     let bodyLean: number;
@@ -2926,7 +2828,6 @@ const RowingScull: React.FC<{
     if (phase < 0.4) {
       // Drive phase - legs extend, arms pull, body swings back
       const t = easeInOut(phase / 0.4);
-      _drivePhase = t;
       legCompression = 1 - t; // 1 (compressed) -> 0 (extended)
       armPull = t; // 0 (arms extended) -> 1 (arms pulled in)
       bodyLean = -0.3 + t * 0.5; // lean forward -> lean back
@@ -2934,7 +2835,6 @@ const RowingScull: React.FC<{
     } else {
       // Recovery phase - legs compress, arms extend, body leans forward
       const t = easeInOut((phase - 0.4) / 0.6);
-      _drivePhase = 1 - t;
       legCompression = t; // 0 (extended) -> 1 (compressed)
       armPull = 1 - t; // 1 (arms pulled in) -> 0 (arms extended)
       bodyLean = 0.2 - t * 0.5; // lean back -> lean forward
@@ -2998,7 +2898,7 @@ const RowingScull: React.FC<{
   const shortsColor = "#1e3a5f";
   
   return (
-    <group position={position} rotation={rotation}>
+    <group>
       {/* HD Main hull - racing shell with high-gloss fiberglass finish */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
@@ -3626,6 +3526,50 @@ const RowingScull: React.FC<{
   );
 };
 
+// Memoize so the boat only re-renders when cadence changes.
+// Position and rotation are driven imperatively — either via a parent group ref
+// (Playwright mode) or via a Rapier kinematic body (normal mode).
+const RowingScull = React.memo(RowingScullBase, (prev, next) => prev.cadence === next.cadence);
+
+// ============================================================================
+// BOAT KINEMATIC CONTROLLER — Drives a Rapier kinematic rigid body from the
+// route-following refs so position/rotation live in the physics world without
+// fighting the CatmullRom curve constraint. No forces are applied; Rapier just
+// owns the transform, enabling future collision detection with scene objects.
+// ============================================================================
+const BoatKinematicController: React.FC<{
+  positionRef: React.MutableRefObject<THREE.Vector3>;
+  rotationRef: React.MutableRefObject<number>;
+  cadence: number;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+}> = ({ positionRef, rotationRef, cadence }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bodyRef = useRef<any>(null);
+
+  useFrame(() => {
+    if (!bodyRef.current) return;
+    bodyRef.current.setNextKinematicTranslation({
+      x: positionRef.current.x,
+      y: positionRef.current.y,
+      z: positionRef.current.z,
+    });
+    // Convert Y-axis rotation angle to unit quaternion
+    const halfAngle = rotationRef.current / 2;
+    bodyRef.current.setNextKinematicRotation({
+      x: 0,
+      y: Math.sin(halfAngle),
+      z: 0,
+      w: Math.cos(halfAngle),
+    });
+  });
+
+  return (
+    <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false}>
+      <RowingScull cadence={cadence} />
+    </RigidBody>
+  );
+};
+
 // ============================================================================
 // DYNAMIC POST-PROCESSING — velocity-gated chromatic aberration + depth-of-field
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
@@ -3699,6 +3643,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const [boatProgress, setBoatProgress] = useState(0);
   const [boatZ, setBoatZ] = useState(0); // For scenery positioning (legacy compatibility)
+
+  // Ref to the boat group used for imperative positioning in Playwright mode
+  const boatGroupRef = useRef<THREE.Group>(null);
+  // Tracks last time scenery state was updated — throttles to ≤ 10 Hz
+  const lastSceneryUpdateRef = useRef<number>(0);
   
   // Calculate total route distance in meters
   const totalDistance = useMemo(() => {
@@ -3715,7 +3664,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
   velocityRef.current = boatState.velocityMps;
 
   // Animation loop - move boat along curved path and camera follows
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     // Get speed from Wasm physics engine (or JS fallback).
     // Build a minimal PM5Data-compatible object from available props.
     const pm5Data = {
@@ -3760,15 +3709,22 @@ const RowerScene: React.FC<Rower3DProps> = ({
     boatPositionRef.current.copy(routePos.position);
     boatRotationRef.current = routePos.angle;
     
-    // Update state for scenery positioning (throttled)
-    if (Math.abs(boatProgressRef.current - boatProgress) > 0.001) {
-      setBoatProgress(boatProgressRef.current);
+    // Imperatively position boat group (Playwright testing path — no Rapier)
+    if ((window as any).__PLAYWRIGHT_TESTING && boatGroupRef.current) {
+      boatGroupRef.current.position.copy(boatPositionRef.current);
+      boatGroupRef.current.rotation.y = boatRotationRef.current;
     }
-    
-    // Update boatZ for legacy scenery components (throttled)
-    const currentZ = boatPositionRef.current.z;
-    if (Math.abs(currentZ - boatZ) > 5) {
-      setBoatZ(currentZ);
+
+    // Update state for scenery positioning — throttled to ≤ 10 Hz to reduce React re-renders.
+    // Scenery components (water channel, landscape, mist) don't need sub-100 ms updates.
+    const elapsedTime = state.clock.elapsedTime;
+    if (elapsedTime - lastSceneryUpdateRef.current > 0.1) {
+      lastSceneryUpdateRef.current = elapsedTime;
+      setBoatProgress(boatProgressRef.current);
+      const currentZ = boatPositionRef.current.z;
+      if (Math.abs(currentZ - boatZ) > 1) {
+        setBoatZ(currentZ);
+      }
     }
     
     // Camera follows boat from behind (relative to boat heading)
@@ -3995,16 +3951,20 @@ const RowerScene: React.FC<Rower3DProps> = ({
         renderThemedLandscape()
       )}
       
-      {/* The rowing scull - high-definition procedural model with animated oars and rower */}
-      <RowingScull 
-        position={[
-          boatPositionRef.current.x, 
-          boatPositionRef.current.y, 
-          boatPositionRef.current.z
-        ]}
-        rotation={[0, boatRotationRef.current, 0]}
-        cadence={cadence || 30}
-      />
+      {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode */}
+      {(window as any).__PLAYWRIGHT_TESTING ? (
+        <group ref={boatGroupRef}>
+          <RowingScull cadence={cadence || 30} />
+        </group>
+      ) : (
+        <Physics gravity={[0, -9.81, 0]}>
+          <BoatKinematicController
+            positionRef={boatPositionRef}
+            rotationRef={boatRotationRef}
+            cadence={cadence || 30}
+          />
+        </Physics>
+      )}
 
       {/* V-shaped Kelvin wake trailing behind the boat — disabled in test mode */}
       {!(window as any).__PLAYWRIGHT_TESTING && (
