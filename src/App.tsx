@@ -289,6 +289,9 @@ function App() {
     };
   }, []);
 
+  const handleHrConnected = useCallback(() => setHrConnected(true), []);
+  const handleHrDisconnected = useCallback(() => setHrConnected(false), []);
+
   const handlePM5Connected = useCallback(() => {
     setPM5Connected(true);
   }, []);
@@ -534,7 +537,11 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                 )}
               </div>
               <div className="device-panel">
-                <HeartRateMonitor onSample={handleHeartRateSample} />
+                <HeartRateMonitor
+                  onSample={handleHeartRateSample}
+                  onConnected={handleHrConnected}
+                  onDisconnected={handleHrDisconnected}
+                />
               </div>
             </>
           )}
