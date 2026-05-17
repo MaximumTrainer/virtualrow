@@ -216,7 +216,7 @@ test.describe('device and connectivity guards', () => {
     // Start workout via the enabled button
     const startBtn = page.locator('.btn-start-workout');
     await expect(startBtn).toBeEnabled({ timeout: 5000 });
-    await startBtn.click();
+    await startBtn.click({ force: true });
 
     // Confirm session is active
     await page.waitForFunction(
@@ -426,22 +426,11 @@ test.describe('Simulated e2e route playback', () => {
 
     if (pm5Connected) {
       const startBtn = page.locator('.btn-start-workout');
-      await startBtn.waitFor({ timeout: 5000 });
-      if (await startBtn.isEnabled()) {
-        await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
-        await captureTestEvidence(page, testInfo, '08-before-workout-start');
-        await clearAnnotations(page);
-        await startBtn.click({ force: true });
-      } else {
-        await captureErrorEvidence(page, testInfo, 'Start button disabled - using fallback', '.btn-start-workout');
-        await page.evaluate(() => {
-          const svc = (window as any).__workoutService;
-          if (svc && svc.startSession) {
-            svc.startSession('sim-manual', 'Simulated Route');
-          }
-        });
-        await page.click('button:has-text("History")');
-      }
+      await expect(startBtn).toBeEnabled({ timeout: 5000 });
+      await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
+      await captureTestEvidence(page, testInfo, '08-before-workout-start');
+      await clearAnnotations(page);
+      await startBtn.click({ force: true });
     }
 
     await page.waitForFunction(() => {
@@ -674,19 +663,9 @@ test.describe('Simulated e2e route playback', () => {
       await page.waitForSelector('.btn-start-workout');
       try {
         const startBtn = page.locator('.btn-start-workout');
-        await startBtn.waitFor({ timeout: 5000 });
-        if (await startBtn.isEnabled()) {
-          await captureTestEvidence(page, testInfo, '04-starting-first-workout');
-          await startBtn.click({ force: true });
-        } else {
-          await captureErrorEvidence(page, testInfo, 'Start button disabled for first route', '.btn-start-workout');
-          await page.evaluate(() => {
-            const svc = (window as any).__workoutService;
-            if (svc && svc.startSession) {
-              svc.startSession('sim-manual-2', 'Simulated Route 2');
-            }
-          });
-        }
+        await expect(startBtn).toBeEnabled({ timeout: 5000 });
+        await captureTestEvidence(page, testInfo, '04-starting-first-workout');
+        await startBtn.click({ force: true });
       } catch (e) {
         await page.evaluate(() => {
           const svc = (window as any).__workoutService;
@@ -775,17 +754,9 @@ test.describe('Simulated e2e route playback', () => {
     if (pm5Connected) {
       const startBtn2 = page.locator('.btn-start-workout');
       try {
-        await startBtn2.waitFor({ timeout: 5000 });
-        if (await startBtn2.isEnabled()) {
-          await captureTestEvidence(page, testInfo, '07-starting-second-workout');
-          await startBtn2.click();
-        } else {
-          await captureErrorEvidence(page, testInfo, 'Start button disabled for second route', '.btn-start-workout');
-          await page.evaluate(() => {
-            const svc = (window as any).__workoutService;
-            if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3');
-          });
-        }
+        await expect(startBtn2).toBeEnabled({ timeout: 5000 });
+        await captureTestEvidence(page, testInfo, '07-starting-second-workout');
+        await startBtn2.click({ force: true });
       } catch (e) {
         await page.evaluate(() => {
           const svc = (window as any).__workoutService;
@@ -878,10 +849,8 @@ test.describe('Simulated e2e route playback', () => {
       await page.waitForSelector('.route-item:has-text("Willowbrook River")', { timeout: 7000 });
       await page.click('.route-item:has-text("Willowbrook River")');
       const startBtn = page.locator('.btn-start-workout');
-      await startBtn.waitFor({ timeout: 4000 });
-      if (await startBtn.isEnabled()) {
-        await startBtn.click();
-      }
+      await expect(startBtn).toBeEnabled({ timeout: 5000 });
+      await startBtn.click({ force: true });
     }
 
     // Drive simulation

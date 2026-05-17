@@ -41,6 +41,9 @@ function App() {
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
   const activityTimerRef = useRef<number | null>(null);
+  // Re-entrancy guards — prevent recursive session start or HR update loops
+  const isStartingSessionRef = useRef(false);
+  const isProcessingHrUpdateRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
   // Session state for the overlay UI
@@ -120,29 +123,36 @@ function App() {
   };
 
   const handleStartWorkout = () => {
-    if (!selectedRoute || !selectedRowerConnected || !hrConnected) {
-      alert(`Please connect your ${activeRowerLabel} and Heart Rate Monitor, and select a route`);
-      return;
-    }
+    // Guard against double-start (rapid clicks, re-entrant calls, or already-active session)
+    if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
+    isStartingSessionRef.current = true;
+    try {
+      if (!selectedRoute || !selectedRowerConnected || !hrConnected) {
+        alert(`Please connect your ${activeRowerLabel} and Heart Rate Monitor, and select a route`);
+        return;
+      }
 
-    const session = workoutService.startSession(
-      selectedRoute.id, 
-      selectedRoute.name,
-      selectedWorkout?.id,
-      activeRowerType,
-      hrConnected,
-    );
-    setCurrentSession(session);
-    setIsWorkoutActive(true);
-    setSessionState('active');
-    
-    // Start structured workout if selected
-    if (selectedWorkout) {
-      const progress = workoutGeneratorService.startWorkout(selectedWorkout.id);
-      setWorkoutProgress(progress);
+      const session = workoutService.startSession(
+        selectedRoute.id, 
+        selectedRoute.name,
+        selectedWorkout?.id,
+        activeRowerType,
+        hrConnected,
+      );
+      setCurrentSession(session);
+      setIsWorkoutActive(true);
+      setSessionState('active');
+      
+      // Start structured workout if selected
+      if (selectedWorkout) {
+        const progress = workoutGeneratorService.startWorkout(selectedWorkout.id);
+        setWorkoutProgress(progress);
+      }
+      
+      setCurrentView('workout');
+    } finally {
+      isStartingSessionRef.current = false;
     }
-    
-    setCurrentView('workout');
   };
 
   const handleEndWorkout = useCallback(() => {
@@ -252,9 +262,16 @@ function App() {
   // workout session regardless of which view is active.
   useEffect(() => {
     const onHR = ({ bpm }: { bpm: number }) => {
-      workoutService.updateSessionHeartRate(bpm);
-      const session = workoutService.getCurrentSession();
-      setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
+      // Guard against recursive re-entry (e.g. if updateSessionHeartRate triggers another heartRate event)
+      if (isProcessingHrUpdateRef.current) return;
+      isProcessingHrUpdateRef.current = true;
+      try {
+        workoutService.updateSessionHeartRate(bpm);
+        const session = workoutService.getCurrentSession();
+        setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
+      } finally {
+        isProcessingHrUpdateRef.current = false;
+      }
     };
     heartRateBluetoothService.on('heartRate', onHR);
     return () => heartRateBluetoothService.off('heartRate', onHR);
