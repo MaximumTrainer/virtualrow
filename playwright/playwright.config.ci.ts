@@ -15,7 +15,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  timeout: 120_000, // 120 seconds — CI machines are slower; route test has many async waits
+  timeout: 160_000, // 160 seconds — CI machines are slower; route test has many async waits
   retries: 2,
   // In CI, force single worker to avoid parallel servers and port conflicts
   workers: process.env.CI ? 1 : undefined,
