@@ -78,7 +78,7 @@ class PM5 {
       .then(() => {
         if (this.cb_connected) this.cb_connected();
       })
-      .catch((e) => console.error('PM5 doConnect error', e));
+      .catch((e) => { console.error('PM5 doConnect error', e); throw e; });
   }
 
   doDisconnect() {

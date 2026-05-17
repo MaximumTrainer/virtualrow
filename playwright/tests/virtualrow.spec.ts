@@ -544,9 +544,14 @@ test.describe('Simulated e2e route playback', () => {
     expect(laterProgress).toBeGreaterThanOrEqual(initialProgress);
 
     const initialOar = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
-    await page.waitForTimeout(500);
+    await expect.poll(
+      async () => {
+        const current = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
+        return Math.abs(current - initialOar);
+      },
+      { timeout: 4000, intervals: [200] }
+    ).toBeGreaterThanOrEqual(0.01);
     const laterOar = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
-    expect(Math.abs(laterOar - initialOar)).toBeGreaterThanOrEqual(0.01);
     expect(Math.abs(laterOar)).toBeLessThanOrEqual(0.8);
 
     const pos = await page.evaluate(() => (window as any).__ROWER3D_POS);

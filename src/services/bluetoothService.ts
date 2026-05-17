@@ -29,15 +29,12 @@ export class Concept2BluetoothService {
       const pm5Module = await import('../vendor/pm5-base.js');
       const PM5 = pm5Module.default || pm5Module;
       
-      // Use the pm5-base wrapper for robust PM5 parsing and feature support
+      // Pass a no-op as cb_connected so the event doesn't fire mid-connect before all
+      // characteristic listeners are registered. We emit 'connected' ourselves below
+      // once the service is fully ready.
       this.pm5Wrapper = new PM5(
         () => this.emit('connecting', {}),
-        // Note: Read device name from pm5Wrapper.device since bluetoothService.device 
-        // isn't set until after doConnect() returns
-        () => {
-          this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
-          this.emit('connected', { deviceName: this.pm5Wrapper?.device?.name || 'PM5' });
-        },
+        () => { /* deferred — see emit below */ },
         () => this.handleDisconnect(),
         // Multiplexed/misc messages
         (msg: any) => this.handlePM5Message(msg)
@@ -72,6 +69,11 @@ export class Concept2BluetoothService {
         console.log('PM5 device disconnected');
         this.handleDisconnect();
       });
+
+      // Emit 'connected' only after ALL characteristic listeners are registered so that
+      // handlers receiving the first data frames immediately after connection are in place.
+      this.suppressDisconnectUntil = performance.now() + this.DISCONNECT_SUPPRESSION_MS;
+      this.emit('connected', { deviceName: this.pm5Wrapper?.device?.name || 'PM5' });
       
       return true;
     } catch (error) {
