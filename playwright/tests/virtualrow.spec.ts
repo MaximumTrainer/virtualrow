@@ -1001,8 +1001,8 @@ test.describe('docs screenshots', () => {
   });
 
   test('captures and publishes screenshots for documentation', async ({ page }) => {
-    // 1. Route selection screen
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-route-selection.png'), fullPage: true });
+    // 1. Route selection screen — viewport only so the route list is prominently visible
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-route-selection.png'), fullPage: false });
 
     // 2. Connect PM5 and HR
     await page.waitForSelector('button:has-text("Connect PM5")');
@@ -1045,47 +1045,54 @@ test.describe('docs screenshots', () => {
       { timeout: 5000 },
     );
 
-    // Inject realistic PM5 + HR data via mock characteristics (no sim server required)
-    await page.evaluate(() => {
-      const buf = new ArrayBuffer(20);
-      const dv = new DataView(buf);
-      dv.setUint16(0, Math.round(118 * 100), true); // pace (s/500m × 100)
-      dv.setUint32(2, 1500, true);                  // distance m
-      dv.setUint32(6, 180, true);                   // elapsedTime s
-      dv.setUint16(10, 195, true);                  // power W
-      dv.setUint8(13, 26);                          // cadence spm
-      dv.setUint8(14, 148);                         // heart rate bpm
-      const w = window as any;
-      if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
-      if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
+    // Wait for React to render the activity view
+    await page.waitForSelector('.activity-view', { timeout: 10_000 });
 
-      // HR characteristic
-      const hrBuf = new ArrayBuffer(2);
-      const hrDv = new DataView(hrBuf);
-      hrDv.setUint8(0, 0x00);
-      hrDv.setUint8(1, 148);
-      if (w.__hrChar) w.__hrChar._dispatch(hrDv);
-    });
+    // Wait for Three.js WebGL renderer to initialise (fires in Canvas onCreated callback)
+    await page.waitForFunction(
+      () => !!(window as any).__ROWER3D_GPU_BACKEND,
+      { timeout: 15_000 },
+    );
 
-    // Wait for RAF-deferred React state update
-    await page.waitForTimeout(500);
+    // Inject PM5 + HR data three times with pauses so the animation loop runs multiple
+    // frames and the boat model has time to load and be positioned on the route.
+    for (let i = 1; i <= 3; i++) {
+      await page.evaluate((frame) => {
+        const buf = new ArrayBuffer(20);
+        const dv = new DataView(buf);
+        dv.setUint16(0, Math.round(118 * 100), true); // pace (s/500m × 100)
+        dv.setUint32(2, 500 * frame, true);            // distance m — advance each frame
+        dv.setUint32(6, 60 * frame, true);             // elapsedTime s
+        dv.setUint16(10, 195, true);                   // power W
+        dv.setUint8(13, 26);                           // cadence spm
+        dv.setUint8(14, 148);                          // heart rate bpm
+        const w = window as any;
+        if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
+        if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
 
-    // 3. Activity screen (full page)
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-activity.png'), fullPage: true });
-
-    // 4. 3D canvas close-up
-    try {
-      const container = page.locator('.rower3d-canvas-container');
-      if ((await container.count()) > 0) {
-        await container.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), type: 'png' });
-      } else {
-        await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
-      }
-    } catch {
-      try {
-        await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
-      } catch { /* ignore */ }
+        const hrBuf = new ArrayBuffer(2);
+        const hrDv = new DataView(hrBuf);
+        hrDv.setUint8(0, 0x00);
+        hrDv.setUint8(1, 148);
+        if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+      }, i);
+      await page.waitForTimeout(600);
     }
+
+    // Wait for the Rower3D animation loop to place the boat on the route
+    await page.waitForFunction(
+      () => (window as any).__ROWER3D_DISTANCE_M > 0,
+      { timeout: 5000 },
+    ).catch(() => { /* non-critical — screenshot taken regardless */ });
+
+    // Allow Two.js/Three.js additional frame time to render the scene
+    await page.waitForTimeout(1500);
+
+    // 3. Activity screen — viewport only so the 3D canvas is centre-stage
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-activity.png'), fullPage: false });
+
+    // 4. 3D canvas close-up for hero image — full viewport matches sidebar-hidden look
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
 
     // 5. End the live session, inject past sessions for a populated history view
     await page.evaluate(() => {
@@ -1143,7 +1150,7 @@ test.describe('docs screenshots', () => {
 
     await page.waitForSelector('.history-item', { timeout: 5000 });
 
-    // 6. History screen
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-history.png'), fullPage: true });
+    // 6. History screen — viewport only
+    await page.screenshot({ path: path.join(docsDir, 'screenshot-history.png'), fullPage: false });
   });
 });
