@@ -897,16 +897,17 @@
 
   screenshotLinks.forEach((link) => {
     link.addEventListener('click', (event) => {
-      const isUnmodifiedPrimaryActivation = event.button === 0
-        && !event.metaKey
-        && !event.ctrlKey
-        && !event.shiftKey
-        && !event.altKey;
-      if (!isUnmodifiedPrimaryActivation) {
+      if (
+        event.button !== 0
+        || event.metaKey
+        || event.ctrlKey
+        || event.shiftKey
+        || event.altKey
+      ) {
         return;
       }
       event.preventDefault();
-      lastFocusedElement = event.currentTarget;
+      lastFocusedElement = link;
       const thumbnail = link.querySelector('img');
       const label = link.querySelector('.screenshot-thumb-label');
       const fallbackLabel = label && label.textContent ? label.textContent.trim() : '';
