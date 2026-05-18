@@ -745,9 +745,9 @@
   </div>
 </section>
 
-<div class="screenshot-modal" id="screenshot-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Screenshot preview">
+<div class="screenshot-modal" id="screenshot-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Image preview dialog">
   <button type="button" class="screenshot-modal-close" id="screenshot-modal-close" aria-label="Close screenshot preview">&times;</button>
-  <img id="screenshot-modal-image" src="" alt="" aria-hidden="true" hidden />
+  <img id="screenshot-modal-image" src="" alt="" hidden />
 </div>
 
 <div class="divider" role="presentation"></div>
@@ -884,14 +884,12 @@
   const screenshotModalClose = document.getElementById('screenshot-modal-close');
   const screenshotLinks = document.querySelectorAll('[data-full-image]');
   let lastFocusedElement = null;
-  const modalFocusableSelector = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   const closeScreenshotModal = () => {
     screenshotModal.classList.remove('open');
     screenshotModal.setAttribute('aria-hidden', 'true');
     screenshotModalImage.src = '';
     screenshotModalImage.alt = '';
-    screenshotModalImage.setAttribute('aria-hidden', 'true');
     screenshotModalImage.hidden = true;
     document.body.style.overflow = '';
     if (lastFocusedElement) {
@@ -907,7 +905,6 @@
       screenshotModalImage.src = link.getAttribute('href') || '';
       screenshotModalImage.alt = thumbnail ? thumbnail.alt : 'VirtualRow screenshot';
       screenshotModalImage.hidden = false;
-      screenshotModalImage.setAttribute('aria-hidden', 'false');
       screenshotModal.classList.add('open');
       screenshotModal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
@@ -930,28 +927,8 @@
       return;
     }
     if (event.key === 'Tab') {
-      const focusableElements = Array.from(screenshotModal.querySelectorAll(modalFocusableSelector));
-      if (focusableElements.length === 0) {
-        event.preventDefault();
-        screenshotModalClose.focus();
-        return;
-      }
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-      if (focusableElements.length === 1) {
-        event.preventDefault();
-        firstElement.focus();
-        return;
-      }
-      if (event.shiftKey && document.activeElement === firstElement) {
-        event.preventDefault();
-        lastElement.focus();
-        return;
-      }
-      if (!event.shiftKey && document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
-      }
+      event.preventDefault();
+      screenshotModalClose.focus();
     }
   });
 </script>
