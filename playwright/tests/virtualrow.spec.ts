@@ -1129,7 +1129,15 @@ test.describe('docs screenshots', () => {
       `;
       document.head.appendChild(style);
     });
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => {
+      const sidebar = document.querySelector('.app-sidebar');
+      if (!sidebar) return false;
+      const routeStage = document.querySelector('.activity-route-stage') as HTMLElement | null;
+      if (!routeStage) return false;
+      const sidebarHidden = window.getComputedStyle(sidebar).display === 'none';
+      const stageIsViewportHeight = Math.abs(routeStage.getBoundingClientRect().height - window.innerHeight) < 2;
+      return sidebarHidden && stageIsViewportHeight;
+    }, { timeout: 2000 });
     await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
     await page.evaluate(() => {
       document.getElementById('docs-hero-screenshot-style')?.remove();
