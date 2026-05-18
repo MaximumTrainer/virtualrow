@@ -697,8 +697,8 @@
         every step of a VirtualRow session is designed around you.
       </p>
     </div>
-    <div class="screenshots-grid" role="list">
-      <a class="screenshot-thumb" role="listitem" href="screenshot-route-selection.png" data-full-image>
+    <div class="screenshots-grid">
+      <a class="screenshot-thumb" href="screenshot-route-selection.png" data-full-image>
         <img
           src="screenshot-route-selection.png"
           alt="VirtualRow route selection screen — choose Willowbrook River or import a custom GPX route"
@@ -709,7 +709,7 @@
         <span class="screenshot-thumb-label">Route Selection</span>
       </a>
 
-      <a class="screenshot-thumb" role="listitem" href="screenshot-activity.png" data-full-image>
+      <a class="screenshot-thumb" href="screenshot-activity.png" data-full-image>
         <img
           src="screenshot-activity.png"
           alt="VirtualRow activity screen showing live metrics panel and 3D river view"
@@ -720,7 +720,7 @@
         <span class="screenshot-thumb-label">Live Activity</span>
       </a>
 
-      <a class="screenshot-thumb" role="listitem" href="screenshot-history.png" data-full-image>
+      <a class="screenshot-thumb" href="screenshot-history.png" data-full-image>
         <img
           src="screenshot-history.png"
           alt="VirtualRow workout history screen showing past sessions with pace and distance stats"
@@ -731,7 +731,7 @@
         <span class="screenshot-thumb-label">Workout History</span>
       </a>
 
-      <a class="screenshot-thumb" role="listitem" href="screenshot-rower-3d.png" data-full-image>
+      <a class="screenshot-thumb" href="screenshot-rower-3d.png" data-full-image>
         <img
           src="screenshot-rower-3d.png"
           alt="Close-up of the VirtualRow 3D single scull on the Willowbrook River"
@@ -745,7 +745,7 @@
   </div>
 </section>
 
-<div class="screenshot-modal" id="screenshot-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Image preview dialog">
+<div class="screenshot-modal" id="screenshot-modal" role="dialog" aria-modal="true" aria-label="Image preview dialog" hidden>
   <button type="button" class="screenshot-modal-close" id="screenshot-modal-close" aria-label="Close screenshot preview">&times;</button>
   <img id="screenshot-modal-image" src="" alt="" hidden />
 </div>
@@ -887,7 +887,7 @@
 
   const closeScreenshotModal = () => {
     screenshotModal.classList.remove('open');
-    screenshotModal.setAttribute('aria-hidden', 'true');
+    screenshotModal.hidden = true;
     screenshotModalImage.src = '';
     screenshotModalImage.alt = '';
     screenshotModalImage.hidden = true;
@@ -905,8 +905,8 @@
       screenshotModalImage.src = link.getAttribute('href') || '';
       screenshotModalImage.alt = thumbnail ? thumbnail.alt : 'VirtualRow screenshot';
       screenshotModalImage.hidden = false;
+      screenshotModal.hidden = false;
       screenshotModal.classList.add('open');
-      screenshotModal.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
       screenshotModalClose.focus();
     });
@@ -924,11 +924,6 @@
     }
     if (event.key === 'Escape') {
       closeScreenshotModal();
-      return;
-    }
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      screenshotModalClose.focus();
     }
   });
 </script>
