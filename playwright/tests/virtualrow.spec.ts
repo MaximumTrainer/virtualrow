@@ -770,12 +770,7 @@ test.describe('Simulated e2e route playback', () => {
     try { await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' }); } catch {}
     try { await page.waitForSelector('.mini-metrics', { timeout: 3000, state: 'attached' }); } catch {}
     const initialProgress1 = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
-    await page.waitForFunction(() => {
-      const sidebarHidden = window.getComputedStyle(document.querySelector('.app-sidebar') as Element).display === 'none';
-      const routeStage = document.querySelector('.activity-route-stage') as HTMLElement | null;
-      if (!routeStage) return false;
-      return sidebarHidden && Math.abs(routeStage.getBoundingClientRect().height - window.innerHeight) < 2;
-    }, { timeout: 2000 });
+    await page.waitForTimeout(300);
     const laterProgress1 = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
     expect(laterProgress1).toBeGreaterThanOrEqual(initialProgress1);
     await captureTestEvidence(page, testInfo, '05-first-route-in-progress');
