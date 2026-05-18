@@ -1096,8 +1096,47 @@ test.describe('docs screenshots', () => {
     // 3. Activity screen — viewport only so the 3D canvas is centre-stage
     await page.screenshot({ path: path.join(docsDir, 'screenshot-activity.png'), fullPage: false });
 
-    // 4. 3D canvas close-up for hero image — full viewport matches sidebar-hidden look
+    // 4. 3D hero image — force a clean full-viewport 3D frame without sidebar/stats overlays
+    await page.evaluate(() => {
+      const style = document.createElement('style');
+      style.id = 'docs-hero-screenshot-style';
+      style.textContent = `
+        .app-header,
+        .app-sidebar,
+        .activity-stats-panel,
+        .activity-route-summary,
+        .activity-map-overlay {
+          display: none !important;
+        }
+        .app-layout,
+        .main-content,
+        .view-container,
+        .activity-view,
+        .activity-screen,
+        .activity-route-stage {
+          width: 100vw !important;
+          height: 100vh !important;
+          min-height: 100vh !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border-radius: 0 !important;
+        }
+      `;
+      document.head.appendChild(style);
+    });
+    await page.waitForFunction(() => {
+      const sidebar = document.querySelector('.app-sidebar');
+      if (!sidebar) return false;
+      const routeStage = document.querySelector('.activity-route-stage') as HTMLElement | null;
+      if (!routeStage) return false;
+      const sidebarHidden = window.getComputedStyle(sidebar).display === 'none';
+      const stageIsViewportHeight = Math.abs(routeStage.getBoundingClientRect().height - window.innerHeight) < 2;
+      return sidebarHidden && stageIsViewportHeight;
+    }, { timeout: 2000 });
     await page.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png'), fullPage: false });
+    await page.evaluate(() => {
+      document.getElementById('docs-hero-screenshot-style')?.remove();
+    });
 
     // 5. End the live session, inject past sessions for a populated history view
     await page.evaluate(() => {
