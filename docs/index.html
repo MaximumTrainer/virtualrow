@@ -883,22 +883,30 @@
   const screenshotModalImage = document.getElementById('screenshot-modal-image');
   const screenshotModalClose = document.getElementById('screenshot-modal-close');
   const screenshotLinks = document.querySelectorAll('[data-full-image]');
+  let lastFocusedElement = null;
 
   const closeScreenshotModal = () => {
     screenshotModal.classList.remove('open');
     screenshotModal.setAttribute('aria-hidden', 'true');
     screenshotModalImage.src = '';
     screenshotModalImage.alt = '';
+    document.body.style.overflow = '';
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      lastFocusedElement.focus();
+    }
   };
 
   screenshotLinks.forEach((link) => {
     link.addEventListener('click', (event) => {
       event.preventDefault();
+      lastFocusedElement = document.activeElement;
       const thumbnail = link.querySelector('img');
       screenshotModalImage.src = link.getAttribute('href') || '';
       screenshotModalImage.alt = thumbnail ? thumbnail.alt : 'VirtualRow screenshot';
       screenshotModal.classList.add('open');
       screenshotModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      screenshotModalClose.focus();
     });
   });
 
@@ -909,8 +917,16 @@
     }
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && screenshotModal.classList.contains('open')) {
+    if (!screenshotModal.classList.contains('open')) {
+      return;
+    }
+    if (event.key === 'Escape') {
       closeScreenshotModal();
+      return;
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      screenshotModalClose.focus();
     }
   });
 </script>
