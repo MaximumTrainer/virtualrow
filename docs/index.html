@@ -745,7 +745,7 @@
   </div>
 </section>
 
-<div class="screenshot-modal" id="screenshot-modal" role="dialog" aria-modal="true" aria-label="Image preview dialog" hidden>
+<div class="screenshot-modal" id="screenshot-modal" role="dialog" aria-modal="true" aria-label="Image preview dialog" tabindex="-1" hidden>
   <button type="button" class="screenshot-modal-close" id="screenshot-modal-close" aria-label="Close screenshot preview">&times;</button>
   <img id="screenshot-modal-image" src="" alt="" hidden />
 </div>
@@ -892,7 +892,7 @@
     screenshotModalImage.alt = '';
     screenshotModalImage.hidden = true;
     document.body.style.overflow = '';
-    if (lastFocusedElement) {
+    if (lastFocusedElement && document.contains(lastFocusedElement)) {
       lastFocusedElement.focus();
     }
   };
@@ -902,8 +902,12 @@
       event.preventDefault();
       lastFocusedElement = document.activeElement;
       const thumbnail = link.querySelector('img');
+      const label = link.querySelector('.screenshot-thumb-label');
+      const fallbackLabel = label && label.textContent ? label.textContent.trim() : '';
       screenshotModalImage.src = link.getAttribute('href') || '';
-      screenshotModalImage.alt = thumbnail ? thumbnail.alt : 'VirtualRow screenshot';
+      screenshotModalImage.alt = thumbnail
+        ? thumbnail.alt
+        : (fallbackLabel ? `${fallbackLabel} screenshot` : 'VirtualRow screenshot');
       screenshotModalImage.hidden = false;
       screenshotModal.hidden = false;
       screenshotModal.classList.add('open');
@@ -924,6 +928,20 @@
     }
     if (event.key === 'Escape') {
       closeScreenshotModal();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const firstFocusable = screenshotModalClose;
+      const lastFocusable = screenshotModal;
+      if (!event.shiftKey && document.activeElement === firstFocusable) {
+        event.preventDefault();
+        lastFocusable.focus();
+        return;
+      }
+      if (event.shiftKey && document.activeElement === lastFocusable) {
+        event.preventDefault();
+        firstFocusable.focus();
+      }
     }
   });
 </script>
