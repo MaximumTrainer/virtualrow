@@ -77,10 +77,6 @@ Thumbs.db
 .yarn/install-state.gz
 .pnp.*
 
-# Rust / WebAssembly build artifacts
-/src/wasm-pkg/
-/crates/**/target/
-
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
