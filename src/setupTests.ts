@@ -2,8 +2,7 @@ import '@testing-library/jest-dom';
 
 // Polyfill minimal ResizeObserver & IntersectionObserver for tests
 class MockResizeObserver implements ResizeObserver {
-  private callback: ResizeObserverCallback;
-  constructor(cb: ResizeObserverCallback) { this.callback = cb; }
+  constructor(_cb: ResizeObserverCallback) {}
   observe(_target: Element, _options?: ResizeObserverOptions): void {}
   unobserve(_target: Element): void {}
   disconnect(): void {}
@@ -12,8 +11,7 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null;
   readonly rootMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
-  private callback: IntersectionObserverCallback;
-  constructor(cb: IntersectionObserverCallback) { this.callback = cb; }
+  constructor(_cb: IntersectionObserverCallback) {}
   observe(_target: Element): void {}
   unobserve(_target: Element): void {}
   disconnect(): void {}

@@ -746,10 +746,9 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
 interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
-  boatProgress: number;
 }
 
-const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, boatProgress }) => {
+const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme }) => {
   const meshRef        = useRef<THREE.Mesh>(null);
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
@@ -2738,7 +2737,6 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
               segments={cloudConfig.segments}
               color={cloudConfig.color}
               scale={pos.scale}
-              depthWrite={false}
             />
           ))}
         </group>
@@ -2760,7 +2758,6 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
               segments={Math.floor(cloudConfig.segments * 0.6)}
               color={cloudConfig.color}
               scale={(45 + Math.random() * 30) * cloudConfig.scale}
-              depthWrite={false}
             />
           ))}
         </group>
@@ -2778,7 +2775,6 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
               segments={12}
               color={cloudConfig.color}
               scale={80 + Math.random() * 40}
-              depthWrite={false}
             />
           ))}
         </group>
@@ -3678,7 +3674,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
     // Get speed from Wasm physics engine (or JS fallback).
     // Build a minimal PM5Data-compatible object from available props.
     const pm5Data = {
-      pace: paceSPer500 ?? null,
+      pace: paceSPer500 ?? undefined,
       power: undefined,     // PM5 power not plumbed through here yet
       cadence: cadence ?? undefined,
       distance: distanceMeters ?? 0,
@@ -3937,7 +3933,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* Water - curved if we have GPS curve, otherwise straight */}
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} boatProgress={boatProgress} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
       ) : (
         <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
       )}
