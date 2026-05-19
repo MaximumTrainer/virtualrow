@@ -47,8 +47,8 @@ function jsSpeedFromPm5(pm5Data: PM5Data | null): number {
  * the simulation each animation frame.
  */
 export function usePhysicsEngine() {
-  const [boatState] = useState<BoatState>(DEFAULT_STATE);
-  const [workerLatency] = useState<WorkerLatency>(DEFAULT_LATENCY);
+  const [boatState, setBoatState] = useState<BoatState>(DEFAULT_STATE);
+  const workerLatency = DEFAULT_LATENCY;
 
   // Running JS position accumulator
   const jsPositionRef = useRef(0);
@@ -62,6 +62,12 @@ export function usePhysicsEngine() {
       // JS fallback: pace → speed, accumulate position.
       const speed = jsSpeedFromPm5(pm5Data);
       jsPositionRef.current += speed * dt;
+      setBoatState((prev) => ({
+        ...prev,
+        velocityMps: speed,
+        positionM: jsPositionRef.current,
+        acceleration: dt > 0 ? (speed - prev.velocityMps) / dt : 0,
+      }));
       return speed;
     },
     [],
@@ -69,6 +75,7 @@ export function usePhysicsEngine() {
 
   const resetEngine = useCallback(() => {
     jsPositionRef.current = 0;
+    setBoatState(DEFAULT_STATE);
   }, []);
 
   return { boatState, dispatchTick, resetEngine, workerLatency };
