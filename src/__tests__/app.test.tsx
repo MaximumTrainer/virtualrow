@@ -35,12 +35,13 @@ beforeAll(() => {
     },
   });
   HTMLCanvasElement.prototype.getContext = vi.fn(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((contextType: string) =>
-      contextType === '2d'
-        ? (context as any)
-        : null) as HTMLCanvasElement['getContext'],
-  );
+    ((contextType: string) => {
+      if (contextType === '2d') {
+        return context as unknown as CanvasRenderingContext2D;
+      }
+      return null;
+    }) as typeof HTMLCanvasElement.prototype.getContext,
+  ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
 
 afterAll(() => {
