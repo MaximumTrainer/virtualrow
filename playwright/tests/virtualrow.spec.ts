@@ -338,7 +338,11 @@ test.describe('FTMS rower device support', () => {
       });
     });
 
-    await page.click('button:has-text("End Workout")');
+    // Wait explicitly for the End Workout button to be clickable before clicking
+    // (reduces flakiness on slower Windows CI runners where React state may not
+    // have fully settled even after the activity view becomes visible).
+    await page.locator('.btn-end-workout').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.locator('.btn-end-workout').click();
     await page.click('button:has-text("History")');
 
     const downloadPromise = page.waitForEvent('download');
@@ -1124,7 +1128,14 @@ test.describe('docs screenshots', () => {
       return summaryHidden && mapHidden;
     }, { timeout: 2000 });
     const routeStage = page.locator('.activity-route-stage');
-    await routeStage.screenshot({ path: path.join(docsDir, 'screenshot-rower-3d.png') });
+    // Use page.screenshot with clip to avoid locator stability-check timeouts caused
+    // by the Three.js animation loop on Ubuntu/Windows CI runners. This gives the same
+    // cropped output without waiting for pixel-level stabilisation.
+    const routeStageBbox = await routeStage.boundingBox({ timeout: 5000 }).catch(() => null);
+    await page.screenshot({
+      path: path.join(docsDir, 'screenshot-rower-3d.png'),
+      ...(routeStageBbox ? { clip: routeStageBbox } : {}),
+    });
     await page.evaluate(() => {
       document.getElementById('docs-hero-screenshot-style')?.remove();
     });
