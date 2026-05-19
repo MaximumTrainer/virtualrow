@@ -46,6 +46,7 @@ export interface WorkoutSession {
   workoutProgress?: WorkoutProgress; // Progress through structured workout (if applicable)
   rowerType?: 'pm5' | 'ftms'; // Which rower device was connected at session start
   hrConnectedAtStart?: boolean; // Whether HR monitor was connected when session started
+  isGuest?: boolean; // True for anonymous/guest sessions — excluded from history
 }
 
 // Individual split data (500m segments typical for rowing)

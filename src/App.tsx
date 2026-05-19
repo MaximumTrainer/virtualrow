@@ -13,6 +13,8 @@ import Rower3D from './components/Rower3D';
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
+import { GuestSessionSummary } from './components/GuestSessionSummary';
+import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
 
@@ -52,6 +54,28 @@ function App() {
   const [debugMode, setDebugMode] = useState(false);
   // Session state for the overlay UI
   const [sessionState, setSessionState] = useState<SessionState>('idle');
+  // Guest mode — activated by ?guest=true URL param or Quick Start button
+  const [isGuestMode, setIsGuestMode] = useState(false);
+  // Holds a completed guest session until the summary modal is dismissed
+  const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
+
+  // Activate guest mode if the URL contains ?guest=true
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('guest') === 'true') {
+        setIsGuestMode(true);
+      }
+    }
+  }, []);
+
+  // When guest mode is activated (URL param or button) ensure Willowbrook is selected
+  useEffect(() => {
+    if (isGuestMode && routes.length > 0) {
+      const wb = routes.find(r => r.id === '1');
+      if (wb) setSelectedRoute(wb);
+    }
+  }, [isGuestMode, routes]);
 
   // Start/stop activity timer when workout state changes
   useEffect(() => {
@@ -124,6 +148,19 @@ function App() {
     setSelectedRoute(route);
   }, []);
 
+  // The Willowbrook River route (id '1') is the default guest route
+  const willowbrookRoute = useMemo(() => routes.find(r => r.id === '1') ?? null, [routes]);
+
+  const handleQuickStart = useCallback(() => {
+    setIsGuestMode(true);
+    if (willowbrookRoute) setSelectedRoute(willowbrookRoute);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('guest', 'true');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [willowbrookRoute]);
+
   const handleStartWorkout = () => {
     // Guard against double-start (rapid clicks, re-entrant calls, or already-active session)
     if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
@@ -140,6 +177,7 @@ function App() {
         selectedWorkout?.id,
         activeRowerType,
         hrConnected,
+        isGuestMode,
       );
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -159,15 +197,39 @@ function App() {
 
   const handleEndWorkout = useCallback(() => {
     const completed = workoutService.endSession();
-    if (completed) {
-      setWorkoutHistory(workoutService.getAllSessions());
-    }
     setIsWorkoutActive(false);
     setCurrentSession(null);
     setWorkoutProgress(null);
     setSessionState('idle');
     workoutGeneratorService.endWorkout();
+
+    if (isGuestMode && completed) {
+      // Show summary modal; do NOT push to workoutHistory (guest sessions are excluded)
+      setGuestCompletedSession(completed);
+    } else {
+      if (completed) {
+        setWorkoutHistory(workoutService.getAllSessions());
+      }
+      setCurrentView('routes');
+    }
+  }, [isGuestMode]);
+
+  const handleGuestRowAgain = useCallback(() => {
+    setGuestCompletedSession(null);
     setCurrentView('routes');
+  }, []);
+
+  const handleGuestExit = useCallback(() => {
+    setGuestCompletedSession(null);
+    setIsGuestMode(false);
+    setWorkoutHistory(workoutService.getAllSessions());
+    setCurrentView('routes');
+    // Remove ?guest param from URL without reload
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('guest');
+      window.history.replaceState({}, '', url.toString());
+    }
   }, []);
 
   const handlePauseWorkout = useCallback(() => {
@@ -469,11 +531,28 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
 
   return (
     <div className="app-container">
+      {guestCompletedSession && (
+        <GuestSessionSummary
+          session={guestCompletedSession}
+          onRowAgain={handleGuestRowAgain}
+          onExit={handleGuestExit}
+        />
+      )}
+
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
           <p className="app-subtitle">RowNative-inspired virtual rowing on iconic water routes</p>
         </div>
+        {isGuestMode && (
+          <div className="guest-mode-banner">
+            <span className="guest-badge-header">Guest Mode</span>
+            <span className="guest-banner-text">Session data will not be saved.</span>
+            <button className="btn-exit-guest" onClick={handleGuestExit} type="button">
+              Exit Guest Mode
+            </button>
+          </div>
+        )}
       </header>
 
       <div className={`app-layout app-layout--${currentView}`}>
@@ -493,18 +572,22 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
-            <button
-              className={`nav-tab ${currentView === 'workouts' ? 'active' : ''}`}
-              onClick={() => setCurrentView('workouts')}
-            >
-              <span className="tab-icon">💪</span> Workouts
-            </button>
-            <button
-              className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
-              onClick={() => setCurrentView('history')}
-            >
-              <span className="tab-icon">📊</span> History
-            </button>
+            {!isGuestMode && (
+              <button
+                className={`nav-tab ${currentView === 'workouts' ? 'active' : ''}`}
+                onClick={() => setCurrentView('workouts')}
+              >
+                <span className="tab-icon">💪</span> Workouts
+              </button>
+            )}
+            {!isGuestMode && (
+              <button
+                className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
+                onClick={() => setCurrentView('history')}
+              >
+                <span className="tab-icon">📊</span> History
+              </button>
+            )}
           </nav>
 
           {currentView === 'routes' && (
@@ -578,6 +661,20 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
         </aside>
 
         <main className="app-main">
+          {/* Quick Start CTA — shown only when NOT in guest mode, on the routes view */}
+          {currentView === 'routes' && !isGuestMode && (
+            <div className="quick-start-banner">
+              <div className="quick-start-content">
+                <span className="quick-start-label">No account needed</span>
+                <h3>Just want to row?</h3>
+                <p>Start instantly on Willowbrook River — no sign-up, no data saved.</p>
+              </div>
+              <button className="btn btn-quick-start" onClick={handleQuickStart} type="button">
+                ⚡ Quick Start
+              </button>
+            </div>
+          )}
+
           {currentView === 'routes' && selectedRoute && (
             <div className="view-container view-container--routes">
               <div className="map-container">
@@ -604,7 +701,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
-                    {(() => { const pb = getPersonalBest(selectedRoute.id); return pb && (
+                    {!isGuestMode && (() => { const pb = getPersonalBest(selectedRoute.id); return pb && (
                       <span className="meta-badge pb-badge">
                         🏆 PB: {pb.averagePace}s/500m
                       </span>
@@ -619,7 +716,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     ))}
                   </div>
 
-                  {selectedWorkout && (
+                  {!isGuestMode && selectedWorkout && (
                     <div className="selected-workout-info">
                       <span>🎯 {selectedWorkout.name}</span>
                       <button className="btn-clear-workout" onClick={handleClearWorkout}>
@@ -641,45 +738,47 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   </button>
                 </div>
 
-                <div className="routes-list">
-                  <div className="routes-list-header">
-                    <h3>Routes</h3>
-                    <RouteImport onRouteImported={handleRouteImported} />
-                    <div className="route-filters">
-                      <div className="filter-group">
-                        {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
-                          <button
-                            key={d}
-                            className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
-                            onClick={() => setDifficultyFilter(d)}
-                          >
-                            {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
-                          </button>
-                        ))}
+                {!isGuestMode && (
+                  <div className="routes-list">
+                    <div className="routes-list-header">
+                      <h3>Routes</h3>
+                      <RouteImport onRouteImported={handleRouteImported} />
+                      <div className="route-filters">
+                        <div className="filter-group">
+                          {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
+                            <button
+                              key={d}
+                              className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
+                              onClick={() => setDifficultyFilter(d)}
+                            >
+                              {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
+                    {filteredRoutes.map((route) => (
+                      <div
+                        key={route.id}
+                        className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
+                        onClick={() => handleRouteSelect(route)}
+                      >
+                        <div className="route-item-header">
+                          <h4>{route.name}</h4>
+                          <span className={`badge badge-${route.difficulty}`}>
+                            {route.difficulty}
+                          </span>
+                        </div>
+                        <p className="route-item-location">{route.location}</p>
+                        <div className="route-item-meta">
+                          <span>{route.distance} km</span>
+                          <span>•</span>
+                          <span>{route.estimatedTime} min</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {filteredRoutes.map((route) => (
-                    <div
-                      key={route.id}
-                      className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
-                      onClick={() => handleRouteSelect(route)}
-                    >
-                      <div className="route-item-header">
-                        <h4>{route.name}</h4>
-                        <span className={`badge badge-${route.difficulty}`}>
-                          {route.difficulty}
-                        </span>
-                      </div>
-                      <p className="route-item-location">{route.location}</p>
-                      <div className="route-item-meta">
-                        <span>{route.distance} km</span>
-                        <span>•</span>
-                        <span>{route.estimatedTime} min</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -964,16 +1063,6 @@ function formatTime(ms: number): string {
     return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
-export function formatPace(paceSeconds: number | null): string {
-  if (!paceSeconds || paceSeconds <= 0) {
-    return '--:--';
-  }
-
-  const minutes = Math.floor(paceSeconds / 60);
-  const seconds = Math.floor(paceSeconds % 60);
-  return `${minutes}:${String(seconds).padStart(2, '0')}/500m`;
 }
 
 function formatDuration(seconds: number): string {

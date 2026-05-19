@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import App, { formatPace } from '../App';
+import App from '../App';
+import { formatPace } from '../utils/formatters';
 
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
@@ -64,5 +65,28 @@ describe('App component', () => {
     expect(formatPace(0)).toBe('--:--');
     expect(formatPace(125)).toBe('2:05/500m');
     expect(formatPace(359)).toBe('5:59/500m');
+  });
+
+  it('shows Quick Start button in normal mode', () => {
+    render(<App />);
+    expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
+  });
+
+  it('hides History and Workouts tabs in guest mode (?guest=true)', () => {
+    // Simulate URL param
+    const url = new URL(window.location.href);
+    url.searchParams.set('guest', 'true');
+    window.history.replaceState({}, '', url.toString());
+
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Guest Mode/i).length).toBeGreaterThan(0);
+
+    // Clean up URL
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('guest');
+    window.history.replaceState({}, '', cleanUrl.toString());
   });
 });

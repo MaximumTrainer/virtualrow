@@ -10,6 +10,7 @@ export class WorkoutService {
     structuredWorkoutId?: string,
     rowerType?: 'pm5' | 'ftms',
     hrConnectedAtStart?: boolean,
+    isGuest?: boolean,
   ): WorkoutSession {
     const session: WorkoutSession = {
       id: Date.now().toString(),
@@ -26,6 +27,7 @@ export class WorkoutService {
       structuredWorkoutId,
       rowerType,
       hrConnectedAtStart,
+      isGuest,
     };
 
     this.currentSession = session;
@@ -76,7 +78,7 @@ export class WorkoutService {
     try {
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('virtualrow:sessionEnded', { detail: completedSession });
-        window.dispatchEvent(event as any);
+        window.dispatchEvent(event);
       }
     } catch { /* ignore when not in browser */ }
     return completedSession;
@@ -145,7 +147,7 @@ export class WorkoutService {
   }
 
   getAllSessions(): WorkoutSession[] {
-    return [...this.sessions];
+    return this.sessions.filter(s => !s.isGuest);
   }
 
   getSessionsByRoute(routeId: string): WorkoutSession[] {
@@ -160,7 +162,7 @@ export class WorkoutService {
   }
 
   getStats() {
-    const completedSessions = this.sessions.filter((s) => !s.isActive);
+    const completedSessions = this.sessions.filter((s) => !s.isActive && !s.isGuest);
 
     return {
       totalWorkouts: completedSessions.length,
@@ -209,7 +211,7 @@ export class WorkoutService {
     ];
 
     const rows = this.sessions
-      .filter((s) => !s.isActive)
+      .filter((s) => !s.isActive && !s.isGuest)
       .map((s) => [
         s.startTime.toISOString().split('T')[0],
         s.routeName,
