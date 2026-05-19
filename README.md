@@ -72,7 +72,6 @@ See **First-Time Setup** below under Testing, or for quick start:
 git clone <repository-url>
 cd virtualrow
 npm install
-npm run wasm:build   # Required — builds the Rust/Wasm physics engine
 npm run dev          # → http://localhost:5173
 ```
 
@@ -104,7 +103,7 @@ src/
     routeLandmarks/
        LandmarkRenderer.tsx        # Route landmark placement in 3D scene
  hooks/
-    usePhysicsEngine.ts            # Rust/Wasm physics engine interface
+    usePhysicsEngine.ts            # Physics engine interface
  services/
     bluetoothService.ts            # PM5 BLE communication
     heartRateBluetoothService.ts   # HR monitor BLE service
@@ -112,8 +111,6 @@ src/
     routeService.ts                # Route data + GPX/GeoJSON import
     workoutService.ts              # Session tracking + localStorage persistence
     workoutGeneratorService.ts     # Structured workouts + intervals.icu import
- workers/
-    physicsWorker.ts               # Web Worker host for the Wasm physics engine
  utils/
     geoUtils.ts                    # Geographic calculations
     gpuUtils.ts                    # WebGL/GPU detection
@@ -123,9 +120,6 @@ src/
     bluetooth.d.ts                 # Web Bluetooth API types
  App.tsx                           # Root component; all application state lives here
  main.tsx                          # React entry point
-
-crates/
- virtualrow-physics/               # Rust physics engine (compiled to Wasm)
 
 playwright/
  tests/                            # E2E test specs
@@ -161,9 +155,6 @@ Unit tests are in `src/__tests__/`. E2E tests are in `playwright/tests/` and use
 git clone <repository-url>
 cd virtualrow
 npm install
-
-# Build the Rust/Wasm physics engine (required before first dev run)
-npm run wasm:build
 
 npm run dev
 # → http://localhost:5173

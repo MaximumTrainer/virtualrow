@@ -57,7 +57,7 @@ src/
     routeLandmarks/
        LandmarkRenderer.tsx  # Landmark/scenery placement in 3D scene
  hooks/
-    usePhysicsEngine.ts      # Rust/Wasm physics engine interface (Web Worker)
+    usePhysicsEngine.ts      # Physics engine interface
  services/
     bluetoothService.ts      # PM5 Bluetooth communication
     heartRateBluetoothService.ts # HR monitor service
@@ -65,8 +65,6 @@ src/
     routeService.ts          # Route data management
     workoutService.ts        # Workout session tracking
     workoutGeneratorService.ts # Structured workouts
- workers/
-    physicsWorker.ts         # Web Worker host for the Wasm physics engine
  utils/
     geoUtils.ts              # Geographic calculations
     gpuUtils.ts              # WebGL/GPU detection
@@ -152,9 +150,6 @@ Fullscreen HUD rendered on top of the 3D canvas during an active workout:
 # Start development server
 npm run dev
 
-# Build the Rust/Wasm physics engine (required before first `npm run dev` or `npm run build`)
-npm run wasm:build
-
 # Type checking
 npx tsc --noEmit
 
@@ -167,9 +162,6 @@ npm test
 # Run unit tests in watch mode
 npm test -- --watch
 
-# Run Wasm performance benchmarks
-npx vitest bench --run
-
 # Run E2E tests
 npm run test:e2e
 
@@ -179,67 +171,6 @@ npm run start:sim
 # Lint
 npm run lint
 ```
-
-## Rust / WebAssembly Physics Engine
-
-The physics engine is written in Rust and compiled to WebAssembly.
-
-### Prerequisites
-
-```bash
-# Install Rust (https://rustup.rs)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Add the Wasm target
-rustup target add wasm32-unknown-unknown
-
-# Install wasm-pack
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-# Or on Windows: cargo install wasm-pack
-```
-
-### Wasm Build
-
-```bash
-npm run wasm:build
-# Outputs to src/wasm-pkg/ (gitignored, must be rebuilt after Rust changes)
-```
-
-The crate is at `crates/virtualrow-physics/`. Run Rust unit tests with:
-
-```bash
-cd crates/virtualrow-physics
-cargo test
-```
-
-### Physics Constants
-
-| Constant | Value | Description |
-|---|---|---|
-| `MASS_BOAT_KG` | 14.0 kg | FISA minimum single scull |
-| `MASS_ROWER_KG` | 80.0 kg | Representative rower mass |
-| `K_DRAG` | 2.34 N·s²/m² | Hydrodynamic drag coefficient |
-| `DRIVE_EFFICIENCY` | 0.85 | Mechanical efficiency of power transfer |
-| `DRIVE_RATIO` | 0.35 | Fraction of stroke that is drive phase (animation only) |
-
-**Calibration:** At 200W steady-state, the engine converges to ≈ 4.17 m/s (2:00/500m pace),
-matching Concept2 pace tables within ±2 s.
-
-### Wasm-JS Bridge
-
-The engine runs in a Web Worker (`src/workers/physicsWorker.ts`).
-The React hook `src/hooks/usePhysicsEngine.ts` provides the interface:
-
-```ts
-const { boatState, dispatchTick, resetEngine } = usePhysicsEngine();
-
-// In useFrame:
-const speedMps = dispatchTick(delta, pm5Data);
-// boatState.strokeCycleT → drives oar/body animation
-// boatState.velocityMps → hull speed (async, lags one frame)
-```
-
-A JS fallback (`pace → speed` conversion) is used automatically if the Worker fails to load.
 
 ## HD Asset Pipeline
 
