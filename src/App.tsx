@@ -591,7 +591,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
           </nav>
 
           {currentView === 'routes' && (
-            <>
+            <div className={isGuestMode ? 'guest-devices-row' : undefined}>
               <div className="device-panel device-panel--selection">
                 <div className="device-panel-heading">
                   <h3 className="panel-title">Rower Device</h3>
@@ -636,7 +636,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   onDisconnected={handleHrDisconnected}
                 />
               </div>
-            </>
+            </div>
           )}
 
           {currentView === 'history' && (

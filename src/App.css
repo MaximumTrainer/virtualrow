@@ -1804,6 +1804,89 @@ body {
   flex-wrap: wrap;
 }
 
+/* In guest mode, place the rower and HR device panels side by side */
+.guest-devices-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.guest-devices-row > .device-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+/* Compact the inner component content for the side-by-side layout */
+.guest-devices-row .bluetooth-device-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guest-devices-row .device-header {
+  gap: 6px;
+}
+
+.guest-devices-row .device-name {
+  font-size: 12px;
+  margin: 0;
+}
+
+.guest-devices-row .device-status {
+  font-size: 10px;
+  margin: 0;
+}
+
+.guest-devices-row .metrics-grid {
+  gap: 4px;
+}
+
+.guest-devices-row .metric {
+  padding: 4px 6px;
+}
+
+.guest-devices-row .metric-value {
+  font-size: 16px;
+}
+
+.guest-devices-row .device-note {
+  font-size: 10px;
+  margin: 0;
+}
+
+.guest-devices-row .device-actions {
+  margin-top: 4px;
+}
+
+.guest-devices-row .device-panel-heading {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.guest-devices-row .device-panel-heading .panel-title {
+  font-size: 12px;
+  margin: 0;
+}
+
+.guest-devices-row .device-panel-status {
+  font-size: 10px;
+  padding: 3px 8px;
+}
+
+.guest-devices-row .device-selector-tabs {
+  width: 100%;
+  padding: 4px;
+}
+
+.guest-devices-row .device-selector-tab {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
 .guest-badge-header {
   background: rgba(74, 155, 255, 0.15);
   color: #4a9bff;
