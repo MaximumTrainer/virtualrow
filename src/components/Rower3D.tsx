@@ -3596,7 +3596,7 @@ const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number> }> =
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
 
       {/* Chromatic aberration — scales with velocity for camera-lens feel */}
-      <ChromaticAberration ref={caRef} offset={[0, 0] as unknown as THREE.Vector2} />
+      <ChromaticAberration ref={caRef} offset={new THREE.Vector2(0, 0)} />
 
       {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
@@ -3715,8 +3715,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
     boatPositionRef.current.copy(routePos.position);
     boatRotationRef.current = routePos.angle;
     
-    // Imperatively position boat group (Playwright testing path — no Rapier)
-    if (window.__PLAYWRIGHT_TESTING && boatGroupRef.current) {
+    // Imperatively position boat group when Rapier is absent (Playwright or physics fallback)
+    if (boatGroupRef.current) {
       boatGroupRef.current.position.copy(boatPositionRef.current);
       boatGroupRef.current.rotation.y = boatRotationRef.current;
     }
@@ -3958,19 +3958,26 @@ const RowerScene: React.FC<Rower3DProps> = ({
         renderThemedLandscape()
       )}
       
-      {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode */}
+      {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode.
+          PhysicsErrorBoundary catches Rapier WASM init failures so the rest of the scene remains visible. */}
       {window.__PLAYWRIGHT_TESTING ? (
         <group ref={boatGroupRef}>
           <RowingScull cadence={cadence || 30} />
         </group>
       ) : (
-        <Physics gravity={[0, -9.81, 0]}>
-          <BoatKinematicController
-            positionRef={boatPositionRef}
-            rotationRef={boatRotationRef}
-            cadence={cadence || 30}
-          />
-        </Physics>
+        <PhysicsErrorBoundary fallback={
+          <group ref={boatGroupRef}>
+            <RowingScull cadence={cadence || 30} />
+          </group>
+        }>
+          <Physics gravity={[0, -9.81, 0]}>
+            <BoatKinematicController
+              positionRef={boatPositionRef}
+              rotationRef={boatRotationRef}
+              cadence={cadence || 30}
+            />
+          </Physics>
+        </PhysicsErrorBoundary>
       )}
 
       {/* V-shaped Kelvin wake trailing behind the boat — disabled in test mode */}
@@ -3998,13 +4005,14 @@ const RowerScene: React.FC<Rower3DProps> = ({
 };
 
 // ============================================================================
-// GPU ERROR BOUNDARY
+// PHYSICS ERROR BOUNDARY — isolates Rapier WASM failures so they don't tear
+// down the whole Canvas. Falls back to an imperative group (same as Playwright mode).
 // ============================================================================
-class GPUErrorBoundary extends React.Component<
-  { children: React.ReactNode },
+class PhysicsErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
   { hasError: boolean }
 > {
-  constructor(props: { children: React.ReactNode }) {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -4014,14 +4022,62 @@ class GPUErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.warn('PhysicsErrorBoundary: Rapier physics unavailable, using fallback', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+// ============================================================================
+// GPU ERROR BOUNDARY
+// ============================================================================
+class GPUErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error?.message ?? String(error) };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('GPU Error Boundary caught error:', error, info);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="rower3d-fallback-marker" data-loaded="true">
-          3D rendering error - GPU may not be available
+        <div className="rower3d-fallback-marker" data-loaded="true" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          height: '100%',
+          color: '#888',
+          fontSize: '13px',
+          padding: '16px',
+          textAlign: 'center',
+        }}>
+          <span>3D rendering error – GPU may not be available</span>
+          {this.state.errorMessage && (
+            <span style={{ fontSize: '11px', opacity: 0.7, maxWidth: '380px', wordBreak: 'break-word' }}>
+              {this.state.errorMessage}
+            </span>
+          )}
+          <button
+            style={{ marginTop: '8px', padding: '6px 16px', cursor: 'pointer', fontSize: '12px' }}
+            onClick={() => this.setState({ hasError: false, errorMessage: '' })}
+          >
+            Retry
+          </button>
         </div>
       );
     }

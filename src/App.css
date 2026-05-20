@@ -1020,32 +1020,32 @@ body {
 .activity-stats-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .activity-stat-card {
-  padding: 18px 16px;
-  border-radius: 22px;
+  padding: 13px 10px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 12px 24px rgba(26, 52, 82, 0.08);
+  box-shadow: 0 8px 18px rgba(26, 52, 82, 0.08);
   text-align: center;
 }
 
 .activity-stat-label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 11px;
+  margin-bottom: 6px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
 
 .activity-stat-value {
   display: block;
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--color-text-primary);
   line-height: 1.1;
@@ -1565,11 +1565,8 @@ body {
   }
 
   .activity-stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-}
-
-@media (max-width: 900px) {
   .app-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1696,11 +1693,7 @@ body {
   }
 
   .activity-stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .activity-stat-card {
-    padding: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .activity-stat-value {
