@@ -1,8 +1,8 @@
 ﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
-import { EffectComposer, Bloom, ToneMapping, ChromaticAberration, Vignette, DepthOfField } from '@react-three/postprocessing';
-import { ToneMappingMode } from 'postprocessing';
+import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField } from '@react-three/postprocessing';
+import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { Physics, RigidBody } from '@react-three/rapier';
 import type { WaterRoute, Coordinate } from '../types/index';
@@ -3579,15 +3579,15 @@ const BoatKinematicController: React.FC<{
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
 const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number> }> = ({ velocityRef }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const caRef = useRef<any>(null);
+  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
+  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
+  const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
 
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(() => {
-    if (!caRef.current) return;
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
-    caRef.current.offset.set(aberration, aberration * 0.6);
+    caEffect.offset.set(aberration, aberration * 0.6);
   });
 
   return (
@@ -3596,7 +3596,7 @@ const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number> }> =
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
 
       {/* Chromatic aberration — scales with velocity for camera-lens feel */}
-      <ChromaticAberration ref={caRef} offset={new THREE.Vector2(0, 0)} />
+      <primitive object={caEffect} />
 
       {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
