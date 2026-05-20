@@ -1887,6 +1887,162 @@ body {
   font-size: 11px;
 }
 
+/* ============================================================================
+   GUEST MODE — NARROW DEVICE BAR
+   In guest mode the sidebar collapses to a single slim horizontal strip
+   running the full page width. Each panel becomes an inline flex row
+   (icon + label + status + button) so the bar stays as short as possible.
+   ============================================================================ */
+.app-sidebar--guest {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  grid-template-columns: none; /* cancel the grid */
+  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Hide the nav-tabs strip in guest mode — only the Routes tab exists and it's
+   implicit; the guest bar IS the navigation interface */
+.app-sidebar--guest .nav-tabs {
+  display: none;
+}
+
+/* The wrapper div that holds both panels spans all remaining width */
+.app-sidebar--guest .guest-devices-row {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+}
+
+/* Each device panel becomes a thin inline row */
+.app-sidebar--guest .device-panel,
+.app-sidebar--guest .device-panel--selection {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  min-width: 0;
+}
+
+/* Divider between the two panels */
+.app-sidebar--guest .device-panel + .device-panel {
+  border-left: 1px solid var(--color-border);
+}
+
+/* The bluetooth-device-container itself becomes an inline flex row */
+.app-sidebar--guest .bluetooth-device-container {
+  display: contents; /* let its children participate in the parent flex row */
+}
+
+/* Rower panel: heading + tabs + actions all in a row */
+.app-sidebar--guest .device-panel--selection {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.app-sidebar--guest .device-panel-heading {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-sidebar--guest .device-panel-heading .panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.app-sidebar--guest .device-panel-status {
+  font-size: 10px;
+  padding: 2px 7px;
+}
+
+.app-sidebar--guest .device-selector-tabs {
+  padding: 3px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.app-sidebar--guest .device-selector-tab {
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+/* Device header (icon + name + status) — sits inline */
+.app-sidebar--guest .device-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.app-sidebar--guest .device-icon-container {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.app-sidebar--guest .device-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.app-sidebar--guest .device-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-sidebar--guest .device-name {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.app-sidebar--guest .device-status {
+  font-size: 10px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Actions button sits at the end */
+.app-sidebar--guest .device-actions {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.app-sidebar--guest .btn-connect,
+.app-sidebar--guest .btn-disconnect {
+  padding: 5px 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Metrics grid and device note are not needed in the narrow bar */
+.app-sidebar--guest .metrics-grid,
+.app-sidebar--guest .device-note,
+.app-sidebar--guest .error-message {
+  display: none;
+}
+
 .guest-badge-header {
   background: rgba(74, 155, 255, 0.15);
   color: #4a9bff;

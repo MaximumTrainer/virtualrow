@@ -557,13 +557,13 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
 
       <div className={`app-layout app-layout--${currentView}`}>
         <aside
-          className={
-            `app-sidebar ${
-              isWorkoutActive && currentView === 'workout' && !window.__PLAYWRIGHT_TESTING
-                ? 'app-sidebar--hidden'
-                : ''
-            }`
-          }
+          className={[
+            'app-sidebar',
+            isGuestMode ? 'app-sidebar--guest' : '',
+            isWorkoutActive && currentView === 'workout' && !window.__PLAYWRIGHT_TESTING
+              ? 'app-sidebar--hidden'
+              : '',
+          ].filter(Boolean).join(' ')}
         >
           <nav className="nav-tabs">
             <button
