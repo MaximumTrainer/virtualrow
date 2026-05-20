@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
+import { HeartRateSimulator } from './components/HeartRateSimulator';
 import { RouteImport } from './components/RouteImport';
 import { FTMSDevice } from './components/FTMSDevice';
 import { routeService } from './services/routeService';
@@ -14,6 +15,7 @@ import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
+import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
@@ -76,6 +78,18 @@ function App() {
       if (wb) setSelectedRoute(wb);
     }
   }, [isGuestMode, routes]);
+
+  // Auto-start/stop the HR simulator when guest mode toggles
+  useEffect(() => {
+    if (isGuestMode) {
+      heartRateSimulator.start(130);
+    } else {
+      heartRateSimulator.stop();
+    }
+    return () => {
+      heartRateSimulator.stop();
+    };
+  }, [isGuestMode]);
 
   // Start/stop activity timer when workout state changes
   useEffect(() => {
@@ -1000,6 +1014,12 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
               onDisconnected={handlePM5Disconnected}
               onDataReceived={handlePM5Data}
             />
+          </div>
+
+          {/* Heart Rate Simulator Controls */}
+          <div className="debug-section debug-simulator-section">
+            <h5>Heart Rate Simulator</h5>
+            <HeartRateSimulator />
           </div>
           
           <div className="debug-section">

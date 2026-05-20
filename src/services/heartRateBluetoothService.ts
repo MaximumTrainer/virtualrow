@@ -106,6 +106,24 @@ export class HeartRateBluetoothService {
     return [...this.samples];
   }
 
+  /** Inject a simulated HR sample directly into the service event bus.
+   *  Used by the HR simulator so HeartRateMonitor and App.tsx both pick it up. */
+  simulateSample(bpm: number): void {
+    const sample: HeartRateSample = { bpm, timestamp: new Date() };
+    this.samples.push(sample);
+    if (this.samples.length > 1200) this.samples.shift();
+    this.emit('heartRate', sample);
+  }
+
+  /** Fire a synthetic connected/disconnected event for simulator use. */
+  simulateConnected(name: string): void {
+    this.emit('connected', { name });
+  }
+
+  simulateDisconnected(): void {
+    this.emit('disconnected', {});
+  }
+
   isConnected(): boolean {
     return !!this.device?.gatt?.connected;
   }
