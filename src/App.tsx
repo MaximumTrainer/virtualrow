@@ -60,6 +60,8 @@ function App() {
   const [isGuestMode, setIsGuestMode] = useState(false);
   // Holds a completed guest session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
+  // Route description panel state (collapsed/expanded)
+  const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -702,8 +704,21 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     <h2>{selectedRoute.name}</h2>
                     <p className="route-location">📍 {selectedRoute.location}</p>
                   </div>
-                  
-                  <p className="route-description">{selectedRoute.description}</p>
+
+                  <div className={`route-description-container ${isRouteDescriptionExpanded ? 'expanded' : 'collapsed'}`}>
+                    <button
+                      className="btn-toggle-description"
+                      onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
+                      type="button"
+                      aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
+                      aria-expanded={isRouteDescriptionExpanded}
+                    >
+                      {isRouteDescriptionExpanded ? '▼' : '▶'} Description
+                    </button>
+                    {isRouteDescriptionExpanded && (
+                      <p className="route-description">{selectedRoute.description}</p>
+                    )}
+                  </div>
                   
                   <div className="route-meta-compact">
                     <span className="meta-badge">
@@ -825,6 +840,20 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   <div className="activity-route-summary">
                     <h2>{selectedRoute?.name}</h2>
                     <p>{selectedRoute?.location}</p>
+                    <div className={`route-description-container ${isRouteDescriptionExpanded ? 'expanded' : 'collapsed'}`}>
+                      <button
+                        className="btn-toggle-description btn-toggle-description--activity"
+                        onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
+                        type="button"
+                        aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
+                        aria-expanded={isRouteDescriptionExpanded}
+                      >
+                        {isRouteDescriptionExpanded ? '▼' : '▶'} Description
+                      </button>
+                      {isRouteDescriptionExpanded && selectedRoute && (
+                        <p className="route-description route-description--activity">{selectedRoute.description}</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="activity-map-overlay">
