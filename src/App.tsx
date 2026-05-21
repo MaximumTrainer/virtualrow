@@ -837,24 +837,25 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     debugMode={debugMode}
                   />
 
-                  <div className="activity-route-summary">
-                    <h2>{selectedRoute?.name}</h2>
-                    <p>{selectedRoute?.location}</p>
-                    <div className="route-description-container">
-                      <button
-                        className="btn-toggle-description btn-toggle-description--activity"
-                        onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
-                        type="button"
-                        aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
-                        aria-expanded={isRouteDescriptionExpanded}
-                      >
-                        {isRouteDescriptionExpanded ? '▼' : '▶'} Description
-                      </button>
-                      {isRouteDescriptionExpanded && selectedRoute && (
+                  <button
+                    className="btn-toggle-description btn-toggle-description--activity"
+                    onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
+                    type="button"
+                    aria-label={isRouteDescriptionExpanded ? "Collapse route info" : "Expand route info"}
+                    aria-expanded={isRouteDescriptionExpanded}
+                  >
+                    {isRouteDescriptionExpanded ? '▼' : '▶'}
+                  </button>
+
+                  {isRouteDescriptionExpanded && (
+                    <div className="activity-route-summary">
+                      <h2>{selectedRoute?.name}</h2>
+                      <p>{selectedRoute?.location}</p>
+                      {selectedRoute && (
                         <p className="route-description route-description--activity">{selectedRoute.description}</p>
                       )}
                     </div>
-                  </div>
+                  )}
 
                   <div className="activity-map-overlay">
                     <RouteMap 
