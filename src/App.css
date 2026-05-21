@@ -499,6 +499,53 @@ body {
   line-height: 1.75;
 }
 
+.route-description-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-toggle-description {
+  align-self: flex-start;
+  background: rgba(var(--color-primary-rgb), 0.08);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.18);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-toggle-description:hover {
+  background: rgba(var(--color-primary-rgb), 0.14);
+  border-color: rgba(var(--color-primary-rgb), 0.28);
+}
+
+.btn-toggle-description--activity {
+  background: rgba(9, 21, 34, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f4f8fc;
+}
+
+.btn-toggle-description--activity:hover {
+  background: rgba(9, 21, 34, 0.88);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.activity-route-summary .route-description--activity {
+  color: rgba(244, 248, 252, 0.88);
+  font-size: 14px;
+  margin: 0;
+  padding: 8px 0 0 0;
+  line-height: 1.6;
+  max-width: 600px;
+}
+
 .route-info-overlay .route-meta-compact {
   display: flex;
   flex-wrap: wrap;
