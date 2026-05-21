@@ -705,7 +705,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                     <p className="route-location">📍 {selectedRoute.location}</p>
                   </div>
 
-                  <div className={`route-description-container ${isRouteDescriptionExpanded ? 'expanded' : 'collapsed'}`}>
+                  <div className="route-description-container">
                     <button
                       className="btn-toggle-description"
                       onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
@@ -840,7 +840,7 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   <div className="activity-route-summary">
                     <h2>{selectedRoute?.name}</h2>
                     <p>{selectedRoute?.location}</p>
-                    <div className={`route-description-container ${isRouteDescriptionExpanded ? 'expanded' : 'collapsed'}`}>
+                    <div className="route-description-container">
                       <button
                         className="btn-toggle-description btn-toggle-description--activity"
                         onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}

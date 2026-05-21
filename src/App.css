@@ -537,7 +537,7 @@ body {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.route-description--activity {
+.activity-route-summary .route-description--activity {
   color: rgba(244, 248, 252, 0.88);
   font-size: 14px;
   margin: 0;
