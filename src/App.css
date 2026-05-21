@@ -1012,9 +1012,16 @@ body {
   display: block;
 }
 
-.activity-route-summary {
+.activity-route-stage .btn-toggle-description--activity {
   position: absolute;
   top: 22px;
+  left: 22px;
+  z-index: 21;
+}
+
+.activity-route-summary {
+  position: absolute;
+  top: 60px;
   left: 22px;
   z-index: 20;
   padding: 14px 16px;
@@ -1721,8 +1728,13 @@ body {
     min-height: 300px;
   }
 
-  .activity-route-summary {
+  .activity-route-stage .btn-toggle-description--activity {
     top: 14px;
+    left: 14px;
+  }
+
+  .activity-route-summary {
+    top: 52px;
     left: 14px;
     padding: 12px 14px;
   }
