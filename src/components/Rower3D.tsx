@@ -19,6 +19,7 @@ import {
 import { getThemeConfig } from './rower3d/themeConfig';
 import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider, useAnimationFrame } from './rower3d/AnimationContext';
+import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import './Rower3D.css';
 
 declare global {
@@ -2194,7 +2195,7 @@ const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
 // Based on modern racing single scull dimensions (~8.2m length, ~0.3m beam).
 // All animation refs preserved for seamless gameplay integration.
 
-const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
+const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.MutableRefObject<number> }> = ({ cadence, strokeCycleTRef }) => {
   const leftOarRef = useRef<THREE.Group>(null);
   const rightOarRef = useRef<THREE.Group>(null);
   const rowerRef = useRef<THREE.Group>(null);
@@ -2217,7 +2218,9 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
     const strokesPerMinute = Math.max(18, cadence || 24);
     const freqHz = strokesPerMinute / 60;
     const time = state.clock.elapsedTime;
-    const phase = (time * freqHz % 1);
+    // Use shared strokeCycleT from physics engine when available; fall back to
+    // an independent clock so the animation still runs without a parent hook.
+    const phase = strokeCycleTRef ? strokeCycleTRef.current : (time * freqHz % 1);
     
     // Rowing stroke phases:
     // 0.0-0.4: Drive (push with legs, pull with arms, body swings back)
@@ -2799,6 +2802,8 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
 // Memoize so the boat only re-renders when cadence changes.
 // Position and rotation are driven imperatively — either via a parent group ref
 // (Playwright mode) or via a Rapier kinematic body (normal mode).
+// strokeCycleTRef is a stable ref object so its identity never changes; the memo
+// comparison below therefore never needs to check it.
 const RowingScull = React.memo(RowingScullBase, (prev, next) => prev.cadence === next.cadence);
 
 // ============================================================================
@@ -2811,7 +2816,8 @@ const BoatKinematicController: React.FC<{
   positionRef: React.MutableRefObject<THREE.Vector3>;
   rotationRef: React.MutableRefObject<number>;
   cadence: number;
-}> = ({ positionRef, rotationRef, cadence }) => {
+  strokeCycleTRef: React.MutableRefObject<number>;
+}> = ({ positionRef, rotationRef, cadence, strokeCycleTRef }) => {
   const bodyRef = useRef<RapierRigidBody>(null);
 
   useFrame(() => {
@@ -2833,7 +2839,7 @@ const BoatKinematicController: React.FC<{
 
   return (
     <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false}>
-      <RowingScull cadence={cadence} />
+      <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
     </RigidBody>
   );
 };
@@ -2913,6 +2919,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   // Detect route theme for landscape selection
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
+  // Compute route-specific landmark config (null when no matching route)
+  const landmarkConfig = useMemo(
+    () => getRouteLandmarkConfig(route?.name, route?.tags),
+    [route?.name, route?.tags],
+  );
   
   // Create curved path from GPS coordinates
   const routeCurve = useMemo(() => {
@@ -3224,17 +3235,25 @@ const RowerScene: React.FC<Rower3DProps> = ({
       ) : (
         renderThemedLandscape()
       )}
+
+      {/* Route-specific landmarks — offset by boatZ so landmark z-coords are
+          relative to the boat's current position along the course. */}
+      {landmarkConfig && (
+        <group position={[0, 0, boatZ]}>
+          <LandmarkRenderer config={landmarkConfig} />
+        </group>
+      )}
       
       {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode.
           PhysicsErrorBoundary catches Rapier WASM init failures so the rest of the scene remains visible. */}
       {IS_TEST_MODE ? (
         <group ref={boatGroupRef}>
-          <RowingScull cadence={cadence || 30} />
+          <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
         </group>
       ) : (
         <PhysicsErrorBoundary fallback={
           <group ref={boatGroupRef}>
-            <RowingScull cadence={cadence || 30} />
+            <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
           </group>
         }>
           <Physics gravity={[0, -9.81, 0]}>
@@ -3242,6 +3261,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
               positionRef={boatPositionRef}
               rotationRef={boatRotationRef}
               cadence={cadence || 30}
+              strokeCycleTRef={strokeCycleTRef}
             />
           </Physics>
         </PhysicsErrorBoundary>

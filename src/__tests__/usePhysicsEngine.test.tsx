@@ -91,4 +91,134 @@ describe('usePhysicsEngine', () => {
     });
     expect(result.current.strokePhase).toBe('catch');
   });
+
+  describe('strokeCycleT advancement', () => {
+    it('advances strokeCycleT proportionally to cadence and dt', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+
+      // 20 spm → 1/3 cycle per second → after 1s should be ≈0.333
+      act(() => {
+        result.current.dispatchTick(1, {
+          pace: 250,
+          power: undefined,
+          cadence: 20,
+          distance: 0,
+          elapsedTime: 0,
+        });
+      });
+
+      expect(result.current.boatStateRef.current.strokeCycleT).toBeCloseTo(20 / 60, 5);
+    });
+
+    it('wraps strokeCycleT back to 0 after a full cycle', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+
+      // 60 spm → 1 cycle per second → after 1s should wrap to 0
+      act(() => {
+        result.current.dispatchTick(1, {
+          pace: 250,
+          power: undefined,
+          cadence: 60,
+          distance: 0,
+          elapsedTime: 0,
+        });
+      });
+
+      expect(result.current.boatStateRef.current.strokeCycleT).toBeCloseTo(0, 5);
+    });
+
+    it('accumulates strokeCycleT across multiple ticks', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+
+      const pm5 = { pace: 250, power: undefined as undefined, cadence: 20, distance: 0, elapsedTime: 0 };
+      // 20 spm → cycleFreq = 1/3 Hz
+      // After 10 ticks × 0.1s: newT = (10 * 0.1 * 20/60) % 1 ≈ 0.333
+      act(() => {
+        for (let i = 0; i < 10; i++) {
+          result.current.dispatchTick(0.1, pm5);
+        }
+      });
+
+      const expected = (10 * 0.1 * (20 / 60)) % 1.0;
+      expect(result.current.boatStateRef.current.strokeCycleT).toBeCloseTo(expected, 3);
+    });
+  });
+
+  describe('strokePhase derivation from strokeCycleT', () => {
+    it('t < 0.15 → catch', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      // 20 spm, dt = 0.1s → newT = 20/60 * 0.1 ≈ 0.033 (catch)
+      act(() => {
+        result.current.dispatchTick(0.1, {
+          pace: 250, power: undefined, cadence: 20, distance: 0, elapsedTime: 0,
+        });
+      });
+      expect(result.current.boatStateRef.current.strokeCycleT).toBeLessThan(0.15);
+      expect(result.current.boatStateRef.current.strokePhase).toBe('catch');
+    });
+
+    it('t in 0.15–0.45 → drive', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      // Use a large cadence/dt to land in drive band: e.g. 180 spm × 0.1s = 0.3
+      act(() => {
+        result.current.dispatchTick(0.1, {
+          pace: 250, power: undefined, cadence: 180, distance: 0, elapsedTime: 0,
+        });
+      });
+      const t = result.current.boatStateRef.current.strokeCycleT;
+      expect(t).toBeGreaterThanOrEqual(0.15);
+      expect(t).toBeLessThan(0.45);
+      expect(result.current.boatStateRef.current.strokePhase).toBe('drive');
+    });
+
+    it('t in 0.45–0.55 → finish', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      // 300 spm × 0.1s = 0.5 → finish
+      act(() => {
+        result.current.dispatchTick(0.1, {
+          pace: 250, power: undefined, cadence: 300, distance: 0, elapsedTime: 0,
+        });
+      });
+      const t = result.current.boatStateRef.current.strokeCycleT;
+      expect(t).toBeGreaterThanOrEqual(0.45);
+      expect(t).toBeLessThan(0.55);
+      expect(result.current.boatStateRef.current.strokePhase).toBe('finish');
+    });
+
+    it('t >= 0.55 → recovery', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      // 480 spm × 0.1s = 0.8 → recovery
+      act(() => {
+        result.current.dispatchTick(0.1, {
+          pace: 250, power: undefined, cadence: 480, distance: 0, elapsedTime: 0,
+        });
+      });
+      const t = result.current.boatStateRef.current.strokeCycleT;
+      expect(t).toBeGreaterThanOrEqual(0.55);
+      expect(result.current.boatStateRef.current.strokePhase).toBe('recovery');
+    });
+
+    it('uses fallback cadence of 20 spm when cadence is absent', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      act(() => {
+        result.current.dispatchTick(1, {
+          pace: 250, power: undefined, cadence: undefined, distance: 0, elapsedTime: 0,
+        });
+      });
+      // 20 spm default → newT = 20/60 ≈ 0.333 → drive
+      expect(result.current.boatStateRef.current.strokeCycleT).toBeCloseTo(20 / 60, 4);
+      expect(result.current.boatStateRef.current.strokePhase).toBe('drive');
+    });
+
+    it('strokePhase React state updates on phase transition', () => {
+      const { result } = renderHook(() => usePhysicsEngine());
+      // Drive phase transition
+      act(() => {
+        result.current.dispatchTick(0.1, {
+          pace: 250, power: undefined, cadence: 180, distance: 0, elapsedTime: 0,
+        });
+      });
+      expect(result.current.strokePhase).toBe('drive');
+    });
+  });
 });

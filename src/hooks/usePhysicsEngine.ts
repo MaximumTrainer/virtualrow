@@ -58,13 +58,34 @@ export function usePhysicsEngine() {
       jsPositionRef.current += rawSpeed * dt;
 
       const prevVelocity = boatStateRef.current.velocityMps;
+      const prevPhase = boatStateRef.current.strokePhase;
+
+      // Advance stroke cycle: cadence (spm) → fraction of cycle per second
+      const cadenceSpm = pm5Data?.cadence ?? 20;
+      const cycleFreq = cadenceSpm / 60;
+      const newT = (boatStateRef.current.strokeCycleT + dt * cycleFreq) % 1.0;
+
+      // Derive stroke phase from standardised boundaries
+      let newPhase: string;
+      if (newT < 0.15) newPhase = 'catch';
+      else if (newT < 0.45) newPhase = 'drive';
+      else if (newT < 0.55) newPhase = 'finish';
+      else newPhase = 'recovery';
+
       boatStateRef.current = {
         ...boatStateRef.current,
         velocityMps: rawSpeed,
         smoothedVelocityMps: smoothedSpeedRef.current,
         positionM: jsPositionRef.current,
         acceleration: dt > 0 ? (rawSpeed - prevVelocity) / dt : 0,
+        strokeCycleT: newT,
+        strokePhase: newPhase,
       };
+
+      // Trigger React re-render only on phase transitions (~2×/stroke)
+      if (newPhase !== prevPhase) {
+        setStrokePhase(newPhase);
+      }
 
       return rawSpeed;
     },
