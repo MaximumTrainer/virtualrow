@@ -1,0 +1,160 @@
+name: Create improvement issues (temp)
+
+# Temporary, branch-scoped workflow that opens one GitHub issue per entry in
+# scripts/improvements.json. Intended to be run once via the "Run workflow"
+# button on the branch that introduces it, then deleted in a follow-up PR.
+#
+# The list covers graphic / physics / display improvements. Most entries are
+# non-functional refactors or dead-code removals; a small number intentionally
+# change visual quality or perception in specific performance modes (e.g.
+# gating post-processing on low, smoothing pace→speed). See individual issue
+# bodies for scope details.
+#
+# Safety:
+#   * Triggered only by manual workflow_dispatch (never on push/PR/schedule).
+#   * Idempotent: skips any title that already matches an existing OPEN issue
+#     in the repository.
+#   * Optional dry-run mode prints what would be created without calling the API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "If true, print planned issues without creating them"
+        type: boolean
+        default: false
+      source_file:
+        description: "Path to the JSON file with the list of improvements"
+        type: string
+        default: "scripts/improvements.json"
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-issues:
+    name: Create improvement issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate source file exists
+        run: |
+          set -euo pipefail
+          if [ ! -f "${{ inputs.source_file }}" ]; then
+            echo "::error file=${{ inputs.source_file }}::Source file not found"
+            exit 1
+          fi
+          echo "Using ${{ inputs.source_file }}"
+
+      - name: Create issues from JSON
+        uses: actions/github-script@v7
+        env:
+          SOURCE_FILE: ${{ inputs.source_file }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.SOURCE_FILE;
+            const dryRun = String(process.env.DRY_RUN).toLowerCase() === 'true';
+
+            const raw = fs.readFileSync(path, 'utf8');
+            let data;
+            try {
+              data = JSON.parse(raw);
+            } catch (err) {
+              core.setFailed(`Failed to parse ${path}: ${err.message}`);
+              return;
+            }
+
+            const baseLabels = Array.isArray(data.labels) ? data.labels : [];
+            const issues = Array.isArray(data.issues) ? data.issues : [];
+
+            if (issues.length === 0) {
+              core.setFailed('No issues found in source file (expected `issues` array).');
+              return;
+            }
+
+            core.info(`Loaded ${issues.length} candidate issue(s) from ${path}`);
+            core.info(`Mode: ${dryRun ? 'DRY RUN (no API calls)' : 'CREATE'}`);
+
+            // Fetch existing open issue titles once to make the run idempotent.
+            const existingTitles = new Set();
+            if (!dryRun) {
+              const iterator = github.paginate.iterator(github.rest.issues.listForRepo, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100,
+              });
+              for await (const { data: page } of iterator) {
+                for (const issue of page) {
+                  // Filter out pull requests (the issues API returns both).
+                  if (issue.pull_request) continue;
+                  existingTitles.add(issue.title.trim());
+                }
+              }
+              core.info(`Found ${existingTitles.size} existing open issue title(s) for dedup`);
+            }
+
+            let created = 0;
+            let skipped = 0;
+            const summaryRows = [['#', 'Status', 'Title']];
+
+            for (const [idx, entry] of issues.entries()) {
+              const title = (entry.title || '').trim();
+              if (!title) {
+                core.warning(`Entry #${idx} has no title; skipping.`);
+                skipped++;
+                summaryRows.push([String(idx + 1), 'skipped (no title)', '']);
+                continue;
+              }
+
+              if (existingTitles.has(title)) {
+                core.info(`↷ Skipping (already exists): ${title}`);
+                skipped++;
+                summaryRows.push([String(idx + 1), 'skipped (exists)', title]);
+                continue;
+              }
+
+              const labels = Array.from(new Set([
+                ...baseLabels,
+                ...(Array.isArray(entry.labels) ? entry.labels : []),
+              ]));
+              const body = (entry.body || '').trim();
+              if (!body) {
+                core.warning(`Entry #${idx} ("${title}") has no body; skipping.`);
+                skipped++;
+                summaryRows.push([String(idx + 1), 'skipped (no body)', title]);
+                continue;
+              }
+
+              if (dryRun) {
+                core.info(`[dry-run] Would create issue: ${title}`);
+                core.info(`  labels: ${labels.join(', ')}`);
+                summaryRows.push([String(idx + 1), 'dry-run', title]);
+                continue;
+              }
+
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels,
+              });
+              core.info(`✓ Created #${issue.number}: ${title}`);
+              created++;
+              existingTitles.add(title);
+              summaryRows.push([String(idx + 1), `created #${issue.number}`, title]);
+            }
+
+            await core.summary
+              .addHeading('Improvement issues')
+              .addRaw(`Source: \`${path}\``).addEOL()
+              .addRaw(`Mode: **${dryRun ? 'dry-run' : 'create'}**`).addEOL()
+              .addRaw(`Created: **${created}**, skipped: **${skipped}**, total candidates: **${issues.length}**`).addEOL()
+              .addTable(summaryRows)
+              .write();
