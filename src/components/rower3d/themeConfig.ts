@@ -4,6 +4,7 @@
 //
 // Each RouteTheme key maps to a ThemeConfig object that covers:
 //   water · mist · bank · landscapeColors · atmosphere · sky · clouds
+//   trees · architecture · groundCover · horizon
 // ============================================================================
 
 export type RouteTheme =
@@ -132,6 +133,58 @@ export interface ColorGradingConfig {
   contrast: number;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 6 scene-enrichment config sections (#128, #129, #130, #131)
+// ---------------------------------------------------------------------------
+
+export interface TreeSpeciesEntry {
+  type: 'pine' | 'willow' | 'oak' | 'cypress' | 'palm' | 'bare' | 'ornamental';
+  color: string;
+  trunkColor: string;
+  /** [min, max] height in scene units */
+  heightRange: [number, number];
+  /** [min, max] crown radius in scene units */
+  radiusRange: [number, number];
+  /** Relative density weight 0–1 */
+  density: number;
+}
+
+export interface TreesConfig {
+  species: TreeSpeciesEntry[];
+}
+
+export interface ArchitectureConfig {
+  buildingStyle: 'georgian' | 'gothic' | 'canal' | 'industrial' | 'modern' | 'futuristic';
+  wallMaterial: { color: string; roughness: number };
+  roofStyle: 'flat' | 'gabled' | 'pointed' | 'dome';
+  roofColor: string;
+  hasBridges: boolean;
+  bridgeStyle: 'stone-arch' | 'iron-truss' | 'gondola-bridge' | 'modern-cable';
+}
+
+export interface GroundCoverTypeEntry {
+  type: 'reed' | 'rock' | 'grass' | 'flower' | 'debris';
+  color: string;
+  /** Relative density weight 0–1 */
+  density: number;
+  /** Scale multiplier */
+  scale: number;
+}
+
+export interface GroundCoverConfig {
+  types: GroundCoverTypeEntry[];
+}
+
+export interface HorizonConfig {
+  type: 'mountains' | 'city' | 'hills' | 'industrial' | 'islands';
+  /** Silhouette fill color */
+  color: string;
+  /** Z distance from boat */
+  distance: number;
+  /** Max height of silhouette in scene units */
+  height: number;
+}
+
 export interface ThemeConfig {
   water: WaterConfig;
   mist: MistConfig;
@@ -143,6 +196,10 @@ export interface ThemeConfig {
   fog: FogConfig;
   lighting: LightingConfig;
   colorGrading: ColorGradingConfig;
+  trees: TreesConfig;
+  architecture: ArchitectureConfig;
+  groundCover: GroundCoverConfig;
+  horizon: HorizonConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +251,28 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 55, sunAzimuth: 90,
     },
     colorGrading: { hue: -0.05, saturation: 0.2, brightness: 0.05, contrast: 0.1 },
+    trees: {
+      species: [
+        { type: 'pine',  color: '#2a5a38', trunkColor: '#4a3020', heightRange: [8, 18],  radiusRange: [1.5, 3.0], density: 0.6 },
+        { type: 'oak',   color: '#3a6a28', trunkColor: '#5a4030', heightRange: [6, 12],  radiusRange: [2.0, 4.5], density: 0.4 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'gothic',
+      wallMaterial: { color: '#c8cfc0', roughness: 0.85 },
+      roofStyle: 'pointed',
+      roofColor: '#8a2020',
+      hasBridges: true,
+      bridgeStyle: 'stone-arch',
+    },
+    groundCover: {
+      types: [
+        { type: 'flower', color: '#e8e0c0', density: 0.5, scale: 0.4 },
+        { type: 'rock',   color: '#8a9090', density: 0.3, scale: 0.6 },
+        { type: 'grass',  color: '#3a5a30', density: 0.7, scale: 0.5 },
+      ],
+    },
+    horizon: { type: 'mountains', color: '#5a7090', distance: 400, height: 80 },
   },
 
   'gothic-venice': {
@@ -240,6 +319,27 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 20, sunAzimuth: 270,
     },
     colorGrading: { hue: 0.02, saturation: -0.1, brightness: -0.05, contrast: 0.15 },
+    trees: {
+      species: [
+        { type: 'cypress', color: '#1a2818', trunkColor: '#2a1810', heightRange: [10, 22], radiusRange: [0.8, 1.5], density: 0.55 },
+        { type: 'palm',    color: '#1e3020', trunkColor: '#3a2810', heightRange: [6, 14],  radiusRange: [1.5, 3.0], density: 0.45 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'canal',
+      wallMaterial: { color: '#c8b898', roughness: 0.9 },
+      roofStyle: 'flat',
+      roofColor: '#6a5040',
+      hasBridges: true,
+      bridgeStyle: 'gondola-bridge',
+    },
+    groundCover: {
+      types: [
+        { type: 'reed',   color: '#3a4a2a', density: 0.6, scale: 0.8 },
+        { type: 'debris', color: '#2a2a2a', density: 0.4, scale: 0.5 },
+      ],
+    },
+    horizon: { type: 'islands', color: '#1e2a2a', distance: 300, height: 25 },
   },
 
   'steampunk-henley': {
@@ -286,6 +386,28 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 30, sunAzimuth: 135,
     },
     colorGrading: { hue: 0.05, saturation: -0.15, brightness: -0.1, contrast: 0.2 },
+    trees: {
+      species: [
+        { type: 'oak',  color: '#4a5a3a', trunkColor: '#5a4030', heightRange: [7, 14],  radiusRange: [2.5, 5.0], density: 0.55 },
+        { type: 'pine', color: '#3a4a2a', trunkColor: '#4a3a28', heightRange: [8, 16],  radiusRange: [1.5, 3.0], density: 0.45 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'industrial',
+      wallMaterial: { color: '#4a3a2a', roughness: 0.92 },
+      roofStyle: 'gabled',
+      roofColor: '#2a2020',
+      hasBridges: true,
+      bridgeStyle: 'iron-truss',
+    },
+    groundCover: {
+      types: [
+        { type: 'grass', color: '#5a6040', density: 0.6, scale: 0.6 },
+        { type: 'rock',  color: '#6a5a48', density: 0.3, scale: 0.7 },
+        { type: 'reed',  color: '#4a5030', density: 0.4, scale: 0.5 },
+      ],
+    },
+    horizon: { type: 'hills', color: '#7a6a4a', distance: 350, height: 30 },
   },
 
   'dystopian-thames': {
@@ -332,6 +454,27 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 15, sunAzimuth: 270,
     },
     colorGrading: { hue: -0.02, saturation: -0.3, brightness: -0.15, contrast: 0.25 },
+    trees: {
+      species: [
+        { type: 'bare', color: '#151512', trunkColor: '#1a1510', heightRange: [5, 12], radiusRange: [0.5, 1.5], density: 0.8 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'industrial',
+      wallMaterial: { color: '#3a3a3a', roughness: 0.95 },
+      roofStyle: 'flat',
+      roofColor: '#2a2a2a',
+      hasBridges: true,
+      bridgeStyle: 'iron-truss',
+    },
+    groundCover: {
+      types: [
+        { type: 'debris', color: '#2a2a28', density: 0.6, scale: 0.8 },
+        { type: 'rock',   color: '#303030', density: 0.5, scale: 0.7 },
+        { type: 'grass',  color: '#252520', density: 0.3, scale: 0.4 },
+      ],
+    },
+    horizon: { type: 'industrial', color: '#2a2a2a', distance: 400, height: 60 },
   },
 
   'scifi-boston': {
@@ -378,6 +521,28 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 60, sunAzimuth: 225,
     },
     colorGrading: { hue: 0.1, saturation: 0.15, brightness: 0.1, contrast: 0.05 },
+    trees: {
+      species: [
+        { type: 'ornamental', color: '#1a3a2a', trunkColor: '#c0c0c8', heightRange: [4, 9],  radiusRange: [1.0, 2.5], density: 0.7 },
+        { type: 'pine',       color: '#152a20', trunkColor: '#1a2018', heightRange: [5, 11], radiusRange: [0.8, 1.8], density: 0.3 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'futuristic',
+      wallMaterial: { color: '#2a4a6a', roughness: 0.2 },
+      roofStyle: 'flat',
+      roofColor: '#1a3a5a',
+      hasBridges: true,
+      bridgeStyle: 'modern-cable',
+    },
+    groundCover: {
+      types: [
+        { type: 'flower', color: '#00e0ff', density: 0.5, scale: 0.3 },
+        { type: 'grass',  color: '#152a20', density: 0.4, scale: 0.4 },
+        { type: 'rock',   color: '#2a4a6a', density: 0.3, scale: 0.5 },
+      ],
+    },
+    horizon: { type: 'city', color: '#1a2a4a', distance: 400, height: 70 },
   },
 
   'willowbrook': {
@@ -424,6 +589,28 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       sunElevation: 45, sunAzimuth: 135,
     },
     colorGrading: { hue: 0, saturation: 0.1, brightness: 0, contrast: 0.05 },
+    trees: {
+      species: [
+        { type: 'willow', color: '#3a6840', trunkColor: '#5a4030', heightRange: [7, 15],  radiusRange: [2.5, 5.0], density: 0.5 },
+        { type: 'oak',    color: '#2a5838', trunkColor: '#4a3820', heightRange: [6, 13],  radiusRange: [2.0, 4.5], density: 0.5 },
+      ],
+    },
+    architecture: {
+      buildingStyle: 'georgian',
+      wallMaterial: { color: '#8b4a3a', roughness: 0.88 },
+      roofStyle: 'gabled',
+      roofColor: '#4a4a5a',
+      hasBridges: false,
+      bridgeStyle: 'stone-arch',
+    },
+    groundCover: {
+      types: [
+        { type: 'reed',   color: '#4a6a38', density: 0.5, scale: 0.7 },
+        { type: 'flower', color: '#c8a8d0', density: 0.4, scale: 0.3 },
+        { type: 'grass',  color: '#4a7a32', density: 0.6, scale: 0.5 },
+      ],
+    },
+    horizon: { type: 'hills', color: '#7a9a5a', distance: 350, height: 40 },
   },
 };
 

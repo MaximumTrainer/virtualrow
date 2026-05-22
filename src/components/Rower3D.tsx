@@ -17,7 +17,7 @@ import {
   distanceToProgress,
 } from './rower3d/curve';
 import { getThemeConfig } from './rower3d/themeConfig';
-import type { RouteTheme, ColorGradingConfig } from './rower3d/themeConfig';
+import type { RouteTheme, ColorGradingConfig, TreeSpeciesEntry } from './rower3d/themeConfig';
 import { AnimationProvider, useAnimationFrame } from './rower3d/AnimationContext';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import './Rower3D.css';
@@ -93,6 +93,73 @@ interface Rower3DProps {
 function seededRandom(seed: number): number {
   const s = Math.sin(seed * 9301 + 49297) * 233280;
   return s - Math.floor(s);
+}
+
+// ============================================================================
+// PROCEDURAL TEXTURE GENERATORS — #116, #106, #123
+// ============================================================================
+
+/** Procedural normal map for boat hull surface grain (#116). */
+function createBoatNormalMap(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#8080ff';
+  ctx.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 64; y += 4) {
+    ctx.strokeStyle = `rgba(120,120,250,0.3)`;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 2);
+  return tex;
+}
+
+/** Procedural normal map for Gerstner water ripple detail (#106). */
+function createWaterNormalMap(frequency: number): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const imageData = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = Math.sin(x * frequency * 0.3) * 0.5 + 0.5;
+      const ny = Math.cos(y * frequency * 0.3) * 0.5 + 0.5;
+      const i = (y * size + x) * 4;
+      imageData.data[i]   = Math.floor(nx * 128 + 64);
+      imageData.data[i+1] = Math.floor(ny * 128 + 64);
+      imageData.data[i+2] = 255;
+      imageData.data[i+3] = 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  return tex;
+}
+
+/** Voronoi-ish caustics cookie texture for the CausticsLight SpotLight (#123). */
+function createCausticsTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 256, 256);
+  // Use a fixed-seed loop so the texture is deterministic
+  for (let i = 0; i < 20; i++) {
+    const x = seededRandom(i * 7 + 1) * 256;
+    const y = seededRandom(i * 7 + 2) * 256;
+    const r = 10 + seededRandom(i * 7 + 3) * 30;
+    const g = ctx.createRadialGradient(x, y, r * 0.3, x, y, r);
+    g.addColorStop(0, 'rgba(200,220,255,0.8)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+  }
+  return new THREE.CanvasTexture(canvas);
 }
 
 // ============================================================================
@@ -578,6 +645,10 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performa
 
   // HD Theme-based water configurations with enhanced realism
   const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
+
+  // Dual scrolling normal maps for Gerstner wave surface detail (#106)
+  const waterNormalMap = useMemo(() => createWaterNormalMap(3.0), []);
+  useEffect(() => () => { waterNormalMap.dispose(); }, [waterNormalMap]);
   
   // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
@@ -602,6 +673,11 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performa
       const causticPulse = (Math.sin(time * 1.2) * 0.5 + 0.5) * 0.02;
       materialRef.current.emissiveIntensity = waterConfig.emissiveIntensity + causticPulse;
     }
+
+    // Scroll the water normal map UV offsets for animated ripple detail (#106)
+    waterNormalMap.offset.x = (time * 0.02) % 1;
+    waterNormalMap.offset.y = (time * 0.01) % 1;
+    waterNormalMap.needsUpdate = true;
   });
 
   return (
@@ -637,6 +713,8 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performa
           sheenColor={waterConfig.sheenColor}
           sheenRoughness={0.3}
           side={THREE.FrontSide}
+          normalMap={waterNormalMap}
+          normalScale={new THREE.Vector2(0.15, 0.15)}
         />
       </mesh>
       {!IS_TEST_MODE && performanceMode !== 'low' && (
@@ -1052,6 +1130,9 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   // Get HD theme colors for elements with enhanced detail
   const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
 
+  // Per-theme architecture config (#129)
+  const archConfig = useMemo(() => getThemeConfig(theme).architecture, [theme]);
+
   // Camera for distance-based LOD (#105)
   const { camera } = useThree();
 
@@ -1192,12 +1273,12 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
             position={[el.position.x, 0, el.position.z]} 
             rotation={[0, el.rotation, 0]}
           >
-            {/* HD Main building with detailed architectural materials */}
+            {/* HD Main building — wall color/roughness from architecture config (#129) */}
             <mesh position={[0, 6 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
               <boxGeometry args={[4.2 * el.scale, 12.5 * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial 
-                color={colors.building}
-                roughness={0.72}
+                color={archConfig.wallMaterial.color}
+                roughness={archConfig.wallMaterial.roughness}
                 metalness={0.08}
                 clearcoat={0.12}
                 clearcoatRoughness={0.75}
@@ -1205,21 +1286,44 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                 sheenColor={colors.buildingAccent}
               />
             </mesh>
-            {/* Detailed roof with cornices */}
-            <mesh position={[0, 12.5 * el.scale, 0]} castShadow={castNearShadow}>
-              <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
-              <meshPhysicalMaterial 
-                color={colors.buildingAccent}
-                roughness={0.78}
-                metalness={0.12}
-                clearcoat={0.08}
-              />
-            </mesh>
-            {/* Secondary roof detail */}
-            <mesh position={[0, 12.8 * el.scale, 0]} castShadow={castNearShadow}>
-              <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
-              <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
-            </mesh>
+            {/* Roof — style and color from architecture config (#129) */}
+            {archConfig.roofStyle === 'pointed' ? (
+              <mesh position={[0, 13 * el.scale, 0]} castShadow={castNearShadow}>
+                <coneGeometry args={[3 * el.scale, 4 * el.scale, 4]} />
+                <meshPhysicalMaterial
+                  color={archConfig.roofColor}
+                  roughness={0.65}
+                  metalness={0.12}
+                  clearcoat={0.1}
+                />
+              </mesh>
+            ) : archConfig.roofStyle === 'gabled' ? (
+              <mesh position={[0, 13 * el.scale, 0]} castShadow={castNearShadow}>
+                <coneGeometry args={[3.5 * el.scale, 3 * el.scale, 3]} />
+                <meshPhysicalMaterial
+                  color={archConfig.roofColor}
+                  roughness={0.7}
+                  metalness={0.1}
+                />
+              </mesh>
+            ) : (
+              <>
+                {/* Flat roof cornice */}
+                <mesh position={[0, 12.5 * el.scale, 0]} castShadow={castNearShadow}>
+                  <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
+                  <meshPhysicalMaterial 
+                    color={archConfig.roofColor}
+                    roughness={0.78}
+                    metalness={0.12}
+                    clearcoat={0.08}
+                  />
+                </mesh>
+                <mesh position={[0, 12.8 * el.scale, 0]} castShadow={castNearShadow}>
+                  <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
+                  <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
+                </mesh>
+              </>
+            )}
             {/* HD Windows — only rendered when close enough (#105) */}
             {isNearBuilding && [0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
               <React.Fragment key={j}>
@@ -1416,16 +1520,21 @@ transformed.z += swayAmt * 0.7;`,
 // ============================================================================
 // PINE TREES - Scattered along the banks
 // ============================================================================
-const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?: RouteTheme }> = ({ side, boatZ, theme = 'willowbrook' }) => {
   const xBase = side === 'left' ? -25 : 25;
-  
-  // Generate tree positions with variety
+
+  // Per-theme tree species config (#128)
+  const speciesList = useMemo(() => getThemeConfig(theme).trees.species, [theme]);
+
+  // Generate tree positions with species-based variety (#128)
   const trees = useMemo(() => {
-    const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number; isNear: boolean }> = [];
+    const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number; isNear: boolean; species: TreeSpeciesEntry }> = [];
     for (let z = -400; z < 400; z += 8) {
       const treeIdx = Math.round((z + 400) / 8);
       const count = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
       for (let j = 0; j < count; j++) {
+        const speciesIdx = Math.floor(seededRandom(treeIdx * 9 + j * 4 + 7) * speciesList.length);
+        const sp = speciesList[speciesIdx];
         result.push({
           x: xBase + (seededRandom(treeIdx * 9 + j * 4 + 2) - 0.5) * 15 + (side === 'left' ? -5 : 5),
           z: z + (seededRandom(treeIdx * 9 + j * 4 + 3) - 0.5) * 6,
@@ -1433,22 +1542,25 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           variant: Math.floor(seededRandom(treeIdx * 9 + j * 4 + 5) * 3),
           rotation: seededRandom(treeIdx * 9 + j * 4 + 6) * Math.PI * 2,
           isNear: Math.abs(z) <= 40,
+          species: sp,
         });
       }
     }
     return result;
-  }, [xBase, side]);
+  }, [xBase, side, speciesList]);
 
   // Sway time uniform — shared across all foliage materials (#107)
   const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
 
-  // Foliage materials with wind-sway vertex shader
+  // Foliage materials with wind-sway vertex shader — use primary species color (#128)
+  const primaryColor = speciesList[0]?.color ?? '#1a4020';
   const foliageMats = useMemo(() => [
-    makeSwayFoliageMaterial({ color: '#1a4020', roughness: 0.85, metalness: 0.0, transmission: 0.05, thickness: 0.5, sheen: 0.3, sheenColor: new THREE.Color('#2a5030') }, swayTime),
-    makeSwayFoliageMaterial({ color: '#2a5a30', roughness: 0.80, metalness: 0.0, transmission: 0.08, thickness: 0.4, sheen: 0.4, sheenColor: new THREE.Color('#3a7040') }, swayTime),
-    makeSwayFoliageMaterial({ color: '#3a6a38', roughness: 0.75, metalness: 0.0, transmission: 0.10, thickness: 0.3, sheen: 0.5, sheenColor: new THREE.Color('#4a8048') }, swayTime),
-    makeSwayFoliageMaterial({ color: '#4a7a42', roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.2, sheen: 0.6, sheenColor: new THREE.Color('#5a9050') }, swayTime),
-  ], [swayTime]);
+    makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.85, metalness: 0.0, transmission: 0.05, thickness: 0.5, sheen: 0.3, sheenColor: new THREE.Color(primaryColor) }, swayTime),
+    makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.80, metalness: 0.0, transmission: 0.08, thickness: 0.4, sheen: 0.4, sheenColor: new THREE.Color(primaryColor) }, swayTime),
+    makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.75, metalness: 0.0, transmission: 0.10, thickness: 0.3, sheen: 0.5, sheenColor: new THREE.Color(primaryColor) }, swayTime),
+    makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.2, sheen: 0.6, sheenColor: new THREE.Color(primaryColor) }, swayTime),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [swayTime, primaryColor]);
 
   useEffect(() => () => { foliageMats.forEach(m => m.dispose()); }, [foliageMats]);
 
@@ -1494,13 +1606,15 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
       {/* Per-tree trunks, bark rings, root flares, and branch variants */}
       {trees.map((tree, i) => {
         const nearShadow = Math.abs(tree.z) < RENDER_CONFIG.shadowNearBand;
+        const trunkColor = tree.species.trunkColor;
+        const isBare = tree.species.type === 'bare';
         return (
         <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale} rotation={[0, tree.rotation, 0]}>
-          {/* Photorealistic tree trunk with bark texture simulation */}
+          {/* Tree trunk — color from species config (#128) */}
           <mesh position={[0, 1.2, 0]} castShadow={nearShadow}>
             <cylinderGeometry args={[0.12, 0.22, 2.4, 12]} />
             <meshPhysicalMaterial 
-              color="#3d2817"
+              color={trunkColor}
               roughness={0.95}
               metalness={0.0}
               clearcoat={0.05}
@@ -1511,24 +1625,37 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           {[0.4, 0.8, 1.2, 1.6].map((y, j) => (
             <mesh key={j} position={[0, y, 0]} castShadow={nearShadow}>
               <torusGeometry args={[0.16 + (2.4 - y) * 0.02, 0.02, 6, 12]} />
-              <meshStandardMaterial color="#2a1a0f" roughness={1.0} />
+              <meshStandardMaterial color={trunkColor} roughness={1.0} />
             </mesh>
           ))}
           {/* Root flare at base */}
           <mesh position={[0, 0.1, 0]} castShadow={nearShadow}>
             <cylinderGeometry args={[0.22, 0.35, 0.3, 8]} />
-            <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
+            <meshPhysicalMaterial color={trunkColor} roughness={0.95} />
           </mesh>
-          {/* Small branch details */}
-          {tree.variant === 0 && (
+          {/* Bare/dead trees: extra dead branch stumps instead of foliage branches */}
+          {isBare && tree.variant === 0 && (
+            <>
+              <mesh position={[0.3, 2.5, 0.2]} rotation={[0, 0, 0.6]} castShadow={nearShadow}>
+                <cylinderGeometry args={[0.02, 0.04, 0.5, 5]} />
+                <meshStandardMaterial color={trunkColor} roughness={1.0} />
+              </mesh>
+              <mesh position={[-0.25, 2.8, -0.15]} rotation={[0, 0, -0.5]} castShadow={nearShadow}>
+                <cylinderGeometry args={[0.015, 0.03, 0.4, 5]} />
+                <meshStandardMaterial color={trunkColor} roughness={1.0} />
+              </mesh>
+            </>
+          )}
+          {/* Normal branch details for non-bare trees */}
+          {!isBare && tree.variant === 0 && (
             <>
               <mesh position={[0.3, 2.5, 0.2]} rotation={[0, 0, 0.4]} castShadow={nearShadow}>
                 <cylinderGeometry args={[0.03, 0.05, 0.6, 6]} />
-                <meshStandardMaterial color="#3d2817" roughness={0.9} />
+                <meshStandardMaterial color={trunkColor} roughness={0.9} />
               </mesh>
               <mesh position={[-0.25, 2.8, -0.15]} rotation={[0, 0, -0.3]} castShadow={nearShadow}>
                 <cylinderGeometry args={[0.025, 0.04, 0.5, 6]} />
-                <meshStandardMaterial color="#3d2817" roughness={0.9} />
+                <meshStandardMaterial color={trunkColor} roughness={0.9} />
               </mesh>
             </>
           )}
@@ -1536,9 +1663,10 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
         );
       })}
 
-      {/* Instanced foliage cone layers — 4 InstancedMesh, one per layer (#102).
+      {/* Instanced foliage cone layers — skip for bare species (#128).
           frustumCulled=false avoids incorrect culling when the bounding box
           is not explicitly recomputed after matrix updates. */}
+      {speciesList[0]?.type !== 'bare' && (<>
       <instancedMesh ref={cone0Ref} args={[undefined, undefined, trees.length]} frustumCulled={false}>
         <coneGeometry args={[CONE_LAYERS[0][1], CONE_LAYERS[0][2], 8]} />
         <primitive object={foliageMats[0]} attach="material" />
@@ -1555,6 +1683,7 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
         <coneGeometry args={[CONE_LAYERS[3][1], CONE_LAYERS[3][2], 6]} />
         <primitive object={foliageMats[3]} attach="material" />
       </instancedMesh>
+      </>)}
     </group>
   );
 };
@@ -2376,8 +2505,271 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
 };
 
 
-// Shared OarRig component — mirrors geometry about the centre-line using a sign factor.
-// Replaces the previous 144-line duplicate left/right oar JSX blocks.
+// ============================================================================
+// CAUSTICS LIGHT — animated SpotLight with caustics cookie texture (#123)
+// Only rendered on performanceMode !== 'low'.
+// ============================================================================
+const CausticsLight: React.FC<{ boatZ: number }> = ({ boatZ }) => {
+  const spotRef = useRef<THREE.SpotLight>(null);
+  const targetRef = useRef<THREE.Object3D>(null);
+  const cookieRef = useRef<THREE.CanvasTexture | null>(null);
+
+  const causticsTexture = useMemo(() => {
+    const tex = createCausticsTexture();
+    cookieRef.current = tex;
+    return tex;
+  }, []);
+  useEffect(() => () => { causticsTexture.dispose(); }, [causticsTexture]);
+
+  useAnimationFrame((time) => {
+    if (spotRef.current) {
+      // Slowly orbit the light for animated caustics shimmer
+      const r = 2.0;
+      spotRef.current.position.x = Math.sin(time * 0.4) * r;
+      spotRef.current.position.z = boatZ + Math.cos(time * 0.4) * r;
+    }
+    // Scroll texture UV offset for animated caustics pattern
+    if (causticsTexture) {
+      causticsTexture.offset.x = (time * 0.03) % 1;
+      causticsTexture.offset.y = (time * 0.02) % 1;
+      causticsTexture.needsUpdate = true;
+    }
+  });
+
+  return (
+    <>
+      <object3D ref={targetRef} position={[0, 0, boatZ]} />
+      <spotLight
+        ref={spotRef}
+        position={[0, 8, boatZ]}
+        color="#b0d8ff"
+        intensity={0.6}
+        angle={0.5}
+        penumbra={0.4}
+        distance={20}
+        castShadow={false}
+        map={causticsTexture}
+        target={targetRef.current ?? undefined}
+      />
+    </>
+  );
+};
+
+// ============================================================================
+// GROUND COVER — instanced reeds, rocks, and grass along the banks (#130)
+// Only rendered on performanceMode !== 'low'.
+// ============================================================================
+const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode }> = ({ boatZ, theme }) => {
+  const gcConfig = useMemo(() => getThemeConfig(theme).groundCover, [theme]);
+
+  const reedEntry  = useMemo(() => gcConfig.types.find(t => t.type === 'reed'),  [gcConfig]);
+  const rockEntry  = useMemo(() => gcConfig.types.find(t => t.type === 'rock'),  [gcConfig]);
+  const grassEntry = useMemo(() => gcConfig.types.find(t => t.type === 'grass' || t.type === 'flower'), [gcConfig]);
+
+  const reedMeshRef  = useRef<THREE.InstancedMesh>(null);
+  const rockMeshRef  = useRef<THREE.InstancedMesh>(null);
+  const grassMeshRef = useRef<THREE.InstancedMesh>(null);
+
+  const REED_COUNT  = 120;
+  const ROCK_COUNT  = 40;
+  const GRASS_COUNT = 80;
+
+  // Reed material
+  const reedMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: reedEntry?.color ?? '#8a7a50',
+    roughness: 0.85,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+  }), [reedEntry]);
+  useEffect(() => () => { reedMat.dispose(); }, [reedMat]);
+
+  // Rock material
+  const rockMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: rockEntry?.color ?? '#666666',
+    roughness: 0.9,
+    metalness: 0.05,
+  }), [rockEntry]);
+  useEffect(() => () => { rockMat.dispose(); }, [rockMat]);
+
+  // Grass material
+  const grassMat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: grassEntry?.color ?? '#4a7a40',
+    roughness: 0.8,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.9,
+  }), [grassEntry]);
+  useEffect(() => () => { grassMat.dispose(); }, [grassMat]);
+
+  // Populate instance matrices
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+
+    if (reedMeshRef.current && reedEntry) {
+      for (let i = 0; i < REED_COUNT; i++) {
+        const side = seededRandom(i * 7 + 0) > 0.5 ? 1 : -1;
+        const x = side * (8 + seededRandom(i * 7 + 1) * 8);
+        const z = (seededRandom(i * 7 + 2) - 0.5) * 400;
+        const s = (reedEntry.scale ?? 1) * (0.8 + seededRandom(i * 7 + 3) * 0.4);
+        dummy.position.set(x, 0.75 * s, z);
+        dummy.scale.set(s, s, s);
+        dummy.rotation.set(0, seededRandom(i * 7 + 4) * Math.PI * 2, 0);
+        dummy.updateMatrix();
+        reedMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      reedMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    if (rockMeshRef.current && rockEntry) {
+      for (let i = 0; i < ROCK_COUNT; i++) {
+        const side = seededRandom(i * 11 + 0) > 0.5 ? 1 : -1;
+        const x = side * (7 + seededRandom(i * 11 + 1) * 10);
+        const z = (seededRandom(i * 11 + 2) - 0.5) * 400;
+        const s = (rockEntry.scale ?? 1) * (0.3 + seededRandom(i * 11 + 3) * 0.5);
+        dummy.position.set(x, s * 0.5, z);
+        dummy.scale.set(s * (0.8 + seededRandom(i * 11 + 4) * 0.4), s, s * (0.8 + seededRandom(i * 11 + 5) * 0.4));
+        dummy.rotation.set(seededRandom(i * 11 + 6) * 0.5, seededRandom(i * 11 + 7) * Math.PI * 2, seededRandom(i * 11 + 8) * 0.3);
+        dummy.updateMatrix();
+        rockMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      rockMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    if (grassMeshRef.current && grassEntry) {
+      for (let i = 0; i < GRASS_COUNT; i++) {
+        const side = seededRandom(i * 5 + 0) > 0.5 ? 1 : -1;
+        const x = side * (7 + seededRandom(i * 5 + 1) * 10);
+        const z = (seededRandom(i * 5 + 2) - 0.5) * 400;
+        const s = (grassEntry.scale ?? 1) * (0.5 + seededRandom(i * 5 + 3) * 0.4);
+        dummy.position.set(x, 0.3 * s, z);
+        dummy.scale.setScalar(s);
+        dummy.rotation.set(0, seededRandom(i * 5 + 4) * Math.PI * 2, 0);
+        dummy.updateMatrix();
+        grassMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      grassMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [theme, reedEntry, rockEntry, grassEntry]);
+
+  return (
+    <group position={[0, 0, boatZ]}>
+      {reedEntry && (
+        <instancedMesh ref={reedMeshRef} args={[undefined, undefined, REED_COUNT]} frustumCulled={false}>
+          <cylinderGeometry args={[0.05, 0.05, 1.5, 4]} />
+          <primitive object={reedMat} attach="material" />
+        </instancedMesh>
+      )}
+      {rockEntry && (
+        <instancedMesh ref={rockMeshRef} args={[undefined, undefined, ROCK_COUNT]} frustumCulled={false}>
+          <sphereGeometry args={[1, 5, 4]} />
+          <primitive object={rockMat} attach="material" />
+        </instancedMesh>
+      )}
+      {grassEntry && (
+        <instancedMesh ref={grassMeshRef} args={[undefined, undefined, GRASS_COUNT]} frustumCulled={false}>
+          <planeGeometry args={[0.6, 0.6]} />
+          <primitive object={grassMat} attach="material" />
+        </instancedMesh>
+      )}
+    </group>
+  );
+};
+
+// ============================================================================
+// HORIZON SILHOUETTE — distant silhouette per theme using THREE.Shape (#131)
+// ============================================================================
+const HorizonSilhouette: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const horizonConfig = useMemo(() => getThemeConfig(theme).horizon, [theme]);
+
+  const silhouetteGeo = useMemo(() => {
+    const shape = new THREE.Shape();
+    const width = 300;
+    const segments = 60;
+
+    shape.moveTo(-width / 2, 0);
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = -width / 2 + t * width;
+      let y = 0;
+
+      switch (horizonConfig.type) {
+        case 'mountains': {
+          // Multi-peak mountain profile
+          y = Math.max(0,
+            seededRandom(i * 3 + 1) * 0.4 * horizonConfig.height
+            + Math.sin(t * Math.PI * 4) * 0.5 * horizonConfig.height
+            + Math.sin(t * Math.PI * 7 + 1.2) * 0.3 * horizonConfig.height
+          );
+          break;
+        }
+        case 'city': {
+          // Rectangular city skyline
+          const buildingIdx = Math.floor(t * 20);
+          const buildingH = seededRandom(buildingIdx * 5 + 2) * horizonConfig.height;
+          y = buildingH;
+          break;
+        }
+        case 'hills': {
+          // Rolling hills/tree-line
+          y = Math.max(0,
+            horizonConfig.height * 0.5
+            + Math.sin(t * Math.PI * 10) * horizonConfig.height * 0.3
+            + seededRandom(i * 3 + 3) * horizonConfig.height * 0.2
+          );
+          break;
+        }
+        case 'industrial': {
+          // Blocky factory shapes with chimneys
+          const segIdx = Math.floor(t * 15);
+          const isChimney = seededRandom(segIdx * 7 + 4) > 0.75;
+          y = isChimney
+            ? horizonConfig.height * (0.6 + seededRandom(segIdx * 7 + 5) * 0.6)
+            : seededRandom(segIdx * 7 + 6) * horizonConfig.height * 0.5;
+          break;
+        }
+        case 'islands': {
+          // Low island archipelago silhouette
+          const islandIdx = Math.floor(t * 8);
+          const isIsland = seededRandom(islandIdx * 9 + 7) > 0.4;
+          y = isIsland
+            ? horizonConfig.height * (0.2 + seededRandom(islandIdx * 9 + 8) * 0.5)
+            : 0;
+          break;
+        }
+        default:
+          y = horizonConfig.height * 0.15;
+          break;
+      }
+
+      shape.lineTo(x, y);
+    }
+
+    shape.lineTo(width / 2, 0);
+    shape.closePath();
+
+    return new THREE.ShapeGeometry(shape);
+  }, [horizonConfig]);
+
+  useEffect(() => () => { silhouetteGeo.dispose(); }, [silhouetteGeo]);
+
+  const silhouetteMat = useMemo(() => new THREE.MeshBasicMaterial({
+    color: horizonConfig.color,
+    side: THREE.FrontSide,
+    transparent: true,
+    opacity: 0.85,
+  }), [horizonConfig.color]);
+  useEffect(() => () => { silhouetteMat.dispose(); }, [silhouetteMat]);
+
+  return (
+    <group position={[0, 0, boatZ - horizonConfig.distance]}>
+      <mesh geometry={silhouetteGeo} material={silhouetteMat} />
+    </group>
+  );
+};
+
+
 const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
   const sx = side === 'left' ? -1 : 1;
   return (
@@ -2400,7 +2792,7 @@ const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
       {/* HD Oar shaft - premium carbon fiber */}
       <mesh position={[sx * 1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
-        <meshPhysicalMaterial color="#0a0a0a" metalness={0.15} roughness={0.28} clearcoat={0.92} clearcoatRoughness={0.08} sheen={0.2} sheenColor="#303030" />
+        <meshPhysicalMaterial color="#c0a060" metalness={0.1} roughness={0.15} clearcoat={0.6} clearcoatRoughness={0.2} sheen={0.2} sheenColor="#d0b070" />
       </mesh>
       {/* Grip area */}
       <mesh position={[sx * 0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
@@ -2410,12 +2802,12 @@ const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
       {/* HD Oar blade - competition composite with team colors */}
       <mesh position={[sx * 3.3, 0, 0]}>
         <boxGeometry args={[0.58, 0.018, 0.2]} />
-        <meshPhysicalMaterial color="#1e40af" metalness={0.0} roughness={0.18} clearcoat={0.85} clearcoatRoughness={0.08} sheen={0.35} sheenColor="#3b82f6" />
+        <meshPhysicalMaterial color="#1a3c6b" metalness={0} roughness={0.4} clearcoat={0.5} clearcoatRoughness={0.2} sheen={0.2} sheenColor="#2a5080" />
       </mesh>
       {/* Blade edge detail */}
       <mesh position={[sx * 3.55, 0, 0]}>
         <boxGeometry args={[0.08, 0.016, 0.19]} />
-        <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
+        <meshPhysicalMaterial color="#0f2460" roughness={0.4} metalness={0} clearcoat={0.5} />
       </mesh>
     </>
   );
@@ -2538,24 +2930,30 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
   const shirtColor = "#1e40af";
   const shirtAccent = "#2563eb";
   const shortsColor = "#1e3a5f";
+
+  // Procedural normal map for hull surface grain (#116)
+  const hullNormalMap = useMemo(() => createBoatNormalMap(), []);
+  useEffect(() => () => hullNormalMap.dispose(), [hullNormalMap]);
   
   return (
     <group>
-      {/* HD Main hull - racing shell with high-gloss fiberglass finish */}
+      {/* HD Main hull - racing shell with PBR fiberglass finish (#116) */}
       <mesh castShadow>
         <boxGeometry args={[0.45, 0.15, 8]} />
         <meshPhysicalMaterial 
-          color="#f0e4a8"           // Premium cream/gold fiberglass
+          color="#e8e4d8"           // Fibreglass white
           metalness={0.0}
-          roughness={0.08}
-          clearcoat={1.0}           // High-gloss gel coat finish
-          clearcoatRoughness={0.02} // Mirror-smooth clearcoat
+          roughness={0.2}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
           reflectivity={0.95}
           envMapIntensity={1.5}
           sheen={0.4}
           sheenColor="#fffef0"
           sheenRoughness={0.2}
           ior={1.45}
+          normalMap={hullNormalMap}
+          normalScale={new THREE.Vector2(0.3, 0.3)}
         />
       </mesh>
       
@@ -2563,11 +2961,11 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
       <mesh position={[0, 0.08, 0]} castShadow>
         <boxGeometry args={[0.4, 0.02, 7.5]} />
         <meshPhysicalMaterial 
-          color="#faf5d8" 
+          color="#f0ecdE" 
           metalness={0.0} 
-          roughness={0.12}
-          clearcoat={0.95}
-          clearcoatRoughness={0.05}
+          roughness={0.22}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
           sheen={0.25}
           sheenColor="#ffffff"
         />
@@ -2577,11 +2975,11 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
       <mesh position={[0, 0, -4.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.22, 1.0, 16]} />
         <meshPhysicalMaterial 
-          color="#f0e4a8" 
+          color="#e8e4d8" 
           metalness={0.0} 
-          roughness={0.08}
-          clearcoat={1.0}
-          clearcoatRoughness={0.02}
+          roughness={0.2}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
           reflectivity={0.95}
           sheen={0.4}
           sheenColor="#fffef0"
@@ -2592,11 +2990,11 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
       <mesh position={[0, 0, 4]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
         <coneGeometry args={[0.2, 0.8, 16]} />
         <meshPhysicalMaterial 
-          color="#f0e4a8" 
+          color="#e8e4d8" 
           metalness={0.0} 
-          roughness={0.08}
-          clearcoat={1.0}
-          clearcoatRoughness={0.02}
+          roughness={0.2}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
           reflectivity={0.95}
         />
       </mesh>
@@ -3386,8 +3784,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
           <>
             <ProceduralTerrain side="left" boatZ={boatZ} />
             <ProceduralTerrain side="right" boatZ={boatZ} />
-            <PineTrees side="left" boatZ={boatZ} />
-            <PineTrees side="right" boatZ={boatZ} />
+            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} />
+            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} />
           </>
         );
     }
@@ -3584,6 +3982,21 @@ const RowerScene: React.FC<Rower3DProps> = ({
           theme={routeTheme}
           sunMeshRef={godRaysSunRef}
         />
+      )}
+
+      {/* Animated caustics SpotLight — mid/high perf only (#123) */}
+      {!IS_TEST_MODE && performanceMode !== 'low' && (
+        <CausticsLight boatZ={boatZ} />
+      )}
+
+      {/* Ground cover: reeds, rocks, grass — mid/high perf only (#130) */}
+      {!IS_TEST_MODE && performanceMode !== 'low' && (
+        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
+      )}
+
+      {/* Horizon silhouette — all modes (#131) */}
+      {!IS_TEST_MODE && (
+        <HorizonSilhouette boatZ={boatZ} theme={routeTheme} />
       )}
     </AnimationProvider>
   );
