@@ -39,6 +39,9 @@ export class WorkoutService {
 
     this.currentSession = session;
     this.sessions.push(session);
+    // Reset HR ring-buffer cursor for the new session. We only reset here (not in
+    // endSession) because `updateSessionHeartRate` no-ops without a currentSession,
+    // so the cursor's value between sessions is unobservable.
     this.hrWriteCursor = 0;
     try {
       if (typeof window !== 'undefined') {

@@ -3529,9 +3529,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   // Boat state - progress along curve (0-1) and rotation angle
   const boatProgressRef = useRef<number>(0);
   const boatRotationRef = useRef<number>(0);
+  // Doubles as the persistent scratch position vector for getRoutePositionAtProgress.
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
-  // Persistent scratch vectors fed to getRoutePositionAtProgress every frame — avoids
-  // ~120 allocations/sec on the render hot path (one Vector3 per point + one per tangent).
+  // Persistent scratch tangent vector — paired with boatPositionRef above, the two are
+  // passed into getRoutePositionAtProgress every frame so the curve sample is written
+  // in-place. Saves ~2 Vector3 allocations per frame (~120/sec) on the render hot path.
   const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
   // Batched scenery state — both updates in one object to halve React re-renders
   const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });

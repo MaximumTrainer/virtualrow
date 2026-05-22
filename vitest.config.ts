@@ -37,12 +37,13 @@ export default defineConfig({
         'src/vendor/**',
       ],
       thresholds: {
-        // Thresholds set to the current measured floor (rounded down) so the
+        // Thresholds locked to the current measured floor (rounded down) so the
         // gate enforces "don't regress". Ratchet upward as coverage improves.
-        lines: 55,
-        functions: 50,
-        statements: 55,
-        branches: 65,
+        // Keys map to the v8 reporter's metric names.
+        lines: 55,        // % of executable lines covered
+        statements: 55,   // % of statements covered (mirrors `lines` for v8)
+        branches: 65,     // % of branch arms covered
+        functions: 50,    // % of declared functions invoked at least once
       },
     },
   },
