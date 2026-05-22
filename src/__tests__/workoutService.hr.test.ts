@@ -25,6 +25,24 @@ describe('WorkoutService heart rate integration', () => {
     expect(current?.heartRateSamples?.length).toBeLessThanOrEqual(600);
   });
 
+  it('preserves chronological order after overflowing the cap', () => {
+    // Regression: when a ring buffer overwrote entries in place, downstream code could
+    // no longer assume the last entry is the most recent. After pushing 1200 samples,
+    // we should retain the most recent 600 in insertion order.
+    const svc = new WorkoutService();
+    svc.startSession('r2b', 'Route 2b');
+    for (let i = 0; i < 1200; i++) {
+      svc.updateSessionHeartRate(i + 1); // unique non-zero bpm per sample
+    }
+    const samples = svc.getCurrentSession()!.heartRateSamples!;
+    expect(samples.length).toBe(600);
+    // Every sample must have come from the most-recent 600 emissions (bpm 601..1200),
+    // and the ordering should be chronological.
+    expect(samples[0].bpm).toBe(601);
+    expect(samples[samples.length - 1].bpm).toBe(1200);
+    expect(samples.every((s) => s.bpm >= 601 && s.bpm <= 1200)).toBe(true);
+  });
+
   it('persists heartRateAvg and heartRateMax on endSession', () => {
     const svc = new WorkoutService();
     svc.startSession('r3', 'Route 3');

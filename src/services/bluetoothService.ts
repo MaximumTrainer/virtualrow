@@ -1,10 +1,19 @@
 import type { PM5Data } from '../types/index';
+import type PM5Type from '../vendor/pm5-base.js';
+import type { PM5Message } from '../vendor/pm5-base.js';
+
+type PM5Constructor = new (
+  cb_connecting: () => void,
+  cb_connected: () => void,
+  cb_disconnected: () => void,
+  cb_message: (msg: PM5Message) => void
+) => PM5Type;
 
 export class Concept2BluetoothService {
   private device: BluetoothDevice | null = null;
   private txChar: BluetoothRemoteGATTCharacteristic | null = null;
-  private pm5Wrapper: any | null = null;
-  private listeners: Map<string, Function[]> = new Map();
+  private pm5Wrapper: PM5Type | null = null;
+  private listeners: Map<string, Array<(data: unknown) => void>> = new Map();
   // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
   private suppressDisconnectUntil = 0;
   private readonly DISCONNECT_SUPPRESSION_MS = 2000;
@@ -25,10 +34,9 @@ export class Concept2BluetoothService {
       }
       
       // Dynamically import PM5 wrapper to avoid ES module issues in tests
-      // @ts-ignore - pm5-base.js is a vendored JS file without TypeScript declarations
       const pm5Module = await import('../vendor/pm5-base.js');
-      const PM5 = pm5Module.default || pm5Module;
-      
+      const PM5 = (pm5Module.default ?? pm5Module) as PM5Constructor;
+
       // Pass a no-op as cb_connected so the event doesn't fire mid-connect before all
       // characteristic listeners are registered. We emit 'connected' ourselves below
       // once the service is fully ready.
@@ -37,7 +45,7 @@ export class Concept2BluetoothService {
         () => { /* deferred — see emit below */ },
         () => this.handleDisconnect(),
         // Multiplexed/misc messages
-        (msg: any) => this.handlePM5Message(msg)
+        (msg: PM5Message) => this.handlePM5Message(msg)
       );
 
       await this.pm5Wrapper.doConnect();
@@ -45,7 +53,7 @@ export class Concept2BluetoothService {
       // After connection, keep a reference to the underlying device
       try {
         this.device = this.pm5Wrapper.device || null;
-      } catch (e) {
+      } catch {
         // Ignored; wrapper may not expose them on older versions
       }
 
@@ -53,7 +61,7 @@ export class Concept2BluetoothService {
       if (this.pm5Wrapper && this.pm5Wrapper._getCharacteristic) {
         try {
           this.txChar = await this.pm5Wrapper._getCharacteristic({ id: 'ce060021-43e5-11e4-916c-0800200c9a66', service: { id: 'ce060020-43e5-11e4-916c-0800200c9a66' } });
-        } catch (e) {
+        } catch {
           // fallback if unavailable
           this.txChar = null;
         }
@@ -61,9 +69,9 @@ export class Concept2BluetoothService {
 
       // Register for parsed events we care about
       // Note: multiplexed-information is already registered by doConnect() via the cb_message constructor arg
-      await this.pm5Wrapper.addEventListener('additional-status', (e: any) => this.handlePM5Message({ type: 'additional-status', data: e.data }));
-      await this.pm5Wrapper.addEventListener('general-status', (e: any) => this.handlePM5Message({ type: 'general-status', data: e.data }));
-      
+      await this.pm5Wrapper.addEventListener('additional-status', (e) => this.handlePM5Message({ type: 'additional-status', data: e.data }));
+      await this.pm5Wrapper.addEventListener('general-status', (e) => this.handlePM5Message({ type: 'general-status', data: e.data }));
+
       // Listen for disconnect events from the device
       await this.pm5Wrapper.addEventListener('disconnect', () => {
         console.log('PM5 device disconnected');
@@ -122,7 +130,7 @@ export class Concept2BluetoothService {
   }
 
 
-  private handlePM5Message(msg: any): void {
+  private handlePM5Message(msg: PM5Message): void {
     try {
       const data = msg && msg.data ? msg.data : {};
       const parsed: Partial<PM5Data> = {};
@@ -213,14 +221,14 @@ export class Concept2BluetoothService {
     return this.device?.gatt?.connected ?? false;
   }
 
-  on(event: string, listener: Function): void {
+  on(event: string, listener: (data: unknown) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
     this.listeners.get(event)!.push(listener);
   }
 
-  off(event: string, listener: Function): void {
+  off(event: string, listener: (data: unknown) => void): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       const index = callbacks.indexOf(listener);
@@ -234,7 +242,7 @@ export class Concept2BluetoothService {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       callbacks.slice().forEach((cb) => {
-        try { cb(data); } catch (_) { /* prevent cascade from listener errors */ }
+        try { cb(data); } catch { /* prevent cascade from listener errors */ }
       });
     }
   }

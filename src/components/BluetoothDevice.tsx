@@ -47,12 +47,13 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
       });
     };
 
-    const handleData = (data: PM5Data) => {
+    const handleData = (data: unknown) => {
+      const pm5 = data as PM5Data;
       // Notify App synchronously so service-level updates are immediate.
       // App.tsx's handlePM5Data already defers its own setState to RAF.
-      onDataReceived?.(data);
+      onDataReceived?.(pm5);
       // Throttle the local display update to prevent renders inside the WS stack.
-      latestPM5DataRef.current = data;
+      latestPM5DataRef.current = pm5;
       if (!pm5RafScheduledRef.current) {
         pm5RafScheduledRef.current = true;
         requestAnimationFrame(() => {

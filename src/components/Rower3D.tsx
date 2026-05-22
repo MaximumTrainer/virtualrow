@@ -5,138 +5,24 @@ import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField } from '@rea
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { Physics, RigidBody } from '@react-three/rapier';
-import type { WaterRoute, Coordinate } from '../types/index';
-import { routeTotalDistanceMeters, latLngToMeters } from '../utils/geoUtils';
+import type { WaterRoute } from '../types/index';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
+import {
+  createRouteCurve,
+  getRoutePositionAtProgress,
+  getCurveDistances,
+  distanceToProgress,
+} from './rower3d/curve';
 import './Rower3D.css';
 
 // Preload the scull GLB at module load time so the asset is cached before first render
 useGLTF.preload('/models/scull.glb');
 
 // ============================================================================
-// GPS TO 3D PATH CONVERSION - Converts GPS coordinates to smooth 3D curve
+// GPS TO 3D PATH CONVERSION — see ./rower3d/curve.ts for the pure helpers.
 // ============================================================================
-
-// Convert GPS coordinates to 3D scene points
-const gpsToScenePoints = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.Vector3[] => {
-  if (coordinates.length < 2) return [];
-  
-  // Use first coordinate as origin
-  const origin = coordinates[0];
-  const points: THREE.Vector3[] = [];
-  
-  for (const coord of coordinates) {
-    const meters = latLngToMeters(coord.lat, coord.lng, origin.lat, origin.lng);
-    // Convert to scene coordinates: x = east/west, z = north/south (inverted for -Z forward)
-    points.push(new THREE.Vector3(
-      meters.x * sceneScale,
-      0,
-      -meters.y * sceneScale  // Negative because boat moves in -Z direction
-    ));
-  }
-  
-  return points;
-};
-
-// Create a smooth Catmull-Rom spline from GPS points
-const createRouteCurve = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.CatmullRomCurve3 | null => {
-  const points = gpsToScenePoints(coordinates, sceneScale);
-  if (points.length < 2) return null;
-  
-  // Create smooth curve with closed=false (not a loop)
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
-};
-
-// Get position and tangent at a given progress (0-1) along the route
-interface RoutePosition {
-  position: THREE.Vector3;
-  tangent: THREE.Vector3;
-  angle: number;  // Rotation angle in radians (around Y axis)
-}
-
-const getRoutePositionAtProgress = (
-  curve: THREE.CatmullRomCurve3 | null, 
-  progress: number
-): RoutePosition => {
-  if (!curve) {
-    // Fallback to straight line
-    return {
-      position: new THREE.Vector3(0, 0, -progress * 100),
-      tangent: new THREE.Vector3(0, 0, -1),
-      angle: 0
-    };
-  }
-  
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const position = curve.getPointAt(clampedProgress);
-  const tangent = curve.getTangentAt(clampedProgress).normalize();
-  
-  // Calculate angle from tangent (rotation around Y axis)
-  // The boat's bow (front) is at local -Z, so we rotate to align local -Z with tangent
-  // atan2(x, z) gives angle where tangent aligns with boat's forward direction
-  const angle = Math.atan2(tangent.x, tangent.z);
-  
-  return { position, tangent, angle };
-};
-
-// Get cumulative distances along the curve for accurate distance-to-progress mapping
-const getCurveDistances = (curve: THREE.CatmullRomCurve3, samples: number = 200): number[] => {
-  const distances: number[] = [0];
-  let totalDist = 0;
-  
-  for (let i = 1; i <= samples; i++) {
-    const t0 = (i - 1) / samples;
-    const t1 = i / samples;
-    const p0 = curve.getPointAt(t0);
-    const p1 = curve.getPointAt(t1);
-    totalDist += p0.distanceTo(p1);
-    distances.push(totalDist);
-  }
-  
-  return distances;
-};
-
-// Convert distance traveled to progress (0-1) on the curve
-const distanceToProgress = (
-  distanceMeters: number, 
-  totalDistanceMeters: number,
-  curveDistances: number[],
-  curveLength: number
-): number => {
-  if (totalDistanceMeters <= 0 || curveLength <= 0) return 0;
-  
-  // Map real-world distance to curve distance
-  const curveDistance = (distanceMeters / totalDistanceMeters) * curveLength;
-  
-  // Binary search to find progress
-  let low = 0;
-  let high = curveDistances.length - 1;
-  
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (curveDistances[mid] < curveDistance) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-  
-  // Interpolate for smoother result
-  const idx = Math.max(0, low - 1);
-  const nextIdx = Math.min(curveDistances.length - 1, low);
-  const segmentStart = curveDistances[idx];
-  const segmentEnd = curveDistances[nextIdx];
-  const segmentLength = segmentEnd - segmentStart;
-  
-  let t = idx / (curveDistances.length - 1);
-  if (segmentLength > 0) {
-    const within = (curveDistance - segmentStart) / segmentLength;
-    t += within / (curveDistances.length - 1);
-  }
-  
-  return Math.max(0, Math.min(1, t));
-};
 
 // Water channel width constant - keeps water wider than single scull (~1.5m wide)
 const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)
@@ -3643,7 +3529,12 @@ const RowerScene: React.FC<Rower3DProps> = ({
   // Boat state - progress along curve (0-1) and rotation angle
   const boatProgressRef = useRef<number>(0);
   const boatRotationRef = useRef<number>(0);
+  // Doubles as the persistent scratch position vector for getRoutePositionAtProgress.
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  // Persistent scratch tangent vector — paired with boatPositionRef above, the two are
+  // passed into getRoutePositionAtProgress every frame so the curve sample is written
+  // in-place. Saves ~2 Vector3 allocations per frame (~120/sec) on the render hot path.
+  const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
   // Batched scenery state — both updates in one object to halve React re-renders
   const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });
   const { boatProgress, boatZ } = sceneryState;
@@ -3710,9 +3601,14 @@ const RowerScene: React.FC<Rower3DProps> = ({
       boatProgressRef.current += (targetProgress - boatProgressRef.current) * delta * 3;
     }
     
-    // Get boat position and rotation from curve
-    const routePos = getRoutePositionAtProgress(routeCurve, boatProgressRef.current);
-    boatPositionRef.current.copy(routePos.position);
+    // Get boat position and rotation from curve — write directly into the persistent
+    // refs to avoid per-frame Vector3 allocations.
+    const routePos = getRoutePositionAtProgress(
+      routeCurve,
+      boatProgressRef.current,
+      boatPositionRef.current,
+      scratchTangentRef.current,
+    );
     boatRotationRef.current = routePos.angle;
     
     // Imperatively position boat group when Rapier is absent (Playwright or physics fallback)

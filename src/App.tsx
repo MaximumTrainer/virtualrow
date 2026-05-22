@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
@@ -10,13 +10,17 @@ import { workoutService } from './services/workoutService';
 import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import { heartRateBluetoothService } from './services/heartRateBluetoothService';
-import Rower3D from './components/Rower3D';
+// Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
+// Code-split it so the routes/workouts/history views don't pay the cost — the chunk only
+// loads when the user actually starts a workout (currentView === 'workout').
+const Rower3D = lazy(() => import('./components/Rower3D'));
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { formatPace } from './utils/formatters';
+import { buildSessionGPX, buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
 
@@ -414,85 +418,21 @@ function App() {
       alert('Route data not available for this workout');
       return;
     }
-    
-    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="VirtualRow">
-  <metadata>
-    <name>${session.routeName}</name>
-    <time>${new Date(session.startTime).toISOString()}</time>
-  </metadata>
-  <trk>
-    <name>${session.routeName}</name>
-    <trkseg>
-${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0</ele></trkpt>`).join('\n')}
-    </trkseg>
-  </trk>
-</gpx>`;
-    
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `virtualrow-${session.id}.gpx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+
+    const gpx = buildSessionGPX(session, route);
+    triggerBlobDownload(gpx, 'application/gpx+xml', `virtualrow-${session.id}.gpx`);
   }, []);
 
   // Export session as FIT format (simplified JSON structure for now)
   const handleExportFIT = useCallback((session: WorkoutSession) => {
-    // Note: True FIT format is binary. This exports a JSON representation
-    // that could be converted to FIT using external tools
-    // Generate a numeric serial from session ID (use hash if not numeric)
-    const serialNumber = /^\d+$/.test(session.id) 
-      ? parseInt(session.id, 10) 
-      : session.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const fitData = {
-      file_id: {
-        type: 'activity',
-        manufacturer: 'VirtualRow',
-        product: 1,
-        serial_number: serialNumber,
-        time_created: new Date(session.startTime).toISOString()
-      },
-      activity: {
-        timestamp: new Date(session.startTime).toISOString(),
-        total_timer_time: session.duration,
-        num_sessions: 1,
-        type: 'manual'
-      },
-      session: {
-        timestamp: new Date(session.startTime).toISOString(),
-        start_time: new Date(session.startTime).toISOString(),
-        total_elapsed_time: session.duration,
-        total_timer_time: session.duration,
-        total_distance: session.distance,
-        total_calories: session.calories,
-        avg_pace: session.averagePace,
-        avg_heart_rate: session.heartRateAvg,
-        max_heart_rate: session.heartRateMax,
-        sport: 'rowing',
-        sub_sport: 'indoor_rowing'
-      },
-      records: session.splits.map(split => ({
-        timestamp: new Date(split.timestamp).toISOString(),
-        distance: split.distance,
-        pace: split.pace,
-        power: split.power,
-        heart_rate: split.heartRate
-      }))
-    };
-    
-    const blob = new Blob([JSON.stringify(fitData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `virtualrow-${session.id}.fit.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // True FIT format is binary. This exports a JSON representation that
+    // could be converted to FIT using external tools.
+    const fitData = buildSessionFITPayload(session);
+    triggerBlobDownload(
+      JSON.stringify(fitData, null, 2),
+      'application/json',
+      `virtualrow-${session.id}.fit.json`,
+    );
   }, []);
 
   // Calculate personal best for a route (only completed sessions count)
@@ -510,7 +450,10 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
     , completedSessions[0]);
   }, [workoutHistory]);
 
-  const stats = workoutService.getStats();
+  // Memoise stats — the underlying call iterates the full session list and runs
+  // several reductions, so re-running it on every render (e.g. on every PM5 tick)
+  // is needlessly wasteful. workoutHistory is the only mutating dependency.
+  const stats = useMemo(() => workoutService.getStats(), [workoutHistory]);
   const latestHeartRate = useMemo(() => (
     heartRateSamples.length > 0
       ? heartRateSamples[heartRateSamples.length - 1].bpm
@@ -826,16 +769,35 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             <div className="view-container activity-view">
               <div className="activity-screen">
                 <div className="activity-route-stage">
-                  <Rower3D 
-                    route={selectedRoute!} 
-                    paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
-                    distanceMeters={pm5Data?.distance} 
-                    isPlaying={isWorkoutActive && sessionState === 'active'} 
-                    cadence={pm5Data?.cadence} 
-                    performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
-                    intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
-                    debugMode={debugMode}
-                  />
+                  <Suspense
+                    fallback={
+                      <div
+                        className="rower3d-fallback-marker"
+                        data-loaded="loading"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
+                          color: '#888',
+                          fontSize: '13px',
+                        }}
+                      >
+                        Loading 3D view…
+                      </div>
+                    }
+                  >
+                    <Rower3D
+                      route={selectedRoute!}
+                      paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined}
+                      distanceMeters={pm5Data?.distance}
+                      isPlaying={isWorkoutActive && sessionState === 'active'}
+                      cadence={pm5Data?.cadence}
+                      performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                      intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
+                      debugMode={debugMode}
+                    />
+                  </Suspense>
 
                   <button
                     className="btn-toggle-description btn-toggle-description--activity"

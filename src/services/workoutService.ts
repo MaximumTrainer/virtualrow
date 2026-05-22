@@ -1,5 +1,10 @@
 import type { WorkoutSession, Split, PM5Data, HeartRateSample, WorkoutProgress } from '../types/index';
 
+/** Maximum number of heart-rate samples retained per session (~10 minutes at 1 Hz). */
+export const HR_SAMPLE_CAP = 600;
+/** Minimum distance delta in meters between recorded splits. */
+export const SPLIT_DISTANCE_METERS = 500;
+
 export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
@@ -101,7 +106,7 @@ export class WorkoutService {
     ];
     const lastDistance = lastSplit ? lastSplit.distance : 0;
 
-    if (data.distance - lastDistance >= 500) {
+    if (data.distance - lastDistance >= SPLIT_DISTANCE_METERS) {
       const split: Split = {
         distance: data.distance,
         time: Math.floor(data.elapsedTime / 1000),
@@ -126,16 +131,14 @@ export class WorkoutService {
     if (!this.currentSession.heartRateSamples) {
       this.currentSession.heartRateSamples = [];
     }
-    // Maintain only last 600 samples (~10 minutes at 1s interval) to limit memory.
-    // Uses index-based ring buffer for O(1) writes.
+    // Maintain only last HR_SAMPLE_CAP samples (~10 minutes at 1s interval) to limit memory,
+    // preserving chronological order so the last entry represents the latest sample.
     const sample: HeartRateSample = { bpm, timestamp: new Date() };
     const samples = this.currentSession.heartRateSamples;
-    if (samples.length >= 600) {
-      const idx = samples.length % 600;
-      samples[idx] = sample;
-    } else {
-      samples.push(sample);
+    if (samples.length >= HR_SAMPLE_CAP) {
+      samples.shift();
     }
+    samples.push(sample);
   }
 
   getCurrentSession(): WorkoutSession | null {
