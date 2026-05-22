@@ -153,8 +153,8 @@ describe('Rower3D Component Logic', () => {
     
     it('should handle angle wrapping correctly', () => {
       // Test crossing from +π to -π boundary
-      let currentRotation = Math.PI * 0.9;
-      let targetRotation = -Math.PI * 0.9;
+      const currentRotation = Math.PI * 0.9;
+      const targetRotation = -Math.PI * 0.9;
       
       let rotationDiff = targetRotation - currentRotation;
       if (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
@@ -195,7 +195,8 @@ describe('Rower3D Component Logic', () => {
       expect(speedMps).toBe(0);
       
       // Progress should not change
-      const progressPerSecond = 5000 > 0 ? (speedMps / 5000) : 0;
+      const totalDistance = 5000;
+      const progressPerSecond = totalDistance > 0 ? (speedMps / totalDistance) : 0;
       expect(progressPerSecond).toBe(0);
     });
     

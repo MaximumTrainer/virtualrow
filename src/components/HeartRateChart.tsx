@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -11,6 +11,7 @@ import {
   Filler,
   CategoryScale,
 } from 'chart.js';
+import type { ChartOptions, ScriptableLineSegmentContext, Chart } from 'chart.js';
 import type { HeartRateSample } from '../types/index';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Legend, Filler, CategoryScale);
@@ -51,7 +52,7 @@ export const HeartRateChart: React.FC<HeartRateChartProps> = ({ samples, height 
         pointRadius: 0,
         fill: true,
         segment: {
-          borderColor: (ctx: any) => zoneColor(ctx.p0.parsed.y),
+          borderColor: (ctx: ScriptableLineSegmentContext) => zoneColor(ctx.p0.parsed.y),
         },
       },
       {
@@ -66,7 +67,7 @@ export const HeartRateChart: React.FC<HeartRateChartProps> = ({ samples, height 
     ],
   };
 
-  const options: any = {
+  const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -79,14 +80,11 @@ export const HeartRateChart: React.FC<HeartRateChartProps> = ({ samples, height 
     },
   };
 
-  const ref = useRef<any>(null);
-  useEffect(() => {
-    // Could add dynamic gradient update here if desired
-  }, [samples]);
+  const ref = useRef<ChartJS<'line'> | null>(null);
 
     const zoneBackground = {
     id: 'hrZonesBackground',
-    beforeDraw: (chart: any) => {
+    beforeDraw: (chart: Chart) => {
       const { ctx, chartArea: { left, right }, scales: { y } } = chart;
       const zones = [
         { max: 90, color: 'rgba(34,197,94,0.10)' },

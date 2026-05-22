@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 
 // Mock react-chartjs-2 Line component to avoid relying on Canvas in tests
 vi.mock('react-chartjs-2', () => ({
-  Line: (props: any) => <div data-testid="chart" {...props}>Chart</div>
+  Line: (_props: unknown) => <div data-testid="chart">Chart</div>
 }));
 
 import HeartRateChart from '../components/HeartRateChart';

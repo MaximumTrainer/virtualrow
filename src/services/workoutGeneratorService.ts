@@ -1,5 +1,28 @@
 import type { StructuredWorkout, WorkoutSegment, WorkoutProgress, PM5Data } from '../types/index';
 
+interface ICUWorkoutStep {
+  type?: string;
+  duration?: number;
+  distance?: number;
+  target_pace?: number;
+  target_power?: number;
+  target_hr_min?: number;
+  target_hr_max?: number;
+  intensity?: string;
+  repeat?: number;
+  description?: string;
+  name?: string;
+}
+
+interface ICUWorkoutData {
+  id?: string;
+  name?: string;
+  description?: string;
+  type?: string;
+  steps?: ICUWorkoutStep[];
+  distance?: number;
+}
+
 export class WorkoutGeneratorService {
   private workouts: StructuredWorkout[] = [];
   private currentWorkout: StructuredWorkout | null = null;
@@ -651,8 +674,9 @@ export class WorkoutGeneratorService {
     }
   }
 
+
   // Convert intervals.icu workout format to our format
-  private convertIntervalsICUWorkout(icuWorkout: any): StructuredWorkout | null {
+  private convertIntervalsICUWorkout(icuWorkout: ICUWorkoutData): StructuredWorkout | null {
     try {
       const segments: WorkoutSegment[] = [];
       let order = 0;
@@ -660,7 +684,7 @@ export class WorkoutGeneratorService {
 
       // Parse intervals.icu workout structure
       if (icuWorkout.steps) {
-        icuWorkout.steps.forEach((step: any, index: number) => {
+        icuWorkout.steps.forEach((step: ICUWorkoutStep, index: number) => {
           const segment: WorkoutSegment = {
             id: `seg-${index}`,
             order: order++,

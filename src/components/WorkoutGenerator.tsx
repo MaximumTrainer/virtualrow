@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { StructuredWorkout } from '../types/index';
 import { workoutGeneratorService } from '../services/workoutGeneratorService';
 import './WorkoutGenerator.css';
@@ -9,18 +9,14 @@ interface WorkoutGeneratorProps {
 }
 
 export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGeneratorProps) {
-  const [workouts, setWorkouts] = useState<StructuredWorkout[]>([]);
+  const [workouts, setWorkouts] = useState<StructuredWorkout[]>(() => workoutGeneratorService.getAllWorkouts());
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importApiKey, setImportApiKey] = useState('');
   const [importAthleteId, setImportAthleteId] = useState('');
   const [importWorkoutId, setImportWorkoutId] = useState('');
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
-    setWorkouts(workoutGeneratorService.getAllWorkouts());
-  }, []);
-
-  const handleSelectWorkout = (workout: StructuredWorkout) => {
+  const handleSelectWorkout= (workout: StructuredWorkout) => {
     if (selectedWorkout?.id === workout.id) {
       onSelectWorkout(null);
     } else {

@@ -21,7 +21,7 @@ describe('HeartRateBluetoothService', () => {
     const listener = vi.fn();
     svc.on('heartRate', listener);
     // @ts-expect-error access private for test injection
-    svc.handleHRNotification({ target: { value: buildHRMeasurement(72) } } as any);
+    svc.handleHRNotification({ target: { value: buildHRMeasurement(72) } } as unknown as Event);
     expect(listener).toHaveBeenCalled();
     const callArg = listener.mock.calls[0][0];
     expect(callArg.bpm).toBe(72);
@@ -33,7 +33,7 @@ describe('HeartRateBluetoothService', () => {
     svc.on('heartRate', listener);
     // inject measurement with uint16 flag and bpm 140
     // @ts-expect-error private access for controlled test
-    svc.handleHRNotification({ target: { value: buildHRMeasurement(140, true) } } as any);
+    svc.handleHRNotification({ target: { value: buildHRMeasurement(140, true) } } as unknown as Event);
     expect(listener).toHaveBeenCalled();
     expect(listener.mock.calls[0][0].bpm).toBe(140);
   });
@@ -42,13 +42,13 @@ describe('HeartRateBluetoothService', () => {
     const svc = new HeartRateBluetoothService();
     for (let i = 0; i < 10; i++) {
       // @ts-expect-error private access
-      svc.handleHRNotification({ target: { value: buildHRMeasurement(60 + i) } } as any);
+      svc.handleHRNotification({ target: { value: buildHRMeasurement(60 + i) } } as unknown as Event);
     }
     expect(svc.getSamples().length).toBe(10);
     // exceed cap artificially
     for (let i = 0; i < 1300; i++) {
       // @ts-expect-error private access
-      svc.handleHRNotification({ target: { value: buildHRMeasurement(80) } } as any);
+      svc.handleHRNotification({ target: { value: buildHRMeasurement(80) } } as unknown as Event);
     }
     expect(svc.getSamples().length).toBeLessThanOrEqual(1200);
   });
