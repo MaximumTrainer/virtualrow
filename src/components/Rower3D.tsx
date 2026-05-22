@@ -39,6 +39,13 @@ const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, wat
 const RIVERBANK_WIDTH = 60; // width of each riverbank
 const LANDSCAPE_OFFSET = 50; // minimum distance from water center to landscape objects
 
+const RENDER_CONFIG = {
+  /** Progress-band around boat for landscape shadow casting (0..1) */
+  shadowNearProgressBand: 0.08,
+  /** World-unit band around boat for non-curve landscape shadow casting */
+  shadowNearBand: 150,
+} as const;
+
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
 
@@ -369,6 +376,39 @@ const WaterReflectionProbe: React.FC<{
 };
 
 // ============================================================================
+// SHARED WATER CONFIG
+// ============================================================================
+interface WaterConfig {
+  color: string;
+  transmission: number;
+  roughness: number;
+  thickness: number;
+  emissive: string;
+  emissiveIntensity: number;
+  attenuationColor: string;
+  attenuationDistance: number;
+  specularIntensity: number;
+  sheenColor: string;
+}
+
+function getWaterConfig(theme: RouteTheme): WaterConfig {
+  switch (theme) {
+    case 'crystal-bled':
+      return { color: '#3a9db8', transmission: 0.65, roughness: 0.04, thickness: 3.5, emissive: '#00e5ff', emissiveIntensity: 0.06, attenuationColor: '#00a8cc', attenuationDistance: 8.0, specularIntensity: 1.2, sheenColor: '#80deea' };
+    case 'gothic-venice':
+      return { color: '#1e3a3a', transmission: 0.22, roughness: 0.18, thickness: 1.5, emissive: '#0a3d62', emissiveIntensity: 0.015, attenuationColor: '#1a2f2f', attenuationDistance: 2.0, specularIntensity: 0.6, sheenColor: '#2a4a4a' };
+    case 'steampunk-henley':
+      return { color: '#3a4a38', transmission: 0.28, roughness: 0.15, thickness: 2.0, emissive: '#4a6741', emissiveIntensity: 0.008, attenuationColor: '#3a4a38', attenuationDistance: 3.0, specularIntensity: 0.8, sheenColor: '#5a7a58' };
+    case 'dystopian-thames':
+      return { color: '#0a1a2a', transmission: 0.15, roughness: 0.22, thickness: 1.0, emissive: '#1a2a4a', emissiveIntensity: 0.025, attenuationColor: '#0a1520', attenuationDistance: 1.0, specularIntensity: 1.4, sheenColor: '#2a3a5a' };
+    case 'scifi-boston':
+      return { color: '#0a3a4a', transmission: 0.45, roughness: 0.06, thickness: 2.5, emissive: '#00ced1', emissiveIntensity: 0.12, attenuationColor: '#006080', attenuationDistance: 5.0, specularIntensity: 1.0, sheenColor: '#40e0d0' };
+    default:
+      return { color: '#3a5a55', transmission: 0.38, roughness: 0.10, thickness: 2.5, emissive: '#2a4a40', emissiveIntensity: 0.008, attenuationColor: '#2a4a45', attenuationDistance: 4.0, specularIntensity: 0.9, sheenColor: '#4a6a60' };
+  }
+}
+
+// ============================================================================
 // HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
 // subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
@@ -378,94 +418,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
   const timeUniformRef = useRef({ value: 0 });
 
   // HD Theme-based water configurations with enhanced realism
-  const waterConfig = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled':
-        // Crystal-clear alpine lake - high visibility, turquoise tint
-        return { 
-          color: '#3a9db8', 
-          transmission: 0.65, 
-          roughness: 0.04, 
-          thickness: 3.5,
-          emissive: '#00e5ff', 
-          emissiveIntensity: 0.06,
-          attenuationColor: '#00a8cc',
-          attenuationDistance: 8.0,
-          specularIntensity: 1.2,
-          sheenColor: '#80deea'
-        };
-      case 'gothic-venice':
-        // Murky canal water - low visibility, greenish-brown, mysterious
-        return { 
-          color: '#1e3a3a', 
-          transmission: 0.22, 
-          roughness: 0.18, 
-          thickness: 1.5,
-          emissive: '#0a3d62', 
-          emissiveIntensity: 0.015,
-          attenuationColor: '#1a2f2f',
-          attenuationDistance: 2.0,
-          specularIntensity: 0.6,
-          sheenColor: '#2a4a4a'
-        };
-      case 'steampunk-henley':
-        // English river - slightly murky, warm green-brown tones
-        return { 
-          color: '#3a4a38', 
-          transmission: 0.28, 
-          roughness: 0.15, 
-          thickness: 2.0,
-          emissive: '#4a6741', 
-          emissiveIntensity: 0.008,
-          attenuationColor: '#3a4a38',
-          attenuationDistance: 3.0,
-          specularIntensity: 0.8,
-          sheenColor: '#5a7a58'
-        };
-      case 'dystopian-thames':
-        // Polluted industrial water - dark, oily surface, toxic sheen
-        return { 
-          color: '#0a1a2a', 
-          transmission: 0.15, 
-          roughness: 0.22, 
-          thickness: 1.0,
-          emissive: '#1a2a4a', 
-          emissiveIntensity: 0.025,
-          attenuationColor: '#0a1520',
-          attenuationDistance: 1.0,
-          specularIntensity: 1.4, // Oily sheen
-          sheenColor: '#2a3a5a'
-        };
-      case 'scifi-boston':
-        // Futuristic water with neon reflections - dark with luminous quality
-        return { 
-          color: '#0a3a4a', 
-          transmission: 0.45, 
-          roughness: 0.06, 
-          thickness: 2.5,
-          emissive: '#00ced1', 
-          emissiveIntensity: 0.12,
-          attenuationColor: '#006080',
-          attenuationDistance: 5.0,
-          specularIntensity: 1.0,
-          sheenColor: '#40e0d0'
-        };
-      default: // Realistic contemporary river (Willowbrook)
-        // Natural river water - balanced visibility, green-blue tones
-        return { 
-          color: '#3a5a55', 
-          transmission: 0.38, 
-          roughness: 0.10, 
-          thickness: 2.5,
-          emissive: '#2a4a40', 
-          emissiveIntensity: 0.008,
-          attenuationColor: '#2a4a45',
-          attenuationDistance: 4.0,
-          specularIntensity: 0.9,
-          sheenColor: '#4a6a60'
-        };
-    }
-  }, [theme]);
+  const waterConfig = useMemo(() => getWaterConfig(theme), [theme]);
   
   // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
@@ -658,70 +611,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
   const timeUniformRef = useRef({ value: 0 });
   
   // HD Theme-based water colors with enhanced realism (matches PhotorealisticWater)
-  const waterConfig = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled':
-        return { 
-          color: '#3a9db8', 
-          emissive: '#00e5ff', 
-          emissiveIntensity: 0.06,
-          transmission: 0.65,
-          thickness: 3.5,
-          attenuationColor: '#00a8cc',
-          roughness: 0.04
-        };
-      case 'gothic-venice':
-        return { 
-          color: '#1e3a3a', 
-          emissive: '#0a3d62', 
-          emissiveIntensity: 0.015,
-          transmission: 0.22,
-          thickness: 1.5,
-          attenuationColor: '#1a2f2f',
-          roughness: 0.18
-        };
-      case 'steampunk-henley':
-        return { 
-          color: '#3a4a38', 
-          emissive: '#4a6741', 
-          emissiveIntensity: 0.008,
-          transmission: 0.28,
-          thickness: 2.0,
-          attenuationColor: '#3a4a38',
-          roughness: 0.15
-        };
-      case 'dystopian-thames':
-        return { 
-          color: '#0a1a2a', 
-          emissive: '#1a2a4a', 
-          emissiveIntensity: 0.025,
-          transmission: 0.15,
-          thickness: 1.0,
-          attenuationColor: '#0a1520',
-          roughness: 0.22
-        };
-      case 'scifi-boston':
-        return { 
-          color: '#0a3a4a', 
-          emissive: '#00ced1', 
-          emissiveIntensity: 0.12,
-          transmission: 0.45,
-          thickness: 2.5,
-          attenuationColor: '#006080',
-          roughness: 0.06
-        };
-      default:
-        return { 
-          color: '#3a5a55', 
-          emissive: '#2a4a40', 
-          emissiveIntensity: 0.008,
-          transmission: 0.38,
-          thickness: 2.5,
-          attenuationColor: '#2a4a45',
-          roughness: 0.10
-        };
-    }
-  }, [theme]);
+  const waterConfig = useMemo(() => getWaterConfig(theme), [theme]);
   
   // Attach GPU Gerstner wave shader when theme changes.
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
@@ -1155,13 +1045,13 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
     return Math.abs(elementProgress - boatProgress) < visibleRange || elementProgress < 0.1;
   });
   
-  const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string) => {
+  const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string, castNearShadow: boolean) => {
     switch (el.type) {
       case 'tree':
         return (
           <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]} rotation={[0, el.rotation, 0]}>
             {/* HD Photorealistic trunk with detailed bark texture simulation */}
-            <mesh position={[0, 2 * el.scale, 0]} castShadow>
+            <mesh position={[0, 2 * el.scale, 0]} castShadow={castNearShadow}>
               <cylinderGeometry args={[0.22 * el.scale, 0.42 * el.scale, 4.2 * el.scale, 16]} />
               <meshPhysicalMaterial 
                 color={colors.treeBark}
@@ -1174,7 +1064,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* Detailed root flare with organic shape */}
-            <mesh position={[0, 0.15 * el.scale, 0]} castShadow>
+            <mesh position={[0, 0.15 * el.scale, 0]} castShadow={castNearShadow}>
               <cylinderGeometry args={[0.38 * el.scale, 0.65 * el.scale, 0.45 * el.scale, 10]} />
               <meshPhysicalMaterial 
                 color={colors.treeBark}
@@ -1186,13 +1076,13 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
             </mesh>
             {/* Secondary roots spreading */}
             {[0, 1.2, 2.4, 3.6, 4.8].map((angle, j) => (
-              <mesh key={j} position={[Math.cos(angle) * 0.5 * el.scale, 0.05, Math.sin(angle) * 0.5 * el.scale]} rotation={[0.3, angle, 0.4]} castShadow>
+              <mesh key={j} position={[Math.cos(angle) * 0.5 * el.scale, 0.05, Math.sin(angle) * 0.5 * el.scale]} rotation={[0.3, angle, 0.4]} castShadow={castNearShadow}>
                 <cylinderGeometry args={[0.06 * el.scale, 0.1 * el.scale, 0.6 * el.scale, 6]} />
                 <meshPhysicalMaterial color={colors.treeBark} roughness={0.98} />
               </mesh>
             ))}
             {/* HD Multi-layer conifer foliage with realistic light transmission */}
-            <mesh position={[0, 4.2 * el.scale, 0]} castShadow>
+            <mesh position={[0, 4.2 * el.scale, 0]} castShadow={castNearShadow}>
               <coneGeometry args={[2.8 * el.scale, 4.8 * el.scale, 16]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
@@ -1205,7 +1095,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                 sheenRoughness={0.7}
               />
             </mesh>
-            <mesh position={[0, 5.8 * el.scale, 0]} castShadow>
+            <mesh position={[0, 5.8 * el.scale, 0]} castShadow={castNearShadow}>
               <coneGeometry args={[2.1 * el.scale, 3.8 * el.scale, 16]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
@@ -1218,7 +1108,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                 sheenRoughness={0.65}
               />
             </mesh>
-            <mesh position={[0, 7.0 * el.scale, 0]} castShadow>
+            <mesh position={[0, 7.0 * el.scale, 0]} castShadow={castNearShadow}>
               <coneGeometry args={[1.4 * el.scale, 3.0 * el.scale, 14]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
@@ -1232,7 +1122,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* Spire top */}
-            <mesh position={[0, 8.0 * el.scale, 0]} castShadow>
+            <mesh position={[0, 8.0 * el.scale, 0]} castShadow={castNearShadow}>
               <coneGeometry args={[0.6 * el.scale, 2.0 * el.scale, 12]} />
               <meshPhysicalMaterial 
                 color={colors.tree}
@@ -1249,7 +1139,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
         return (
           <group key={`${side}-mountain-${index}`} position={[el.position.x, 0, el.position.z]}>
             {/* HD Main mountain with realistic rock surfaces */}
-            <mesh position={[0, 8 * el.scale, 0]} castShadow receiveShadow>
+            <mesh position={[0, 8 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
               <coneGeometry args={[10 * el.scale, 20 * el.scale, 10]} />
               <meshPhysicalMaterial 
                 color={colors.mountain}
@@ -1262,7 +1152,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* HD Snow cap with realistic ice/snow material */}
-            <mesh position={[0, 14 * el.scale, 0]} castShadow>
+            <mesh position={[0, 14 * el.scale, 0]} castShadow={castNearShadow}>
               <coneGeometry args={[4.2 * el.scale, 8.5 * el.scale, 10]} />
               <meshPhysicalMaterial 
                 color={colors.mountainSnow}
@@ -1276,15 +1166,15 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* Multiple rocky outcrops for natural appearance */}
-            <mesh position={[3 * el.scale, 5 * el.scale, 2 * el.scale]} castShadow>
+            <mesh position={[3 * el.scale, 5 * el.scale, 2 * el.scale]} castShadow={castNearShadow}>
               <dodecahedronGeometry args={[1.6 * el.scale, 0]} />
               <meshPhysicalMaterial color="#4a5545" roughness={0.95} metalness={0.02} />
             </mesh>
-            <mesh position={[-2 * el.scale, 7 * el.scale, 3 * el.scale]} castShadow>
+            <mesh position={[-2 * el.scale, 7 * el.scale, 3 * el.scale]} castShadow={castNearShadow}>
               <dodecahedronGeometry args={[1.2 * el.scale, 0]} />
               <meshPhysicalMaterial color="#525a4a" roughness={0.94} metalness={0.02} />
             </mesh>
-            <mesh position={[1 * el.scale, 4 * el.scale, -2.5 * el.scale]} castShadow>
+            <mesh position={[1 * el.scale, 4 * el.scale, -2.5 * el.scale]} castShadow={castNearShadow}>
               <dodecahedronGeometry args={[1.8 * el.scale, 0]} />
               <meshPhysicalMaterial color="#4a5040" roughness={0.96} metalness={0.01} />
             </mesh>
@@ -1298,7 +1188,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
             rotation={[0, el.rotation, 0]}
           >
             {/* HD Main building with detailed architectural materials */}
-            <mesh position={[0, 6 * el.scale, 0]} castShadow receiveShadow>
+            <mesh position={[0, 6 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
               <boxGeometry args={[4.2 * el.scale, 12.5 * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial 
                 color={colors.building}
@@ -1311,7 +1201,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* Detailed roof with cornices */}
-            <mesh position={[0, 12.5 * el.scale, 0]} castShadow>
+            <mesh position={[0, 12.5 * el.scale, 0]} castShadow={castNearShadow}>
               <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
               <meshPhysicalMaterial 
                 color={colors.buildingAccent}
@@ -1321,7 +1211,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               />
             </mesh>
             {/* Secondary roof detail */}
-            <mesh position={[0, 12.8 * el.scale, 0]} castShadow>
+            <mesh position={[0, 12.8 * el.scale, 0]} castShadow={castNearShadow}>
               <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
               <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
             </mesh>
@@ -1329,7 +1219,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
             {[0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
               <React.Fragment key={j}>
                 {/* Front windows */}
-                <mesh position={[2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
+                <mesh position={[2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
                   <meshPhysicalMaterial 
                     color="#0a1a2a"
@@ -1344,7 +1234,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                   />
                 </mesh>
                 {/* Back windows */}
-                <mesh position={[-2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow>
+                <mesh position={[-2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
                   <meshPhysicalMaterial 
                     color="#0a1a2a"
@@ -1361,7 +1251,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               </React.Fragment>
             ))}
             {/* Window frames for detail */}
-            <mesh position={[2.14 * el.scale, 6 * el.scale, 0]} castShadow>
+            <mesh position={[2.14 * el.scale, 6 * el.scale, 0]} castShadow={castNearShadow}>
               <boxGeometry args={[0.02 * el.scale, 10 * el.scale, 2.8 * el.scale]} />
               <meshPhysicalMaterial color="#1a1a1a" roughness={0.9} metalness={0.15} />
             </mesh>
@@ -1372,8 +1262,16 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   
   return (
     <group>
-      {filteredLeft.map((el, i) => renderElement(el, i, 'left'))}
-      {filteredRight.map((el, i) => renderElement(el, i, 'right'))}
+      {filteredLeft.map((el, i) => {
+        const elementProgress = i * 0.02 / 0.6;
+        const nearShadow = Math.abs(elementProgress - boatProgress) < RENDER_CONFIG.shadowNearProgressBand;
+        return renderElement(el, i, 'left', nearShadow);
+      })}
+      {filteredRight.map((el, i) => {
+        const elementProgress = i * 0.02 / 0.6;
+        const nearShadow = Math.abs(elementProgress - boatProgress) < RENDER_CONFIG.shadowNearProgressBand;
+        return renderElement(el, i, 'right', nearShadow);
+      })}
     </group>
   );
 };
@@ -1408,10 +1306,12 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
   
   return (
     <group position={[0, 0, boatZ]}>
-      {mountains.map((m, i) => (
+      {mountains.map((m, i) => {
+        const nearShadow = Math.abs(m.z) < RENDER_CONFIG.shadowNearBand;
+        return (
         <group key={i} position={[m.x, 0, m.z]}>
           {/* Main mountain body with realistic rock material */}
-          <mesh position={[0, m.height / 2 - 2, 0]} castShadow receiveShadow>
+          <mesh position={[0, m.height / 2 - 2, 0]} castShadow={nearShadow} receiveShadow>
             <coneGeometry args={[m.scale, m.height, 8]} />
             <meshPhysicalMaterial 
               color={rockColors[m.rockVariant]}
@@ -1423,7 +1323,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
           </mesh>
           
           {/* Rocky outcrops for detail */}
-          <mesh position={[m.scale * 0.3, m.height * 0.25, m.scale * 0.2]} castShadow>
+          <mesh position={[m.scale * 0.3, m.height * 0.25, m.scale * 0.2]} castShadow={nearShadow}>
             <dodecahedronGeometry args={[m.scale * 0.15, 0]} />
             <meshPhysicalMaterial 
               color="#4a5545"
@@ -1431,7 +1331,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
               metalness={0.02}
             />
           </mesh>
-          <mesh position={[-m.scale * 0.25, m.height * 0.35, -m.scale * 0.15]} castShadow>
+          <mesh position={[-m.scale * 0.25, m.height * 0.35, -m.scale * 0.15]} castShadow={nearShadow}>
             <dodecahedronGeometry args={[m.scale * 0.12, 0]} />
             <meshPhysicalMaterial 
               color="#555f50"
@@ -1441,7 +1341,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
           </mesh>
           
           {/* Snow cap with realistic material */}
-          <mesh position={[0, m.height * m.snowLine, 0]} castShadow>
+          <mesh position={[0, m.height * m.snowLine, 0]} castShadow={nearShadow}>
             <coneGeometry args={[m.scale * (1 - m.snowLine) * 1.1, m.height * (1 - m.snowLine) * 1.2, 8]} />
             <meshPhysicalMaterial 
               color="#f8fafc"
@@ -1455,7 +1355,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
           </mesh>
           
           {/* Snow detail patches */}
-          <mesh position={[m.scale * 0.2, m.height * (m.snowLine - 0.1), m.scale * 0.1]} castShadow>
+          <mesh position={[m.scale * 0.2, m.height * (m.snowLine - 0.1), m.scale * 0.1]} castShadow={nearShadow}>
             <sphereGeometry args={[m.scale * 0.08, 8, 6]} />
             <meshPhysicalMaterial 
               color="#ffffff"
@@ -1475,7 +1375,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
                 1.5,
                 m.scale * 0.6 * Math.sin((j / 3) * Math.PI * 2)
               ]} 
-              castShadow
+              castShadow={nearShadow}
             >
               <coneGeometry args={[1.5, 4, 8]} />
               <meshPhysicalMaterial 
@@ -1487,7 +1387,8 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
             </mesh>
           ))}
         </group>
-      ))}
+        );
+      })}
     </group>
   );
 };
@@ -1519,10 +1420,12 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
   
   return (
     <group position={[0, 0, boatZ]}>
-      {trees.map((tree, i) => (
+      {trees.map((tree, i) => {
+        const nearShadow = Math.abs(tree.z) < RENDER_CONFIG.shadowNearBand;
+        return (
         <group key={i} position={[tree.x, 0, tree.z]} scale={tree.scale} rotation={[0, tree.rotation, 0]}>
           {/* Photorealistic tree trunk with bark texture simulation */}
-          <mesh position={[0, 1.2, 0]} castShadow>
+          <mesh position={[0, 1.2, 0]} castShadow={nearShadow}>
             <cylinderGeometry args={[0.12, 0.22, 2.4, 12]} />
             <meshPhysicalMaterial 
               color="#3d2817"
@@ -1534,20 +1437,20 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           </mesh>
           {/* Bark detail rings */}
           {[0.4, 0.8, 1.2, 1.6].map((y, j) => (
-            <mesh key={j} position={[0, y, 0]} castShadow>
+            <mesh key={j} position={[0, y, 0]} castShadow={nearShadow}>
               <torusGeometry args={[0.16 + (2.4 - y) * 0.02, 0.02, 6, 12]} />
               <meshStandardMaterial color="#2a1a0f" roughness={1.0} />
             </mesh>
           ))}
           {/* Root flare at base */}
-          <mesh position={[0, 0.1, 0]} castShadow>
+          <mesh position={[0, 0.1, 0]} castShadow={nearShadow}>
             <cylinderGeometry args={[0.22, 0.35, 0.3, 8]} />
             <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
           </mesh>
           
           {/* Multi-layered foliage with subsurface scattering effect */}
           {/* Bottom layer - dense, darker */}
-          <mesh position={[0, 2.8, 0]} castShadow>
+          <mesh position={[0, 2.8, 0]} castShadow={nearShadow}>
             <coneGeometry args={[1.4, 2.2, 12]} />
             <meshPhysicalMaterial 
               color="#1a4020"
@@ -1560,7 +1463,7 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
             />
           </mesh>
           {/* Middle layer */}
-          <mesh position={[0, 3.8, 0]} castShadow>
+          <mesh position={[0, 3.8, 0]} castShadow={nearShadow}>
             <coneGeometry args={[1.1, 2.0, 12]} />
             <meshPhysicalMaterial 
               color="#2a5a30"
@@ -1573,7 +1476,7 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
             />
           </mesh>
           {/* Upper layer - lighter, catches more light */}
-          <mesh position={[0, 4.6, 0]} castShadow>
+          <mesh position={[0, 4.6, 0]} castShadow={nearShadow}>
             <coneGeometry args={[0.8, 1.8, 12]} />
             <meshPhysicalMaterial 
               color="#3a6a38"
@@ -1586,7 +1489,7 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
             />
           </mesh>
           {/* Top spike */}
-          <mesh position={[0, 5.3, 0]} castShadow>
+          <mesh position={[0, 5.3, 0]} castShadow={nearShadow}>
             <coneGeometry args={[0.4, 1.2, 10]} />
             <meshPhysicalMaterial 
               color="#4a7a42"
@@ -1601,18 +1504,19 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           {/* Small branch details */}
           {tree.variant === 0 && (
             <>
-              <mesh position={[0.3, 2.5, 0.2]} rotation={[0, 0, 0.4]} castShadow>
+              <mesh position={[0.3, 2.5, 0.2]} rotation={[0, 0, 0.4]} castShadow={nearShadow}>
                 <cylinderGeometry args={[0.03, 0.05, 0.6, 6]} />
                 <meshStandardMaterial color="#3d2817" roughness={0.9} />
               </mesh>
-              <mesh position={[-0.25, 2.8, -0.15]} rotation={[0, 0, -0.3]} castShadow>
+              <mesh position={[-0.25, 2.8, -0.15]} rotation={[0, 0, -0.3]} castShadow={nearShadow}>
                 <cylinderGeometry args={[0.025, 0.04, 0.5, 6]} />
                 <meshStandardMaterial color="#3d2817" roughness={0.9} />
               </mesh>
             </>
           )}
         </group>
-      ))}
+        );
+      })}
     </group>
   );
 };
@@ -1663,7 +1567,7 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
       {crystals.map((c, i) => (
         <group key={i} position={[c.x, 0, c.z]}>
           {/* Main crystal with realistic glass/gem material */}
-          <mesh position={[0, c.height / 2, 0]} castShadow>
+          <mesh position={[0, c.height / 2, 0]} castShadow={Math.abs(c.z) < RENDER_CONFIG.shadowNearBand}>
             <cylinderGeometry args={[c.radius * 0.25, c.radius, c.height, c.facets]} />
             <meshPhysicalMaterial 
               color={c.color}
@@ -1684,7 +1588,7 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
             />
           </mesh>
           {/* Inner crystal core for depth */}
-          <mesh position={[0, c.height / 2, 0]} castShadow>
+          <mesh position={[0, c.height / 2, 0]} castShadow={Math.abs(c.z) < RENDER_CONFIG.shadowNearBand}>
             <cylinderGeometry args={[c.radius * 0.15, c.radius * 0.6, c.height * 0.8, c.facets]} />
             <meshPhysicalMaterial 
               color="#ffffff"
@@ -1726,7 +1630,7 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
       {mountains.map((m, i) => (
         <group key={`mtn-${i}`} position={[m.x, 0, m.z]}>
           {/* Main mountain with realistic rock */}
-          <mesh position={[0, m.height / 2 - 2, 0]} castShadow receiveShadow>
+          <mesh position={[0, m.height / 2 - 2, 0]} castShadow={Math.abs(m.z) < RENDER_CONFIG.shadowNearBand} receiveShadow>
             <coneGeometry args={[m.scale, m.height, 8]} />
             <meshPhysicalMaterial 
               color="#5a6570"
@@ -1737,12 +1641,12 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
             />
           </mesh>
           {/* Rocky details */}
-          <mesh position={[m.scale * 0.35, m.height * 0.3, m.scale * 0.2]} castShadow>
+          <mesh position={[m.scale * 0.35, m.height * 0.3, m.scale * 0.2]} castShadow={Math.abs(m.z) < RENDER_CONFIG.shadowNearBand}>
             <dodecahedronGeometry args={[m.scale * 0.12, 0]} />
             <meshPhysicalMaterial color="#4a5560" roughness={0.94} />
           </mesh>
           {/* Realistic snow cap */}
-          <mesh position={[0, m.height * m.snowAmount, 0]} castShadow>
+          <mesh position={[0, m.height * m.snowAmount, 0]} castShadow={Math.abs(m.z) < RENDER_CONFIG.shadowNearBand}>
             <coneGeometry args={[m.scale * (1 - m.snowAmount) * 1.15, m.height * (1 - m.snowAmount) * 1.25, 8]} />
             <meshPhysicalMaterial 
               color="#f8fafc"
@@ -1755,7 +1659,7 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
             />
           </mesh>
           {/* Snow patches */}
-          <mesh position={[m.scale * 0.25, m.height * (m.snowAmount - 0.12), m.scale * 0.15]} castShadow>
+          <mesh position={[m.scale * 0.25, m.height * (m.snowAmount - 0.12), m.scale * 0.15]} castShadow={Math.abs(m.z) < RENDER_CONFIG.shadowNearBand}>
             <sphereGeometry args={[m.scale * 0.1, 8, 6]} />
             <meshPhysicalMaterial color="#ffffff" roughness={0.32} sheen={0.85} sheenColor="#e0e8ff" />
           </mesh>
@@ -1794,7 +1698,7 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
       {buildings.map((b, i) => (
         <group key={i} position={[b.x, 0, b.z]} rotation={[0, 0, b.tilt]}>
           {/* Ruined palazzo with weathered stone material */}
-          <mesh position={[0, b.height / 2, 0]} castShadow receiveShadow>
+          <mesh position={[0, b.height / 2, 0]} castShadow={Math.abs(b.z) < RENDER_CONFIG.shadowNearBand} receiveShadow>
             <boxGeometry args={[b.width, b.height, b.depth]} />
             <meshPhysicalMaterial 
               color={b.color}
@@ -1806,11 +1710,11 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
           </mesh>
           
           {/* Architectural details - cornices */}
-          <mesh position={[0, b.height * 0.95, 0]} castShadow>
+          <mesh position={[0, b.height * 0.95, 0]} castShadow={Math.abs(b.z) < RENDER_CONFIG.shadowNearBand}>
             <boxGeometry args={[b.width + 0.3, 0.4, b.depth + 0.3]} />
             <meshPhysicalMaterial color="#3d4a50" roughness={0.88} metalness={0.03} />
           </mesh>
-          <mesh position={[0, b.height * 0.6, 0]} castShadow>
+          <mesh position={[0, b.height * 0.6, 0]} castShadow={Math.abs(b.z) < RENDER_CONFIG.shadowNearBand}>
             <boxGeometry args={[b.width + 0.15, 0.2, b.depth + 0.15]} />
             <meshPhysicalMaterial color="#3d4a50" roughness={0.9} />
           </mesh>
@@ -1859,7 +1763,7 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
           </mesh>
           
           {/* Crumbling top with detailed debris */}
-          <mesh position={[b.debrisOffset * b.width * 0.3, b.height + 0.5, 0]} castShadow>
+          <mesh position={[b.debrisOffset * b.width * 0.3, b.height + 0.5, 0]} castShadow={Math.abs(b.z) < RENDER_CONFIG.shadowNearBand}>
             <boxGeometry args={[b.width * 0.4, 1.2, b.depth * 0.4]} />
             <meshPhysicalMaterial color={b.color} roughness={0.95} />
           </mesh>
@@ -1902,7 +1806,7 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
           {s.type === 'tower' && (
             <>
               {/* Photorealistic brass tower */}
-              <mesh position={[0, s.height / 2, 0]} castShadow receiveShadow>
+              <mesh position={[0, s.height / 2, 0]} castShadow={Math.abs(s.z) < RENDER_CONFIG.shadowNearBand} receiveShadow>
                 <cylinderGeometry args={[1.8, 2.8, s.height, 12]} />
                 <meshPhysicalMaterial 
                   color="#b87333"
@@ -1963,7 +1867,7 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
           {s.type === 'platform' && (
             <>
               {/* Iron platform with realistic weathered metal */}
-              <mesh position={[0, s.height * 0.3, 0]} castShadow receiveShadow>
+              <mesh position={[0, s.height * 0.3, 0]} castShadow={Math.abs(s.z) < RENDER_CONFIG.shadowNearBand} receiveShadow>
                 <boxGeometry args={[8, 0.8, 6]} />
                 <meshPhysicalMaterial 
                   color="#5a4a40"
@@ -2099,7 +2003,7 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
         return (
           <group key={i} position={[r.x, 0, r.z]}>
             {/* Ruined skyscraper with weathered concrete */}
-            <mesh position={[0, actualHeight / 2, 0]} castShadow receiveShadow>
+            <mesh position={[0, actualHeight / 2, 0]} castShadow={Math.abs(r.z) < RENDER_CONFIG.shadowNearBand} receiveShadow>
               <boxGeometry args={[r.width, actualHeight, r.width]} />
               <meshPhysicalMaterial 
                 color={concreteColor}
@@ -2250,7 +2154,7 @@ const SciFiBostonLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
             {s.type === 'tower' && (
               <>
                 {/* Holographic tower */}
-                <mesh position={[0, s.height / 2, 0]} castShadow>
+                <mesh position={[0, s.height / 2, 0]} castShadow={Math.abs(s.z) < RENDER_CONFIG.shadowNearBand}>
                   <boxGeometry args={[3, s.height, 3]} />
                   <meshStandardMaterial color={color} transparent opacity={0.7} emissive={color} emissiveIntensity={0.4} metalness={0.8} roughness={0.1} />
                 </mesh>
