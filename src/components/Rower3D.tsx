@@ -1,4 +1,4 @@
-﻿import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField } from '@react-three/postprocessing';
@@ -17,6 +17,15 @@ import {
   distanceToProgress,
 } from './rower3d/curve';
 import './Rower3D.css';
+
+declare global {
+  interface Window {
+    __PLAYWRIGHT_TESTING?: boolean;
+  }
+}
+
+/** True when running under Playwright automation. Set before the SPA boots and never toggled. */
+const IS_TEST_MODE = typeof window !== 'undefined' && !!window.__PLAYWRIGHT_TESTING;
 
 // Preload the scull GLB at module load time so the asset is cached before first render
 useGLTF.preload('/models/scull.glb');
@@ -461,7 +470,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
   // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
   useEffect(() => {
-    if (window.__PLAYWRIGHT_TESTING) return;
+    if (IS_TEST_MODE) return;
     const mat = materialRef.current;
     if (!mat) return;
     attachGerstnerShader(mat, timeUniformRef.current, 'z', theme);
@@ -519,7 +528,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
           side={THREE.FrontSide}
         />
       </mesh>
-      {!window.__PLAYWRIGHT_TESTING && (
+      {!IS_TEST_MODE && (
         <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} />
       )}
     </>
@@ -717,7 +726,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
   // Attach GPU Gerstner wave shader when theme changes.
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
   useEffect(() => {
-    if (window.__PLAYWRIGHT_TESTING) return;
+    if (IS_TEST_MODE) return;
     const mat = materialRef.current;
     if (!mat) return;
     // Curved channel geometry uses Y as height axis (no -PI/2 rotation)
@@ -2763,7 +2772,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
     
     // Expose oar angle and stroke rate for Playwright e2e testing
     try {
-      if (window.__PLAYWRIGHT_TESTING) {
+      if (IS_TEST_MODE) {
         window.__ROWER3D_OAR_ANGLE = oarSweep;
         window.__ROWER3D_STROKE_RATE = strokesPerMinute;
       }
@@ -3694,7 +3703,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
     
     // Expose boat position and physics telemetry for Playwright testing
     try {
-      if (window.__PLAYWRIGHT_TESTING) {
+      if (IS_TEST_MODE) {
         window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
@@ -3894,7 +3903,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* The rowing scull — kinematic Rapier body in normal mode; imperative group in Playwright mode.
           PhysicsErrorBoundary catches Rapier WASM init failures so the rest of the scene remains visible. */}
-      {window.__PLAYWRIGHT_TESTING ? (
+      {IS_TEST_MODE ? (
         <group ref={boatGroupRef}>
           <RowingScull cadence={cadence || 30} />
         </group>
@@ -3915,7 +3924,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* V-shaped Kelvin wake trailing behind the boat — disabled in test mode */}
-      {!window.__PLAYWRIGHT_TESTING && (
+      {!IS_TEST_MODE && (
         <WakeEffect
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -3924,7 +3933,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* White foam sprites at oar blade-entry point — disabled in test mode */}
-      {!window.__PLAYWRIGHT_TESTING && (
+      {!IS_TEST_MODE && (
         <BladeEntryFoam
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -3933,7 +3942,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!window.__PLAYWRIGHT_TESTING && <DynamicPostFx velocityRef={velocityRef} isHighQuality={isHighQuality} />}
+      {!IS_TEST_MODE && <DynamicPostFx velocityRef={velocityRef} isHighQuality={isHighQuality} />}
     </>
   );
 };
