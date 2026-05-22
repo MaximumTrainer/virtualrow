@@ -1207,10 +1207,8 @@ test.describe('docs screenshots', () => {
 //
 // These tests drive PM5 telemetry through __workoutService and assert the
 // UI's "Meters" stat card reflects monotonically non-decreasing distance.
-// They use test.fail() because the underlying bug
-// (WorkoutService.updateSessionWithPM5Data:95 destructively overwrites
-// session.distance with the latest device value) is still present — flip
-// the test.fail() once the fix lands.
+// They exist to prevent regressions where transient stale/zero/backwards
+// packets would make the UI distance drop mid-session.
 // ===========================================================================
 test.describe('activity distance integrity', () => {
   test.beforeEach(async ({ page }) => {
@@ -1244,16 +1242,10 @@ test.describe('activity distance integrity', () => {
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 5000 });
   });
 
-  // BUG: a transient stale/zero packet (BLE re-subscribe, momentary device
-  // glitch) is mirrored straight into session.distance, so the displayed
-  // Meters drops from 1234 → 50 and the user loses ~1184 m of credit.
-  // Required behavior: the Meters card must never display a value lower than
-  // a previously displayed value during a single active session.
-  // TODO(activity-distance-bug): remove `test.fail()` once
-  // `WorkoutService.updateSessionWithPM5Data` accumulates distance instead of
-  // overwriting it (paired with the unit-level fix covered by the `.fails`
-  // specs in `src/__tests__/workoutService.distance.test.ts`).
-  test.fail('Meters display does not regress when a transient backwards packet arrives', async ({ page }) => {
+  // Regression guard: a transient stale/zero packet (BLE re-subscribe,
+  // momentary device glitch) must not make the displayed Meters value drop
+  // mid-session.
+  test('Meters display does not regress when a transient backwards packet arrives', async ({ page }) => {
     const metersValue = page.locator(
       '.activity-stat-card:has(.activity-stat-label:has-text("Meters")) .activity-stat-value',
     );
@@ -1288,6 +1280,10 @@ test.describe('activity distance integrity', () => {
         { distance, elapsedMs },
       );
     }
+
+    // Prime the session offset (the service treats the first PM5 reading as the
+    // session-start baseline).
+    await push(0, 0);
 
     // Row steadily up to 1234 m.
     await push(1234, 240_000);

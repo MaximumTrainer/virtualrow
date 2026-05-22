@@ -17,15 +17,19 @@ import type { WorkoutSession, WaterRoute } from '../types/index';
 export function buildSessionGPX(session: WorkoutSession, route: WaterRoute): string {
   const startTime = new Date(session.startTime).toISOString();
   const routeName = escapeXml(session.routeName);
+  const rowedDistanceMeters = escapeXml(String(session.distance));
   const trkpts = route.coordinates
     .map((c) => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0</ele></trkpt>`)
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="VirtualRow">
+<gpx version="1.1" creator="VirtualRow" xmlns:virtualrow="https://virtualrow.app/xmlns/1">
   <metadata>
     <name>${routeName}</name>
     <time>${startTime}</time>
+    <extensions>
+      <virtualrow:rowed_distance_m>${rowedDistanceMeters}</virtualrow:rowed_distance_m>
+    </extensions>
   </metadata>
   <trk>
     <name>${routeName}</name>

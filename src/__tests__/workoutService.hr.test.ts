@@ -60,6 +60,15 @@ describe('WorkoutService heart rate integration', () => {
     svc.startSession('r4', 'Route 4');
 
     svc.updateSessionWithPM5Data({
+      distance: 0,
+      elapsedTime: 0,
+      pace: 120,
+      power: 200,
+      cadence: 30,
+      heartRate: 95,
+    });
+
+    svc.updateSessionWithPM5Data({
       distance: 500,
       elapsedTime: 120000,
       pace: 120,
@@ -72,6 +81,6 @@ describe('WorkoutService heart rate integration', () => {
     expect(current?.isActive).toBe(true);
     expect(current?.splits.length).toBe(1);
     expect(current?.splits[0].heartRate).toBe(95);
-    expect(current?.heartRateSamples?.length).toBe(1);
+    expect(current?.heartRateSamples?.length).toBe(2);
   });
 });

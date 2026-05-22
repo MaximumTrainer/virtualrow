@@ -65,7 +65,7 @@ describe('buildSessionGPX', () => {
   it('emits a well-formed GPX 1.1 document', () => {
     const gpx = buildSessionGPX(makeSession(), makeRoute());
     expect(gpx).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-    expect(gpx).toContain('<gpx version="1.1" creator="VirtualRow">');
+    expect(gpx).toContain('<gpx version="1.1" creator="VirtualRow"');
     expect(gpx).toContain('</gpx>');
     expect(gpx).toContain('<name>Test Route</name>');
     expect(gpx).toContain('<time>2025-01-02T10:00:00.000Z</time>');

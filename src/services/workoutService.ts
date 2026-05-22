@@ -8,6 +8,8 @@ export const SPLIT_DISTANCE_METERS = 500;
 export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
+  private pm5DistanceOffsetMeters: number | null = null;
+  private isPaused = false;
 
   startSession(
     routeId: string,
@@ -36,6 +38,8 @@ export class WorkoutService {
     };
 
     this.currentSession = session;
+    this.pm5DistanceOffsetMeters = null;
+    this.isPaused = false;
     this.sessions.push(session);
     try {
       if (typeof window !== 'undefined') {
@@ -80,6 +84,8 @@ export class WorkoutService {
 
     const completedSession = this.currentSession;
     this.currentSession = null;
+    this.pm5DistanceOffsetMeters = null;
+    this.isPaused = false;
     try {
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('virtualrow:sessionEnded', { detail: completedSession });
@@ -89,27 +95,45 @@ export class WorkoutService {
     return completedSession;
   }
 
+  pauseSession(): void {
+    this.isPaused = true;
+  }
+
+  resumeSession(): void {
+    this.isPaused = false;
+  }
+
   updateSessionWithPM5Data(data: PM5Data): void {
     if (!this.currentSession) return;
-
-    this.currentSession.distance = data.distance;
-    this.currentSession.duration = Math.floor(data.elapsedTime / 1000);
-    this.currentSession.calories = data.calories || 0;
 
     if (data.heartRate) {
       this.updateSessionHeartRate(data.heartRate);
     }
 
-    // Add split if distance increased
-    const lastSplit = this.currentSession.splits[
-      this.currentSession.splits.length - 1
-    ];
-    const lastDistance = lastSplit ? lastSplit.distance : 0;
+    if (this.isPaused) return;
 
-    if (data.distance - lastDistance >= SPLIT_DISTANCE_METERS) {
+    if (this.pm5DistanceOffsetMeters === null) {
+      this.pm5DistanceOffsetMeters = data.distance;
+    }
+
+    const elapsedSeconds = Math.floor(data.elapsedTime / 1000);
+    const adjustedDistance = Math.max(0, data.distance - this.pm5DistanceOffsetMeters);
+
+    // Ensure distance never regresses due to transient stale/zero/backwards packets.
+    this.currentSession.distance = Math.max(this.currentSession.distance, adjustedDistance);
+    this.currentSession.duration = elapsedSeconds;
+    this.currentSession.calories = data.calories || 0;
+
+    // Add splits at each 500m boundary crossed (catch up if we jumped multiple splits).
+    while (true) {
+      const lastSplit = this.currentSession.splits[this.currentSession.splits.length - 1];
+      const lastSplitDistance = lastSplit ? lastSplit.distance : 0;
+      const nextSplitDistance = lastSplitDistance + SPLIT_DISTANCE_METERS;
+      if (this.currentSession.distance < nextSplitDistance) break;
+
       const split: Split = {
-        distance: data.distance,
-        time: Math.floor(data.elapsedTime / 1000),
+        distance: nextSplitDistance,
+        time: elapsedSeconds,
         pace: data.pace || 0,
         power: data.power,
         heartRate: data.heartRate,

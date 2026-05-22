@@ -87,15 +87,8 @@ describe('FIT export — distance units contract', () => {
   });
 });
 
-describe('GPX export — rowed distance fidelity (known bug, expected to fail until fixed)', () => {
-  // TODO(activity-distance-bug): GPX export only emits the static route
-  // polyline; consumers (Intervals.icu, Strava, etc.) then derive distance
-  // by haversining the trkpts and so see the route's nominal length, not
-  // what was actually rowed. Fix by embedding the rowed distance in a
-  // machine-parsable element (e.g. `<gpxtpx:Distance>`, `<metadata><desc>`,
-  // or `<extensions>`). Remove `.fails` from every test in this describe
-  // block when the export carries rowed distance.
-  it.fails('embeds the actual rowed distance so consumers do not derive it from the static polyline', () => {
+describe('GPX export — rowed distance fidelity', () => {
+  it('embeds the actual rowed distance so consumers do not derive it from the static polyline', () => {
     // The session covered 1500 m. The route polyline (lat/lng above) spans
     // ~22 km along its great-circle, so any consumer that computes distance
     // by haversining the <trkpt> coordinates will see 22000+ m, not 1500.
@@ -106,10 +99,10 @@ describe('GPX export — rowed distance fidelity (known bug, expected to fail un
     // a <metadata>/<desc> field, or a <trk>/<extensions> block.
     // Right now the exporter emits only the static route polyline with no
     // rowed-distance element at all.
-    expect(gpx).toMatch(/1500/);
+    expect(gpx).toMatch(/<virtualrow:rowed_distance_m>1500<\/virtualrow:rowed_distance_m>/);
   });
 
-  it.fails('still records the rowed distance when the route polyline is empty', () => {
+  it('still records the rowed distance when the route polyline is empty', () => {
     // Edge case: route has no coordinates (e.g. custom free-row activity).
     // Today the GPX is essentially empty <trkseg></trkseg> with no distance
     // information at all, so platforms record a 0-length activity.
@@ -117,6 +110,6 @@ describe('GPX export — rowed distance fidelity (known bug, expected to fail un
       makeSession({ distance: 2000 }),
       makeRoute({ coordinates: [] }),
     );
-    expect(gpx).toMatch(/2000/);
+    expect(gpx).toMatch(/<virtualrow:rowed_distance_m>2000<\/virtualrow:rowed_distance_m>/);
   });
 });
