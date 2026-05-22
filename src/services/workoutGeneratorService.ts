@@ -688,7 +688,7 @@ export class WorkoutGeneratorService {
           const segment: WorkoutSegment = {
             id: `seg-${index}`,
             order: order++,
-            type: this.mapICUStepType(step.type),
+            type: this.mapICUStepType(step.type ?? ''),
             duration: step.duration,
             distance: step.distance,
             targetPaceMin: step.target_pace ? step.target_pace - 5 : undefined,
@@ -696,7 +696,7 @@ export class WorkoutGeneratorService {
             targetPower: step.target_power,
             targetHeartRateMin: step.target_hr_min,
             targetHeartRateMax: step.target_hr_max,
-            intensity: this.mapICUIntensity(step.intensity),
+            intensity: this.mapICUIntensity(step.intensity ?? ''),
             repeat: step.repeat || 1,
             description: step.description || step.name,
           };
@@ -710,7 +710,7 @@ export class WorkoutGeneratorService {
         id: `icu-${icuWorkout.id}`,
         name: icuWorkout.name || 'Imported Workout',
         description: icuWorkout.description || '',
-        type: this.mapICUWorkoutType(icuWorkout.type),
+        type: this.mapICUWorkoutType(icuWorkout.type ?? ''),
         segments,
         totalDuration,
         totalDistance: icuWorkout.distance,

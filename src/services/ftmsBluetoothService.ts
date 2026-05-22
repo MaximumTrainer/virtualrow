@@ -119,7 +119,7 @@ export class FTMSBluetoothService {
 
   private handleDisconnect(): void {
     this.device = null;
-    this.emit('disconnected');
+    this.emit('disconnected', undefined);
   }
 
   /**

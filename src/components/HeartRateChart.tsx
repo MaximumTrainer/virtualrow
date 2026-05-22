@@ -52,7 +52,7 @@ export const HeartRateChart: React.FC<HeartRateChartProps> = ({ samples, height 
         pointRadius: 0,
         fill: true,
         segment: {
-          borderColor: (ctx: ScriptableLineSegmentContext) => zoneColor(ctx.p0.parsed.y),
+          borderColor: (ctx: ScriptableLineSegmentContext) => zoneColor(ctx.p0.parsed.y ?? 0),
         },
       },
       {
