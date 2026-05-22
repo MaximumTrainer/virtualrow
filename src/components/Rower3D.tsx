@@ -16,6 +16,9 @@ import {
   getCurveDistances,
   distanceToProgress,
 } from './rower3d/curve';
+import { getThemeConfig } from './rower3d/themeConfig';
+import type { RouteTheme } from './rower3d/themeConfig';
+import { AnimationProvider, useAnimationFrame } from './rower3d/AnimationContext';
 import './Rower3D.css';
 
 declare global {
@@ -48,9 +51,7 @@ const RENDER_CONFIG = {
 
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
-
-// Route theme types for landscape selection
-type RouteTheme = 'willowbrook' | 'crystal-bled' | 'gothic-venice' | 'steampunk-henley' | 'dystopian-thames' | 'scifi-boston';
+type PerformanceMode = 'auto' | 'high' | 'low';
 
 // Detect route theme from route name and tags
 const detectRouteTheme = (route: WaterRoute): RouteTheme => {
@@ -81,7 +82,7 @@ interface Rower3DProps {
   distanceMeters?: number | null;
   isPlaying?: boolean;
   cadence?: number | null;
-  performanceMode?: 'auto' | 'high' | 'low';
+  performanceMode?: PerformanceMode;
   intensityFactor?: number;
   debugMode?: boolean;
 }
@@ -355,13 +356,15 @@ const BladeEntryFoam: React.FC<{
 const WaterReflectionProbe: React.FC<{
   materialRef: React.MutableRefObject<THREE.MeshPhysicalMaterial | null>;
   meshRef: React.MutableRefObject<THREE.Mesh | null>;
-}> = ({ materialRef, meshRef }) => {
+  performanceMode?: PerformanceMode;
+}> = ({ materialRef, meshRef, performanceMode }) => {
   const { fbo, update } = useCubeCamera({ resolution: 64, near: 0.5, far: 600 });
   const frameRef = useRef(0);
+  const interval = performanceMode === 'auto' ? 60 : 30;
 
   useFrame(() => {
     frameRef.current++;
-    if (frameRef.current % 30 !== 0) return;
+    if (frameRef.current % interval !== 0) return;
     // Hide water surface so it doesn't self-reflect
     if (meshRef.current) meshRef.current.visible = false;
     update();
@@ -372,53 +375,30 @@ const WaterReflectionProbe: React.FC<{
     }
   });
 
+  // Clear envMap reference on unmount so the material doesn't reference a disposed FBO
+  useEffect(() => {
+    return () => {
+      if (materialRef.current) {
+        materialRef.current.envMap = null;
+        materialRef.current.needsUpdate = true;
+      }
+    };
+  }, [materialRef]);
+
   return null;
 };
-
-// ============================================================================
-// SHARED WATER CONFIG
-// ============================================================================
-interface WaterConfig {
-  color: string;
-  transmission: number;
-  roughness: number;
-  thickness: number;
-  emissive: string;
-  emissiveIntensity: number;
-  attenuationColor: string;
-  attenuationDistance: number;
-  specularIntensity: number;
-  sheenColor: string;
-}
-
-function getWaterConfig(theme: RouteTheme): WaterConfig {
-  switch (theme) {
-    case 'crystal-bled':
-      return { color: '#3a9db8', transmission: 0.65, roughness: 0.04, thickness: 3.5, emissive: '#00e5ff', emissiveIntensity: 0.06, attenuationColor: '#00a8cc', attenuationDistance: 8.0, specularIntensity: 1.2, sheenColor: '#80deea' };
-    case 'gothic-venice':
-      return { color: '#1e3a3a', transmission: 0.22, roughness: 0.18, thickness: 1.5, emissive: '#0a3d62', emissiveIntensity: 0.015, attenuationColor: '#1a2f2f', attenuationDistance: 2.0, specularIntensity: 0.6, sheenColor: '#2a4a4a' };
-    case 'steampunk-henley':
-      return { color: '#3a4a38', transmission: 0.28, roughness: 0.15, thickness: 2.0, emissive: '#4a6741', emissiveIntensity: 0.008, attenuationColor: '#3a4a38', attenuationDistance: 3.0, specularIntensity: 0.8, sheenColor: '#5a7a58' };
-    case 'dystopian-thames':
-      return { color: '#0a1a2a', transmission: 0.15, roughness: 0.22, thickness: 1.0, emissive: '#1a2a4a', emissiveIntensity: 0.025, attenuationColor: '#0a1520', attenuationDistance: 1.0, specularIntensity: 1.4, sheenColor: '#2a3a5a' };
-    case 'scifi-boston':
-      return { color: '#0a3a4a', transmission: 0.45, roughness: 0.06, thickness: 2.5, emissive: '#00ced1', emissiveIntensity: 0.12, attenuationColor: '#006080', attenuationDistance: 5.0, specularIntensity: 1.0, sheenColor: '#40e0d0' };
-    default:
-      return { color: '#3a5a55', transmission: 0.38, roughness: 0.10, thickness: 2.5, emissive: '#2a4a40', emissiveIntensity: 0.008, attenuationColor: '#2a4a45', attenuationDistance: 4.0, specularIntensity: 0.9, sheenColor: '#4a6a60' };
-  }
-}
 
 // ============================================================================
 // HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
 // subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
-const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQuality: boolean }> = ({ boatZ, theme, isHighQuality }) => {
+const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode }> = ({ boatZ, theme, performanceMode }) => {
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   const timeUniformRef = useRef({ value: 0 });
 
   // HD Theme-based water configurations with enhanced realism
-  const waterConfig = useMemo(() => getWaterConfig(theme), [theme]);
+  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
   
   // Attach GPU Gerstner wave shader whenever theme changes (requires material recompile).
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
@@ -431,8 +411,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
   }, [theme]);
 
   // Update time uniform and material animation properties each frame
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
+  useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
 
     if (materialRef.current) {
@@ -455,7 +434,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
         receiveShadow
       >
         {/* Tessellation keyed to performanceMode: 64×64 high-quality, 32×32 low-power */}
-        <planeGeometry args={[1000, 1000, isHighQuality ? 64 : 32, isHighQuality ? 64 : 32]} />
+        <planeGeometry args={[1000, 1000, performanceMode !== 'low' ? 64 : 32, performanceMode !== 'low' ? 64 : 32]} />
         <meshPhysicalMaterial
           ref={materialRef}
           color={waterConfig.color}
@@ -481,8 +460,8 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
           side={THREE.FrontSide}
         />
       </mesh>
-      {!IS_TEST_MODE && (
-        <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} />
+      {!IS_TEST_MODE && performanceMode !== 'low' && (
+        <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} performanceMode={performanceMode} />
       )}
     </>
   );
@@ -496,68 +475,10 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
   const layer2Ref = useRef<THREE.Mesh>(null);
   
   // HD mist configuration with multiple layers
-  const mistConfig = useMemo(() => {
-    switch (theme) {
-      case 'gothic-venice': 
-        return { 
-          baseOpacity: 0.22, 
-          color1: '#1e272e', 
-          color2: '#2a3a4a',
-          height1: 0.6, 
-          height2: 2.5,
-          density: 1.4
-        };
-      case 'dystopian-thames': 
-        return { 
-          baseOpacity: 0.18, 
-          color1: '#1a1a2e', 
-          color2: '#2a2a3e',
-          height1: 0.5, 
-          height2: 3.0,
-          density: 1.2
-        };
-      case 'steampunk-henley': 
-        return { 
-          baseOpacity: 0.14, 
-          color1: '#8b7355', 
-          color2: '#a08565',
-          height1: 0.8, 
-          height2: 2.0,
-          density: 0.9
-        };
-      case 'crystal-bled': 
-        return { 
-          baseOpacity: 0.06, 
-          color1: '#e8f4f8', 
-          color2: '#d0e8f0',
-          height1: 0.3, 
-          height2: 1.5,
-          density: 0.5
-        };
-      case 'scifi-boston': 
-        return { 
-          baseOpacity: 0.08, 
-          color1: '#162447', 
-          color2: '#1a3a5a',
-          height1: 0.4, 
-          height2: 2.0,
-          density: 0.7
-        };
-      default: 
-        return { 
-          baseOpacity: 0.10, 
-          color1: '#c8d4dc', 
-          color2: '#d8e4ec',
-          height1: 0.5, 
-          height2: 1.8,
-          density: 0.8
-        };
-    }
-  }, [theme]);
+  const mistConfig = useMemo(() => getThemeConfig(theme).mist, [theme]);
   
   // Animate mist drift for realism
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
+  useAnimationFrame((time) => {
     if (layer1Ref.current) {
       layer1Ref.current.position.x = Math.sin(time * 0.05) * 3;
       layer1Ref.current.position.z = boatZ + Math.cos(time * 0.03) * 2;
@@ -602,16 +523,15 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
 interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
-  isHighQuality: boolean;
 }
 
-const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, isHighQuality }) => {
+const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme }) => {
   const meshRef        = useRef<THREE.Mesh>(null);
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
   
   // HD Theme-based water colors with enhanced realism (matches PhotorealisticWater)
-  const waterConfig = useMemo(() => getWaterConfig(theme), [theme]);
+  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
   
   // Attach GPU Gerstner wave shader when theme changes.
   // Skipped in Playwright: shader recompilation after context-restore stalls the page.
@@ -625,8 +545,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
   }, [theme]);
 
   // Animate water material for dynamic surface
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
+  useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
     if (materialRef.current) {
       const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
@@ -638,7 +557,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
   const waterGeometry = useMemo(() => {
     if (!curve) return null;
     
-    const segments = isHighQuality ? 200 : 100;
+    const segments = 200;
     const halfWidth = WATER_CHANNEL_WIDTH / 2;
     
     // Create geometry vertices following the curve
@@ -693,8 +612,15 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
     geometry.setIndex(indices);
     
     return geometry;
-  }, [curve, isHighQuality]);
-  
+  }, [curve]);
+
+  // Dispose geometry when curve changes or component unmounts to prevent GPU memory leaks
+  useEffect(() => {
+    return () => {
+      waterGeometry?.dispose();
+    };
+  }, [waterGeometry]);
+
   if (!curve || !waterGeometry) {
     return null;
   }
@@ -738,76 +664,7 @@ interface CurvedRiverbanksProps {
 
 const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => {
   // HD Theme-based bank materials with realistic PBR properties
-  const bankConfig = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled':
-        // Alpine meadow - lush green grass with rocky edges
-        return { 
-          color: '#5a8a42', 
-          roughness: 0.88,
-          metalness: 0.0,
-          emissive: '#2a4a22',
-          emissiveIntensity: 0.01,
-          sheen: 0.25,
-          sheenColor: '#7ab05a'
-        };
-      case 'gothic-venice':
-        // Weathered stone embankments with moss
-        return { 
-          color: '#2a3a2a', 
-          roughness: 0.95,
-          metalness: 0.02,
-          emissive: '#1a2a1a',
-          emissiveIntensity: 0.005,
-          sheen: 0.1,
-          sheenColor: '#3a4a3a'
-        };
-      case 'steampunk-henley':
-        // Manicured grass with golden-brown edges
-        return { 
-          color: '#6a7a48', 
-          roughness: 0.82,
-          metalness: 0.0,
-          emissive: '#4a5a30',
-          emissiveIntensity: 0.008,
-          sheen: 0.35,
-          sheenColor: '#8a9a68'
-        };
-      case 'dystopian-thames':
-        // Industrial concrete and muddy ground
-        return { 
-          color: '#1a1a18', 
-          roughness: 0.96,
-          metalness: 0.05,
-          emissive: '#0a0a08',
-          emissiveIntensity: 0.002,
-          sheen: 0.05,
-          sheenColor: '#2a2a28'
-        };
-      case 'scifi-boston':
-        // High-tech walkway materials
-        return { 
-          color: '#1a2a3a', 
-          roughness: 0.75,
-          metalness: 0.15,
-          emissive: '#0a1a2a',
-          emissiveIntensity: 0.015,
-          sheen: 0.2,
-          sheenColor: '#2a4a5a'
-        };
-      default:
-        // Natural river grass - Willowbrook
-        return { 
-          color: '#4a7a32', 
-          roughness: 0.9,
-          metalness: 0.0,
-          emissive: '#2a4a18',
-          emissiveIntensity: 0.006,
-          sheen: 0.3,
-          sheenColor: '#6a9a52'
-        };
-    }
-  }, [theme]);
+  const bankConfig = useMemo(() => getThemeConfig(theme).bank, [theme]);
   
   // Generate curved riverbank geometry
   const { leftBankGeometry, rightBankGeometry } = useMemo(() => {
@@ -991,46 +848,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   }, [curve, theme]);
   
   // Get HD theme colors for elements with enhanced detail
-  const colors = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled':
-        return { 
-          tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
-          mountain: '#5a7247', mountainSnow: '#f8faff', 
-          building: '#8fa4b8', buildingAccent: '#6a8098', windowGlow: '#e8f4ff'
-        };
-      case 'gothic-venice':
-        return { 
-          tree: '#1a2818', treeBark: '#2a1810', treeHighlight: '#2a3a28',
-          mountain: '#3d4a3a', mountainSnow: '#c0c8d0', 
-          building: '#3a4552', buildingAccent: '#2a3542', windowGlow: '#ff8844'
-        };
-      case 'steampunk-henley':
-        return { 
-          tree: '#4a5a3a', treeBark: '#5a4030', treeHighlight: '#6a7a5a',
-          mountain: '#8b7355', mountainSnow: '#e8dcd0', 
-          building: '#c49a32', buildingAccent: '#8b6914', windowGlow: '#ffcc44'
-        };
-      case 'dystopian-thames':
-        return { 
-          tree: '#151512', treeBark: '#1a1510', treeHighlight: '#252520',
-          mountain: '#2a2a2a', mountainSnow: '#4a4a4a', 
-          building: '#3a3a3a', buildingAccent: '#2a2a2a', windowGlow: '#ff4422'
-        };
-      case 'scifi-boston':
-        return { 
-          tree: '#152a20', treeBark: '#1a2018', treeHighlight: '#2a4a3a',
-          mountain: '#2a3a4a', mountainSnow: '#4a6a8a', 
-          building: '#3a5a7a', buildingAccent: '#2a4a6a', windowGlow: '#00e0ff'
-        };
-      default:
-        return { 
-          tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
-          mountain: '#5a7247', mountainSnow: '#f5f8fa', 
-          building: '#8b7355', buildingAccent: '#6a5a45', windowGlow: '#ffcc88'
-        };
-    }
-  }, [theme]);
+  const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
   
   if (!curve) return null;
   
@@ -1301,9 +1119,30 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
     return result;
   }, [xOffset]);
   
-  // Rock color variations for natural appearance
-  const rockColors = ['#5a6350', '#6b7260', '#4a5540', '#5e6955'];
-  
+  // Rock color variations for natural appearance — shared material instances
+  const rockBodyMaterials = useMemo(() => [
+    new THREE.MeshPhysicalMaterial({ color: '#5a6350', roughness: 0.92, metalness: 0.05, clearcoat: 0.02, clearcoatRoughness: 0.95 }),
+    new THREE.MeshPhysicalMaterial({ color: '#6b7260', roughness: 0.92, metalness: 0.05, clearcoat: 0.02, clearcoatRoughness: 0.95 }),
+    new THREE.MeshPhysicalMaterial({ color: '#4a5540', roughness: 0.92, metalness: 0.05, clearcoat: 0.02, clearcoatRoughness: 0.95 }),
+    new THREE.MeshPhysicalMaterial({ color: '#5e6955', roughness: 0.92, metalness: 0.05, clearcoat: 0.02, clearcoatRoughness: 0.95 }),
+  ], []);
+  const rockOutcrop1Material = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#4a5545', roughness: 0.95, metalness: 0.02 }), []);
+  const rockOutcrop2Material = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#555f50', roughness: 0.93, metalness: 0.03 }), []);
+  const snowCapMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#f8fafc', roughness: 0.4, metalness: 0.0, clearcoat: 0.3, clearcoatRoughness: 0.6, sheen: 0.8, sheenColor: new THREE.Color('#e8f0ff') }), []);
+  const snowDetailMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.35, clearcoat: 0.4, sheen: 0.7, sheenColor: new THREE.Color('#e0e8ff') }), []);
+  const treelineMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#2a4a2a', roughness: 0.85, sheen: 0.3, sheenColor: new THREE.Color('#3a5a3a') }), []);
+
+  useEffect(() => {
+    return () => {
+      rockBodyMaterials.forEach((m) => m.dispose());
+      rockOutcrop1Material.dispose();
+      rockOutcrop2Material.dispose();
+      snowCapMaterial.dispose();
+      snowDetailMaterial.dispose();
+      treelineMaterial.dispose();
+    };
+  }, [rockBodyMaterials, rockOutcrop1Material, rockOutcrop2Material, snowCapMaterial, snowDetailMaterial, treelineMaterial]);
+
   return (
     <group position={[0, 0, boatZ]}>
       {mountains.map((m, i) => {
@@ -1313,57 +1152,29 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
           {/* Main mountain body with realistic rock material */}
           <mesh position={[0, m.height / 2 - 2, 0]} castShadow={nearShadow} receiveShadow>
             <coneGeometry args={[m.scale, m.height, 8]} />
-            <meshPhysicalMaterial 
-              color={rockColors[m.rockVariant]}
-              roughness={0.92}
-              metalness={0.05}
-              clearcoat={0.02}
-              clearcoatRoughness={0.95}
-            />
+            <primitive object={rockBodyMaterials[m.rockVariant]} attach="material" />
           </mesh>
           
           {/* Rocky outcrops for detail */}
           <mesh position={[m.scale * 0.3, m.height * 0.25, m.scale * 0.2]} castShadow={nearShadow}>
             <dodecahedronGeometry args={[m.scale * 0.15, 0]} />
-            <meshPhysicalMaterial 
-              color="#4a5545"
-              roughness={0.95}
-              metalness={0.02}
-            />
+            <primitive object={rockOutcrop1Material} attach="material" />
           </mesh>
           <mesh position={[-m.scale * 0.25, m.height * 0.35, -m.scale * 0.15]} castShadow={nearShadow}>
             <dodecahedronGeometry args={[m.scale * 0.12, 0]} />
-            <meshPhysicalMaterial 
-              color="#555f50"
-              roughness={0.93}
-              metalness={0.03}
-            />
+            <primitive object={rockOutcrop2Material} attach="material" />
           </mesh>
           
           {/* Snow cap with realistic material */}
           <mesh position={[0, m.height * m.snowLine, 0]} castShadow={nearShadow}>
             <coneGeometry args={[m.scale * (1 - m.snowLine) * 1.1, m.height * (1 - m.snowLine) * 1.2, 8]} />
-            <meshPhysicalMaterial 
-              color="#f8fafc"
-              roughness={0.4}
-              metalness={0.0}
-              clearcoat={0.3}
-              clearcoatRoughness={0.6}
-              sheen={0.8}
-              sheenColor="#e8f0ff"
-            />
+            <primitive object={snowCapMaterial} attach="material" />
           </mesh>
           
           {/* Snow detail patches */}
           <mesh position={[m.scale * 0.2, m.height * (m.snowLine - 0.1), m.scale * 0.1]} castShadow={nearShadow}>
             <sphereGeometry args={[m.scale * 0.08, 8, 6]} />
-            <meshPhysicalMaterial 
-              color="#ffffff"
-              roughness={0.35}
-              clearcoat={0.4}
-              sheenColor="#e0e8ff"
-              sheen={0.7}
-            />
+            <primitive object={snowDetailMaterial} attach="material" />
           </mesh>
           
           {/* Treeline at base */}
@@ -1378,12 +1189,7 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
               castShadow={nearShadow}
             >
               <coneGeometry args={[1.5, 4, 8]} />
-              <meshPhysicalMaterial 
-                color="#2a4a2a"
-                roughness={0.85}
-                sheen={0.3}
-                sheenColor="#3a5a3a"
-              />
+              <primitive object={treelineMaterial} attach="material" />
             </mesh>
           ))}
         </group>
@@ -2203,16 +2009,7 @@ const SciFiBostonLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
 // THEMED RIVERBANKS - Ground color varies by route theme
 // ============================================================================
 const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
-  const bankColor = useMemo(() => {
-    switch (theme) {
-      case 'crystal-bled': return '#2d5a27'; // Lush alpine green
-      case 'gothic-venice': return '#1e272e'; // Dark stone quay
-      case 'steampunk-henley': return '#5d4e37'; // Industrial brown
-      case 'dystopian-thames': return '#1a1a2e'; // Dark concrete
-      case 'scifi-boston': return '#0f172a'; // Dark tech surface
-      default: return '#4a7c32'; // Standard grass
-    }
-  }, [theme]);
+  const bankColor = useMemo(() => getThemeConfig(theme).bank.flatColor, [theme]);
   
   return (
     <group position={[0, -0.5, boatZ]}>
@@ -2230,271 +2027,16 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 
 
 // ============================================================================
-// HD THEMED SKY/FOG - Enhanced atmosphere with realistic fog gradients
+// HD THEMED SKY/FOG - Delegates to THEME_CONFIG
 // ============================================================================
-const getThemeAtmosphere = (theme: RouteTheme) => {
-  switch (theme) {
-    case 'crystal-bled':
-      // Crystal-clear alpine atmosphere - minimal fog, vibrant blue
-      return { 
-        fogColor: '#b0ddfa', 
-        fogNear: 80, 
-        fogFar: 800, 
-        skyColor: '#87ceeb',
-        ambientColor: '#c0e0ff',
-        ambientIntensity: 0.45
-      };
-    case 'gothic-venice':
-      // Heavy venetian mist - mysterious, atmospheric
-      return { 
-        fogColor: '#2a3a4a', 
-        fogNear: 15, 
-        fogFar: 250, 
-        skyColor: '#1e272e',
-        ambientColor: '#4a5a6a',
-        ambientIntensity: 0.25
-      };
-    case 'steampunk-henley':
-      // Golden-hour sepia haze - warm, dusty
-      return { 
-        fogColor: '#9a8365', 
-        fogNear: 35, 
-        fogFar: 450, 
-        skyColor: '#d4a857',
-        ambientColor: '#c9a227',
-        ambientIntensity: 0.4
-      };
-    case 'dystopian-thames':
-      // Toxic industrial smog - oppressive, dark
-      return { 
-        fogColor: '#1a1a28', 
-        fogNear: 20, 
-        fogFar: 300, 
-        skyColor: '#0f172a',
-        ambientColor: '#2a2a3a',
-        ambientIntensity: 0.2
-      };
-    case 'scifi-boston':
-      // Neon-lit night - cool, futuristic
-      return { 
-        fogColor: '#0a1428', 
-        fogNear: 50, 
-        fogFar: 550, 
-        skyColor: '#162447',
-        ambientColor: '#1a3a5a',
-        ambientIntensity: 0.3
-      };
-    default: // Willowbrook - realistic contemporary
-      // Natural morning atmosphere - balanced, realistic
-      return { 
-        fogColor: '#a8d0f0', 
-        fogNear: 60, 
-        fogFar: 600, 
-        skyColor: '#a0cdfa',
-        ambientColor: '#b0d0e0',
-        ambientIntensity: 0.38
-      };
-  }
-};
-
-// ============================================================================
-// HD SKY CONFIGURATION - Enhanced physically-accurate sun and atmosphere
-// ============================================================================
-interface SkyConfig {
-  sunPosition: [number, number, number];
-  turbidity: number;         // Haziness (1-20, lower is clearer)
-  rayleigh: number;          // Sky blue scattering (0-4)
-  mieCoefficient: number;    // Particle scattering (0-0.1)
-  mieDirectionalG: number;   // Sun glow direction (0-1)
-  inclination: number;       // Sun elevation (0-1, 0.5 = horizon)
-  azimuth: number;           // Sun compass direction (0-1)
-  exposure: number;          // Overall brightness
-  sunIntensity: number;      // Direct sun light intensity
-  sunColor: string;          // Sun light color tint
-}
-
-const getSkyConfig = (theme: RouteTheme): SkyConfig => {
-  switch (theme) {
-    case 'crystal-bled':
-      // Crystal-clear alpine morning - bright blue sky, high sun, crisp light
-      return {
-        sunPosition: [120, 100, 60],
-        turbidity: 1.2,
-        rayleigh: 2.2,
-        mieCoefficient: 0.003,
-        mieDirectionalG: 0.75,
-        inclination: 0.70,
-        azimuth: 0.25,
-        exposure: 0.55,
-        sunIntensity: 2.2,
-        sunColor: '#fffaf0'
-      };
-    case 'gothic-venice':
-      // Overcast twilight - low sun, heavy atmosphere, mysterious
-      return {
-        sunPosition: [40, 12, -120],
-        turbidity: 12,
-        rayleigh: 3.5,
-        mieCoefficient: 0.06,
-        mieDirectionalG: 0.96,
-        inclination: 0.32,
-        azimuth: 0.78,
-        exposure: 0.28,
-        sunIntensity: 0.8,
-        sunColor: '#ff9966'
-      };
-    case 'steampunk-henley':
-      // Golden hour - warm sunset colors, dusty Victorian atmosphere
-      return {
-        sunPosition: [90, 28, 70],
-        turbidity: 9,
-        rayleigh: 1.4,
-        mieCoefficient: 0.035,
-        mieDirectionalG: 0.92,
-        inclination: 0.40,
-        azimuth: 0.12,
-        exposure: 0.48,
-        sunIntensity: 1.6,
-        sunColor: '#ffcc66'
-      };
-    case 'dystopian-thames':
-      // Polluted dusk - red/orange haze, obscured sun, industrial
-      return {
-        sunPosition: [25, 6, -90],
-        turbidity: 20,
-        rayleigh: 0.4,
-        mieCoefficient: 0.12,
-        mieDirectionalG: 0.99,
-        inclination: 0.25,
-        azimuth: 0.88,
-        exposure: 0.22,
-        sunIntensity: 0.5,
-        sunColor: '#ff6633'
-      };
-    case 'scifi-boston':
-      // Night with artificial moonlight - cool, futuristic glow
-      return {
-        sunPosition: [-60, 70, 120],
-        turbidity: 0.4,
-        rayleigh: 0.15,
-        mieCoefficient: 0.0008,
-        mieDirectionalG: 0.65,
-        inclination: 0.62,
-        azimuth: 0.55,
-        exposure: 0.18,
-        sunIntensity: 0.6,
-        sunColor: '#aaccff'
-      };
-    default: // Willowbrook - realistic contemporary morning
-      return {
-        sunPosition: [90, 55, 35],
-        turbidity: 3.5,
-        rayleigh: 2.8,
-        mieCoefficient: 0.008,
-        mieDirectionalG: 0.82,
-        inclination: 0.58,
-        azimuth: 0.18,
-        exposure: 0.42,
-        sunIntensity: 1.8,
-        sunColor: '#fff8e8'
-      };
-  }
-};
-
-// HD Cloud configuration - enhanced volumetric cloud settings by theme
-interface CloudConfig {
-  enabled: boolean;
-  count: number;
-  opacity: number;
-  speed: number;
-  color: string;
-  segments: number;
-  scale: number;
-  depth: number;
-}
-
-const getCloudConfig = (theme: RouteTheme): CloudConfig => {
-  switch (theme) {
-    case 'crystal-bled':
-      // Sparse, bright white alpine clouds - crisp and defined
-      return { 
-        enabled: true, 
-        count: 5, 
-        opacity: 0.42, 
-        speed: 0.18, 
-        color: '#ffffff', 
-        segments: 32,
-        scale: 1.3,
-        depth: 0.8
-      };
-    case 'gothic-venice':
-      // Heavy, brooding storm clouds - dark and atmospheric
-      return { 
-        enabled: true, 
-        count: 14, 
-        opacity: 0.65, 
-        speed: 0.06, 
-        color: '#5a6268', 
-        segments: 38,
-        scale: 1.5,
-        depth: 1.2
-      };
-    case 'steampunk-henley':
-      // Warm, golden-tinged clouds - dusty Victorian atmosphere
-      return { 
-        enabled: true, 
-        count: 9, 
-        opacity: 0.48, 
-        speed: 0.12, 
-        color: '#f0e0c8', 
-        segments: 30,
-        scale: 1.2,
-        depth: 0.9
-      };
-    case 'dystopian-thames':
-      // Heavy smog and pollution clouds - dark and oppressive
-      return { 
-        enabled: true, 
-        count: 16, 
-        opacity: 0.72, 
-        speed: 0.04, 
-        color: '#3a3a42', 
-        segments: 42,
-        scale: 1.6,
-        depth: 1.4
-      };
-    case 'scifi-boston':
-      // Minimal, wispy night clouds - futuristic and sparse
-      return { 
-        enabled: true, 
-        count: 3, 
-        opacity: 0.22, 
-        speed: 0.28, 
-        color: '#2a4a6a', 
-        segments: 22,
-        scale: 0.9,
-        depth: 0.6
-      };
-    default: // Willowbrook - natural realistic clouds
-      return { 
-        enabled: true, 
-        count: 8, 
-        opacity: 0.38, 
-        speed: 0.16, 
-        color: '#f8f8ff', 
-        segments: 28,
-        scale: 1.1,
-        depth: 0.85
-      };
-  }
-};
+const getThemeAtmosphere = (theme: RouteTheme) => getThemeConfig(theme).atmosphere;
 
 // ============================================================================
 // HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
 // ============================================================================
 const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({ theme, boatZ }) => {
-  const skyConfig = useMemo(() => getSkyConfig(theme), [theme]);
-  const cloudConfig = useMemo(() => getCloudConfig(theme), [theme]);
+  const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
+  const cloudConfig = useMemo(() => getThemeConfig(theme).clouds, [theme]);
   
   // HD Cloud positions with varied heights and distribution
   const cloudPositions = useMemo(() => {
@@ -2523,8 +2065,7 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
   const cloudGroupRef = useRef<THREE.Group>(null);
   const layer2Ref = useRef<THREE.Group>(null);
   
-  useFrame((state) => {
-    const time = state.clock.elapsedTime;
+  useAnimationFrame((time) => {
     if (cloudGroupRef.current) {
       // Primary cloud layer - gentle rotation with wind simulation
       cloudGroupRef.current.rotation.y = time * cloudConfig.speed * 0.008;
@@ -2607,6 +2148,51 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
   );
 };
 
+
+// Shared OarRig component — mirrors geometry about the centre-line using a sign factor.
+// Replaces the previous 144-line duplicate left/right oar JSX blocks.
+const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
+  const sx = side === 'left' ? -1 : 1;
+  return (
+    <>
+      {/* HD Rigger - aerospace aluminum outrigger */}
+      <mesh position={[sx * 0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
+        <meshPhysicalMaterial color="#9a9a9a" metalness={0.95} roughness={0.08} clearcoat={0.75} clearcoatRoughness={0.12} reflectivity={0.9} />
+      </mesh>
+      {/* Rigger support strut */}
+      <mesh position={[sx * 0.3, -0.08, 0]} rotation={[0, 0, sx * -0.4]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
+        <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
+      </mesh>
+      {/* HD Oarlock - precision stainless steel */}
+      <mesh position={[sx * 1.15, 0, 0]}>
+        <torusGeometry args={[0.045, 0.018, 12, 20]} />
+        <meshPhysicalMaterial color="#b8b8b8" metalness={0.98} roughness={0.06} clearcoat={0.85} clearcoatRoughness={0.08} reflectivity={0.95} />
+      </mesh>
+      {/* HD Oar shaft - premium carbon fiber */}
+      <mesh position={[sx * 1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
+        <meshPhysicalMaterial color="#0a0a0a" metalness={0.15} roughness={0.28} clearcoat={0.92} clearcoatRoughness={0.08} sheen={0.2} sheenColor="#303030" />
+      </mesh>
+      {/* Grip area */}
+      <mesh position={[sx * 0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
+        <meshPhysicalMaterial color="#1a1a1a" roughness={0.85} metalness={0.0} />
+      </mesh>
+      {/* HD Oar blade - competition composite with team colors */}
+      <mesh position={[sx * 3.3, 0, 0]}>
+        <boxGeometry args={[0.58, 0.018, 0.2]} />
+        <meshPhysicalMaterial color="#1e40af" metalness={0.0} roughness={0.18} clearcoat={0.85} clearcoatRoughness={0.08} sheen={0.35} sheenColor="#3b82f6" />
+      </mesh>
+      {/* Blade edge detail */}
+      <mesh position={[sx * 3.55, 0, 0]}>
+        <boxGeometry args={[0.08, 0.016, 0.19]} />
+        <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
+      </mesh>
+    </>
+  );
+};
 
 // ============================================================================
 // HIGH-DEFINITION ROWING SCULL (BOAT) with animated oars and realistic rower
@@ -3206,148 +2792,12 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
       
       {/* HD Left oar group - professional racing equipment */}
       <group ref={leftOarRef} position={[-0.3, 0.15, 0.5]}>
-        {/* HD Rigger - aerospace aluminum outrigger */}
-        <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
-          <meshPhysicalMaterial 
-            color="#9a9a9a" 
-            metalness={0.95} 
-            roughness={0.08}
-            clearcoat={0.75}
-            clearcoatRoughness={0.12}
-            reflectivity={0.9}
-          />
-        </mesh>
-        {/* Rigger support struts */}
-        <mesh position={[-0.3, -0.08, 0]} rotation={[0, 0, 0.4]}>
-          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
-          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
-        </mesh>
-        {/* HD Oarlock - precision stainless steel */}
-        <mesh position={[-1.15, 0, 0]}>
-          <torusGeometry args={[0.045, 0.018, 12, 20]} />
-          <meshPhysicalMaterial 
-            color="#b8b8b8" 
-            metalness={0.98} 
-            roughness={0.06}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            reflectivity={0.95}
-          />
-        </mesh>
-        {/* HD Oar shaft - premium carbon fiber */}
-        <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
-          <meshPhysicalMaterial 
-            color="#0a0a0a" 
-            metalness={0.15} 
-            roughness={0.28}
-            clearcoat={0.92}
-            clearcoatRoughness={0.08}
-            sheen={0.2}
-            sheenColor="#303030"
-          />
-        </mesh>
-        {/* Grip area */}
-        <mesh position={[-0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
-          <meshPhysicalMaterial 
-            color="#1a1a1a"
-            roughness={0.85}
-            metalness={0.0}
-          />
-        </mesh>
-        {/* HD Oar blade - competition composite with team colors */}
-        <mesh position={[-3.3, 0, 0]}>
-          <boxGeometry args={[0.58, 0.018, 0.2]} />
-          <meshPhysicalMaterial 
-            color="#1e40af" 
-            metalness={0.0} 
-            roughness={0.18}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            sheen={0.35}
-            sheenColor="#3b82f6"
-          />
-        </mesh>
-        {/* Blade edge detail */}
-        <mesh position={[-3.55, 0, 0]}>
-          <boxGeometry args={[0.08, 0.016, 0.19]} />
-          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
-        </mesh>
+        <OarRig side="left" />
       </group>
       
       {/* HD Right oar group - professional racing equipment */}
       <group ref={rightOarRef} position={[0.3, 0.15, 0.5]}>
-        {/* HD Rigger - aerospace aluminum outrigger */}
-        <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
-          <meshPhysicalMaterial 
-            color="#9a9a9a" 
-            metalness={0.95} 
-            roughness={0.08}
-            clearcoat={0.75}
-            clearcoatRoughness={0.12}
-            reflectivity={0.9}
-          />
-        </mesh>
-        {/* Rigger support struts */}
-        <mesh position={[0.3, -0.08, 0]} rotation={[0, 0, -0.4]}>
-          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
-          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
-        </mesh>
-        {/* HD Oarlock - precision stainless steel */}
-        <mesh position={[1.15, 0, 0]}>
-          <torusGeometry args={[0.045, 0.018, 12, 20]} />
-          <meshPhysicalMaterial 
-            color="#b8b8b8" 
-            metalness={0.98} 
-            roughness={0.06}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            reflectivity={0.95}
-          />
-        </mesh>
-        {/* HD Oar shaft - premium carbon fiber */}
-        <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
-          <meshPhysicalMaterial 
-            color="#0a0a0a" 
-            metalness={0.15} 
-            roughness={0.28}
-            clearcoat={0.92}
-            clearcoatRoughness={0.08}
-            sheen={0.2}
-            sheenColor="#303030"
-          />
-        </mesh>
-        {/* Grip area */}
-        <mesh position={[0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
-          <meshPhysicalMaterial 
-            color="#1a1a1a"
-            roughness={0.85}
-            metalness={0.0}
-          />
-        </mesh>
-        {/* HD Oar blade - competition composite with team colors */}
-        <mesh position={[3.3, 0, 0]}>
-          <boxGeometry args={[0.58, 0.018, 0.2]} />
-          <meshPhysicalMaterial 
-            color="#1e40af" 
-            metalness={0.0} 
-            roughness={0.18}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            sheen={0.35}
-            sheenColor="#3b82f6"
-          />
-        </mesh>
-        {/* Blade edge detail */}
-        <mesh position={[3.55, 0, 0]}>
-          <boxGeometry args={[0.08, 0.016, 0.19]} />
-          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
-        </mesh>
+        <OarRig side="right" />
       </group>
     </group>
   );
@@ -3400,46 +2850,46 @@ const BoatKinematicController: React.FC<{
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
-const ChromaticAberrationDriver: React.FC<{
-  effect: ChromaticAberrationEffect;
-  velocityRef: React.MutableRefObject<number>;
-}> = ({ effect, velocityRef }) => {
+const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; performanceMode?: PerformanceMode }> = ({ velocityRef, performanceMode }) => {
+  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
+  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
+  const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
+  useEffect(() => () => caEffect.dispose(), [caEffect]);
+
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(() => {
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
-    effect.offset.set(aberration, aberration * 0.6);
+    caEffect.offset.set(aberration, aberration * 0.6);
   });
-  return null;
-};
 
-const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; isHighQuality: boolean }> = ({ velocityRef, isHighQuality }) => {
-  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
-  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
-  const caEffect = useMemo(
-    () => (isHighQuality
-      ? new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 })
-      : null),
-    [isHighQuality],
-  );
-  useEffect(() => {
-    return () => {
-      caEffect?.dispose();
-    };
-  }, [caEffect]);
+  // In auto mode skip the expensive DepthOfField pass
+  if (performanceMode === 'auto') {
+    return (
+      <EffectComposer>
+        <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+        <primitive object={caEffect} />
+        <Vignette eskil={false} offset={0.3} darkness={0.5} />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      </EffectComposer>
+    );
+  }
 
-  return isHighQuality ? (
+  return (
     <EffectComposer>
-      <ChromaticAberrationDriver effect={caEffect!} velocityRef={velocityRef} />
+      {/* Bloom — highlights water speculars and emissive caustics */}
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-      <primitive object={caEffect!} />
+
+      {/* Chromatic aberration — scales with velocity for camera-lens feel */}
+      <primitive object={caEffect} />
+
+      {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
+
+      {/* Cinematic vignette to draw focus to the scene centre */}
       <Vignette eskil={false} offset={0.3} darkness={0.5} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-    </EffectComposer>
-  ) : (
-    <EffectComposer>
-      <Vignette eskil={false} offset={0.3} darkness={0.5} />
+
+      {/* Filmic tone mapping for realistic HDR colour response */}
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );
@@ -3455,10 +2905,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   isPlaying, 
   cadence,
   intensityFactor,
-  performanceMode
+  performanceMode = 'auto',
 }) => {
   const { camera } = useThree();
-  const isHighQuality = performanceMode !== 'low';
   
   // Detect route theme for landscape selection
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
@@ -3680,10 +3129,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
   };
   
   // Get sky configuration for sun-aligned lighting
-  const skyConfig = useMemo(() => getSkyConfig(routeTheme), [routeTheme]);
+  const skyConfig = useMemo(() => getThemeConfig(routeTheme).sky, [routeTheme]);
   
   return (
-    <>
+    <AnimationProvider>
       {/* Themed exponential fog for depth */}
       <fog attach="fog" args={[atmosphere.fogColor, atmosphere.fogNear, atmosphere.fogFar]} />
       
@@ -3778,9 +3227,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* Water - curved if we have GPS curve, otherwise straight */}
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} isHighQuality={isHighQuality} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
       ) : (
-        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} isHighQuality={isHighQuality} />
+        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
       )}
       
       {/* Curved riverbanks following the GPS path */}
@@ -3844,8 +3293,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!IS_TEST_MODE && <DynamicPostFx velocityRef={velocityRef} isHighQuality={isHighQuality} />}
-    </>
+      {!IS_TEST_MODE && performanceMode !== 'low' && <DynamicPostFx velocityRef={velocityRef} performanceMode={performanceMode} />}
+    </AnimationProvider>
   );
 };
 

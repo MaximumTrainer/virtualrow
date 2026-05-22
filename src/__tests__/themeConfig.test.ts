@@ -1,0 +1,173 @@
+import { describe, it, expect } from 'vitest';
+import {
+  THEME_CONFIG,
+  getThemeConfig,
+  type RouteTheme,
+} from '../components/rower3d/themeConfig';
+
+const ALL_THEMES: RouteTheme[] = [
+  'willowbrook',
+  'crystal-bled',
+  'gothic-venice',
+  'steampunk-henley',
+  'dystopian-thames',
+  'scifi-boston',
+];
+
+describe('THEME_CONFIG', () => {
+  it('has an entry for every RouteTheme', () => {
+    for (const theme of ALL_THEMES) {
+      expect(THEME_CONFIG[theme]).toBeDefined();
+    }
+  });
+
+  it('every entry has all required top-level sections', () => {
+    for (const theme of ALL_THEMES) {
+      const cfg = THEME_CONFIG[theme];
+      expect(cfg).toHaveProperty('water');
+      expect(cfg).toHaveProperty('mist');
+      expect(cfg).toHaveProperty('bank');
+      expect(cfg).toHaveProperty('landscapeColors');
+      expect(cfg).toHaveProperty('atmosphere');
+      expect(cfg).toHaveProperty('sky');
+      expect(cfg).toHaveProperty('clouds');
+    }
+  });
+
+  it('water configs have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const w = THEME_CONFIG[theme].water;
+      expect(typeof w.color).toBe('string');
+      expect(typeof w.transmission).toBe('number');
+      expect(typeof w.roughness).toBe('number');
+      expect(typeof w.thickness).toBe('number');
+      expect(typeof w.emissive).toBe('string');
+      expect(typeof w.emissiveIntensity).toBe('number');
+      expect(typeof w.attenuationColor).toBe('string');
+      expect(typeof w.attenuationDistance).toBe('number');
+      expect(typeof w.specularIntensity).toBe('number');
+      expect(typeof w.sheenColor).toBe('string');
+    }
+  });
+
+  it('mist configs have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const m = THEME_CONFIG[theme].mist;
+      expect(typeof m.baseOpacity).toBe('number');
+      expect(typeof m.color1).toBe('string');
+      expect(typeof m.color2).toBe('string');
+      expect(typeof m.height1).toBe('number');
+      expect(typeof m.height2).toBe('number');
+      expect(typeof m.density).toBe('number');
+    }
+  });
+
+  it('bank configs have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const b = THEME_CONFIG[theme].bank;
+      expect(typeof b.color).toBe('string');
+      expect(typeof b.roughness).toBe('number');
+      expect(typeof b.metalness).toBe('number');
+      expect(typeof b.emissive).toBe('string');
+      expect(typeof b.emissiveIntensity).toBe('number');
+      expect(typeof b.sheen).toBe('number');
+      expect(typeof b.sheenColor).toBe('string');
+      expect(typeof b.flatColor).toBe('string');
+    }
+  });
+
+  it('landscapeColors have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const lc = THEME_CONFIG[theme].landscapeColors;
+      expect(typeof lc.tree).toBe('string');
+      expect(typeof lc.treeBark).toBe('string');
+      expect(typeof lc.treeHighlight).toBe('string');
+      expect(typeof lc.mountain).toBe('string');
+      expect(typeof lc.mountainSnow).toBe('string');
+      expect(typeof lc.building).toBe('string');
+      expect(typeof lc.buildingAccent).toBe('string');
+      expect(typeof lc.windowGlow).toBe('string');
+    }
+  });
+
+  it('atmosphere configs have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const a = THEME_CONFIG[theme].atmosphere;
+      expect(typeof a.fogColor).toBe('string');
+      expect(typeof a.fogNear).toBe('number');
+      expect(typeof a.fogFar).toBe('number');
+      expect(typeof a.skyColor).toBe('string');
+      expect(typeof a.ambientColor).toBe('string');
+      expect(typeof a.ambientIntensity).toBe('number');
+    }
+  });
+
+  it('sky configs have all required fields with valid ranges', () => {
+    for (const theme of ALL_THEMES) {
+      const sky = THEME_CONFIG[theme].sky;
+      expect(Array.isArray(sky.sunPosition)).toBe(true);
+      expect(sky.sunPosition).toHaveLength(3);
+      expect(typeof sky.turbidity).toBe('number');
+      expect(sky.turbidity).toBeGreaterThanOrEqual(0);
+      expect(typeof sky.rayleigh).toBe('number');
+      expect(typeof sky.mieCoefficient).toBe('number');
+      expect(typeof sky.mieDirectionalG).toBe('number');
+      expect(sky.mieDirectionalG).toBeGreaterThanOrEqual(0);
+      expect(sky.mieDirectionalG).toBeLessThanOrEqual(1);
+      expect(typeof sky.exposure).toBe('number');
+      expect(typeof sky.sunIntensity).toBe('number');
+      expect(typeof sky.sunColor).toBe('string');
+    }
+  });
+
+  it('cloud configs have all required fields', () => {
+    for (const theme of ALL_THEMES) {
+      const clouds = THEME_CONFIG[theme].clouds;
+      expect(typeof clouds.enabled).toBe('boolean');
+      expect(typeof clouds.count).toBe('number');
+      expect(clouds.count).toBeGreaterThan(0);
+      expect(typeof clouds.opacity).toBe('number');
+      expect(clouds.opacity).toBeGreaterThanOrEqual(0);
+      expect(clouds.opacity).toBeLessThanOrEqual(1);
+      expect(typeof clouds.speed).toBe('number');
+      expect(typeof clouds.color).toBe('string');
+      expect(typeof clouds.segments).toBe('number');
+      expect(typeof clouds.scale).toBe('number');
+      expect(typeof clouds.depth).toBe('number');
+    }
+  });
+
+  it('themes are visually distinct (water colors differ)', () => {
+    const waterColors = ALL_THEMES.map((t) => THEME_CONFIG[t].water.color);
+    const unique = new Set(waterColors);
+    expect(unique.size).toBe(ALL_THEMES.length);
+  });
+});
+
+describe('getThemeConfig', () => {
+  it('returns the correct config for each known theme', () => {
+    for (const theme of ALL_THEMES) {
+      expect(getThemeConfig(theme)).toBe(THEME_CONFIG[theme]);
+    }
+  });
+
+  it('falls back to willowbrook for an unknown theme', () => {
+    const fallback = getThemeConfig('unknown-theme' as RouteTheme);
+    expect(fallback).toBe(THEME_CONFIG['willowbrook']);
+  });
+
+  it('crystal-bled has high water transmission (clear alpine lake)', () => {
+    expect(getThemeConfig('crystal-bled').water.transmission).toBeGreaterThan(0.5);
+  });
+
+  it('dystopian-thames has dense mist', () => {
+    expect(getThemeConfig('dystopian-thames').mist.density).toBeGreaterThan(1);
+  });
+
+  it('gothic-venice has darker atmosphere than crystal-bled', () => {
+    const venice = getThemeConfig('gothic-venice').atmosphere;
+    const bled = getThemeConfig('crystal-bled').atmosphere;
+    // fogFar should be shorter (denser fog) in gothic-venice
+    expect(venice.fogFar).toBeLessThan(bled.fogFar);
+  });
+});
