@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
+import { Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
 import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO } from '@react-three/postprocessing';
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
@@ -347,6 +347,181 @@ const BladeEntryFoam: React.FC<{
       </mesh>
     </>
   );
+};
+
+// ============================================================================
+// PMREM ENVIRONMENT — generates env map from the procedural skydome via
+// PMREMGenerator, replacing the static drei Environment preset (#121).
+// Regenerates only when the route theme changes to avoid per-frame cost.
+// ============================================================================
+const PMREMEnvironment: React.FC<{ theme: RouteTheme }> = ({ theme }) => {
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    if (IS_TEST_MODE) return;
+    const pmremGen = new THREE.PMREMGenerator(gl);
+    pmremGen.compileEquirectangularShader();
+    const envRT = pmremGen.fromScene(scene);
+    scene.environment = envRT.texture;
+    return () => {
+      envRT.texture.dispose();
+      envRT.dispose();
+      pmremGen.dispose();
+      scene.environment = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl, scene, theme]);
+  return null;
+};
+
+// ============================================================================
+// DRIVE SPRAY — small spray particles at blade-entry sites during 'drive'
+// phase (#122). Uses pre-allocated BufferGeometry; no external particle lib.
+// ============================================================================
+const DRIVE_PARTICLE_COUNT = 24;
+const DriveSpray: React.FC<{
+  positionRef: React.MutableRefObject<THREE.Vector3>;
+  rotationRef: React.MutableRefObject<number>;
+  strokePhase: string;
+}> = ({ positionRef, rotationRef, strokePhase }) => {
+  const pointsRef = useRef<THREE.Points | null>(null);
+  const velArray = useRef(new Float32Array(DRIVE_PARTICLE_COUNT * 3));
+  const lifeArray = useRef(new Float32Array(DRIVE_PARTICLE_COUNT));
+  const prevPhaseRef = useRef('recovery');
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const posData = new Float32Array(DRIVE_PARTICLE_COUNT * 3).fill(-9999);
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(posData, 3));
+    const mat = new THREE.PointsMaterial({ color: 'white', size: 0.18, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true });
+    const pts = new THREE.Points(geom, mat);
+    pointsRef.current = pts;
+    scene.add(pts);
+    return () => { scene.remove(pts); geom.dispose(); mat.dispose(); pointsRef.current = null; };
+  }, [scene]);
+
+  useFrame((_, delta) => {
+    const pts = pointsRef.current;
+    if (!pts) return;
+    const mat = pts.material as THREE.PointsMaterial;
+    const attr = pts.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const pos = attr.array as Float32Array;
+
+    if (strokePhase === 'drive' && prevPhaseRef.current !== 'drive') {
+      const bp = positionRef.current;
+      const rot = rotationRef.current;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      const span = 3.2;
+      for (let i = 0; i < DRIVE_PARTICLE_COUNT; i++) {
+        const side = i < DRIVE_PARTICLE_COUNT / 2 ? -1 : 1;
+        pos[i * 3 + 0] = bp.x + side * cosR * span + (Math.random() - 0.5) * 0.4;
+        pos[i * 3 + 1] = bp.y + 0.05;
+        pos[i * 3 + 2] = bp.z - side * sinR * span + (Math.random() - 0.5) * 0.4;
+        velArray.current[i * 3 + 0] = (Math.random() - 0.5) * 1.5;
+        velArray.current[i * 3 + 1] = Math.random() * 1.2 + 0.3;
+        velArray.current[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+        lifeArray.current[i] = 0.4 + Math.random() * 0.3;
+      }
+    }
+    prevPhaseRef.current = strokePhase;
+
+    let anyAlive = false;
+    for (let i = 0; i < DRIVE_PARTICLE_COUNT; i++) {
+      if (lifeArray.current[i] <= 0) continue;
+      lifeArray.current[i] -= delta;
+      if (lifeArray.current[i] <= 0) {
+        pos[i * 3 + 1] = -9999;
+      } else {
+        anyAlive = true;
+        pos[i * 3 + 0] += velArray.current[i * 3 + 0] * delta;
+        pos[i * 3 + 1] += velArray.current[i * 3 + 1] * delta;
+        pos[i * 3 + 2] += velArray.current[i * 3 + 2] * delta;
+        velArray.current[i * 3 + 1] -= 5.0 * delta;
+      }
+    }
+    mat.opacity = anyAlive ? 0.65 : 0;
+    mat.visible = anyAlive;
+    attr.needsUpdate = true;
+  });
+
+  return null;
+};
+
+// ============================================================================
+// FINISH SPLASH — brief burst at blade-exit on 'finish' phase (#122).
+// ============================================================================
+const FINISH_PARTICLE_COUNT = 32;
+const FinishSplash: React.FC<{
+  positionRef: React.MutableRefObject<THREE.Vector3>;
+  rotationRef: React.MutableRefObject<number>;
+  strokePhase: string;
+}> = ({ positionRef, rotationRef, strokePhase }) => {
+  const pointsRef = useRef<THREE.Points | null>(null);
+  const velArray = useRef(new Float32Array(FINISH_PARTICLE_COUNT * 3));
+  const lifeArray = useRef(new Float32Array(FINISH_PARTICLE_COUNT));
+  const prevPhaseRef = useRef('drive');
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const posData = new Float32Array(FINISH_PARTICLE_COUNT * 3).fill(-9999);
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(posData, 3));
+    const mat = new THREE.PointsMaterial({ color: '#cceeff', size: 0.22, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true });
+    const pts = new THREE.Points(geom, mat);
+    pointsRef.current = pts;
+    scene.add(pts);
+    return () => { scene.remove(pts); geom.dispose(); mat.dispose(); pointsRef.current = null; };
+  }, [scene]);
+
+  useFrame((_, delta) => {
+    const pts = pointsRef.current;
+    if (!pts) return;
+    const mat = pts.material as THREE.PointsMaterial;
+    const attr = pts.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const pos = attr.array as Float32Array;
+
+    if (strokePhase === 'finish' && prevPhaseRef.current !== 'finish') {
+      const bp = positionRef.current;
+      const rot = rotationRef.current;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      const span = 3.2;
+      for (let i = 0; i < FINISH_PARTICLE_COUNT; i++) {
+        const side = i < FINISH_PARTICLE_COUNT / 2 ? -1 : 1;
+        pos[i * 3 + 0] = bp.x + side * cosR * span + (Math.random() - 0.5) * 0.6;
+        pos[i * 3 + 1] = bp.y + 0.05;
+        pos[i * 3 + 2] = bp.z - side * sinR * span + (Math.random() - 0.5) * 0.6;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 2.0 + 0.5;
+        velArray.current[i * 3 + 0] = Math.cos(angle) * speed;
+        velArray.current[i * 3 + 1] = Math.random() * 1.8 + 0.5;
+        velArray.current[i * 3 + 2] = Math.sin(angle) * speed;
+        lifeArray.current[i] = 0.3 + Math.random() * 0.4;
+      }
+    }
+    prevPhaseRef.current = strokePhase;
+
+    let anyAlive = false;
+    for (let i = 0; i < FINISH_PARTICLE_COUNT; i++) {
+      if (lifeArray.current[i] <= 0) continue;
+      lifeArray.current[i] -= delta;
+      if (lifeArray.current[i] <= 0) {
+        pos[i * 3 + 1] = -9999;
+      } else {
+        anyAlive = true;
+        pos[i * 3 + 0] += velArray.current[i * 3 + 0] * delta;
+        pos[i * 3 + 1] += velArray.current[i * 3 + 1] * delta;
+        pos[i * 3 + 2] += velArray.current[i * 3 + 2] * delta;
+        velArray.current[i * 3 + 1] -= 6.0 * delta;
+      }
+    }
+    mat.opacity = anyAlive ? 0.7 : 0;
+    mat.visible = anyAlive;
+    attr.needsUpdate = true;
+  });
+
+  return null;
 };
 
 // ============================================================================
@@ -1253,9 +1428,44 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
 
   // Drive uTime each frame so sway animates
   useAnimationFrame((time) => { swayTime.value = time; });
+
+  // Instanced mesh refs — one per foliage cone layer (#102)
+  const cone0Ref = useRef<THREE.InstancedMesh>(null);
+  const cone1Ref = useRef<THREE.InstancedMesh>(null);
+  const cone2Ref = useRef<THREE.InstancedMesh>(null);
+  const cone3Ref = useRef<THREE.InstancedMesh>(null);
+
+  // Layer config: [yOffset, radius, height] — matches original per-tree cone positions
+  const CONE_LAYERS = [
+    [2.8, 1.4, 2.2],
+    [3.8, 1.1, 2.0],
+    [4.6, 0.8, 1.8],
+    [5.3, 0.4, 1.2],
+  ] as const;
+
+  // Set instance matrices whenever the tree list changes
+  useEffect(() => {
+    const refs = [cone0Ref, cone1Ref, cone2Ref, cone3Ref];
+    const dummy = new THREE.Object3D();
+    refs.forEach((ref, layer) => {
+      if (!ref.current) return;
+      const yOffset = CONE_LAYERS[layer][0];
+      trees.forEach((tree, i) => {
+        dummy.position.set(tree.x, yOffset * tree.scale, tree.z);
+        dummy.scale.setScalar(tree.scale);
+        dummy.rotation.set(0, tree.rotation, 0);
+        dummy.updateMatrix();
+        ref.current!.setMatrixAt(i, dummy.matrix);
+      });
+      ref.current.instanceMatrix.needsUpdate = true;
+    });
+  // CONE_LAYERS is a constant tuple; trees and foliageMats are the real deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trees]);
   
   return (
     <group position={[0, 0, boatZ]}>
+      {/* Per-tree trunks, bark rings, root flares, and branch variants */}
       {trees.map((tree, i) => {
         const nearShadow = Math.abs(tree.z) < RENDER_CONFIG.shadowNearBand;
         return (
@@ -1283,29 +1493,6 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
             <cylinderGeometry args={[0.22, 0.35, 0.3, 8]} />
             <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
           </mesh>
-          
-          {/* Multi-layered foliage with wind-sway and LOD (#107, #105) */}
-          {/* Bottom layer - dense, darker */}
-          <mesh position={[0, 2.8, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[1.4, 2.2, tree.isNear ? 12 : 4]} />
-            <primitive object={foliageMats[0]} attach="material" />
-          </mesh>
-          {/* Middle layer */}
-          <mesh position={[0, 3.8, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[1.1, 2.0, tree.isNear ? 12 : 4]} />
-            <primitive object={foliageMats[1]} attach="material" />
-          </mesh>
-          {/* Upper layer - lighter, catches more light */}
-          <mesh position={[0, 4.6, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[0.8, 1.8, tree.isNear ? 12 : 4]} />
-            <primitive object={foliageMats[2]} attach="material" />
-          </mesh>
-          {/* Top spike */}
-          <mesh position={[0, 5.3, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[0.4, 1.2, tree.isNear ? 10 : 4]} />
-            <primitive object={foliageMats[3]} attach="material" />
-          </mesh>
-          
           {/* Small branch details */}
           {tree.variant === 0 && (
             <>
@@ -1322,6 +1509,26 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
         </group>
         );
       })}
+
+      {/* Instanced foliage cone layers — 4 InstancedMesh, one per layer (#102).
+          frustumCulled=false avoids incorrect culling when the bounding box
+          is not explicitly recomputed after matrix updates. */}
+      <instancedMesh ref={cone0Ref} args={[undefined, undefined, trees.length]} frustumCulled={false}>
+        <coneGeometry args={[CONE_LAYERS[0][1], CONE_LAYERS[0][2], 8]} />
+        <primitive object={foliageMats[0]} attach="material" />
+      </instancedMesh>
+      <instancedMesh ref={cone1Ref} args={[undefined, undefined, trees.length]} frustumCulled={false}>
+        <coneGeometry args={[CONE_LAYERS[1][1], CONE_LAYERS[1][2], 8]} />
+        <primitive object={foliageMats[1]} attach="material" />
+      </instancedMesh>
+      <instancedMesh ref={cone2Ref} args={[undefined, undefined, trees.length]} frustumCulled={false}>
+        <coneGeometry args={[CONE_LAYERS[2][1], CONE_LAYERS[2][2], 8]} />
+        <primitive object={foliageMats[2]} attach="material" />
+      </instancedMesh>
+      <instancedMesh ref={cone3Ref} args={[undefined, undefined, trees.length]} frustumCulled={false}>
+        <coneGeometry args={[CONE_LAYERS[3][1], CONE_LAYERS[3][2], 6]} />
+        <primitive object={foliageMats[3]} attach="material" />
+      </instancedMesh>
     </group>
   );
 };
@@ -3195,19 +3402,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
         color={themeConfig.lighting.fillColor}
       />
       
-      {/* HDR Environment for realistic reflections - matched to theme */}
-      <Environment 
-        preset={
-          routeTheme === 'scifi-boston' ? 'night' :
-          routeTheme === 'dystopian-thames' ? 'sunset' :
-          routeTheme === 'gothic-venice' ? 'dawn' :
-          routeTheme === 'steampunk-henley' ? 'sunset' :
-          'city'
-        } 
-        background={false} 
-        blur={0.5}
-        environmentIntensity={skyConfig.exposure}
-      />
+      {/* PMREM environment generated from the procedural skydome — #121 */}
+      <PMREMEnvironment theme={routeTheme} />
       
       {/* Water - curved if we have GPS curve, otherwise straight */}
       {routeCurve ? (
@@ -3283,6 +3479,22 @@ const RowerScene: React.FC<Rower3DProps> = ({
           rotationRef={boatRotationRef}
           strokePhase={strokePhase}
         />
+      )}
+
+      {/* Stroke-synced spray/splash particles — disabled in test mode (#122) */}
+      {!IS_TEST_MODE && (
+        <>
+          <DriveSpray
+            positionRef={boatPositionRef}
+            rotationRef={boatRotationRef}
+            strokePhase={strokePhase}
+          />
+          <FinishSplash
+            positionRef={boatPositionRef}
+            rotationRef={boatRotationRef}
+            strokePhase={strokePhase}
+          />
+        </>
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
