@@ -55,28 +55,39 @@ interface RoutePosition {
   angle: number;  // Rotation angle in radians (around Y axis)
 }
 
+/**
+ * Get the boat position, tangent, and Y-axis angle at a given progress along the curve.
+ *
+ * When `outPosition` / `outTangent` are supplied, the curve sample is written into them
+ * in-place — this avoids per-frame `THREE.Vector3` allocations on the render hot path.
+ * The returned `RoutePosition` re-uses the same references.
+ */
 const getRoutePositionAtProgress = (
-  curve: THREE.CatmullRomCurve3 | null, 
-  progress: number
+  curve: THREE.CatmullRomCurve3 | null,
+  progress: number,
+  outPosition?: THREE.Vector3,
+  outTangent?: THREE.Vector3,
 ): RoutePosition => {
+  const position = outPosition ?? new THREE.Vector3();
+  const tangent = outTangent ?? new THREE.Vector3();
+
   if (!curve) {
     // Fallback to straight line
-    return {
-      position: new THREE.Vector3(0, 0, -progress * 100),
-      tangent: new THREE.Vector3(0, 0, -1),
-      angle: 0
-    };
+    position.set(0, 0, -progress * 100);
+    tangent.set(0, 0, -1);
+    return { position, tangent, angle: 0 };
   }
-  
+
   const clampedProgress = Math.max(0, Math.min(1, progress));
-  const position = curve.getPointAt(clampedProgress);
-  const tangent = curve.getTangentAt(clampedProgress).normalize();
-  
+  // Use the in-place variants supported by CatmullRomCurve3 to avoid GC churn.
+  curve.getPointAt(clampedProgress, position);
+  curve.getTangentAt(clampedProgress, tangent).normalize();
+
   // Calculate angle from tangent (rotation around Y axis)
   // The boat's bow (front) is at local -Z, so we rotate to align local -Z with tangent
   // atan2(x, z) gives angle where tangent aligns with boat's forward direction
   const angle = Math.atan2(tangent.x, tangent.z);
-  
+
   return { position, tangent, angle };
 };
 
@@ -84,16 +95,19 @@ const getRoutePositionAtProgress = (
 const getCurveDistances = (curve: THREE.CatmullRomCurve3, samples: number = 200): number[] => {
   const distances: number[] = [0];
   let totalDist = 0;
-  
+  // Re-use two scratch vectors instead of allocating 2 * samples Vector3 instances.
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+
+  curve.getPointAt(0, p0);
   for (let i = 1; i <= samples; i++) {
-    const t0 = (i - 1) / samples;
     const t1 = i / samples;
-    const p0 = curve.getPointAt(t0);
-    const p1 = curve.getPointAt(t1);
+    curve.getPointAt(t1, p1);
     totalDist += p0.distanceTo(p1);
     distances.push(totalDist);
+    p0.copy(p1);
   }
-  
+
   return distances;
 };
 
@@ -3644,6 +3658,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const boatProgressRef = useRef<number>(0);
   const boatRotationRef = useRef<number>(0);
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  // Persistent scratch vectors fed to getRoutePositionAtProgress every frame — avoids
+  // ~120 allocations/sec on the render hot path (one Vector3 per point + one per tangent).
+  const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
   // Batched scenery state — both updates in one object to halve React re-renders
   const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });
   const { boatProgress, boatZ } = sceneryState;
@@ -3710,9 +3727,14 @@ const RowerScene: React.FC<Rower3DProps> = ({
       boatProgressRef.current += (targetProgress - boatProgressRef.current) * delta * 3;
     }
     
-    // Get boat position and rotation from curve
-    const routePos = getRoutePositionAtProgress(routeCurve, boatProgressRef.current);
-    boatPositionRef.current.copy(routePos.position);
+    // Get boat position and rotation from curve — write directly into the persistent
+    // refs to avoid per-frame Vector3 allocations.
+    const routePos = getRoutePositionAtProgress(
+      routeCurve,
+      boatProgressRef.current,
+      boatPositionRef.current,
+      scratchTangentRef.current,
+    );
     boatRotationRef.current = routePos.angle;
     
     // Imperatively position boat group when Rapier is absent (Playwright or physics fallback)

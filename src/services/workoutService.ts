@@ -1,8 +1,15 @@
 import type { WorkoutSession, Split, PM5Data, HeartRateSample, WorkoutProgress } from '../types/index';
 
+/** Maximum number of heart-rate samples retained per session (~10 minutes at 1 Hz). */
+export const HR_SAMPLE_CAP = 600;
+/** Minimum distance delta in meters between recorded splits. */
+export const SPLIT_DISTANCE_METERS = 500;
+
 export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
+  /** Write-cursor for the heart-rate ring buffer once it has reached HR_SAMPLE_CAP. */
+  private hrWriteCursor = 0;
 
   startSession(
     routeId: string,
@@ -32,6 +39,7 @@ export class WorkoutService {
 
     this.currentSession = session;
     this.sessions.push(session);
+    this.hrWriteCursor = 0;
     try {
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('virtualrow:sessionStarted', { detail: session });
@@ -101,7 +109,7 @@ export class WorkoutService {
     ];
     const lastDistance = lastSplit ? lastSplit.distance : 0;
 
-    if (data.distance - lastDistance >= 500) {
+    if (data.distance - lastDistance >= SPLIT_DISTANCE_METERS) {
       const split: Split = {
         distance: data.distance,
         time: Math.floor(data.elapsedTime / 1000),
@@ -126,15 +134,16 @@ export class WorkoutService {
     if (!this.currentSession.heartRateSamples) {
       this.currentSession.heartRateSamples = [];
     }
-    // Maintain only last 600 samples (~10 minutes at 1s interval) to limit memory.
-    // Uses index-based ring buffer for O(1) writes.
+    // Maintain only last HR_SAMPLE_CAP samples (~10 minutes at 1s interval) to limit memory.
+    // Uses a dedicated write-cursor (NOT samples.length % CAP, which collapses to slot 0
+    // once length === CAP) so the ring buffer wraps correctly.
     const sample: HeartRateSample = { bpm, timestamp: new Date() };
     const samples = this.currentSession.heartRateSamples;
-    if (samples.length >= 600) {
-      const idx = samples.length % 600;
-      samples[idx] = sample;
-    } else {
+    if (samples.length < HR_SAMPLE_CAP) {
       samples.push(sample);
+    } else {
+      samples[this.hrWriteCursor] = sample;
+      this.hrWriteCursor = (this.hrWriteCursor + 1) % HR_SAMPLE_CAP;
     }
   }
 

@@ -25,6 +25,25 @@ describe('WorkoutService heart rate integration', () => {
     expect(current?.heartRateSamples?.length).toBeLessThanOrEqual(600);
   });
 
+  it('ring buffer preserves most-recent samples after overflowing the cap', () => {
+    // Regression: the previous implementation used `samples.length % 600`, which is 0
+    // for every call once length === 600 — only slot 0 was ever overwritten. With a
+    // proper write-cursor, pushing 1200 samples must retain the most recent 600.
+    const svc = new WorkoutService();
+    svc.startSession('r2b', 'Route 2b');
+    for (let i = 0; i < 1200; i++) {
+      svc.updateSessionHeartRate(i + 1); // unique non-zero bpm per sample
+    }
+    const samples = svc.getCurrentSession()!.heartRateSamples!;
+    expect(samples.length).toBe(600);
+    // The most-recent value (1200) must appear somewhere in the buffer.
+    expect(samples.some((s) => s.bpm === 1200)).toBe(true);
+    // The oldest value (1) must have been overwritten.
+    expect(samples.some((s) => s.bpm === 1)).toBe(false);
+    // Every sample must have come from the most-recent 600 emissions (bpm 601..1200).
+    expect(samples.every((s) => s.bpm >= 601 && s.bpm <= 1200)).toBe(true);
+  });
+
   it('persists heartRateAvg and heartRateMax on endSession', () => {
     const svc = new WorkoutService();
     svc.startSession('r3', 'Route 3');

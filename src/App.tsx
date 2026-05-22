@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
@@ -10,7 +10,10 @@ import { workoutService } from './services/workoutService';
 import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import { heartRateBluetoothService } from './services/heartRateBluetoothService';
-import Rower3D from './components/Rower3D';
+// Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
+// Code-split it so the routes/workouts/history views don't pay the cost — the chunk only
+// loads when the user actually starts a workout (currentView === 'workout').
+const Rower3D = lazy(() => import('./components/Rower3D'));
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
@@ -510,7 +513,10 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
     , completedSessions[0]);
   }, [workoutHistory]);
 
-  const stats = workoutService.getStats();
+  // Memoise stats — the underlying call iterates the full session list and runs
+  // several reductions, so re-running it on every render (e.g. on every PM5 tick)
+  // is needlessly wasteful. workoutHistory is the only mutating dependency.
+  const stats = useMemo(() => workoutService.getStats(), [workoutHistory]);
   const latestHeartRate = useMemo(() => (
     heartRateSamples.length > 0
       ? heartRateSamples[heartRateSamples.length - 1].bpm
@@ -826,16 +832,35 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
             <div className="view-container activity-view">
               <div className="activity-screen">
                 <div className="activity-route-stage">
-                  <Rower3D 
-                    route={selectedRoute!} 
-                    paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined} 
-                    distanceMeters={pm5Data?.distance} 
-                    isPlaying={isWorkoutActive && sessionState === 'active'} 
-                    cadence={pm5Data?.cadence} 
-                    performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
-                    intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
-                    debugMode={debugMode}
-                  />
+                  <Suspense
+                    fallback={
+                      <div
+                        className="rower3d-fallback-marker"
+                        data-loaded="loading"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
+                          color: '#888',
+                          fontSize: '13px',
+                        }}
+                      >
+                        Loading 3D view…
+                      </div>
+                    }
+                  >
+                    <Rower3D
+                      route={selectedRoute!}
+                      paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined}
+                      distanceMeters={pm5Data?.distance}
+                      isPlaying={isWorkoutActive && sessionState === 'active'}
+                      cadence={pm5Data?.cadence}
+                      performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                      intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
+                      debugMode={debugMode}
+                    />
+                  </Suspense>
 
                   <button
                     className="btn-toggle-description btn-toggle-description--activity"
