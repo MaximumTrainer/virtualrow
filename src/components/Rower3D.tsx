@@ -3487,30 +3487,47 @@ const BoatKinematicController: React.FC<{
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
-const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; isHighQuality: boolean }> = ({ velocityRef, isHighQuality }) => {
-  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
-  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
-  const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
-
+const ChromaticAberrationDriver: React.FC<{
+  effect: ChromaticAberrationEffect;
+  velocityRef: React.MutableRefObject<number>;
+}> = ({ effect, velocityRef }) => {
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(() => {
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
-    caEffect.offset.set(aberration, aberration * 0.6);
+    effect.offset.set(aberration, aberration * 0.6);
   });
+  return null;
+};
+
+const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; isHighQuality: boolean }> = ({ velocityRef, isHighQuality }) => {
+  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
+  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
+  const caEffect = useMemo(
+    () => (isHighQuality
+      ? new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 })
+      : null),
+    [isHighQuality],
+  );
+  useEffect(() => {
+    return () => {
+      caEffect?.dispose();
+    };
+  }, [caEffect]);
 
   return isHighQuality ? (
     <EffectComposer>
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      <Vignette eskil={false} offset={0.3} darkness={0.5} />
+      <ChromaticAberrationDriver effect={caEffect!} velocityRef={velocityRef} />
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-      <primitive object={caEffect} />
+      <primitive object={caEffect!} />
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
+      <Vignette eskil={false} offset={0.3} darkness={0.5} />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   ) : (
     <EffectComposer>
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
       <Vignette eskil={false} offset={0.3} darkness={0.5} />
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );
 };
@@ -4074,7 +4091,9 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             // Store max anisotropy for texture quality optimization (#109)
-            window.__ROWER3D_MAX_ANISOTROPY = gl.capabilities.getMaxAnisotropy();
+            try {
+              window.__ROWER3D_MAX_ANISOTROPY = gl.capabilities.getMaxAnisotropy();
+            } catch { /* intentional */ }
             try {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
