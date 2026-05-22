@@ -1,14 +1,27 @@
 name: Create improvement issues (temp)
 
-# Temporary, branch-scoped workflow that opens one GitHub issue per entry in
-# scripts/improvements.json. Intended to be run once via the "Run workflow"
-# button on the branch that introduces it, then deleted in a follow-up PR.
+# Temporary, branch-scoped workflow that opens one GitHub issue per markdown
+# file under docs/graphics-improvements/. Intended to be run once via the
+# "Run workflow" button on the branch that introduces it, then deleted in a
+# follow-up PR.
 #
 # The list covers graphic / physics / display improvements. Most entries are
 # non-functional refactors or dead-code removals; a small number intentionally
 # change visual quality or perception in specific performance modes (e.g.
 # gating post-processing on low, smoothing pace→speed). See individual issue
 # bodies for scope details.
+#
+# Each markdown file is expected to use the following section layout:
+#   ## Title
+#   <single-line issue title>
+#
+#   ## Labels
+#   `label-a`, `label-b`, `label-c`
+#
+#   ## <any other sections> ...
+#
+# The "## Title" and "## Labels" sections are stripped from the issue body.
+# README.md (and any non-`.md` file) is ignored.
 #
 # Safety:
 #   * Triggered only by manual workflow_dispatch (never on push/PR/schedule).
@@ -23,10 +36,10 @@ on:
         description: "If true, print planned issues without creating them"
         type: boolean
         default: false
-      source_file:
-        description: "Path to the JSON file with the list of improvements"
+      source_dir:
+        description: "Directory containing one markdown file per improvement"
         type: string
-        default: "scripts/improvements.json"
+        default: "docs/graphics-improvements"
 
 permissions:
   issues: write
@@ -40,44 +53,99 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate source file exists
+      - name: Validate source directory exists
         run: |
           set -euo pipefail
-          if [ ! -f "${{ inputs.source_file }}" ]; then
-            echo "::error file=${{ inputs.source_file }}::Source file not found"
+          if [ ! -d "${{ inputs.source_dir }}" ]; then
+            echo "::error file=${{ inputs.source_dir }}::Source directory not found"
             exit 1
           fi
-          echo "Using ${{ inputs.source_file }}"
+          echo "Using ${{ inputs.source_dir }}"
 
-      - name: Create issues from JSON
+      - name: Create issues from markdown files
         uses: actions/github-script@v7
         env:
-          SOURCE_FILE: ${{ inputs.source_file }}
+          SOURCE_DIR: ${{ inputs.source_dir }}
           DRY_RUN: ${{ inputs.dry_run }}
         with:
           script: |
             const fs = require('fs');
-            const path = process.env.SOURCE_FILE;
+            const path = require('path');
+            const dir = process.env.SOURCE_DIR;
             const dryRun = String(process.env.DRY_RUN).toLowerCase() === 'true';
 
-            const raw = fs.readFileSync(path, 'utf8');
-            let data;
-            try {
-              data = JSON.parse(raw);
-            } catch (err) {
-              core.setFailed(`Failed to parse ${path}: ${err.message}`);
+            // Collect all *.md files in the directory, excluding README.md,
+            // sorted by filename so the numeric prefix (01-, 02-, ...) controls order.
+            const entries = fs.readdirSync(dir, { withFileTypes: true })
+              .filter(d => d.isFile())
+              .map(d => d.name)
+              .filter(name => name.toLowerCase().endsWith('.md'))
+              .filter(name => name.toLowerCase() !== 'readme.md')
+              .sort();
+
+            if (entries.length === 0) {
+              core.setFailed(`No markdown files found in ${dir}`);
               return;
             }
 
-            const baseLabels = Array.isArray(data.labels) ? data.labels : [];
-            const issues = Array.isArray(data.issues) ? data.issues : [];
+            // Parse a single markdown file into { title, labels, body }.
+            // - title: first non-blank line under "## Title"
+            // - labels: backtick-wrapped tokens (or plain comma-separated tokens)
+            //           under "## Labels"
+            // - body:  full file contents with the "## Title" and "## Labels"
+            //          sections removed.
+            function parseMarkdown(raw) {
+              const lines = raw.split(/\r?\n/);
+              // Identify section boundaries: any line starting with "## ".
+              const sections = []; // { name, start (heading line), bodyStart, end }
+              for (let i = 0; i < lines.length; i++) {
+                const m = lines[i].match(/^##\s+(.+?)\s*$/);
+                if (m) {
+                  if (sections.length > 0) sections[sections.length - 1].end = i;
+                  sections.push({ name: m[1].trim(), start: i, bodyStart: i + 1, end: lines.length });
+                }
+              }
 
-            if (issues.length === 0) {
-              core.setFailed('No issues found in source file (expected `issues` array).');
-              return;
+              const findSection = (name) => sections.find(s => s.name.toLowerCase() === name.toLowerCase());
+              const titleSec = findSection('Title');
+              const labelsSec = findSection('Labels');
+
+              let title = '';
+              if (titleSec) {
+                for (let i = titleSec.bodyStart; i < titleSec.end; i++) {
+                  const t = lines[i].trim();
+                  if (t) { title = t; break; }
+                }
+              }
+
+              let labels = [];
+              if (labelsSec) {
+                const text = lines.slice(labelsSec.bodyStart, labelsSec.end).join(' ').trim();
+                const backticked = [...text.matchAll(/`([^`]+)`/g)].map(m => m[1].trim());
+                if (backticked.length > 0) {
+                  labels = backticked;
+                } else if (text) {
+                  labels = text.split(',').map(s => s.trim()).filter(Boolean);
+                }
+              }
+
+              // Build body by skipping the Title and Labels sections.
+              const skipRanges = [titleSec, labelsSec].filter(Boolean)
+                .map(s => [s.start, s.end])
+                .sort((a, b) => a[0] - b[0]);
+              const keep = [];
+              let cursor = 0;
+              for (const [s, e] of skipRanges) {
+                if (cursor < s) keep.push(...lines.slice(cursor, s));
+                cursor = e;
+              }
+              if (cursor < lines.length) keep.push(...lines.slice(cursor));
+              const body = keep.join('\n').replace(/^\s+|\s+$/g, '');
+
+              return { title, labels, body };
             }
 
-            core.info(`Loaded ${issues.length} candidate issue(s) from ${path}`);
+            core.info(`Loaded ${entries.length} markdown file(s) from ${dir}`);
             core.info(`Mode: ${dryRun ? 'DRY RUN (no API calls)' : 'CREATE'}`);
 
             // Fetch existing open issue titles once to make the run idempotent.
@@ -101,40 +169,49 @@ jobs:
 
             let created = 0;
             let skipped = 0;
-            const summaryRows = [['#', 'Status', 'Title']];
+            const summaryRows = [['#', 'File', 'Status', 'Title']];
 
-            for (const [idx, entry] of issues.entries()) {
-              const title = (entry.title || '').trim();
-              if (!title) {
-                core.warning(`Entry #${idx} has no title; skipping.`);
+            for (const [idx, file] of entries.entries()) {
+              const filePath = path.join(dir, file);
+              let parsed;
+              try {
+                parsed = parseMarkdown(fs.readFileSync(filePath, 'utf8'));
+              } catch (err) {
+                core.warning(`Failed to read ${filePath}: ${err.message}`);
                 skipped++;
-                summaryRows.push([String(idx + 1), 'skipped (no title)', '']);
+                summaryRows.push([String(idx + 1), file, 'skipped (read error)', '']);
+                continue;
+              }
+
+              const title = (parsed.title || '').trim();
+              if (!title) {
+                core.warning(`${file} has no "## Title" section; skipping.`);
+                skipped++;
+                summaryRows.push([String(idx + 1), file, 'skipped (no title)', '']);
+                continue;
+              }
+
+              const body = (parsed.body || '').trim();
+              if (!body) {
+                core.warning(`${file} ("${title}") has no body content; skipping.`);
+                skipped++;
+                summaryRows.push([String(idx + 1), file, 'skipped (no body)', title]);
                 continue;
               }
 
               if (existingTitles.has(title)) {
                 core.info(`↷ Skipping (already exists): ${title}`);
                 skipped++;
-                summaryRows.push([String(idx + 1), 'skipped (exists)', title]);
+                summaryRows.push([String(idx + 1), file, 'skipped (exists)', title]);
                 continue;
               }
 
-              const labels = Array.from(new Set([
-                ...baseLabels,
-                ...(Array.isArray(entry.labels) ? entry.labels : []),
-              ]));
-              const body = (entry.body || '').trim();
-              if (!body) {
-                core.warning(`Entry #${idx} ("${title}") has no body; skipping.`);
-                skipped++;
-                summaryRows.push([String(idx + 1), 'skipped (no body)', title]);
-                continue;
-              }
+              const labels = Array.from(new Set(parsed.labels || []));
 
               if (dryRun) {
-                core.info(`[dry-run] Would create issue: ${title}`);
+                core.info(`[dry-run] Would create issue from ${file}: ${title}`);
                 core.info(`  labels: ${labels.join(', ')}`);
-                summaryRows.push([String(idx + 1), 'dry-run', title]);
+                summaryRows.push([String(idx + 1), file, 'dry-run', title]);
                 continue;
               }
 
@@ -145,16 +222,16 @@ jobs:
                 body,
                 labels,
               });
-              core.info(`✓ Created #${issue.number}: ${title}`);
+              core.info(`✓ Created #${issue.number} from ${file}: ${title}`);
               created++;
               existingTitles.add(title);
-              summaryRows.push([String(idx + 1), `created #${issue.number}`, title]);
+              summaryRows.push([String(idx + 1), file, `created #${issue.number}`, title]);
             }
 
             await core.summary
               .addHeading('Improvement issues')
-              .addRaw(`Source: \`${path}\``).addEOL()
+              .addRaw(`Source: \`${dir}\``).addEOL()
               .addRaw(`Mode: **${dryRun ? 'dry-run' : 'create'}**`).addEOL()
-              .addRaw(`Created: **${created}**, skipped: **${skipped}**, total candidates: **${issues.length}**`).addEOL()
+              .addRaw(`Created: **${created}**, skipped: **${skipped}**, total candidates: **${entries.length}**`).addEOL()
               .addTable(summaryRows)
               .write();
