@@ -29,3 +29,9 @@ jobs:
 
       - name: Run unit tests
         run: npm run test -- --run
+
+      - name: Run unit-test coverage gate
+        # Thresholds are configured in vitest.config.ts (`test.coverage.thresholds`).
+        # vitest exits non-zero if the configured per-metric thresholds are missed,
+        # turning this into a hard CI gate.
+        run: npm run coverage
