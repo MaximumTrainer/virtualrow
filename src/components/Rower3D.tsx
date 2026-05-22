@@ -48,6 +48,7 @@ const RENDER_CONFIG = {
 
 // GPU backend type for renderer selection
 type GPUBackend = 'webgpu' | 'webgl' | 'none';
+type PerformanceMode = 'auto' | 'high' | 'low';
 
 // Route theme types for landscape selection
 type RouteTheme = 'willowbrook' | 'crystal-bled' | 'gothic-venice' | 'steampunk-henley' | 'dystopian-thames' | 'scifi-boston';
@@ -81,7 +82,7 @@ interface Rower3DProps {
   distanceMeters?: number | null;
   isPlaying?: boolean;
   cadence?: number | null;
-  performanceMode?: 'auto' | 'high' | 'low';
+  performanceMode?: PerformanceMode;
   intensityFactor?: number;
   debugMode?: boolean;
 }
@@ -355,13 +356,15 @@ const BladeEntryFoam: React.FC<{
 const WaterReflectionProbe: React.FC<{
   materialRef: React.MutableRefObject<THREE.MeshPhysicalMaterial | null>;
   meshRef: React.MutableRefObject<THREE.Mesh | null>;
-}> = ({ materialRef, meshRef }) => {
+  performanceMode?: PerformanceMode;
+}> = ({ materialRef, meshRef, performanceMode }) => {
   const { fbo, update } = useCubeCamera({ resolution: 64, near: 0.5, far: 600 });
   const frameRef = useRef(0);
+  const interval = performanceMode === 'auto' ? 60 : 30;
 
   useFrame(() => {
     frameRef.current++;
-    if (frameRef.current % 30 !== 0) return;
+    if (frameRef.current % interval !== 0) return;
     // Hide water surface so it doesn't self-reflect
     if (meshRef.current) meshRef.current.visible = false;
     update();
@@ -371,6 +374,16 @@ const WaterReflectionProbe: React.FC<{
       materialRef.current.envMapIntensity = 0.35;
     }
   });
+
+  // Clear envMap reference on unmount so the material doesn't reference a disposed FBO
+  useEffect(() => {
+    return () => {
+      if (materialRef.current) {
+        materialRef.current.envMap = null;
+        materialRef.current.needsUpdate = true;
+      }
+    };
+  }, [materialRef]);
 
   return null;
 };
@@ -412,7 +425,7 @@ function getWaterConfig(theme: RouteTheme): WaterConfig {
 // HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
 // subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
-const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQuality: boolean }> = ({ boatZ, theme, isHighQuality }) => {
+const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode }> = ({ boatZ, theme, performanceMode }) => {
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   const timeUniformRef = useRef({ value: 0 });
@@ -455,7 +468,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
         receiveShadow
       >
         {/* Tessellation keyed to performanceMode: 64×64 high-quality, 32×32 low-power */}
-        <planeGeometry args={[1000, 1000, isHighQuality ? 64 : 32, isHighQuality ? 64 : 32]} />
+        <planeGeometry args={[1000, 1000, performanceMode !== 'low' ? 64 : 32, performanceMode !== 'low' ? 64 : 32]} />
         <meshPhysicalMaterial
           ref={materialRef}
           color={waterConfig.color}
@@ -481,8 +494,8 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQu
           side={THREE.FrontSide}
         />
       </mesh>
-      {!IS_TEST_MODE && (
-        <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} />
+      {!IS_TEST_MODE && performanceMode !== 'low' && (
+        <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} performanceMode={performanceMode} />
       )}
     </>
   );
@@ -602,10 +615,9 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
 interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
-  isHighQuality: boolean;
 }
 
-const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, isHighQuality }) => {
+const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme }) => {
   const meshRef        = useRef<THREE.Mesh>(null);
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
@@ -638,7 +650,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
   const waterGeometry = useMemo(() => {
     if (!curve) return null;
     
-    const segments = isHighQuality ? 200 : 100;
+    const segments = 200;
     const halfWidth = WATER_CHANNEL_WIDTH / 2;
     
     // Create geometry vertices following the curve
@@ -693,8 +705,15 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, i
     geometry.setIndex(indices);
     
     return geometry;
-  }, [curve, isHighQuality]);
-  
+  }, [curve]);
+
+  // Dispose geometry when curve changes or component unmounts to prevent GPU memory leaks
+  useEffect(() => {
+    return () => {
+      waterGeometry?.dispose();
+    };
+  }, [waterGeometry]);
+
   if (!curve || !waterGeometry) {
     return null;
   }
@@ -2608,6 +2627,51 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
 };
 
 
+// Shared OarRig component — mirrors geometry about the centre-line using a sign factor.
+// Replaces the previous 144-line duplicate left/right oar JSX blocks.
+const OarRig: React.FC<{ side: 'left' | 'right' }> = ({ side }) => {
+  const sx = side === 'left' ? -1 : 1;
+  return (
+    <>
+      {/* HD Rigger - aerospace aluminum outrigger */}
+      <mesh position={[sx * 0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
+        <meshPhysicalMaterial color="#9a9a9a" metalness={0.95} roughness={0.08} clearcoat={0.75} clearcoatRoughness={0.12} reflectivity={0.9} />
+      </mesh>
+      {/* Rigger support strut */}
+      <mesh position={[sx * 0.3, -0.08, 0]} rotation={[0, 0, sx * -0.4]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
+        <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
+      </mesh>
+      {/* HD Oarlock - precision stainless steel */}
+      <mesh position={[sx * 1.15, 0, 0]}>
+        <torusGeometry args={[0.045, 0.018, 12, 20]} />
+        <meshPhysicalMaterial color="#b8b8b8" metalness={0.98} roughness={0.06} clearcoat={0.85} clearcoatRoughness={0.08} reflectivity={0.95} />
+      </mesh>
+      {/* HD Oar shaft - premium carbon fiber */}
+      <mesh position={[sx * 1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
+        <meshPhysicalMaterial color="#0a0a0a" metalness={0.15} roughness={0.28} clearcoat={0.92} clearcoatRoughness={0.08} sheen={0.2} sheenColor="#303030" />
+      </mesh>
+      {/* Grip area */}
+      <mesh position={[sx * 0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
+        <meshPhysicalMaterial color="#1a1a1a" roughness={0.85} metalness={0.0} />
+      </mesh>
+      {/* HD Oar blade - competition composite with team colors */}
+      <mesh position={[sx * 3.3, 0, 0]}>
+        <boxGeometry args={[0.58, 0.018, 0.2]} />
+        <meshPhysicalMaterial color="#1e40af" metalness={0.0} roughness={0.18} clearcoat={0.85} clearcoatRoughness={0.08} sheen={0.35} sheenColor="#3b82f6" />
+      </mesh>
+      {/* Blade edge detail */}
+      <mesh position={[sx * 3.55, 0, 0]}>
+        <boxGeometry args={[0.08, 0.016, 0.19]} />
+        <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
+      </mesh>
+    </>
+  );
+};
+
 // ============================================================================
 // HIGH-DEFINITION ROWING SCULL (BOAT) with animated oars and realistic rower
 // ============================================================================
@@ -3206,148 +3270,12 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
       
       {/* HD Left oar group - professional racing equipment */}
       <group ref={leftOarRef} position={[-0.3, 0.15, 0.5]}>
-        {/* HD Rigger - aerospace aluminum outrigger */}
-        <mesh position={[-0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
-          <meshPhysicalMaterial 
-            color="#9a9a9a" 
-            metalness={0.95} 
-            roughness={0.08}
-            clearcoat={0.75}
-            clearcoatRoughness={0.12}
-            reflectivity={0.9}
-          />
-        </mesh>
-        {/* Rigger support struts */}
-        <mesh position={[-0.3, -0.08, 0]} rotation={[0, 0, 0.4]}>
-          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
-          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
-        </mesh>
-        {/* HD Oarlock - precision stainless steel */}
-        <mesh position={[-1.15, 0, 0]}>
-          <torusGeometry args={[0.045, 0.018, 12, 20]} />
-          <meshPhysicalMaterial 
-            color="#b8b8b8" 
-            metalness={0.98} 
-            roughness={0.06}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            reflectivity={0.95}
-          />
-        </mesh>
-        {/* HD Oar shaft - premium carbon fiber */}
-        <mesh position={[-1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
-          <meshPhysicalMaterial 
-            color="#0a0a0a" 
-            metalness={0.15} 
-            roughness={0.28}
-            clearcoat={0.92}
-            clearcoatRoughness={0.08}
-            sheen={0.2}
-            sheenColor="#303030"
-          />
-        </mesh>
-        {/* Grip area */}
-        <mesh position={[-0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
-          <meshPhysicalMaterial 
-            color="#1a1a1a"
-            roughness={0.85}
-            metalness={0.0}
-          />
-        </mesh>
-        {/* HD Oar blade - competition composite with team colors */}
-        <mesh position={[-3.3, 0, 0]}>
-          <boxGeometry args={[0.58, 0.018, 0.2]} />
-          <meshPhysicalMaterial 
-            color="#1e40af" 
-            metalness={0.0} 
-            roughness={0.18}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            sheen={0.35}
-            sheenColor="#3b82f6"
-          />
-        </mesh>
-        {/* Blade edge detail */}
-        <mesh position={[-3.55, 0, 0]}>
-          <boxGeometry args={[0.08, 0.016, 0.19]} />
-          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
-        </mesh>
+        <OarRig side="left" />
       </group>
       
       {/* HD Right oar group - professional racing equipment */}
       <group ref={rightOarRef} position={[0.3, 0.15, 0.5]}>
-        {/* HD Rigger - aerospace aluminum outrigger */}
-        <mesh position={[0.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.028, 0.028, 1.2, 16]} />
-          <meshPhysicalMaterial 
-            color="#9a9a9a" 
-            metalness={0.95} 
-            roughness={0.08}
-            clearcoat={0.75}
-            clearcoatRoughness={0.12}
-            reflectivity={0.9}
-          />
-        </mesh>
-        {/* Rigger support struts */}
-        <mesh position={[0.3, -0.08, 0]} rotation={[0, 0, -0.4]}>
-          <cylinderGeometry args={[0.012, 0.012, 0.35, 12]} />
-          <meshPhysicalMaterial color="#8a8a8a" metalness={0.92} roughness={0.1} />
-        </mesh>
-        {/* HD Oarlock - precision stainless steel */}
-        <mesh position={[1.15, 0, 0]}>
-          <torusGeometry args={[0.045, 0.018, 12, 20]} />
-          <meshPhysicalMaterial 
-            color="#b8b8b8" 
-            metalness={0.98} 
-            roughness={0.06}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            reflectivity={0.95}
-          />
-        </mesh>
-        {/* HD Oar shaft - premium carbon fiber */}
-        <mesh position={[1.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.022, 0.028, 2.8, 16]} />
-          <meshPhysicalMaterial 
-            color="#0a0a0a" 
-            metalness={0.15} 
-            roughness={0.28}
-            clearcoat={0.92}
-            clearcoatRoughness={0.08}
-            sheen={0.2}
-            sheenColor="#303030"
-          />
-        </mesh>
-        {/* Grip area */}
-        <mesh position={[0.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.032, 0.032, 0.3, 16]} />
-          <meshPhysicalMaterial 
-            color="#1a1a1a"
-            roughness={0.85}
-            metalness={0.0}
-          />
-        </mesh>
-        {/* HD Oar blade - competition composite with team colors */}
-        <mesh position={[3.3, 0, 0]}>
-          <boxGeometry args={[0.58, 0.018, 0.2]} />
-          <meshPhysicalMaterial 
-            color="#1e40af" 
-            metalness={0.0} 
-            roughness={0.18}
-            clearcoat={0.85}
-            clearcoatRoughness={0.08}
-            sheen={0.35}
-            sheenColor="#3b82f6"
-          />
-        </mesh>
-        {/* Blade edge detail */}
-        <mesh position={[3.55, 0, 0]}>
-          <boxGeometry args={[0.08, 0.016, 0.19]} />
-          <meshPhysicalMaterial color="#0f2460" roughness={0.2} clearcoat={0.8} />
-        </mesh>
+        <OarRig side="right" />
       </group>
     </group>
   );
@@ -3400,46 +3328,46 @@ const BoatKinematicController: React.FC<{
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
-const ChromaticAberrationDriver: React.FC<{
-  effect: ChromaticAberrationEffect;
-  velocityRef: React.MutableRefObject<number>;
-}> = ({ effect, velocityRef }) => {
+const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; performanceMode?: PerformanceMode }> = ({ velocityRef, performanceMode }) => {
+  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
+  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
+  const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
+  useEffect(() => () => caEffect.dispose(), [caEffect]);
+
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(() => {
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
-    effect.offset.set(aberration, aberration * 0.6);
+    caEffect.offset.set(aberration, aberration * 0.6);
   });
-  return null;
-};
 
-const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; isHighQuality: boolean }> = ({ velocityRef, isHighQuality }) => {
-  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
-  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
-  const caEffect = useMemo(
-    () => (isHighQuality
-      ? new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 })
-      : null),
-    [isHighQuality],
-  );
-  useEffect(() => {
-    return () => {
-      caEffect?.dispose();
-    };
-  }, [caEffect]);
+  // In auto mode skip the expensive DepthOfField pass
+  if (performanceMode === 'auto') {
+    return (
+      <EffectComposer>
+        <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+        <primitive object={caEffect} />
+        <Vignette eskil={false} offset={0.3} darkness={0.5} />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      </EffectComposer>
+    );
+  }
 
-  return isHighQuality ? (
+  return (
     <EffectComposer>
-      <ChromaticAberrationDriver effect={caEffect!} velocityRef={velocityRef} />
+      {/* Bloom — highlights water speculars and emissive caustics */}
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-      <primitive object={caEffect!} />
+
+      {/* Chromatic aberration — scales with velocity for camera-lens feel */}
+      <primitive object={caEffect} />
+
+      {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
+
+      {/* Cinematic vignette to draw focus to the scene centre */}
       <Vignette eskil={false} offset={0.3} darkness={0.5} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-    </EffectComposer>
-  ) : (
-    <EffectComposer>
-      <Vignette eskil={false} offset={0.3} darkness={0.5} />
+
+      {/* Filmic tone mapping for realistic HDR colour response */}
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );
@@ -3455,10 +3383,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   isPlaying, 
   cadence,
   intensityFactor,
-  performanceMode
+  performanceMode = 'auto',
 }) => {
   const { camera } = useThree();
-  const isHighQuality = performanceMode !== 'low';
   
   // Detect route theme for landscape selection
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
@@ -3778,9 +3705,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* Water - curved if we have GPS curve, otherwise straight */}
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} isHighQuality={isHighQuality} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
       ) : (
-        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} isHighQuality={isHighQuality} />
+        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
       )}
       
       {/* Curved riverbanks following the GPS path */}
@@ -3844,7 +3771,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!IS_TEST_MODE && <DynamicPostFx velocityRef={velocityRef} isHighQuality={isHighQuality} />}
+      {!IS_TEST_MODE && performanceMode !== 'low' && <DynamicPostFx velocityRef={velocityRef} performanceMode={performanceMode} />}
     </>
   );
 };
