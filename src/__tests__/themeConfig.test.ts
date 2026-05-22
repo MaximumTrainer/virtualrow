@@ -33,6 +33,7 @@ describe('THEME_CONFIG', () => {
       expect(cfg).toHaveProperty('clouds');
       expect(cfg).toHaveProperty('fog');
       expect(cfg).toHaveProperty('lighting');
+      expect(cfg).toHaveProperty('colorGrading');
     }
   });
 
@@ -49,6 +50,18 @@ describe('THEME_CONFIG', () => {
       expect(typeof w.attenuationDistance).toBe('number');
       expect(typeof w.specularIntensity).toBe('number');
       expect(typeof w.sheenColor).toBe('string');
+      // Phase 6 water character fields (#127)
+      expect(typeof w.turbidity).toBe('number');
+      expect(w.turbidity).toBeGreaterThanOrEqual(0);
+      expect(w.turbidity).toBeLessThanOrEqual(1);
+      expect(typeof w.waveAmplitude).toBe('number');
+      expect(w.waveAmplitude).toBeGreaterThan(0);
+      expect(typeof w.waveFrequency).toBe('number');
+      expect(w.waveFrequency).toBeGreaterThan(0);
+      expect(typeof w.foamIntensity).toBe('number');
+      expect(w.foamIntensity).toBeGreaterThanOrEqual(0);
+      expect(w.foamIntensity).toBeLessThanOrEqual(1);
+      expect(typeof w.underwaterFog).toBe('string');
     }
   });
 
@@ -160,6 +173,31 @@ describe('THEME_CONFIG', () => {
       expect(typeof l.fillColor).toBe('string');
       expect(typeof l.fillIntensity).toBe('number');
       expect(l.fillIntensity).toBeGreaterThanOrEqual(0);
+      // Phase 6 per-theme lighting profiles (#126)
+      expect(typeof l.sunElevation).toBe('number');
+      expect(l.sunElevation).toBeGreaterThanOrEqual(0);
+      expect(l.sunElevation).toBeLessThanOrEqual(90);
+      expect(typeof l.sunAzimuth).toBe('number');
+      expect(l.sunAzimuth).toBeGreaterThanOrEqual(0);
+      expect(l.sunAzimuth).toBeLessThan(360);
+    }
+  });
+
+  it('colorGrading configs have all required fields with valid ranges (#124)', () => {
+    for (const theme of ALL_THEMES) {
+      const cg = THEME_CONFIG[theme].colorGrading;
+      expect(typeof cg.hue).toBe('number');
+      expect(cg.hue).toBeGreaterThanOrEqual(-0.5);
+      expect(cg.hue).toBeLessThanOrEqual(0.5);
+      expect(typeof cg.saturation).toBe('number');
+      expect(cg.saturation).toBeGreaterThanOrEqual(-1);
+      expect(cg.saturation).toBeLessThanOrEqual(1);
+      expect(typeof cg.brightness).toBe('number');
+      expect(cg.brightness).toBeGreaterThanOrEqual(-1);
+      expect(cg.brightness).toBeLessThanOrEqual(1);
+      expect(typeof cg.contrast).toBe('number');
+      expect(cg.contrast).toBeGreaterThanOrEqual(-1);
+      expect(cg.contrast).toBeLessThanOrEqual(1);
     }
   });
 
@@ -193,6 +231,40 @@ describe('getThemeConfig', () => {
 
   it('crystal-bled has high water transmission (clear alpine lake)', () => {
     expect(getThemeConfig('crystal-bled').water.transmission).toBeGreaterThan(0.5);
+  });
+
+  it('crystal-bled has low turbidity (clearest water)', () => {
+    const bled = getThemeConfig('crystal-bled').water.turbidity;
+    const dystopian = getThemeConfig('dystopian-thames').water.turbidity;
+    expect(bled).toBeLessThan(dystopian);
+  });
+
+  it('dystopian-thames has highest waveAmplitude (rough industrial river)', () => {
+    const dystopian = getThemeConfig('dystopian-thames').water.waveAmplitude;
+    for (const theme of ALL_THEMES.filter(t => t !== 'dystopian-thames')) {
+      expect(dystopian).toBeGreaterThanOrEqual(getThemeConfig(theme).water.waveAmplitude);
+    }
+  });
+
+  it('sun elevation varies meaningfully across themes (#126)', () => {
+    const elevations = ALL_THEMES.map(t => getThemeConfig(t).lighting.sunElevation);
+    const min = Math.min(...elevations);
+    const max = Math.max(...elevations);
+    expect(max - min).toBeGreaterThan(20);
+  });
+
+  it('colorGrading values are distinct across themes (#124)', () => {
+    const satValues = ALL_THEMES.map(t => getThemeConfig(t).colorGrading.saturation);
+    const unique = new Set(satValues);
+    expect(unique.size).toBeGreaterThan(1);
+  });
+
+  it('scifi-boston has positive saturation boost (neon aesthetic)', () => {
+    expect(getThemeConfig('scifi-boston').colorGrading.saturation).toBeGreaterThan(0);
+  });
+
+  it('dystopian-thames has negative saturation (desaturated dystopia)', () => {
+    expect(getThemeConfig('dystopian-thames').colorGrading.saturation).toBeLessThan(0);
   });
 
   it('dystopian-thames has dense mist', () => {
