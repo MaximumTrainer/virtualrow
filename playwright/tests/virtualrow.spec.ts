@@ -1200,3 +1200,106 @@ test.describe('docs screenshots', () => {
     await page.screenshot({ path: path.join(docsDir, 'screenshot-history.png'), fullPage: false });
   });
 });
+
+// ===========================================================================
+// Activity distance integrity (companion to "activity distance may not be
+// calculated correctly" investigation).
+//
+// These tests drive PM5 telemetry through __workoutService and assert the
+// UI's "Meters" stat card reflects monotonically non-decreasing distance.
+// They use test.fail() because the underlying bug
+// (WorkoutService.updateSessionWithPM5Data:95 destructively overwrites
+// session.distance with the latest device value) is still present — flip
+// the test.fail() once the fix lands.
+// ===========================================================================
+test.describe('activity distance integrity', () => {
+  test.beforeEach(async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('/');
+
+    // Connect PM5
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+
+    // Connect HR Monitor (evaluate-click to avoid hitting the disconnect btn
+    // that swaps in at the same coordinates on instant mock connect).
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+
+    // Start workout via the UI start button.
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await page.waitForFunction(
+      () => !!(window as unknown as SimWindow).__workoutService,
+      { timeout: 5000 },
+    );
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 5000 });
+  });
+
+  // BUG: a transient stale/zero packet (BLE re-subscribe, momentary device
+  // glitch) is mirrored straight into session.distance, so the displayed
+  // Meters drops from 1234 → 50 and the user loses ~1184 m of credit.
+  // Required behavior: the Meters card must never display a value lower than
+  // a previously displayed value during a single active session.
+  test.fail('Meters display does not regress when a transient backwards packet arrives', async ({ page }) => {
+    const metersValue = page.locator(
+      '.activity-stat-card:has(.activity-stat-label:has-text("Meters")) .activity-stat-value',
+    );
+
+    // Push PM5 frames directly via the in-browser service to keep the test
+    // deterministic and fast (no reliance on the BLE simulator's pacing).
+    async function push(distance: number, elapsedMs: number) {
+      await page.evaluate(
+        ({ distance, elapsedMs }) => {
+          const svc = (window as unknown as SimWindow).__workoutService as
+            | undefined
+            | {
+                updateSessionWithPM5Data?: (data: {
+                  distance: number;
+                  elapsedTime: number;
+                  pace: number;
+                  power: number;
+                  cadence: number;
+                  heartRate: number;
+                  calories?: number;
+                }) => void;
+              };
+          svc?.updateSessionWithPM5Data?.({
+            distance,
+            elapsedTime: elapsedMs,
+            pace: 120,
+            power: 200,
+            cadence: 30,
+            heartRate: 140,
+          });
+        },
+        { distance, elapsedMs },
+      );
+    }
+
+    // Row steadily up to 1234 m.
+    await push(1234, 240_000);
+    await expect(metersValue).toContainText('1234 m', { timeout: 2000 });
+
+    // Transient blip: a stale frame reports 0 m.
+    await push(0, 241_000);
+    // Then a real frame arrives just past the blip.
+    await push(50, 242_000);
+
+    // Required behavior: the Meters card never displays a smaller value than
+    // 1234 m. Read the rendered text and convert to a number.
+    const displayedMeters = await metersValue.evaluate((el) => {
+      const match = (el.textContent ?? '').match(/(-?\d+)/);
+      return match ? Number(match[1]) : NaN;
+    });
+    expect(displayedMeters).toBeGreaterThanOrEqual(1234);
+  });
+});
