@@ -97,6 +97,20 @@ export interface CloudConfig {
   depth: number;
 }
 
+export interface FogConfig {
+  color: string;
+  density: number;
+}
+
+export interface LightingConfig {
+  ambientColor: string;
+  ambientIntensity: number;
+  sunColor: string;
+  sunIntensity: number;
+  fillColor: string;
+  fillIntensity: number;
+}
+
 export interface ThemeConfig {
   water: WaterConfig;
   mist: MistConfig;
@@ -105,6 +119,8 @@ export interface ThemeConfig {
   atmosphere: AtmosphereConfig;
   sky: SkyConfig;
   clouds: CloudConfig;
+  fog: FogConfig;
+  lighting: LightingConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +162,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 5, opacity: 0.42, speed: 0.18,
       color: '#ffffff', segments: 32, scale: 1.3, depth: 0.8,
     },
+    fog: { color: '#b0ddfa', density: 0.003 },
+    lighting: {
+      ambientColor: '#c0e0ff', ambientIntensity: 0.25,
+      sunColor: '#fffaf0', sunIntensity: 1.2,
+      fillColor: '#b4c7dc', fillIntensity: 0.3,
+    },
   },
 
   'gothic-venice': {
@@ -181,6 +203,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
     clouds: {
       enabled: true, count: 14, opacity: 0.65, speed: 0.06,
       color: '#5a6268', segments: 38, scale: 1.5, depth: 1.2,
+    },
+    fog: { color: '#2a3a4a', density: 0.008 },
+    lighting: {
+      ambientColor: '#4a5568', ambientIntensity: 0.12,
+      sunColor: '#8fa4b8', sunIntensity: 0.5,
+      fillColor: '#b4c7dc', fillIntensity: 0.15,
     },
   },
 
@@ -218,6 +246,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 9, opacity: 0.48, speed: 0.12,
       color: '#f0e0c8', segments: 30, scale: 1.2, depth: 0.9,
     },
+    fog: { color: '#9a8365', density: 0.004 },
+    lighting: {
+      ambientColor: '#c9a227', ambientIntensity: 0.25,
+      sunColor: '#ffd700', sunIntensity: 1.5,
+      fillColor: '#ffb347', fillIntensity: 0.3,
+    },
   },
 
   'dystopian-thames': {
@@ -253,6 +287,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
     clouds: {
       enabled: true, count: 16, opacity: 0.72, speed: 0.04,
       color: '#3a3a42', segments: 42, scale: 1.6, depth: 1.4,
+    },
+    fog: { color: '#1a1a28', density: 0.007 },
+    lighting: {
+      ambientColor: '#2a1f1a', ambientIntensity: 0.1,
+      sunColor: '#ff6b35', sunIntensity: 0.4,
+      fillColor: '#b4c7dc', fillIntensity: 0.15,
     },
   },
 
@@ -290,6 +330,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 3, opacity: 0.22, speed: 0.28,
       color: '#2a4a6a', segments: 22, scale: 0.9, depth: 0.6,
     },
+    fog: { color: '#0a1428', density: 0.003 },
+    lighting: {
+      ambientColor: '#162447', ambientIntensity: 0.15,
+      sunColor: '#a0d2ff', sunIntensity: 0.3,
+      fillColor: '#4a90d9', fillIntensity: 0.3,
+    },
   },
 
   'willowbrook': {
@@ -325,6 +371,12 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
     clouds: {
       enabled: true, count: 8, opacity: 0.38, speed: 0.16,
       color: '#f8f8ff', segments: 28, scale: 1.1, depth: 0.85,
+    },
+    fog: { color: '#a8d0f0', density: 0.0025 },
+    lighting: {
+      ambientColor: '#b0d0e0', ambientIntensity: 0.25,
+      sunColor: '#fff8e8', sunIntensity: 1.2,
+      fillColor: '#b4c7dc', fillIntensity: 0.3,
     },
   },
 };

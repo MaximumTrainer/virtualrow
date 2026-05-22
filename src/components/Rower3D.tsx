@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Environment, Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
-import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField } from '@react-three/postprocessing';
+import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO } from '@react-three/postprocessing';
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { Physics, RigidBody } from '@react-three/rapier';
@@ -849,6 +849,20 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   
   // Get HD theme colors for elements with enhanced detail
   const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
+
+  // Camera for distance-based LOD (#105)
+  const { camera } = useThree();
+
+  // Sway time uniform and foliage materials with wind-sway shader (#107)
+  const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
+  const curveFoliageMats = useMemo(() => [
+    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.78, metalness: 0.0, transmission: 0.08, thickness: 0.6, sheen: 0.45, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.7 }, swayTime),
+    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.74, metalness: 0.0, transmission: 0.10, thickness: 0.5, sheen: 0.52, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.65 }, swayTime),
+    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.4, sheen: 0.58, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.6 }, swayTime),
+    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.68, metalness: 0.0, transmission: 0.14, thickness: 0.3, sheen: 0.65, sheenColor: new THREE.Color(colors.treeHighlight) }, swayTime),
+  ], [colors, swayTime]);
+  useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
+  useAnimationFrame((time) => { swayTime.value = time; });
   
   if (!curve) return null;
   
@@ -864,6 +878,11 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
   });
   
   const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string, castNearShadow: boolean) => {
+    // Distance-based LOD (#105)
+    const distToCamera = camera.position.distanceTo(el.position);
+    const isNearTree = distToCamera <= 40;
+    const isNearBuilding = distToCamera <= 60;
+
     switch (el.type) {
       case 'tree':
         return (
@@ -899,57 +918,23 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                 <meshPhysicalMaterial color={colors.treeBark} roughness={0.98} />
               </mesh>
             ))}
-            {/* HD Multi-layer conifer foliage with realistic light transmission */}
+            {/* HD Multi-layer conifer foliage with sway and LOD (#107, #105) */}
             <mesh position={[0, 4.2 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[2.8 * el.scale, 4.8 * el.scale, 16]} />
-              <meshPhysicalMaterial 
-                color={colors.tree}
-                roughness={0.78}
-                metalness={0.0}
-                transmission={0.08}
-                thickness={0.6}
-                sheen={0.45}
-                sheenColor={colors.treeHighlight}
-                sheenRoughness={0.7}
-              />
+              <coneGeometry args={[2.8 * el.scale, 4.8 * el.scale, isNearTree ? 16 : 4]} />
+              <primitive object={curveFoliageMats[0]} attach="material" />
             </mesh>
             <mesh position={[0, 5.8 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[2.1 * el.scale, 3.8 * el.scale, 16]} />
-              <meshPhysicalMaterial 
-                color={colors.tree}
-                roughness={0.74}
-                metalness={0.0}
-                transmission={0.10}
-                thickness={0.5}
-                sheen={0.52}
-                sheenColor={colors.treeHighlight}
-                sheenRoughness={0.65}
-              />
+              <coneGeometry args={[2.1 * el.scale, 3.8 * el.scale, isNearTree ? 16 : 4]} />
+              <primitive object={curveFoliageMats[1]} attach="material" />
             </mesh>
             <mesh position={[0, 7.0 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[1.4 * el.scale, 3.0 * el.scale, 14]} />
-              <meshPhysicalMaterial 
-                color={colors.tree}
-                roughness={0.70}
-                metalness={0.0}
-                transmission={0.12}
-                thickness={0.4}
-                sheen={0.58}
-                sheenColor={colors.treeHighlight}
-                sheenRoughness={0.6}
-              />
+              <coneGeometry args={[1.4 * el.scale, 3.0 * el.scale, isNearTree ? 14 : 4]} />
+              <primitive object={curveFoliageMats[2]} attach="material" />
             </mesh>
             {/* Spire top */}
             <mesh position={[0, 8.0 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[0.6 * el.scale, 2.0 * el.scale, 12]} />
-              <meshPhysicalMaterial 
-                color={colors.tree}
-                roughness={0.68}
-                transmission={0.14}
-                thickness={0.3}
-                sheen={0.65}
-                sheenColor={colors.treeHighlight}
-              />
+              <coneGeometry args={[0.6 * el.scale, 2.0 * el.scale, isNearTree ? 12 : 4]} />
+              <primitive object={curveFoliageMats[3]} attach="material" />
             </mesh>
           </group>
         );
@@ -1033,8 +1018,8 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
               <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
               <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
             </mesh>
-            {/* HD Windows with realistic glass reflections and interior glow */}
-            {[0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
+            {/* HD Windows — only rendered when close enough (#105) */}
+            {isNearBuilding && [0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
               <React.Fragment key={j}>
                 {/* Front windows */}
                 <mesh position={[2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow={castNearShadow}>
@@ -1068,11 +1053,13 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                 </mesh>
               </React.Fragment>
             ))}
-            {/* Window frames for detail */}
+            {/* Window frames for detail — only near buildings (#105) */}
+            {isNearBuilding && (
             <mesh position={[2.14 * el.scale, 6 * el.scale, 0]} castShadow={castNearShadow}>
               <boxGeometry args={[0.02 * el.scale, 10 * el.scale, 2.8 * el.scale]} />
               <meshPhysicalMaterial color="#1a1a1a" roughness={0.9} metalness={0.15} />
             </mesh>
+            )}
           </group>
         );
     }
@@ -1200,6 +1187,31 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
 };
 
 // ============================================================================
+// FOLIAGE SWAY — shared wind-sway vertex shader helper (#107)
+// Injects a sinusoidal displacement into cone foliage materials so high-Y
+// vertices sway gently in the breeze. All foliage cones share a single
+// uTime uniform updated each animation frame.
+// ============================================================================
+function makeSwayFoliageMaterial(
+  params: THREE.MeshPhysicalMaterialParameters,
+  uTime: THREE.IUniform<number>,
+): THREE.MeshPhysicalMaterial {
+  const mat = new THREE.MeshPhysicalMaterial(params);
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uTime;
+    shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+float swayAmt = sin(uTime * 1.2 + position.x * 0.5) * 0.04 * max(0.0, position.y / 5.0);
+transformed.x += swayAmt;
+transformed.z += swayAmt * 0.7;`,
+    );
+  };
+  return mat;
+}
+
+// ============================================================================
 // PINE TREES - Scattered along the banks
 // ============================================================================
 const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
@@ -1207,7 +1219,7 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
   
   // Generate tree positions with variety
   const trees = useMemo(() => {
-    const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number }> = [];
+    const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number; isNear: boolean }> = [];
     for (let z = -400; z < 400; z += 8) {
       const treeIdx = Math.round((z + 400) / 8);
       const count = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
@@ -1218,11 +1230,28 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
           scale: 0.8 + seededRandom(treeIdx * 9 + j * 4 + 4) * 0.6,
           variant: Math.floor(seededRandom(treeIdx * 9 + j * 4 + 5) * 3),
           rotation: seededRandom(treeIdx * 9 + j * 4 + 6) * Math.PI * 2,
+          isNear: Math.abs(z) <= 40,
         });
       }
     }
     return result;
   }, [xBase, side]);
+
+  // Sway time uniform — shared across all foliage materials (#107)
+  const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
+
+  // Foliage materials with wind-sway vertex shader
+  const foliageMats = useMemo(() => [
+    makeSwayFoliageMaterial({ color: '#1a4020', roughness: 0.85, metalness: 0.0, transmission: 0.05, thickness: 0.5, sheen: 0.3, sheenColor: new THREE.Color('#2a5030') }, swayTime),
+    makeSwayFoliageMaterial({ color: '#2a5a30', roughness: 0.80, metalness: 0.0, transmission: 0.08, thickness: 0.4, sheen: 0.4, sheenColor: new THREE.Color('#3a7040') }, swayTime),
+    makeSwayFoliageMaterial({ color: '#3a6a38', roughness: 0.75, metalness: 0.0, transmission: 0.10, thickness: 0.3, sheen: 0.5, sheenColor: new THREE.Color('#4a8048') }, swayTime),
+    makeSwayFoliageMaterial({ color: '#4a7a42', roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.2, sheen: 0.6, sheenColor: new THREE.Color('#5a9050') }, swayTime),
+  ], [swayTime]);
+
+  useEffect(() => () => { foliageMats.forEach(m => m.dispose()); }, [foliageMats]);
+
+  // Drive uTime each frame so sway animates
+  useAnimationFrame((time) => { swayTime.value = time; });
   
   return (
     <group position={[0, 0, boatZ]}>
@@ -1254,57 +1283,26 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
             <meshPhysicalMaterial color="#3d2817" roughness={0.95} />
           </mesh>
           
-          {/* Multi-layered foliage with subsurface scattering effect */}
+          {/* Multi-layered foliage with wind-sway and LOD (#107, #105) */}
           {/* Bottom layer - dense, darker */}
           <mesh position={[0, 2.8, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[1.4, 2.2, 12]} />
-            <meshPhysicalMaterial 
-              color="#1a4020"
-              roughness={0.85}
-              metalness={0.0}
-              transmission={0.05}
-              thickness={0.5}
-              sheen={0.3}
-              sheenColor="#2a5030"
-            />
+            <coneGeometry args={[1.4, 2.2, tree.isNear ? 12 : 4]} />
+            <primitive object={foliageMats[0]} attach="material" />
           </mesh>
           {/* Middle layer */}
           <mesh position={[0, 3.8, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[1.1, 2.0, 12]} />
-            <meshPhysicalMaterial 
-              color="#2a5a30"
-              roughness={0.8}
-              metalness={0.0}
-              transmission={0.08}
-              thickness={0.4}
-              sheen={0.4}
-              sheenColor="#3a7040"
-            />
+            <coneGeometry args={[1.1, 2.0, tree.isNear ? 12 : 4]} />
+            <primitive object={foliageMats[1]} attach="material" />
           </mesh>
           {/* Upper layer - lighter, catches more light */}
           <mesh position={[0, 4.6, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[0.8, 1.8, 12]} />
-            <meshPhysicalMaterial 
-              color="#3a6a38"
-              roughness={0.75}
-              metalness={0.0}
-              transmission={0.1}
-              thickness={0.3}
-              sheen={0.5}
-              sheenColor="#4a8048"
-            />
+            <coneGeometry args={[0.8, 1.8, tree.isNear ? 12 : 4]} />
+            <primitive object={foliageMats[2]} attach="material" />
           </mesh>
           {/* Top spike */}
           <mesh position={[0, 5.3, 0]} castShadow={nearShadow}>
-            <coneGeometry args={[0.4, 1.2, 10]} />
-            <meshPhysicalMaterial 
-              color="#4a7a42"
-              roughness={0.7}
-              transmission={0.12}
-              thickness={0.2}
-              sheen={0.6}
-              sheenColor="#5a9050"
-            />
+            <coneGeometry args={[0.4, 1.2, tree.isNear ? 10 : 4]} />
+            <primitive object={foliageMats[3]} attach="material" />
           </mesh>
           
           {/* Small branch details */}
@@ -2025,11 +2023,6 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
   );
 };
 
-
-// ============================================================================
-// HD THEMED SKY/FOG - Delegates to THEME_CONFIG
-// ============================================================================
-const getThemeAtmosphere = (theme: RouteTheme) => getThemeConfig(theme).atmosphere;
 
 // ============================================================================
 // HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
@@ -2857,16 +2850,21 @@ const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; per
   useEffect(() => () => caEffect.dispose(), [caEffect]);
 
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
-  useFrame(() => {
+  useFrame(({ gl }) => {
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
     caEffect.offset.set(aberration, aberration * 0.6);
+
+    // Adaptive eye-adaptation: slowly lerp toneMappingExposure toward target (#125)
+    const targetExposure = vel > 3 ? 0.85 : 1.0;
+    gl.toneMappingExposure = THREE.MathUtils.lerp(gl.toneMappingExposure, targetExposure, 0.015);
   });
 
   // In auto mode skip the expensive DepthOfField pass
   if (performanceMode === 'auto') {
     return (
-      <EffectComposer>
+      <EffectComposer enableNormalPass>
+        <SSAO samples={16} rings={3} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={10} bias={0.5} intensity={0.8} />
         <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
         <primitive object={caEffect} />
         <Vignette eskil={false} offset={0.3} darkness={0.5} />
@@ -2876,7 +2874,10 @@ const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; per
   }
 
   return (
-    <EffectComposer>
+    <EffectComposer enableNormalPass>
+      {/* Screen-space ambient occlusion — adds contact shadows and depth (#117) */}
+      <SSAO samples={24} rings={4} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={15} bias={0.5} intensity={1.0} />
+
       {/* Bloom — highlights water speculars and emissive caustics */}
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
 
@@ -2911,7 +2912,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
   
   // Detect route theme for landscape selection
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
-  const atmosphere = useMemo(() => getThemeAtmosphere(routeTheme), [routeTheme]);
+  const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
   
   // Create curved path from GPS coordinates
   const routeCurve = useMemo(() => {
@@ -3129,12 +3130,12 @@ const RowerScene: React.FC<Rower3DProps> = ({
   };
   
   // Get sky configuration for sun-aligned lighting
-  const skyConfig = useMemo(() => getThemeConfig(routeTheme).sky, [routeTheme]);
+  const skyConfig = useMemo(() => themeConfig.sky, [themeConfig]);
   
   return (
     <AnimationProvider>
-      {/* Themed exponential fog for depth */}
-      <fog attach="fog" args={[atmosphere.fogColor, atmosphere.fogNear, atmosphere.fogFar]} />
+      {/* Exponential fog — per-theme density/colour from themeConfig (#108) */}
+      <fogExp2 attach="fog" args={[themeConfig.fog.color, themeConfig.fog.density]} />
       
       {/* Photorealistic skydome with physically-based sky and clouds */}
       <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
@@ -3155,23 +3156,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
         position={[0, 50, 0]}
       />
       
-      {/* Primary sunlight - position and color matched to sky */}
+      {/* Primary sunlight — colour/intensity from themeConfig (#108) */}
       <directionalLight
         position={skyConfig.sunPosition}
-        intensity={
-          routeTheme === 'dystopian-thames' ? 0.4 :
-          routeTheme === 'gothic-venice' ? 0.5 :
-          routeTheme === 'scifi-boston' ? 0.3 :
-          routeTheme === 'steampunk-henley' ? 1.5 :  // Golden hour
-          1.2
-        }
-        color={
-          routeTheme === 'dystopian-thames' ? '#ff6b35' :  // Red-orange pollution
-          routeTheme === 'gothic-venice' ? '#8fa4b8' :     // Cold twilight
-          routeTheme === 'steampunk-henley' ? '#ffd700' :  // Golden sunset
-          routeTheme === 'scifi-boston' ? '#a0d2ff' :      // Moonlight blue
-          '#fffaf0'  // Warm daylight
-        }
+        intensity={themeConfig.lighting.sunIntensity}
+        color={themeConfig.lighting.sunColor}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -3182,33 +3171,17 @@ const RowerScene: React.FC<Rower3DProps> = ({
         shadow-camera-bottom={-100}
       />
       
-      {/* Ambient light for fill - matched to atmosphere */}
+      {/* Ambient fill — colour/intensity from themeConfig (#108) */}
       <ambientLight 
-        intensity={
-          routeTheme === 'dystopian-thames' ? 0.1 :
-          routeTheme === 'gothic-venice' ? 0.12 :
-          routeTheme === 'scifi-boston' ? 0.15 :
-          0.25
-        }
-        color={
-          routeTheme === 'dystopian-thames' ? '#2a1f1a' :
-          routeTheme === 'gothic-venice' ? '#4a5568' :
-          routeTheme === 'scifi-boston' ? '#162447' :
-          '#e8f4f8'
-        }
+        intensity={themeConfig.lighting.ambientIntensity}
+        color={themeConfig.lighting.ambientColor}
       />
       
-      {/* Fill light from opposite side for soft shadows */}
+      {/* Fill light from opposite side — colour/intensity from themeConfig (#108) */}
       <directionalLight
         position={[-skyConfig.sunPosition[0] * 0.6, 50, -skyConfig.sunPosition[2] * 0.5]}
-        intensity={
-          routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.15 : 0.3
-        }
-        color={
-          routeTheme === 'steampunk-henley' ? '#ffb347' :  // Warm bounce
-          routeTheme === 'scifi-boston' ? '#4a90d9' :      // Cool sci-fi
-          '#b4c7dc'  // Cool blue fill
-        }
+        intensity={themeConfig.lighting.fillIntensity}
+        color={themeConfig.lighting.fillColor}
       />
       
       {/* HDR Environment for realistic reflections - matched to theme */}
