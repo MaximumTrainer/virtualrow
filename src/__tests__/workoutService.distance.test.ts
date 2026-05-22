@@ -49,7 +49,14 @@ describe('WorkoutService — distance handling (current behavior)', () => {
 });
 
 describe('WorkoutService — distance handling (known bugs, expected to fail until fixed)', () => {
-  // H1: destructive overwrite on a transient backwards jump.
+  // TODO(activity-distance-bug): when fixed, remove `.fails` from every test in
+  // this describe block so they enforce the corrected behavior. Each test below
+  // also carries a per-bug TODO with the specific defect it covers.
+
+  // TODO(activity-distance-bug): H1 destructive overwrite — `updateSessionWithPM5Data`
+  // mirrors `data.distance` directly into `session.distance`, so a transient stale
+  // or zero packet wipes the running total. Fix: accumulate deltas (and clamp
+  // negative deltas to 0) instead of overwriting. Remove `.fails` once fixed.
   it.fails('does not lose distance when a transient zero/stale packet arrives', () => {
     const svc = new WorkoutService();
     svc.startSession('r-overwrite', 'Overwrite Repro');
@@ -68,6 +75,10 @@ describe('WorkoutService — distance handling (known bugs, expected to fail unt
     expect(svc.getCurrentSession()!.distance).toBeGreaterThanOrEqual(1234);
   });
 
+  // TODO(activity-distance-bug): split detector compares `lastSplit.distance`
+  // against `data.distance`, so after a backward jump the comparison misses
+  // 500 m boundaries. Tied to the H1 fix above — once distance accumulates
+  // correctly, the split detector should follow. Remove `.fails` when fixed.
   it.fails('still records splits after recovering from a transient backwards jump', () => {
     const svc = new WorkoutService();
     svc.startSession('r-splits', 'Split Repro');
@@ -89,6 +100,11 @@ describe('WorkoutService — distance handling (known bugs, expected to fail unt
     expect(splits.length).toBeGreaterThanOrEqual(2);
   });
 
+  // TODO(activity-distance-bug): H2 start-offset — the first PM5 frame's
+  // `distance` should be captured as a session origin and subtracted from all
+  // subsequent readings. Today it is recorded verbatim, so mid-row connects or
+  // FTMS devices that report lifetime odometer inflate the session total.
+  // Remove `.fails` when the offset is implemented.
   // H1 (start-offset): mid-row connect / lifetime-odometer device.
   it.fails('treats the first device reading as the session-start offset (does not inherit a non-zero baseline)', () => {
     const svc = new WorkoutService();
@@ -106,6 +122,10 @@ describe('WorkoutService — distance handling (known bugs, expected to fail unt
     expect(svc.getCurrentSession()!.distance).toBeLessThan(1000);
   });
 
+  // TODO(activity-distance-bug): H3 pause API — `WorkoutService` has no
+  // `pauseSession()`/`resumeSession()`. The UI shows a paused state but PM5
+  // packets still mutate `session.distance` underneath. Add the API and gate
+  // `updateSessionWithPM5Data` on it. Remove `.fails` when implemented.
   // Pause is currently UI-only — workoutService keeps accepting distance updates.
   it.fails('exposes a paused state that suspends distance accumulation', () => {
     const svc = new WorkoutService() as WorkoutService & {

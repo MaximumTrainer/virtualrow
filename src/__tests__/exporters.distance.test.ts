@@ -88,6 +88,13 @@ describe('FIT export — distance units contract', () => {
 });
 
 describe('GPX export — rowed distance fidelity (known bug, expected to fail until fixed)', () => {
+  // TODO(activity-distance-bug): GPX export only emits the static route
+  // polyline; consumers (Intervals.icu, Strava, etc.) then derive distance
+  // by haversining the trkpts and so see the route's nominal length, not
+  // what was actually rowed. Fix by embedding the rowed distance in a
+  // machine-parsable element (e.g. `<gpxtpx:Distance>`, `<metadata><desc>`,
+  // or `<extensions>`). Remove `.fails` from every test in this describe
+  // block when the export carries rowed distance.
   it.fails('embeds the actual rowed distance so consumers do not derive it from the static polyline', () => {
     // The session covered 1500 m. The route polyline (lat/lng above) spans
     // ~22 km along its great-circle, so any consumer that computes distance

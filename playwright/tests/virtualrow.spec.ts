@@ -1249,6 +1249,10 @@ test.describe('activity distance integrity', () => {
   // Meters drops from 1234 → 50 and the user loses ~1184 m of credit.
   // Required behavior: the Meters card must never display a value lower than
   // a previously displayed value during a single active session.
+  // TODO(activity-distance-bug): remove `test.fail()` once
+  // `WorkoutService.updateSessionWithPM5Data` accumulates distance instead of
+  // overwriting it (paired with the unit-level fix covered by the `.fails`
+  // specs in `src/__tests__/workoutService.distance.test.ts`).
   test.fail('Meters display does not regress when a transient backwards packet arrives', async ({ page }) => {
     const metersValue = page.locator(
       '.activity-stat-card:has(.activity-stat-label:has-text("Meters")) .activity-stat-value',
