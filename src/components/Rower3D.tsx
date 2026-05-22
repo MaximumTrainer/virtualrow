@@ -3597,15 +3597,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   }, [route.coordinates]);
 
   // Wasm physics engine (falls back to JS pace→speed if unavailable)
-  const { boatState, dispatchTick } = usePhysicsEngine();
+  const { boatStateRef, strokePhase, dispatchTick } = usePhysicsEngine();
 
   // Expose stroke phase and velocity via refs for child components (avoids re-renders)
   const strokeCycleTRef = useRef(0);
   const velocityRef = useRef(0);
-  useEffect(() => {
-    strokeCycleTRef.current = boatState.strokeCycleT;
-    velocityRef.current = boatState.velocityMps;
-  }, [boatState.strokeCycleT, boatState.velocityMps]);
 
   // Animation loop - move boat along curved path and camera follows
   useFrame((state, delta) => {
@@ -3619,6 +3615,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
       elapsedTime: 0,
     };
     let speedMps = dispatchTick(delta, pm5Data);
+    velocityRef.current = boatStateRef.current.smoothedVelocityMps || speedMps;
+    strokeCycleTRef.current = boatStateRef.current.strokeCycleT;
     
     // Apply intensity factor if provided
     if (intensityFactor && intensityFactor > 0) {
@@ -3720,7 +3718,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
           curveLength: curveData.length
         };
         window.__ROWER3D_SPEED_MPS = speedMps;
-        window.__ROWER3D_STROKE_PHASE = boatState.strokePhase;
+        window.__ROWER3D_STROKE_PHASE = boatStateRef.current.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
       }
     } catch { /* intentional: window access may fail in test environments */ }
@@ -3937,7 +3935,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
         <BladeEntryFoam
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
-          strokePhase={boatState.strokePhase}
+          strokePhase={strokePhase}
         />
       )}
 
