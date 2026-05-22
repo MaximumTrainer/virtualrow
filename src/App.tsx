@@ -697,6 +697,15 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                 <RouteMap route={selectedRoute} />
               </div>
               <div className="route-details-panel">
+                <button
+                  className="btn-toggle-description btn-toggle-description--route-details"
+                  onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
+                  type="button"
+                  aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
+                  aria-expanded={isRouteDescriptionExpanded}
+                >
+                  {isRouteDescriptionExpanded ? '▼' : '▶'} Description
+                </button>
 
                 {/* Route Info Overlay */}
                 <div className="route-info-overlay">
@@ -706,15 +715,6 @@ ${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0<
                   </div>
 
                   <div className="route-description-container">
-                    <button
-                      className="btn-toggle-description"
-                      onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
-                      type="button"
-                      aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
-                      aria-expanded={isRouteDescriptionExpanded}
-                    >
-                      {isRouteDescriptionExpanded ? '▼' : '▶'} Description
-                    </button>
                     {isRouteDescriptionExpanded && (
                       <p className="route-description">{selectedRoute.description}</p>
                     )}
