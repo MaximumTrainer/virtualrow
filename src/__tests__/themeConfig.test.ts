@@ -34,6 +34,10 @@ describe('THEME_CONFIG', () => {
       expect(cfg).toHaveProperty('fog');
       expect(cfg).toHaveProperty('lighting');
       expect(cfg).toHaveProperty('colorGrading');
+      expect(cfg).toHaveProperty('trees');
+      expect(cfg).toHaveProperty('architecture');
+      expect(cfg).toHaveProperty('groundCover');
+      expect(cfg).toHaveProperty('horizon');
     }
   });
 
@@ -276,5 +280,175 @@ describe('getThemeConfig', () => {
     const bled = getThemeConfig('crystal-bled').atmosphere;
     // fogFar should be shorter (denser fog) in gothic-venice
     expect(venice.fogFar).toBeLessThan(bled.fogFar);
+  });
+});
+
+describe('trees config (#128)', () => {
+  it('every theme has at least one tree species', () => {
+    for (const theme of ALL_THEMES) {
+      const trees = THEME_CONFIG[theme].trees;
+      expect(Array.isArray(trees.species)).toBe(true);
+      expect(trees.species.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every species entry has required fields with valid ranges', () => {
+    for (const theme of ALL_THEMES) {
+      for (const s of THEME_CONFIG[theme].trees.species) {
+        expect(typeof s.type).toBe('string');
+        expect(typeof s.color).toBe('string');
+        expect(typeof s.trunkColor).toBe('string');
+        expect(Array.isArray(s.heightRange)).toBe(true);
+        expect(s.heightRange).toHaveLength(2);
+        expect(s.heightRange[0]).toBeLessThanOrEqual(s.heightRange[1]);
+        expect(Array.isArray(s.radiusRange)).toBe(true);
+        expect(s.radiusRange).toHaveLength(2);
+        expect(s.radiusRange[0]).toBeLessThanOrEqual(s.radiusRange[1]);
+        expect(typeof s.density).toBe('number');
+        expect(s.density).toBeGreaterThan(0);
+        expect(s.density).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('dystopian-thames has bare/dead trees only', () => {
+    const types = THEME_CONFIG['dystopian-thames'].trees.species.map(s => s.type);
+    expect(types.every(t => t === 'bare')).toBe(true);
+  });
+
+  it('crystal-bled has pine trees for alpine setting', () => {
+    const types = THEME_CONFIG['crystal-bled'].trees.species.map(s => s.type);
+    expect(types).toContain('pine');
+  });
+
+  it('willowbrook has willow trees', () => {
+    const types = THEME_CONFIG['willowbrook'].trees.species.map(s => s.type);
+    expect(types).toContain('willow');
+  });
+});
+
+describe('architecture config (#129)', () => {
+  const VALID_BUILDING_STYLES = ['georgian', 'gothic', 'canal', 'industrial', 'modern', 'futuristic'] as const;
+  const VALID_ROOF_STYLES = ['flat', 'gabled', 'pointed', 'dome'] as const;
+  const VALID_BRIDGE_STYLES = ['stone-arch', 'iron-truss', 'gondola-bridge', 'modern-cable'] as const;
+
+  it('every theme has valid architecture config', () => {
+    for (const theme of ALL_THEMES) {
+      const a = THEME_CONFIG[theme].architecture;
+      expect(VALID_BUILDING_STYLES).toContain(a.buildingStyle);
+      expect(typeof a.wallMaterial.color).toBe('string');
+      expect(typeof a.wallMaterial.roughness).toBe('number');
+      expect(a.wallMaterial.roughness).toBeGreaterThanOrEqual(0);
+      expect(a.wallMaterial.roughness).toBeLessThanOrEqual(1);
+      expect(VALID_ROOF_STYLES).toContain(a.roofStyle);
+      expect(typeof a.roofColor).toBe('string');
+      expect(typeof a.hasBridges).toBe('boolean');
+      expect(VALID_BRIDGE_STYLES).toContain(a.bridgeStyle);
+    }
+  });
+
+  it('gothic-venice uses canal building style', () => {
+    expect(THEME_CONFIG['gothic-venice'].architecture.buildingStyle).toBe('canal');
+  });
+
+  it('gothic-venice has gondola bridges', () => {
+    expect(THEME_CONFIG['gothic-venice'].architecture.bridgeStyle).toBe('gondola-bridge');
+  });
+
+  it('willowbrook uses georgian style', () => {
+    expect(THEME_CONFIG['willowbrook'].architecture.buildingStyle).toBe('georgian');
+  });
+
+  it('scifi-boston uses futuristic style with modern-cable bridges', () => {
+    const a = THEME_CONFIG['scifi-boston'].architecture;
+    expect(a.buildingStyle).toBe('futuristic');
+    expect(a.bridgeStyle).toBe('modern-cable');
+  });
+
+  it('building styles are not all the same across themes', () => {
+    const styles = ALL_THEMES.map(t => THEME_CONFIG[t].architecture.buildingStyle);
+    const unique = new Set(styles);
+    expect(unique.size).toBeGreaterThan(2);
+  });
+});
+
+describe('groundCover config (#130)', () => {
+  const VALID_TYPES = ['reed', 'rock', 'grass', 'flower', 'debris'] as const;
+
+  it('every theme has at least one ground cover type', () => {
+    for (const theme of ALL_THEMES) {
+      const gc = THEME_CONFIG[theme].groundCover;
+      expect(Array.isArray(gc.types)).toBe(true);
+      expect(gc.types.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every ground cover entry has required fields', () => {
+    for (const theme of ALL_THEMES) {
+      for (const t of THEME_CONFIG[theme].groundCover.types) {
+        expect(VALID_TYPES).toContain(t.type);
+        expect(typeof t.color).toBe('string');
+        expect(typeof t.density).toBe('number');
+        expect(t.density).toBeGreaterThan(0);
+        expect(t.density).toBeLessThanOrEqual(1);
+        expect(typeof t.scale).toBe('number');
+        expect(t.scale).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('dystopian-thames has debris ground cover', () => {
+    const types = THEME_CONFIG['dystopian-thames'].groundCover.types.map(t => t.type);
+    expect(types).toContain('debris');
+  });
+
+  it('willowbrook has reeds and flowers', () => {
+    const types = THEME_CONFIG['willowbrook'].groundCover.types.map(t => t.type);
+    expect(types).toContain('reed');
+    expect(types).toContain('flower');
+  });
+});
+
+describe('horizon config (#131)', () => {
+  const VALID_TYPES = ['mountains', 'city', 'hills', 'industrial', 'islands'] as const;
+
+  it('every theme has valid horizon config', () => {
+    for (const theme of ALL_THEMES) {
+      const h = THEME_CONFIG[theme].horizon;
+      expect(VALID_TYPES).toContain(h.type);
+      expect(typeof h.color).toBe('string');
+      expect(typeof h.distance).toBe('number');
+      expect(h.distance).toBeGreaterThan(0);
+      expect(typeof h.height).toBe('number');
+      expect(h.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('crystal-bled has mountain horizon', () => {
+    expect(THEME_CONFIG['crystal-bled'].horizon.type).toBe('mountains');
+  });
+
+  it('scifi-boston has city horizon', () => {
+    expect(THEME_CONFIG['scifi-boston'].horizon.type).toBe('city');
+  });
+
+  it('dystopian-thames has industrial horizon', () => {
+    expect(THEME_CONFIG['dystopian-thames'].horizon.type).toBe('industrial');
+  });
+
+  it('mountain horizons are taller than island horizons', () => {
+    const mountainThemes = ALL_THEMES.filter(t => THEME_CONFIG[t].horizon.type === 'mountains');
+    const islandThemes = ALL_THEMES.filter(t => THEME_CONFIG[t].horizon.type === 'islands');
+    if (mountainThemes.length > 0 && islandThemes.length > 0) {
+      const avgMountain = mountainThemes.reduce((s, t) => s + THEME_CONFIG[t].horizon.height, 0) / mountainThemes.length;
+      const avgIsland = islandThemes.reduce((s, t) => s + THEME_CONFIG[t].horizon.height, 0) / islandThemes.length;
+      expect(avgMountain).toBeGreaterThan(avgIsland);
+    }
+  });
+
+  it('horizon types are diverse across themes', () => {
+    const types = ALL_THEMES.map(t => THEME_CONFIG[t].horizon.type);
+    const unique = new Set(types);
+    expect(unique.size).toBeGreaterThan(2);
   });
 });
