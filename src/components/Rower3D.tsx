@@ -79,6 +79,13 @@ interface Rower3DProps {
   debugMode?: boolean;
 }
 
+// Deterministic seeded pseudo-random — avoids Math.random() impurity in render.
+// Returns a stable value in [0, 1) for a given seed integer.
+function seededRandom(seed: number): number {
+  const s = Math.sin(seed * 9301 + 49297) * 233280;
+  return s - Math.floor(s);
+}
+
 // ============================================================================
 // GPU GERSTNER WAVE SHADER — injected into MeshPhysicalMaterial via
 // onBeforeCompile so all PBR features (IOR, transmission, env reflections)
@@ -365,7 +372,7 @@ const WaterReflectionProbe: React.FC<{
 // HIGH-DEFINITION PHOTOREALISTIC WATER - Advanced PBR with realistic waves,
 // subsurface scattering simulation, and theme-appropriate depth effects
 // ============================================================================
-const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; isHighQuality: boolean }> = ({ boatZ, theme, isHighQuality }) => {
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   const timeUniformRef = useRef({ value: 0 });
@@ -494,8 +501,8 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
         position={[0, -0.1, boatZ]}
         receiveShadow
       >
-        {/* 128×128 segments — enough tessellation for Gerstner waves on the GPU */}
-        <planeGeometry args={[1000, 1000, 128, 128]} />
+        {/* Tessellation keyed to performanceMode: 64×64 high-quality, 32×32 low-power */}
+        <planeGeometry args={[1000, 1000, isHighQuality ? 64 : 32, isHighQuality ? 64 : 32]} />
         <meshPhysicalMaterial
           ref={materialRef}
           color={waterConfig.color}
@@ -518,7 +525,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ b
           sheen={0.15}
           sheenColor={waterConfig.sheenColor}
           sheenRoughness={0.3}
-          side={THREE.DoubleSide}
+          side={THREE.FrontSide}
         />
       </mesh>
       {!IS_TEST_MODE && (
@@ -642,9 +649,10 @@ const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, them
 interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
+  isHighQuality: boolean;
 }
 
-const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme }) => {
+const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme, isHighQuality }) => {
   const meshRef        = useRef<THREE.Mesh>(null);
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
@@ -740,7 +748,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme })
   const waterGeometry = useMemo(() => {
     if (!curve) return null;
     
-    const segments = 200;
+    const segments = isHighQuality ? 200 : 100;
     const halfWidth = WATER_CHANNEL_WIDTH / 2;
     
     // Create geometry vertices following the curve
@@ -795,7 +803,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme })
     geometry.setIndex(indices);
     
     return geometry;
-  }, [curve]);
+  }, [curve, isHighQuality]);
   
   if (!curve || !waterGeometry) {
     return null;
@@ -821,7 +829,7 @@ const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme })
         emissiveIntensity={waterConfig.emissiveIntensity}
         attenuationColor={waterConfig.attenuationColor}
         attenuationDistance={waterConfig.thickness * 1.5}
-        side={THREE.DoubleSide}
+        side={THREE.FrontSide}
       />
     </mesh>
   );
@@ -1038,19 +1046,20 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
     const elementSpacing = 0.02; // Progress spacing between elements
     const minOffset = LANDSCAPE_OFFSET; // Minimum distance from water center
     
+    let elemIdx = 0;
     for (let t = 0; t < 1; t += elementSpacing) {
       const point = curve.getPointAt(t);
       const tangent = curve.getTangentAt(t).normalize();
       const up = new THREE.Vector3(0, 1, 0);
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
       
-      // Random offset beyond the minimum landscape offset
-      const leftOffset = minOffset + Math.random() * 30;
-      const rightOffset = minOffset + Math.random() * 30;
+      // Stable offset beyond the minimum landscape offset
+      const leftOffset = minOffset + seededRandom(elemIdx * 7 + 1) * 30;
+      const rightOffset = minOffset + seededRandom(elemIdx * 7 + 2) * 30;
       
-      // Element type based on theme and randomness
-      const getElementType = (): 'tree' | 'mountain' | 'building' => {
-        const rand = Math.random();
+      // Element type based on theme and stable seed
+      const getElementType = (seedOffset: number): 'tree' | 'mountain' | 'building' => {
+        const rand = seededRandom(elemIdx * 7 + seedOffset);
         switch (theme) {
           case 'dystopian-thames':
           case 'scifi-boston':
@@ -1064,27 +1073,28 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
       };
       
       // Only add elements with some probability to avoid overcrowding
-      if (Math.random() < 0.6) {
+      if (seededRandom(elemIdx * 7 + 4) < 0.6) {
         const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
         leftPos.y = 0;
         leftElements.push({
           position: leftPos,
-          type: getElementType(),
-          scale: 0.8 + Math.random() * 0.8,
+          type: getElementType(3),
+          scale: 0.8 + seededRandom(elemIdx * 7 + 5) * 0.8,
           rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2
         });
       }
       
-      if (Math.random() < 0.6) {
+      if (seededRandom(elemIdx * 7 + 6) < 0.6) {
         const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
         rightPos.y = 0;
         rightElements.push({
           position: rightPos,
-          type: getElementType(),
-          scale: 0.8 + Math.random() * 0.8,
+          type: getElementType(7),
+          scale: 0.8 + seededRandom(elemIdx * 7 + 8) * 0.8,
           rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2
         });
       }
+      elemIdx++;
     }
     
     return { leftElements, rightElements };
@@ -1329,7 +1339,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                     clearcoat={1.0}
                     clearcoatRoughness={0.01}
                     emissive={colors.windowGlow}
-                    emissiveIntensity={Math.random() > 0.5 ? 0.35 : 0.08}
+                    emissiveIntensity={seededRandom(index * 17 + j) > 0.5 ? 0.35 : 0.08}
                     ior={1.5}
                   />
                 </mesh>
@@ -1344,7 +1354,7 @@ const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme,
                     clearcoat={1.0}
                     clearcoatRoughness={0.01}
                     emissive={colors.windowGlow}
-                    emissiveIntensity={Math.random() > 0.6 ? 0.3 : 0.06}
+                    emissiveIntensity={seededRandom(index * 17 + j + 4) > 0.6 ? 0.3 : 0.06}
                     ior={1.5}
                   />
                 </mesh>
@@ -1379,14 +1389,15 @@ const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = (
   const mountains = useMemo(() => {
     const result: Array<{ x: number; z: number; scale: number; height: number; snowLine: number; rockVariant: number }> = [];
     for (let z = -500; z < 500; z += 40) {
-      const height = 15 + Math.random() * 25;
+      const i = Math.round((z + 500) / 40);
+      const height = 15 + seededRandom(i * 11 + 1) * 25;
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 10,
-        z: z + (Math.random() - 0.5) * 20,
-        scale: 8 + Math.random() * 12,
+        x: xOffset + (seededRandom(i * 11 + 2) - 0.5) * 10,
+        z: z + (seededRandom(i * 11 + 3) - 0.5) * 20,
+        scale: 8 + seededRandom(i * 11 + 4) * 12,
         height,
-        snowLine: 0.6 + Math.random() * 0.2, // Variable snow coverage
-        rockVariant: Math.floor(Math.random() * 3),
+        snowLine: 0.6 + seededRandom(i * 11 + 5) * 0.2,
+        rockVariant: Math.floor(seededRandom(i * 11 + 6) * 3),
       });
     }
     return result;
@@ -1491,14 +1502,15 @@ const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, 
   const trees = useMemo(() => {
     const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number }> = [];
     for (let z = -400; z < 400; z += 8) {
-      const count = 1 + Math.floor(Math.random() * 2);
+      const treeIdx = Math.round((z + 400) / 8);
+      const count = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
       for (let j = 0; j < count; j++) {
         result.push({
-          x: xBase + (Math.random() - 0.5) * 15 + (side === 'left' ? -5 : 5),
-          z: z + (Math.random() - 0.5) * 6,
-          scale: 0.8 + Math.random() * 0.6,
-          variant: Math.floor(Math.random() * 3), // Tree type variation
-          rotation: Math.random() * Math.PI * 2, // Random rotation for natural look
+          x: xBase + (seededRandom(treeIdx * 9 + j * 4 + 2) - 0.5) * 15 + (side === 'left' ? -5 : 5),
+          z: z + (seededRandom(treeIdx * 9 + j * 4 + 3) - 0.5) * 6,
+          scale: 0.8 + seededRandom(treeIdx * 9 + j * 4 + 4) * 0.6,
+          variant: Math.floor(seededRandom(treeIdx * 9 + j * 4 + 5) * 3),
+          rotation: seededRandom(treeIdx * 9 + j * 4 + 6) * Math.PI * 2,
         });
       }
     }
@@ -1617,13 +1629,14 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
     const result: Array<{ x: number; z: number; height: number; radius: number; color: string; facets: number }> = [];
     const colors = ['#00f5d4', '#7df9ff', '#a0e7e5', '#40e0d0', '#00ced1'];
     for (let z = -500; z < 500; z += 30) {
+      const i = Math.round((z + 500) / 30);
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 20,
-        z: z + (Math.random() - 0.5) * 15,
-        height: 12 + Math.random() * 25,
-        radius: 1.5 + Math.random() * 2,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        facets: 5 + Math.floor(Math.random() * 3), // Varied crystal facets
+        x: xOffset + (seededRandom(i * 13 + 1) - 0.5) * 20,
+        z: z + (seededRandom(i * 13 + 2) - 0.5) * 15,
+        height: 12 + seededRandom(i * 13 + 3) * 25,
+        radius: 1.5 + seededRandom(i * 13 + 4) * 2,
+        color: colors[Math.floor(seededRandom(i * 13 + 5) * colors.length)],
+        facets: 5 + Math.floor(seededRandom(i * 13 + 6) * 3),
       });
     }
     return result;
@@ -1632,12 +1645,13 @@ const CrystalBledLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
   const mountains = useMemo(() => {
     const result: Array<{ x: number; z: number; scale: number; height: number; snowAmount: number }> = [];
     for (let z = -500; z < 500; z += 80) {
+      const i = Math.round((z + 500) / 80);
       result.push({
-        x: xOffset + (side === 'left' ? -30 : 30) + (Math.random() - 0.5) * 15,
-        z: z + (Math.random() - 0.5) * 30,
-        scale: 20 + Math.random() * 20,
-        height: 30 + Math.random() * 40,
-        snowAmount: 0.55 + Math.random() * 0.2,
+        x: xOffset + (side === 'left' ? -30 : 30) + (seededRandom(i * 17 + 1) - 0.5) * 15,
+        z: z + (seededRandom(i * 17 + 2) - 0.5) * 30,
+        scale: 20 + seededRandom(i * 17 + 3) * 20,
+        height: 30 + seededRandom(i * 17 + 4) * 40,
+        snowAmount: 0.55 + seededRandom(i * 17 + 5) * 0.2,
       });
     }
     return result;
@@ -1756,18 +1770,20 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
   const xOffset = side === 'left' ? -25 : 25;
   
   const buildings = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; width: number; depth: number; color: string; tilt: number; windowGlow: number }> = [];
+    const result: Array<{ x: number; z: number; height: number; width: number; depth: number; color: string; tilt: number; windowGlow: number; debrisOffset: number }> = [];
     const colors = ['#2d3436', '#1e272e', '#2c3e50', '#34495e', '#192a56'];
     for (let z = -400; z < 400; z += 20) {
+      const i = Math.round((z + 400) / 20);
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 12,
-        z: z + (Math.random() - 0.5) * 10,
-        height: 8 + Math.random() * 14,
-        width: 4 + Math.random() * 6,
-        depth: 4 + Math.random() * 5,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        tilt: (Math.random() - 0.5) * 0.15,
-        windowGlow: Math.random(), // Random window illumination
+        x: xOffset + (seededRandom(i * 19 + 1) - 0.5) * 12,
+        z: z + (seededRandom(i * 19 + 2) - 0.5) * 10,
+        height: 8 + seededRandom(i * 19 + 3) * 14,
+        width: 4 + seededRandom(i * 19 + 4) * 6,
+        depth: 4 + seededRandom(i * 19 + 5) * 5,
+        color: colors[Math.floor(seededRandom(i * 19 + 6) * colors.length)],
+        tilt: (seededRandom(i * 19 + 7) - 0.5) * 0.15,
+        windowGlow: seededRandom(i * 19 + 8),
+        debrisOffset: (seededRandom(i * 19 + 9) - 0.5),
       });
     }
     return result;
@@ -1843,7 +1859,7 @@ const GothicVeniceLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }>
           </mesh>
           
           {/* Crumbling top with detailed debris */}
-          <mesh position={[(Math.random() - 0.5) * b.width * 0.3, b.height + 0.5, 0]} castShadow>
+          <mesh position={[b.debrisOffset * b.width * 0.3, b.height + 0.5, 0]} castShadow>
             <boxGeometry args={[b.width * 0.4, 1.2, b.depth * 0.4]} />
             <meshPhysicalMaterial color={b.color} roughness={0.95} />
           </mesh>
@@ -1865,13 +1881,15 @@ const SteampunkHenleyLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
   const structures = useMemo(() => {
     const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'platform' | 'gear'; patina: number }> = [];
     for (let z = -400; z < 400; z += 25) {
-      const type = Math.random() > 0.6 ? 'tower' : (Math.random() > 0.5 ? 'platform' : 'gear');
+      const i = Math.round((z + 400) / 25);
+      const r1 = seededRandom(i * 29 + 1);
+      const type = r1 > 0.6 ? 'tower' : (seededRandom(i * 29 + 2) > 0.5 ? 'platform' : 'gear');
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 15,
-        z: z + (Math.random() - 0.5) * 12,
-        height: 8 + Math.random() * 18,
+        x: xOffset + (seededRandom(i * 29 + 3) - 0.5) * 15,
+        z: z + (seededRandom(i * 29 + 4) - 0.5) * 12,
+        height: 8 + seededRandom(i * 29 + 5) * 18,
         type,
-        patina: Math.random(), // For verdigris/weathering variation
+        patina: seededRandom(i * 29 + 6),
       });
     }
     return result;
@@ -2053,15 +2071,20 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
   const xOffset = side === 'left' ? -35 : 35;
   
   const ruins = useMemo(() => {
-    const result: Array<{ x: number; z: number; height: number; width: number; damaged: boolean; rustLevel: number }> = [];
+    const result: Array<{ x: number; z: number; height: number; width: number; damaged: boolean; rustLevel: number; debrisX: number; debrisZ: number; searchlight: boolean }> = [];
     for (let z = -500; z < 500; z += 30) {
+      const i = Math.round((z + 500) / 30);
+      const damaged = seededRandom(i * 31 + 5) > 0.4;
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 20,
-        z: z + (Math.random() - 0.5) * 15,
-        height: 15 + Math.random() * 35,
-        width: 4 + Math.random() * 6,
-        damaged: Math.random() > 0.4,
-        rustLevel: Math.random(), // For varied weathering
+        x: xOffset + (seededRandom(i * 31 + 1) - 0.5) * 20,
+        z: z + (seededRandom(i * 31 + 2) - 0.5) * 15,
+        height: 15 + seededRandom(i * 31 + 3) * 35,
+        width: 4 + seededRandom(i * 31 + 4) * 6,
+        damaged,
+        rustLevel: seededRandom(i * 31 + 6),
+        debrisX: (seededRandom(i * 31 + 7) - 0.5),
+        debrisZ: (seededRandom(i * 31 + 8) - 0.5),
+        searchlight: seededRandom(i * 31 + 9) > 0.75 && !damaged,
       });
     }
     return result;
@@ -2118,8 +2141,8 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
             
             {/* Windows with broken glass and emergency lighting */}
             {[0.2, 0.4, 0.6, 0.8].map((yPos, j) => {
-              const isBroken = Math.random() > 0.6;
-              const hasLight = !isBroken && Math.random() > 0.7;
+              const isBroken = seededRandom(i * 13 + j) > 0.6;
+              const hasLight = !isBroken && seededRandom(i * 13 + j + 4) > 0.7;
               return (
                 <group key={j}>
                   {/* Window frame */}
@@ -2152,7 +2175,7 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
             {/* Damage debris pile */}
             {r.damaged && (
               <group>
-                <mesh position={[(Math.random() - 0.5) * r.width, actualHeight * 0.35 + 1, (Math.random() - 0.5) * r.width]} rotation={[0.3, 0.5, 0.2]}>
+                <mesh position={[r.debrisX * r.width, actualHeight * 0.35 + 1, r.debrisZ * r.width]} rotation={[0.3, 0.5, 0.2]}>
                   <boxGeometry args={[r.width * 0.35, 2.5, r.width * 0.35]} />
                   <meshPhysicalMaterial color="#16213e" roughness={0.96} />
                 </mesh>
@@ -2169,7 +2192,7 @@ const DystopianThamesLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number
             )}
             
             {/* Searchlight on some buildings */}
-            {Math.random() > 0.75 && !r.damaged && (
+            {r.searchlight && (
               <group position={[0, r.height + 1.5, 0]}>
                 <mesh>
                   <cylinderGeometry args={[0.15, 0.35, 2.5, 8]} />
@@ -2204,11 +2227,12 @@ const SciFiBostonLandscape: React.FC<{ side: 'left' | 'right'; boatZ: number }> 
   const structures = useMemo(() => {
     const result: Array<{ x: number; z: number; height: number; type: 'tower' | 'cube' | 'pyramid' }> = [];
     for (let z = -500; z < 500; z += 28) {
-      const type = Math.random() > 0.6 ? 'tower' : (Math.random() > 0.5 ? 'cube' : 'pyramid');
+      const i = Math.round((z + 500) / 28);
+      const type = seededRandom(i * 37 + 1) > 0.6 ? 'tower' : (seededRandom(i * 37 + 2) > 0.5 ? 'cube' : 'pyramid');
       result.push({
-        x: xOffset + (Math.random() - 0.5) * 18,
-        z: z + (Math.random() - 0.5) * 14,
-        height: 10 + Math.random() * 25,
+        x: xOffset + (seededRandom(i * 37 + 3) - 0.5) * 18,
+        z: z + (seededRandom(i * 37 + 4) - 0.5) * 14,
+        height: 10 + seededRandom(i * 37 + 5) * 25,
         type,
       });
     }
@@ -2575,17 +2599,17 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
       // Golden ratio distribution for natural cloud spacing
       const goldenAngle = Math.PI * (3 - Math.sqrt(5));
       const angle = i * goldenAngle;
-      const radiusVariation = 0.7 + Math.random() * 0.6;
+      const radiusVariation = 0.7 + seededRandom(i * 41 + 1) * 0.6;
       const radius = (120 + i * 25) * radiusVariation;
       const heightBase = 55 + (i % 3) * 30;
-      const heightVariation = Math.random() * 45;
+      const heightVariation = seededRandom(i * 41 + 2) * 45;
       
       positions.push({
         x: Math.cos(angle) * radius,
         y: heightBase + heightVariation,
         z: Math.sin(angle) * radius,
-        scale: (12 + Math.random() * 28) * cloudConfig.scale,
-        variation: Math.random()
+        scale: (12 + seededRandom(i * 41 + 3) * 28) * cloudConfig.scale,
+        variation: seededRandom(i * 41 + 4)
       });
     }
     return positions;
@@ -2645,15 +2669,15 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
             <Cloud
               key={`distant-${i}`}
               position={[
-                (i - Math.ceil(cloudConfig.count * 0.2)) * 180 + Math.random() * 60,
-                Math.random() * 30,
-                -150 + Math.random() * 60
+                (i - Math.ceil(cloudConfig.count * 0.2)) * 180 + seededRandom(i * 43 + 1) * 60,
+                seededRandom(i * 43 + 2) * 30,
+                -150 + seededRandom(i * 43 + 3) * 60
               ]}
               opacity={cloudConfig.opacity * 0.22 * cloudConfig.depth}
               speed={cloudConfig.speed * 0.35}
               segments={Math.floor(cloudConfig.segments * 0.6)}
               color={cloudConfig.color}
-              scale={(45 + Math.random() * 30) * cloudConfig.scale}
+              scale={(45 + seededRandom(i * 43 + 4) * 30) * cloudConfig.scale}
             />
           ))}
         </group>
@@ -2670,7 +2694,7 @@ const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({
               speed={cloudConfig.speed * 0.2}
               segments={12}
               color={cloudConfig.color}
-              scale={80 + Math.random() * 40}
+              scale={80 + seededRandom(i * 47 + 1) * 40}
             />
           ))}
         </group>
@@ -2752,7 +2776,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
         window.__ROWER3D_OAR_ANGLE = oarSweep;
         window.__ROWER3D_STROKE_RATE = strokesPerMinute;
       }
-    } catch {}
+    } catch { /* intentional: window access may fail in test environments */ }
     
     // Animate rower body
     if (torsoRef.current) {
@@ -3011,7 +3035,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
           <group position={[0, 0.56, 0]}>
             {/* HD Head - realistic skin material */}
             <mesh ref={headRef} castShadow>
-              <sphereGeometry args={[0.1, 24, 24]} />
+              <sphereGeometry args={[0.1, 16, 12]} />
               <meshPhysicalMaterial 
                 color={skinColor}
                 roughness={0.55}
@@ -3026,7 +3050,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
             
             {/* HD Hair - natural texture */}
             <mesh position={[0, 0.04, -0.02]} castShadow>
-              <sphereGeometry args={[0.095, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+              <sphereGeometry args={[0.095, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
               <meshPhysicalMaterial 
                 color={hairColor}
                 roughness={0.88}
@@ -3046,7 +3070,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
             
             {/* HD Eyes with realistic reflection */}
             <mesh position={[-0.03, 0.02, 0.085]}>
-              <sphereGeometry args={[0.012, 12, 12]} />
+              <sphereGeometry args={[0.012, 8, 8]} />
               <meshPhysicalMaterial 
                 color="#1a1008"
                 roughness={0.12}
@@ -3057,7 +3081,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
               />
             </mesh>
             <mesh position={[0.03, 0.02, 0.085]}>
-              <sphereGeometry args={[0.012, 12, 12]} />
+              <sphereGeometry args={[0.012, 8, 8]} />
               <meshPhysicalMaterial 
                 color="#1a1008"
                 roughness={0.12}
@@ -3070,7 +3094,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
             
             {/* HD Ears with realistic skin */}
             <mesh position={[-0.1, 0, 0]}>
-              <sphereGeometry args={[0.025, 12, 12]} />
+              <sphereGeometry args={[0.025, 8, 8]} />
               <meshPhysicalMaterial 
                 color={skinColor}
                 roughness={0.58}
@@ -3079,7 +3103,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
               />
             </mesh>
             <mesh position={[0.1, 0, 0]}>
-              <sphereGeometry args={[0.025, 12, 12]} />
+              <sphereGeometry args={[0.025, 8, 8]} />
               <meshPhysicalMaterial 
                 color={skinColor}
                 roughness={0.58}
@@ -3122,7 +3146,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
               
               {/* Hand with realistic skin */}
               <mesh position={[0, -0.22, 0]} castShadow>
-                <sphereGeometry args={[0.038, 12, 12]} />
+                <sphereGeometry args={[0.038, 8, 8]} />
                 <meshPhysicalMaterial 
                   color={skinColor}
                   roughness={0.58}
@@ -3166,7 +3190,7 @@ const RowingScullBase: React.FC<{ cadence: number }> = ({ cadence }) => {
               
               {/* Hand with realistic skin */}
               <mesh position={[0, -0.22, 0]} castShadow>
-                <sphereGeometry args={[0.038, 12, 12]} />
+                <sphereGeometry args={[0.038, 8, 8]} />
                 <meshPhysicalMaterial 
                   color={skinColor}
                   roughness={0.58}
@@ -3440,7 +3464,6 @@ const BoatKinematicController: React.FC<{
   positionRef: React.MutableRefObject<THREE.Vector3>;
   rotationRef: React.MutableRefObject<number>;
   cadence: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 }> = ({ positionRef, rotationRef, cadence }) => {
   const bodyRef = useRef<RapierRigidBody>(null);
 
@@ -3473,33 +3496,46 @@ const BoatKinematicController: React.FC<{
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
-const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number> }> = ({ velocityRef }) => {
-  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
-  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
-  const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
-
+const ChromaticAberrationDriver: React.FC<{
+  effect: ChromaticAberrationEffect;
+  velocityRef: React.MutableRefObject<number>;
+}> = ({ effect, velocityRef }) => {
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(() => {
     const vel = velocityRef.current;
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
-    caEffect.offset.set(aberration, aberration * 0.6);
+    effect.offset.set(aberration, aberration * 0.6);
   });
+  return null;
+};
 
-  return (
+const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; isHighQuality: boolean }> = ({ velocityRef, isHighQuality }) => {
+  // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
+  // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
+  const caEffect = useMemo(
+    () => (isHighQuality
+      ? new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 })
+      : null),
+    [isHighQuality],
+  );
+  useEffect(() => {
+    return () => {
+      caEffect?.dispose();
+    };
+  }, [caEffect]);
+
+  return isHighQuality ? (
     <EffectComposer>
-      {/* Bloom — highlights water speculars and emissive caustics */}
+      <ChromaticAberrationDriver effect={caEffect!} velocityRef={velocityRef} />
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-
-      {/* Chromatic aberration — scales with velocity for camera-lens feel */}
-      <primitive object={caEffect} />
-
-      {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
+      <primitive object={caEffect!} />
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
-
-      {/* Cinematic vignette to draw focus to the scene centre */}
       <Vignette eskil={false} offset={0.3} darkness={0.5} />
-
-      {/* Filmic tone mapping for realistic HDR colour response */}
+      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+    </EffectComposer>
+  ) : (
+    <EffectComposer>
+      <Vignette eskil={false} offset={0.3} darkness={0.5} />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );
@@ -3514,9 +3550,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   distanceMeters, 
   isPlaying, 
   cadence,
-  intensityFactor 
+  intensityFactor,
+  performanceMode
 }) => {
   const { camera } = useThree();
+  const isHighQuality = performanceMode !== 'low';
   
   // Detect route theme for landscape selection
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
@@ -3685,7 +3723,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
         window.__ROWER3D_STROKE_PHASE = boatState.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
       }
-    } catch {}
+    } catch { /* intentional: window access may fail in test environments */ }
   });
   
   // Render themed landscape based on route
@@ -3838,9 +3876,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* Water - curved if we have GPS curve, otherwise straight */}
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} isHighQuality={isHighQuality} />
       ) : (
-        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} />
+        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} isHighQuality={isHighQuality} />
       )}
       
       {/* Curved riverbanks following the GPS path */}
@@ -3904,7 +3942,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!IS_TEST_MODE && <DynamicPostFx velocityRef={velocityRef} />}
+      {!IS_TEST_MODE && <DynamicPostFx velocityRef={velocityRef} isHighQuality={isHighQuality} />}
     </>
   );
 };
@@ -4049,20 +4087,25 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
         <Canvas
           camera={{ position: [0, 2.5, 6], fov: 60 }}
           shadows={isHighQuality}
+          dpr={isHighQuality ? [1, 2] : 1}
           gl={{
             antialias: isHighQuality,
             alpha: true,
             powerPreference: isHighQuality ? 'high-performance' : 'low-power',
             failIfMajorPerformanceCaveat: false,
-            preserveDrawingBuffer: true,
+            preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
+            // Store max anisotropy for texture quality optimization (#109)
+            try {
+              window.__ROWER3D_MAX_ANISOTROPY = gl.capabilities.getMaxAnisotropy();
+            } catch { /* intentional */ }
             try {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
-            } catch {}
+            } catch { /* intentional */ }
             
             // Handle WebGL context lost/restored for Playwright tests
             const canvas = gl.domElement;
@@ -4072,14 +4115,14 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
                 if (marker) marker.style.display = 'block';
                 window.__ROWER3D_WEBGL_LOST = true;
-              } catch {}
+              } catch { /* intentional */ }
             }, false);
             canvas.addEventListener('webglcontextrestored', () => {
               try {
                 const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
                 if (marker) marker.style.display = 'none';
                 window.__ROWER3D_WEBGL_LOST = false;
-              } catch {}
+              } catch { /* intentional */ }
             }, false);
           }}
         >
@@ -4091,4 +4134,3 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
 };
 
 export default Rower3D;
-
