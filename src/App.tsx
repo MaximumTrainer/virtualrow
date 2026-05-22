@@ -254,12 +254,12 @@ function App() {
 
   const handlePauseWorkout = useCallback(() => {
     setSessionState('paused');
-    // Note: Full pause logic would need to be added to workoutService
+    workoutService.pauseSession();
   }, []);
 
   const handleResumeWorkout = useCallback(() => {
     setSessionState('active');
-    // Note: Full resume logic would need to be added to workoutService
+    workoutService.resumeSession();
   }, []);
 
   const handleResetWorkout = useCallback(() => {
