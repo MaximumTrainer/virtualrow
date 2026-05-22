@@ -5,14 +5,16 @@ Realism: volumetric god rays / sun shafts aligned to directional light
 `realism`, `graphics`, `post-processing`, `atmosphere`, `enhancement`
 
 ## Summary
-Several of the route themes (`steampunk-henley`, `dystopian-thames`,
-`gothic-venice`) explicitly evoke low-sun, hazy lighting via warm
-directional-light colours, but the renderer has no volumetric scattering
-pass, so the air itself does not pick up any directional brightness.
-
-## Summary continued
-This is what makes early-morning rowing footage feel atmospheric: light
-shafts cutting through bridges, trees, and the boat itself.
+The current `EffectComposer` chain in `src/components/Rower3D.tsx`
+(`Bloom` → `ChromaticAberration` → `DepthOfField` → `Vignette` →
+`ToneMapping`) has no volumetric scattering pass, so the air itself
+does not pick up any directional brightness. Several of the route
+themes (`steampunk-henley`, `dystopian-thames`, `gothic-venice`)
+explicitly evoke low-sun, hazy lighting via warm directional-light
+colours, but without a god-rays pass the implied atmosphere never
+materialises. This is what makes early-morning rowing footage feel
+atmospheric: light shafts cutting through bridges, trees, and the
+boat itself.
 
 ## Motivation
 A cheap screen-space god-rays pass (radial blur of bright pixels around

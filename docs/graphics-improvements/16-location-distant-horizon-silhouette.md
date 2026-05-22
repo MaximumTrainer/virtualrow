@@ -31,7 +31,7 @@ Earth* this is. It composes with #108 FogExp2 for aerial perspective.
   - **dystopian-thames**: half-collapsed silhouettes of Battersea
     Power Station, broken Shard, oil-refinery chimneys with flame
     plumes
-  - **sci-fi Boston**: layered megastructure skyline with animated
+  - **scifi-boston**: layered megastructure skyline with animated
     aircraft running-lights and rooftop holograms
 - Tint the silhouette by current `LIGHTING_PROFILE.aerosolDensity` so
   it matches the local fog colour automatically (composes with #108
