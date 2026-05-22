@@ -1,5 +1,5 @@
 {
-  "_comment": "Curated list of non-functional technical improvement candidates for VirtualRow. Each entry becomes one GitHub issue when the temporary workflow .github/workflows/create-improvement-issues.yml is dispatched. Issues describe what to change and why, but must not alter visible behaviour, simulator output, or test contracts.",
+  "_comment": "Curated list of technical improvement candidates for VirtualRow. Each entry becomes one GitHub issue when the temporary workflow .github/workflows/create-improvement-issues.yml is dispatched. Issues describe what to change and why. Most entries are non-functional refactors or dead-code removals; a small number intentionally change visual quality or perception in specific performance modes (e.g. gating post-processing on low, smoothing pace→speed) — these are documented as such in the individual issue bodies.",
   "_scope": "graphic, physics & display — implementation quality only, no functional changes",
   "labels": [
     "tech-debt",

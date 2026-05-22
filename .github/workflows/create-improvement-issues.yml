@@ -4,8 +4,11 @@ name: Create improvement issues (temp)
 # scripts/improvements.json. Intended to be run once via the "Run workflow"
 # button on the branch that introduces it, then deleted in a follow-up PR.
 #
-# The list is curated for non-functional graphic / physics / display
-# improvements only — no behaviour changes.
+# The list covers graphic / physics / display improvements. Most entries are
+# non-functional refactors or dead-code removals; a small number intentionally
+# change visual quality or perception in specific performance modes (e.g.
+# gating post-processing on low, smoothing pace→speed). See individual issue
+# bodies for scope details.
 #
 # Safety:
 #   * Triggered only by manual workflow_dispatch (never on push/PR/schedule).
@@ -120,7 +123,13 @@ jobs:
                 ...baseLabels,
                 ...(Array.isArray(entry.labels) ? entry.labels : []),
               ]));
-              const body = entry.body || '';
+              const body = (entry.body || '').trim();
+              if (!body) {
+                core.warning(`Entry #${idx} ("${title}") has no body; skipping.`);
+                skipped++;
+                summaryRows.push([String(idx + 1), 'skipped (no body)', title]);
+                continue;
+              }
 
               if (dryRun) {
                 core.info(`[dry-run] Would create issue: ${title}`);
@@ -138,6 +147,7 @@ jobs:
               });
               core.info(`✓ Created #${issue.number}: ${title}`);
               created++;
+              existingTitles.add(title);
               summaryRows.push([String(idx + 1), `created #${issue.number}`, title]);
             }
 
