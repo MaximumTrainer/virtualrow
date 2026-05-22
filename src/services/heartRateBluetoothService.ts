@@ -2,12 +2,14 @@
 // Characteristic: Heart Rate Measurement (0x2A37)
 import type { HeartRateSample } from '../types/index';
 
+type EventCallback = (data: unknown) => void;
+
 export class HeartRateBluetoothService {
   private device: BluetoothDevice | null = null;
   private server: BluetoothRemoteGATTServer | null = null;
   private hrService: BluetoothRemoteGATTService | null = null;
   private hrChar: BluetoothRemoteGATTCharacteristic | null = null;
-  private listeners: Map<string, Function[]> = new Map();
+  private listeners: Map<string, EventCallback[]> = new Map();
   private samples: HeartRateSample[] = [];
   // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
   private suppressDisconnectUntil = 0;
@@ -57,7 +59,7 @@ export class HeartRateBluetoothService {
     try {
       if (this.hrChar) await this.hrChar.stopNotifications();
       if (this.device?.gatt?.connected) this.device.gatt.disconnect();
-    } catch (e) {
+    } catch {
       // ignore
     } finally {
       this.handleDisconnect();
@@ -128,22 +130,22 @@ export class HeartRateBluetoothService {
     return !!this.device?.gatt?.connected;
   }
 
-  on(event: string, listener: Function) {
+  on<T = unknown>(event: string, listener: (data: T) => void) {
     if (!this.listeners.has(event)) this.listeners.set(event, []);
-    this.listeners.get(event)!.push(listener);
+    this.listeners.get(event)!.push(listener as EventCallback);
   }
 
-  off(event: string, listener: Function) {
+  off<T = unknown>(event: string, listener: (data: T) => void) {
     const list = this.listeners.get(event);
     if (!list) return;
-    const idx = list.indexOf(listener);
+    const idx = list.indexOf(listener as EventCallback);
     if (idx > -1) list.splice(idx, 1);
   }
 
   private emit(event: string, payload: unknown) {
     const list = this.listeners.get(event) || [];
     list.forEach((l) => {
-      try { l(payload); } catch (_) {/* ignore listener errors */}
+      try { l(payload); } catch {/* ignore listener errors */}
     });
   }
 }

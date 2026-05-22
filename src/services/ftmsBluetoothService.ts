@@ -28,9 +28,11 @@ import type { PM5Data } from '../types/index';
 const FTMS_SERVICE_UUID = '00001826-0000-1000-8000-00805f9b34fb';
 const ROWER_DATA_CHAR_UUID = '00002ad1-0000-1000-8000-00805f9b34fb';
 
+type EventCallback = (data: unknown) => void;
+
 export class FTMSBluetoothService {
   private device: BluetoothDevice | null = null;
-  private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
+  private listeners: Map<string, EventCallback[]> = new Map();
   // Suppress spurious disconnect calls (e.g. React event replay) for a short window after connect
   private suppressDisconnectUntil = 0;
   private readonly DISCONNECT_SUPPRESSION_MS = 2000;
@@ -44,20 +46,20 @@ export class FTMSBluetoothService {
     calories: 0,
   };
 
-  on(event: string, handler: (...args: any[]) => void): void {
+  on<T = unknown>(event: string, handler: (data: T) => void): void {
     const handlers = this.listeners.get(event) ?? [];
-    handlers.push(handler);
+    handlers.push(handler as EventCallback);
     this.listeners.set(event, handlers);
   }
 
-  off(event: string, handler: (...args: any[]) => void): void {
+  off<T = unknown>(event: string, handler: (data: T) => void): void {
     const handlers = this.listeners.get(event) ?? [];
-    this.listeners.set(event, handlers.filter((h) => h !== handler));
+    this.listeners.set(event, handlers.filter((h) => h !== (handler as EventCallback)));
   }
 
-  private emit(event: string, ...args: any[]): void {
+  private emit(event: string, data: unknown): void {
     const handlers = this.listeners.get(event) ?? [];
-    for (const h of handlers) h(...args);
+    for (const h of handlers) h(data);
   }
 
   async connect(): Promise<boolean> {
@@ -79,8 +81,9 @@ export class FTMSBluetoothService {
       const service = await server.getPrimaryService(FTMS_SERVICE_UUID);
       const rowerChar = await service.getCharacteristic(ROWER_DATA_CHAR_UUID);
 
-      rowerChar.addEventListener('characteristicvaluechanged', (event: any) => {
-        const value: DataView = event.target.value;
+      rowerChar.addEventListener('characteristicvaluechanged', (event: Event) => {
+        const char = event.target as unknown as BluetoothRemoteGATTCharacteristic;
+        const value: DataView = char.value!;
         this.parseRowerData(value);
       });
 
@@ -116,7 +119,7 @@ export class FTMSBluetoothService {
 
   private handleDisconnect(): void {
     this.device = null;
-    this.emit('disconnected');
+    this.emit('disconnected', undefined);
   }
 
   /**

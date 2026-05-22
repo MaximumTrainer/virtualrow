@@ -5,11 +5,21 @@ import { Concept2BluetoothService } from '../services/bluetoothService';
 vi.mock('../vendor/pm5-base.js', () => {
   return {
     default: class MockPM5 {
-      device: any;
+      device: { name: string } | undefined;
       _connected: boolean = false;
-      private callbacks: any;
+      private callbacks: {
+        cb_connecting?: () => void;
+        cb_connected?: () => void;
+        cb_disconnected?: () => void;
+        cb_message?: (msg: unknown) => void;
+      };
 
-      constructor(cb_connecting: any, cb_connected: any, cb_disconnected: any, cb_message: any) {
+      constructor(
+        cb_connecting: () => void,
+        cb_connected: () => void,
+        cb_disconnected: () => void,
+        cb_message: (msg: unknown) => void,
+      ) {
         this.callbacks = { cb_connecting, cb_connected, cb_disconnected, cb_message };
       }
 
@@ -30,15 +40,15 @@ vi.mock('../vendor/pm5-base.js', () => {
         return this._connected;
       }
 
-      async addEventListener(_type: string, _callback: any) {
+      async addEventListener(_type: string, _callback: (e: { data: unknown }) => void) {
         // Mock event listener registration
       }
 
-      async writeTransmit(_data: any) {
+      async writeTransmit(_data: unknown) {
         return true;
       }
 
-      async _getCharacteristic(_config: any) {
+      async _getCharacteristic(_config: unknown) {
         return {
           writeValue: vi.fn().mockResolvedValue(undefined),
         };
@@ -50,11 +60,11 @@ vi.mock('../vendor/pm5-base.js', () => {
 describe('Concept2BluetoothService basic behavior', () => {
   beforeEach(() => {
     // Mock navigator.bluetooth
-    (globalThis as any).navigator = {
+    (globalThis as unknown as { navigator: typeof navigator }).navigator = {
       bluetooth: {
         requestDevice: vi.fn(),
       },
-    };
+    } as unknown as typeof navigator;
   });
 
   it('initial state is disconnected with zeroed data', () => {

@@ -3,17 +3,22 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import HeartRateMonitor from '../components/HeartRateMonitor';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
 
+type TestableService = {
+  listeners: Map<string, unknown>;
+  samples: unknown[];
+};
+
 describe('HeartRateMonitor component', () => {
   beforeEach(() => {
     // clear any existing listeners and samples
-    (heartRateBluetoothService as any).listeners = new Map();
-    (heartRateBluetoothService as any).samples = [];
+    (heartRateBluetoothService as unknown as TestableService).listeners = new Map();
+    (heartRateBluetoothService as unknown as TestableService).samples = [];
   });
 
   afterEach(() => {
     // ensure unmount clears listeners
-    (heartRateBluetoothService as any).listeners = new Map();
-    (heartRateBluetoothService as any).samples = [];
+    (heartRateBluetoothService as unknown as TestableService).listeners = new Map();
+    (heartRateBluetoothService as unknown as TestableService).samples = [];
   });
 
   it('shows connection state on connected/disconnected events', async () => {
@@ -23,7 +28,7 @@ describe('HeartRateMonitor component', () => {
     expect(screen.getByText(/Disconnected/i)).toBeInTheDocument();
 
     // Emit connected — state update is RAF-deferred to avoid WS/CDP stack overflows
-    act(() => (heartRateBluetoothService as any).emit('connected', {}));
+    act(() => heartRateBluetoothService.simulateConnected('test'));
 
     // Wait for the RAF callback to fire and React to re-render
     const statusElement = document.querySelector('.device-status');
@@ -33,7 +38,7 @@ describe('HeartRateMonitor component', () => {
     expect(screen.getByText('Connected')).toBeInTheDocument();
 
     // Emit disconnected
-    act(() => (heartRateBluetoothService as any).emit('disconnected', {}));
+    act(() => heartRateBluetoothService.simulateDisconnected());
     await waitFor(() => {
       expect(statusElement).toHaveClass('disconnected');
     }, { timeout: 500 });
@@ -44,7 +49,9 @@ describe('HeartRateMonitor component', () => {
     render(<HeartRateMonitor onSample={onSample} />);
 
     // Emit a heart rate sample — onSample is called synchronously; UI updates are RAF-deferred
-    act(() => (heartRateBluetoothService as any).emit('heartRate', { bpm: 84 }));
+    // Cast to access the private emit method without using `any`
+    type TestEmitter = { emit: (event: string, data: unknown) => void };
+    act(() => (heartRateBluetoothService as unknown as TestEmitter).emit('heartRate', { bpm: 84 }));
 
     expect(onSample).toHaveBeenCalled();
     expect(onSample.mock.calls[0][0]).toBe(84);

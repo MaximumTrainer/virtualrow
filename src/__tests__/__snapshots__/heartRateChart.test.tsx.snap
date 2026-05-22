@@ -6,10 +6,7 @@ exports[`HeartRateChart > renders chart placeholder and matches snapshot 1`] = `
   style="height: 140px;"
 >
   <div
-    data="[object Object]"
     data-testid="chart"
-    options="[object Object]"
-    plugins="[object Object]"
   >
     Chart
   </div>
