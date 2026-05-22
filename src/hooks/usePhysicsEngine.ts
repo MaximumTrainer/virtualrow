@@ -10,16 +10,6 @@ export interface BoatState {
   acceleration: number;
 }
 
-/** Latency stats placeholder (for future physics engine integration). */
-export interface WorkerLatency {
-  /** Most recent round-trip time in milliseconds. */
-  lastMs: number;
-  /** Rolling average over the last 60 ticks (ms). */
-  avgMs: number;
-  /** 99th-percentile over the last 60 ticks (ms). */
-  p99Ms: number;
-}
-
 const DEFAULT_STATE: BoatState = {
   velocityMps: 0,
   positionM: 0,
@@ -27,8 +17,6 @@ const DEFAULT_STATE: BoatState = {
   strokeCycleT: 0,
   acceleration: 0,
 };
-
-const DEFAULT_LATENCY: WorkerLatency = { lastMs: 0, avgMs: 0, p99Ms: 0 };
 
 /**
  * Compute boat speed from PM5 pace using a simple JS formula.
@@ -48,7 +36,6 @@ function jsSpeedFromPm5(pm5Data: PM5Data | null): number {
  */
 export function usePhysicsEngine() {
   const [boatState, setBoatState] = useState<BoatState>(DEFAULT_STATE);
-  const workerLatency = DEFAULT_LATENCY;
 
   // Running JS position accumulator
   const jsPositionRef = useRef(0);
@@ -78,5 +65,5 @@ export function usePhysicsEngine() {
     setBoatState(DEFAULT_STATE);
   }, []);
 
-  return { boatState, dispatchTick, resetEngine, workerLatency };
+  return { boatState, dispatchTick, resetEngine };
 }
