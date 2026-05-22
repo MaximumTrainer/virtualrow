@@ -5,152 +5,24 @@ import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField } from '@rea
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { Physics, RigidBody } from '@react-three/rapier';
-import type { WaterRoute, Coordinate } from '../types/index';
-import { routeTotalDistanceMeters, latLngToMeters } from '../utils/geoUtils';
+import type { WaterRoute } from '../types/index';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
+import {
+  createRouteCurve,
+  getRoutePositionAtProgress,
+  getCurveDistances,
+  distanceToProgress,
+} from './rower3d/curve';
 import './Rower3D.css';
 
 // Preload the scull GLB at module load time so the asset is cached before first render
 useGLTF.preload('/models/scull.glb');
 
 // ============================================================================
-// GPS TO 3D PATH CONVERSION - Converts GPS coordinates to smooth 3D curve
+// GPS TO 3D PATH CONVERSION — see ./Rower3D/curve.ts for the pure helpers.
 // ============================================================================
-
-// Convert GPS coordinates to 3D scene points
-const gpsToScenePoints = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.Vector3[] => {
-  if (coordinates.length < 2) return [];
-  
-  // Use first coordinate as origin
-  const origin = coordinates[0];
-  const points: THREE.Vector3[] = [];
-  
-  for (const coord of coordinates) {
-    const meters = latLngToMeters(coord.lat, coord.lng, origin.lat, origin.lng);
-    // Convert to scene coordinates: x = east/west, z = north/south (inverted for -Z forward)
-    points.push(new THREE.Vector3(
-      meters.x * sceneScale,
-      0,
-      -meters.y * sceneScale  // Negative because boat moves in -Z direction
-    ));
-  }
-  
-  return points;
-};
-
-// Create a smooth Catmull-Rom spline from GPS points
-const createRouteCurve = (coordinates: Coordinate[], sceneScale: number = 0.1): THREE.CatmullRomCurve3 | null => {
-  const points = gpsToScenePoints(coordinates, sceneScale);
-  if (points.length < 2) return null;
-  
-  // Create smooth curve with closed=false (not a loop)
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
-};
-
-// Get position and tangent at a given progress (0-1) along the route
-interface RoutePosition {
-  position: THREE.Vector3;
-  tangent: THREE.Vector3;
-  angle: number;  // Rotation angle in radians (around Y axis)
-}
-
-/**
- * Get the boat position, tangent, and Y-axis angle at a given progress along the curve.
- *
- * When `outPosition` / `outTangent` are supplied, the curve sample is written into them
- * in-place — this avoids per-frame `THREE.Vector3` allocations on the render hot path.
- * The returned `RoutePosition` re-uses the same references.
- */
-const getRoutePositionAtProgress = (
-  curve: THREE.CatmullRomCurve3 | null,
-  progress: number,
-  outPosition?: THREE.Vector3,
-  outTangent?: THREE.Vector3,
-): RoutePosition => {
-  const position = outPosition ?? new THREE.Vector3();
-  const tangent = outTangent ?? new THREE.Vector3();
-
-  if (!curve) {
-    // Fallback to straight line
-    position.set(0, 0, -progress * 100);
-    tangent.set(0, 0, -1);
-    return { position, tangent, angle: 0 };
-  }
-
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  // Use the in-place variants supported by CatmullRomCurve3 to avoid GC churn.
-  curve.getPointAt(clampedProgress, position);
-  curve.getTangentAt(clampedProgress, tangent).normalize();
-
-  // Calculate angle from tangent (rotation around Y axis)
-  // The boat's bow (front) is at local -Z, so we rotate to align local -Z with tangent
-  // atan2(x, z) gives angle where tangent aligns with boat's forward direction
-  const angle = Math.atan2(tangent.x, tangent.z);
-
-  return { position, tangent, angle };
-};
-
-// Get cumulative distances along the curve for accurate distance-to-progress mapping
-const getCurveDistances = (curve: THREE.CatmullRomCurve3, samples: number = 200): number[] => {
-  const distances: number[] = [0];
-  let totalDist = 0;
-  // Re-use two scratch vectors instead of allocating 2 * samples Vector3 instances.
-  const p0 = new THREE.Vector3();
-  const p1 = new THREE.Vector3();
-
-  curve.getPointAt(0, p0);
-  for (let i = 1; i <= samples; i++) {
-    const t1 = i / samples;
-    curve.getPointAt(t1, p1);
-    totalDist += p0.distanceTo(p1);
-    distances.push(totalDist);
-    p0.copy(p1);
-  }
-
-  return distances;
-};
-
-// Convert distance traveled to progress (0-1) on the curve
-const distanceToProgress = (
-  distanceMeters: number, 
-  totalDistanceMeters: number,
-  curveDistances: number[],
-  curveLength: number
-): number => {
-  if (totalDistanceMeters <= 0 || curveLength <= 0) return 0;
-  
-  // Map real-world distance to curve distance
-  const curveDistance = (distanceMeters / totalDistanceMeters) * curveLength;
-  
-  // Binary search to find progress
-  let low = 0;
-  let high = curveDistances.length - 1;
-  
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (curveDistances[mid] < curveDistance) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-  
-  // Interpolate for smoother result
-  const idx = Math.max(0, low - 1);
-  const nextIdx = Math.min(curveDistances.length - 1, low);
-  const segmentStart = curveDistances[idx];
-  const segmentEnd = curveDistances[nextIdx];
-  const segmentLength = segmentEnd - segmentStart;
-  
-  let t = idx / (curveDistances.length - 1);
-  if (segmentLength > 0) {
-    const within = (curveDistance - segmentStart) / segmentLength;
-    t += within / (curveDistances.length - 1);
-  }
-  
-  return Math.max(0, Math.min(1, t));
-};
 
 // Water channel width constant - keeps water wider than single scull (~1.5m wide)
 const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)

@@ -20,6 +20,7 @@ import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { formatPace } from './utils/formatters';
+import { buildSessionGPX, buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
 import './App.css';
 
@@ -417,85 +418,21 @@ function App() {
       alert('Route data not available for this workout');
       return;
     }
-    
-    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="VirtualRow">
-  <metadata>
-    <name>${session.routeName}</name>
-    <time>${new Date(session.startTime).toISOString()}</time>
-  </metadata>
-  <trk>
-    <name>${session.routeName}</name>
-    <trkseg>
-${route.coordinates.map(c => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0</ele></trkpt>`).join('\n')}
-    </trkseg>
-  </trk>
-</gpx>`;
-    
-    const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `virtualrow-${session.id}.gpx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+
+    const gpx = buildSessionGPX(session, route);
+    triggerBlobDownload(gpx, 'application/gpx+xml', `virtualrow-${session.id}.gpx`);
   }, []);
 
   // Export session as FIT format (simplified JSON structure for now)
   const handleExportFIT = useCallback((session: WorkoutSession) => {
-    // Note: True FIT format is binary. This exports a JSON representation
-    // that could be converted to FIT using external tools
-    // Generate a numeric serial from session ID (use hash if not numeric)
-    const serialNumber = /^\d+$/.test(session.id) 
-      ? parseInt(session.id, 10) 
-      : session.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const fitData = {
-      file_id: {
-        type: 'activity',
-        manufacturer: 'VirtualRow',
-        product: 1,
-        serial_number: serialNumber,
-        time_created: new Date(session.startTime).toISOString()
-      },
-      activity: {
-        timestamp: new Date(session.startTime).toISOString(),
-        total_timer_time: session.duration,
-        num_sessions: 1,
-        type: 'manual'
-      },
-      session: {
-        timestamp: new Date(session.startTime).toISOString(),
-        start_time: new Date(session.startTime).toISOString(),
-        total_elapsed_time: session.duration,
-        total_timer_time: session.duration,
-        total_distance: session.distance,
-        total_calories: session.calories,
-        avg_pace: session.averagePace,
-        avg_heart_rate: session.heartRateAvg,
-        max_heart_rate: session.heartRateMax,
-        sport: 'rowing',
-        sub_sport: 'indoor_rowing'
-      },
-      records: session.splits.map(split => ({
-        timestamp: new Date(split.timestamp).toISOString(),
-        distance: split.distance,
-        pace: split.pace,
-        power: split.power,
-        heart_rate: split.heartRate
-      }))
-    };
-    
-    const blob = new Blob([JSON.stringify(fitData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `virtualrow-${session.id}.fit.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // True FIT format is binary. This exports a JSON representation that
+    // could be converted to FIT using external tools.
+    const fitData = buildSessionFITPayload(session);
+    triggerBlobDownload(
+      JSON.stringify(fitData, null, 2),
+      'application/json',
+      `virtualrow-${session.id}.fit.json`,
+    );
   }, []);
 
   // Calculate personal best for a route (only completed sessions count)
