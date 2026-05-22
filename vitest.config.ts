@@ -16,9 +16,16 @@ export default defineConfig({
         'playwright/**',
         'src/main.tsx',
         'src/types/**',
-        // 4 kLoC R3F component — exercised by Playwright; pure curve math is
-        // unit-tested separately in src/__tests__/Rower3D.curve.test.ts.
+        // R3F 3D scene components — exercised by Playwright E2E; pure utilities
+        // (curve, helpers, themeConfig) are unit-tested separately.
         'src/components/Rower3D.tsx',
+        'src/components/rower3d/effectComponents.tsx',
+        'src/components/rower3d/waterComponents.tsx',
+        'src/components/rower3d/bankComponents.tsx',
+        'src/components/rower3d/vegetationComponents.tsx',
+        'src/components/rower3d/skyComponents.tsx',
+        'src/components/rower3d/boatComponents.tsx',
+        'src/components/rower3d/themes/**',
         // 3D scene asset packs — large, mostly geometry/material constants.
         'src/components/routeLandmarks/**',
         // Dev-only on-screen simulators (Bluetooth/PM5/HR/route generator UIs).
