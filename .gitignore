@@ -86,3 +86,8 @@ vite.config.ts.timestamp-*
 *.swp
 *.swo
 *~
+
+# Rust/Wasm crate build output
+crates/*/target
+src/wasm-pkg/*.wasm
+

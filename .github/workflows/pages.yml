@@ -1,0 +1,73 @@
+name: Deploy Landing Page to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+# Grant the GITHUB_TOKEN the permissions required by actions/deploy-pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment; cancel in-progress runs
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Capture gameplay screenshots from the E2E test run so they appear
+      # on the landing page. The screenshot already committed at
+      # docs/screenshot-rower-3d.png is used as the primary hero image;
+      # if a fresher screenshot is produced by CI it replaces it.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+          cache: 'npm'
+
+      - name: Validate landing page HTML
+        run: |
+          if [ ! -f docs/index.html ]; then
+            echo "❌ docs/index.html not found"
+            exit 1
+          fi
+          echo "✅ docs/index.html present ($(wc -c < docs/index.html) bytes)"
+
+      - name: List docs assets
+        run: |
+          echo "── docs/ contents ──"
+          find docs -type f | sort
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Publish the docs/ directory as the GitHub Pages site
+          path: docs
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
