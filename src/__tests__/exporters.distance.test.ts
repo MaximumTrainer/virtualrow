@@ -102,7 +102,7 @@ describe('GPX export — rowed distance fidelity (known bug, expected to fail un
     expect(gpx).toMatch(/1500/);
   });
 
-  it.fails('omits no rowed-track information when the route polyline is empty', () => {
+  it.fails('still records the rowed distance when the route polyline is empty', () => {
     // Edge case: route has no coordinates (e.g. custom free-row activity).
     // Today the GPX is essentially empty <trkseg></trkseg> with no distance
     // information at all, so platforms record a 0-length activity.
