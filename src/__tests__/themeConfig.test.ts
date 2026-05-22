@@ -31,6 +31,8 @@ describe('THEME_CONFIG', () => {
       expect(cfg).toHaveProperty('atmosphere');
       expect(cfg).toHaveProperty('sky');
       expect(cfg).toHaveProperty('clouds');
+      expect(cfg).toHaveProperty('fog');
+      expect(cfg).toHaveProperty('lighting');
     }
   });
 
@@ -135,6 +137,39 @@ describe('THEME_CONFIG', () => {
       expect(typeof clouds.scale).toBe('number');
       expect(typeof clouds.depth).toBe('number');
     }
+  });
+
+  it('fog configs have color and positive density (#108)', () => {
+    for (const theme of ALL_THEMES) {
+      const fog = THEME_CONFIG[theme].fog;
+      expect(typeof fog.color).toBe('string');
+      expect(typeof fog.density).toBe('number');
+      expect(fog.density).toBeGreaterThan(0);
+    }
+  });
+
+  it('lighting configs have all required fields with valid ranges (#108)', () => {
+    for (const theme of ALL_THEMES) {
+      const l = THEME_CONFIG[theme].lighting;
+      expect(typeof l.ambientColor).toBe('string');
+      expect(typeof l.ambientIntensity).toBe('number');
+      expect(l.ambientIntensity).toBeGreaterThanOrEqual(0);
+      expect(typeof l.sunColor).toBe('string');
+      expect(typeof l.sunIntensity).toBe('number');
+      expect(l.sunIntensity).toBeGreaterThanOrEqual(0);
+      expect(typeof l.fillColor).toBe('string');
+      expect(typeof l.fillIntensity).toBe('number');
+      expect(l.fillIntensity).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('dark themes have denser fog than bright themes', () => {
+    expect(THEME_CONFIG['dystopian-thames'].fog.density).toBeGreaterThan(
+      THEME_CONFIG['crystal-bled'].fog.density,
+    );
+    expect(THEME_CONFIG['gothic-venice'].fog.density).toBeGreaterThan(
+      THEME_CONFIG['willowbrook'].fog.density,
+    );
   });
 
   it('themes are visually distinct (water colors differ)', () => {
