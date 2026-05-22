@@ -29,6 +29,16 @@ export interface WaterConfig {
   attenuationDistance: number;
   specularIntensity: number;
   sheenColor: string;
+  /** 0–1: affects murk/depth colour under water */
+  turbidity: number;
+  /** Multiplier on Gerstner wave height (0.5–2.0) */
+  waveAmplitude: number;
+  /** Multiplier on Gerstner wave frequency (0.5–2.0) */
+  waveFrequency: number;
+  /** 0–1: blade-entry foam opacity ceiling */
+  foamIntensity: number;
+  /** Hex colour used for underwater murk tint */
+  underwaterFog: string;
 }
 
 export interface MistConfig {
@@ -109,6 +119,17 @@ export interface LightingConfig {
   sunIntensity: number;
   fillColor: string;
   fillIntensity: number;
+  /** Degrees above horizon (0–90) */
+  sunElevation: number;
+  /** Degrees; 0=north, 90=east, 180=south, 270=west */
+  sunAzimuth: number;
+}
+
+export interface ColorGradingConfig {
+  hue: number;
+  saturation: number;
+  brightness: number;
+  contrast: number;
 }
 
 export interface ThemeConfig {
@@ -121,6 +142,7 @@ export interface ThemeConfig {
   clouds: CloudConfig;
   fog: FogConfig;
   lighting: LightingConfig;
+  colorGrading: ColorGradingConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +155,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#3a9db8', transmission: 0.65, roughness: 0.04, thickness: 3.5,
       emissive: '#00e5ff', emissiveIntensity: 0.06, attenuationColor: '#00a8cc',
       attenuationDistance: 8.0, specularIntensity: 1.2, sheenColor: '#80deea',
+      turbidity: 0.1, waveAmplitude: 0.6, waveFrequency: 0.8,
+      foamIntensity: 0.2, underwaterFog: '#00a8cc',
     },
     mist: {
       baseOpacity: 0.06, color1: '#e8f4f8', color2: '#d0e8f0',
@@ -167,7 +191,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#c0e0ff', ambientIntensity: 0.25,
       sunColor: '#fffaf0', sunIntensity: 1.2,
       fillColor: '#b4c7dc', fillIntensity: 0.3,
+      sunElevation: 55, sunAzimuth: 90,
     },
+    colorGrading: { hue: -0.05, saturation: 0.2, brightness: 0.05, contrast: 0.1 },
   },
 
   'gothic-venice': {
@@ -175,6 +201,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#1e3a3a', transmission: 0.22, roughness: 0.18, thickness: 1.5,
       emissive: '#0a3d62', emissiveIntensity: 0.015, attenuationColor: '#1a2f2f',
       attenuationDistance: 2.0, specularIntensity: 0.6, sheenColor: '#2a4a4a',
+      turbidity: 0.7, waveAmplitude: 1.2, waveFrequency: 1.0,
+      foamIntensity: 0.45, underwaterFog: '#1a2f2f',
     },
     mist: {
       baseOpacity: 0.22, color1: '#1e272e', color2: '#2a3a4a',
@@ -209,7 +237,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#4a5568', ambientIntensity: 0.12,
       sunColor: '#8fa4b8', sunIntensity: 0.5,
       fillColor: '#b4c7dc', fillIntensity: 0.15,
+      sunElevation: 20, sunAzimuth: 270,
     },
+    colorGrading: { hue: 0.02, saturation: -0.1, brightness: -0.05, contrast: 0.15 },
   },
 
   'steampunk-henley': {
@@ -217,6 +247,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#3a4a38', transmission: 0.28, roughness: 0.15, thickness: 2.0,
       emissive: '#4a6741', emissiveIntensity: 0.008, attenuationColor: '#3a4a38',
       attenuationDistance: 3.0, specularIntensity: 0.8, sheenColor: '#5a7a58',
+      turbidity: 0.5, waveAmplitude: 1.0, waveFrequency: 0.95,
+      foamIntensity: 0.35, underwaterFog: '#3a4a38',
     },
     mist: {
       baseOpacity: 0.14, color1: '#8b7355', color2: '#a08565',
@@ -251,7 +283,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#c9a227', ambientIntensity: 0.25,
       sunColor: '#ffd700', sunIntensity: 1.5,
       fillColor: '#ffb347', fillIntensity: 0.3,
+      sunElevation: 30, sunAzimuth: 135,
     },
+    colorGrading: { hue: 0.05, saturation: -0.15, brightness: -0.1, contrast: 0.2 },
   },
 
   'dystopian-thames': {
@@ -259,6 +293,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#0a1a2a', transmission: 0.15, roughness: 0.22, thickness: 1.0,
       emissive: '#1a2a4a', emissiveIntensity: 0.025, attenuationColor: '#0a1520',
       attenuationDistance: 1.0, specularIntensity: 1.4, sheenColor: '#2a3a5a',
+      turbidity: 0.9, waveAmplitude: 1.5, waveFrequency: 1.3,
+      foamIntensity: 0.55, underwaterFog: '#0a1520',
     },
     mist: {
       baseOpacity: 0.18, color1: '#1a1a2e', color2: '#2a2a3e',
@@ -293,7 +329,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#2a1f1a', ambientIntensity: 0.1,
       sunColor: '#ff6b35', sunIntensity: 0.4,
       fillColor: '#b4c7dc', fillIntensity: 0.15,
+      sunElevation: 15, sunAzimuth: 270,
     },
+    colorGrading: { hue: -0.02, saturation: -0.3, brightness: -0.15, contrast: 0.25 },
   },
 
   'scifi-boston': {
@@ -301,6 +339,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#0a3a4a', transmission: 0.45, roughness: 0.06, thickness: 2.5,
       emissive: '#00ced1', emissiveIntensity: 0.12, attenuationColor: '#006080',
       attenuationDistance: 5.0, specularIntensity: 1.0, sheenColor: '#40e0d0',
+      turbidity: 0.3, waveAmplitude: 0.8, waveFrequency: 0.9,
+      foamIntensity: 0.3, underwaterFog: '#006080',
     },
     mist: {
       baseOpacity: 0.08, color1: '#162447', color2: '#1a3a5a',
@@ -335,7 +375,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#162447', ambientIntensity: 0.15,
       sunColor: '#a0d2ff', sunIntensity: 0.3,
       fillColor: '#4a90d9', fillIntensity: 0.3,
+      sunElevation: 60, sunAzimuth: 225,
     },
+    colorGrading: { hue: 0.1, saturation: 0.15, brightness: 0.1, contrast: 0.05 },
   },
 
   'willowbrook': {
@@ -343,6 +385,8 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       color: '#3a5a55', transmission: 0.38, roughness: 0.10, thickness: 2.5,
       emissive: '#2a4a40', emissiveIntensity: 0.008, attenuationColor: '#2a4a45',
       attenuationDistance: 4.0, specularIntensity: 0.9, sheenColor: '#4a6a60',
+      turbidity: 0.3, waveAmplitude: 1.0, waveFrequency: 1.0,
+      foamIntensity: 0.35, underwaterFog: '#2a4a40',
     },
     mist: {
       baseOpacity: 0.10, color1: '#c8d4dc', color2: '#d8e4ec',
@@ -377,7 +421,9 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       ambientColor: '#b0d0e0', ambientIntensity: 0.25,
       sunColor: '#fff8e8', sunIntensity: 1.2,
       fillColor: '#b4c7dc', fillIntensity: 0.3,
+      sunElevation: 45, sunAzimuth: 135,
     },
+    colorGrading: { hue: 0, saturation: 0.1, brightness: 0, contrast: 0.05 },
   },
 };
 

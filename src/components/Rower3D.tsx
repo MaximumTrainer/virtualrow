@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Sky, Cloud, useCubeCamera, useGLTF } from '@react-three/drei';
-import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO } from '@react-three/postprocessing';
+import { Sky, Cloud, useCubeCamera, useGLTF, MeshReflectorMaterial } from '@react-three/drei';
+import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO, GodRays, HueSaturation, BrightnessContrast } from '@react-three/postprocessing';
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { Physics, RigidBody } from '@react-three/rapier';
@@ -17,7 +17,7 @@ import {
   distanceToProgress,
 } from './rower3d/curve';
 import { getThemeConfig } from './rower3d/themeConfig';
-import type { RouteTheme } from './rower3d/themeConfig';
+import type { RouteTheme, ColorGradingConfig } from './rower3d/themeConfig';
 import { AnimationProvider, useAnimationFrame } from './rower3d/AnimationContext';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import './Rower3D.css';
@@ -115,6 +115,8 @@ function attachGerstnerShader(
   timeUniform: { value: number },
   heightAxis: 'y' | 'z',
   cacheKey: string,
+  waveAmplitude: number = 1.0,
+  waveFrequency: number = 1.0,
 ): void {
   // Horizontal position axes in local vertex space
   const waveXY = heightAxis === 'z'
@@ -138,10 +140,10 @@ function attachGerstnerShader(
   // Normal injection — must come BEFORE begin_vertex in Three.js chunk order
   const normalChunk = `
     vec2 wXY = ${waveXY};
-    vec2 wGrad = gWaveGrad(wXY, vec2( 1.0,  0.3), 0.15, 0.020, 0.80)
-               + gWaveGrad(wXY, vec2(-0.3,  1.0), 0.12, 0.025, 0.60)
-               + gWaveGrad(wXY, vec2( 0.7,  0.7), 0.08, 0.015, 1.10)
-               + gWaveGrad(wXY, vec2( 0.5, -0.5), 0.04, 0.050, 1.50);
+    vec2 wGrad = gWaveGrad(wXY, vec2( 1.0,  0.3), ${(0.15 * waveAmplitude).toFixed(4)}, ${(0.020 * waveFrequency).toFixed(4)}, 0.80)
+               + gWaveGrad(wXY, vec2(-0.3,  1.0), ${(0.12 * waveAmplitude).toFixed(4)}, ${(0.025 * waveFrequency).toFixed(4)}, 0.60)
+               + gWaveGrad(wXY, vec2( 0.7,  0.7), ${(0.08 * waveAmplitude).toFixed(4)}, ${(0.015 * waveFrequency).toFixed(4)}, 1.10)
+               + gWaveGrad(wXY, vec2( 0.5, -0.5), ${(0.04 * waveAmplitude).toFixed(4)}, ${(0.050 * waveFrequency).toFixed(4)}, 1.50);
     vec3 objectNormal = normalize(vec3(-wGrad.x, -wGrad.y, 1.0));
     #ifdef USE_TANGENT
       vec3 objectTangent = vec3(tangent.xyz);
@@ -154,10 +156,10 @@ function attachGerstnerShader(
     : 'vec3(position.x, position.y + wH, position.z)';
 
   const positionChunk = `
-    float wH = gWave(wXY, vec2( 1.0,  0.3), 0.15, 0.020, 0.80)
-             + gWave(wXY, vec2(-0.3,  1.0), 0.12, 0.025, 0.60)
-             + gWave(wXY, vec2( 0.7,  0.7), 0.08, 0.015, 1.10)
-             + gWave(wXY, vec2( 0.5, -0.5), 0.04, 0.050, 1.50);
+    float wH = gWave(wXY, vec2( 1.0,  0.3), ${(0.15 * waveAmplitude).toFixed(4)}, ${(0.020 * waveFrequency).toFixed(4)}, 0.80)
+             + gWave(wXY, vec2(-0.3,  1.0), ${(0.12 * waveAmplitude).toFixed(4)}, ${(0.025 * waveFrequency).toFixed(4)}, 0.60)
+             + gWave(wXY, vec2( 0.7,  0.7), ${(0.08 * waveAmplitude).toFixed(4)}, ${(0.015 * waveFrequency).toFixed(4)}, 1.10)
+             + gWave(wXY, vec2( 0.5, -0.5), ${(0.04 * waveAmplitude).toFixed(4)}, ${(0.050 * waveFrequency).toFixed(4)}, 1.50);
     vec3 transformed = ${heightDisplace};
   `;
 
@@ -272,7 +274,8 @@ const BladeEntryFoam: React.FC<{
   positionRef: React.MutableRefObject<THREE.Vector3>;
   rotationRef: React.MutableRefObject<number>;
   strokePhase: string;
-}> = ({ positionRef, rotationRef, strokePhase }) => {
+  foamIntensity?: number;
+}> = ({ positionRef, rotationRef, strokePhase, foamIntensity = 0.65 }) => {
   const leftRef  = useRef<THREE.Mesh>(null);
   const rightRef = useRef<THREE.Mesh>(null);
   const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
@@ -297,7 +300,7 @@ const BladeEntryFoam: React.FC<{
 
     // Decay foam
     foamLifeRef.current = Math.max(0, foamLifeRef.current - delta / 0.6);
-    const alpha = foamLifeRef.current * 0.65;
+    const alpha = foamLifeRef.current * foamIntensity;
 
     // Position foam at oar-blade entry (oar span ≈ ±3.2 units from boat centre)
     const pos = positionRef.current;
@@ -582,7 +585,7 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performa
     if (IS_TEST_MODE) return;
     const mat = materialRef.current;
     if (!mat) return;
-    attachGerstnerShader(mat, timeUniformRef.current, 'z', theme);
+    attachGerstnerShader(mat, timeUniformRef.current, 'z', theme, waterConfig.waveAmplitude, waterConfig.waveFrequency);
     mat.needsUpdate = true;
   }, [theme]);
 
@@ -640,6 +643,29 @@ const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performa
         <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} performanceMode={performanceMode} />
       )}
     </>
+  );
+};
+
+// ============================================================================
+// WATER REFLECTION PLANE — flat plane with MeshReflectorMaterial providing
+// planar reflections of the boat and sky on the water surface (#119).
+// Rendered only on non-low performance modes; sits just below the Gerstner
+// water mesh so animated waves show through the transparent PBR water above.
+// ============================================================================
+const WaterReflectionPlane: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, boatZ]}>
+      <planeGeometry args={[1000, 1000]} />
+      <MeshReflectorMaterial
+        resolution={256}
+        blur={[300, 100]}
+        color={waterConfig.color}
+        roughness={1}
+        metalness={0.8}
+        mirror={0.5}
+      />
+    </mesh>
   );
 };
 
@@ -3056,11 +3082,19 @@ const BoatKinematicController: React.FC<{
 // + bloom, vignette, ACES filmic tone mapping. Runs inside the R3F canvas so
 // it can access useFrame for per-frame effect updates without React state churn.
 // ============================================================================
-const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; performanceMode?: PerformanceMode }> = ({ velocityRef, performanceMode }) => {
+const DynamicPostFx: React.FC<{
+  velocityRef: React.MutableRefObject<number>;
+  performanceMode?: PerformanceMode;
+  theme: RouteTheme;
+  sunMeshRef?: React.RefObject<THREE.Mesh>;
+}> = ({ velocityRef, performanceMode, theme, sunMeshRef }) => {
   // Create ChromaticAberrationEffect directly (not via the @react-three/postprocessing P-wrapper)
   // to avoid React 19's ref-as-prop behaviour causing JSON.stringify on the circular __r3f instance.
   const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
   useEffect(() => () => caEffect.dispose(), [caEffect]);
+
+  // Per-theme color grading values from themeConfig (#124)
+  const colorGrading: ColorGradingConfig = useMemo(() => getThemeConfig(theme).colorGrading, [theme]);
 
   // Scale chromatic aberration with boat speed: silent at rest, subtle at sprint pace
   useFrame(({ gl }) => {
@@ -3080,30 +3114,42 @@ const DynamicPostFx: React.FC<{ velocityRef: React.MutableRefObject<number>; per
         <SSAO samples={16} rings={3} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={10} bias={0.5} intensity={0.8} />
         <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
         <primitive object={caEffect} />
+        {/* Per-theme colour grading — HueSaturation + BrightnessContrast (#124) */}
+        <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
+        <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
         <Vignette eskil={false} offset={0.3} darkness={0.5} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
       </EffectComposer>
     );
   }
 
+  // High mode with GodRays — only when sun mesh ref is provided (#120)
+  if (sunMeshRef) {
+    return (
+      <EffectComposer enableNormalPass>
+        <SSAO samples={24} rings={4} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={15} bias={0.5} intensity={1.0} />
+        <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+        <primitive object={caEffect} />
+        <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
+        <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
+        <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
+        <GodRays sun={sunMeshRef} exposure={0.34} decay={0.85} density={0.85} weight={0.4} samples={60} />
+        <Vignette eskil={false} offset={0.3} darkness={0.5} />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      </EffectComposer>
+    );
+  }
+
+  // High mode without GodRays (test mode or sun mesh not yet mounted)
   return (
     <EffectComposer enableNormalPass>
-      {/* Screen-space ambient occlusion — adds contact shadows and depth (#117) */}
       <SSAO samples={24} rings={4} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={15} bias={0.5} intensity={1.0} />
-
-      {/* Bloom — highlights water speculars and emissive caustics */}
       <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-
-      {/* Chromatic aberration — scales with velocity for camera-lens feel */}
       <primitive object={caEffect} />
-
-      {/* Shallow depth-of-field: keep boat in focus, softly blur distant landscape */}
       <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
-
-      {/* Cinematic vignette to draw focus to the scene centre */}
+      <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
+      <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
       <Vignette eskil={false} offset={0.3} darkness={0.5} />
-
-      {/* Filmic tone mapping for realistic HDR colour response */}
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
     </EffectComposer>
   );
@@ -3346,10 +3392,25 @@ const RowerScene: React.FC<Rower3DProps> = ({
         );
     }
   };
-  
-  // Get sky configuration for sun-aligned lighting
-  const skyConfig = useMemo(() => themeConfig.sky, [themeConfig]);
-  
+
+  // Compute sun position from per-theme elevation/azimuth (#126)
+  // Formula: [cos(elev)*sin(az), sin(elev), cos(elev)*cos(az)] × 200
+  const sunLightPos = useMemo((): [number, number, number] => {
+    const elevRad = (themeConfig.lighting.sunElevation * Math.PI) / 180;
+    const azRad   = (themeConfig.lighting.sunAzimuth   * Math.PI) / 180;
+    const scale   = 200;
+    return [
+      Math.cos(elevRad) * Math.sin(azRad) * scale,
+      Math.sin(elevRad) * scale,
+      Math.cos(elevRad) * Math.cos(azRad) * scale,
+    ];
+  }, [themeConfig.lighting.sunElevation, themeConfig.lighting.sunAzimuth]);
+
+  // Ref for sun mesh passed to GodRays (#120)
+  const sunMeshRef = useRef<THREE.Mesh>(null!);
+  // Ref guards sunMeshRef so GodRays only receives it in high mode
+  const godRaysSunRef = performanceMode === 'high' ? sunMeshRef : undefined;
+
   return (
     <AnimationProvider>
       {/* Exponential fog — per-theme density/colour from themeConfig (#108) */}
@@ -3374,22 +3435,24 @@ const RowerScene: React.FC<Rower3DProps> = ({
         position={[0, 50, 0]}
       />
       
-      {/* Primary sunlight — colour/intensity from themeConfig (#108) */}
+      {/* Primary sunlight — position derived from per-theme sunElevation/sunAzimuth (#126)
+          Shadow quality scales with performanceMode: 2048 high, 1024 auto, none low (#118) */}
       <directionalLight
-        position={skyConfig.sunPosition}
+        position={sunLightPos}
         intensity={themeConfig.lighting.sunIntensity}
         color={themeConfig.lighting.sunColor}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={500}
+        castShadow={performanceMode !== 'low'}
+        shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
+        shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
+        shadow-camera-near={0.1}
+        shadow-camera-far={performanceMode === 'high' ? 200 : 300}
         shadow-camera-left={-100}
         shadow-camera-right={100}
         shadow-camera-top={100}
         shadow-camera-bottom={-100}
       />
       
-      {/* Ambient fill — colour/intensity from themeConfig (#108) */}
+      {/* Ambient fill — colour/intensity from themeConfig (#108, #126) */}
       <ambientLight 
         intensity={themeConfig.lighting.ambientIntensity}
         color={themeConfig.lighting.ambientColor}
@@ -3397,10 +3460,19 @@ const RowerScene: React.FC<Rower3DProps> = ({
       
       {/* Fill light from opposite side — colour/intensity from themeConfig (#108) */}
       <directionalLight
-        position={[-skyConfig.sunPosition[0] * 0.6, 50, -skyConfig.sunPosition[2] * 0.5]}
+        position={[-sunLightPos[0] * 0.6, 50, -sunLightPos[2] * 0.5]}
         intensity={themeConfig.lighting.fillIntensity}
         color={themeConfig.lighting.fillColor}
       />
+
+      {/* Sun mesh for GodRays — small bright sphere placed at sun position (#120).
+          Visible only in high mode; frustumCulled=false prevents early clip-out. */}
+      {!IS_TEST_MODE && performanceMode === 'high' && (
+        <mesh ref={sunMeshRef} position={sunLightPos} frustumCulled={false}>
+          <sphereGeometry args={[5, 8, 8]} />
+          <meshBasicMaterial color={themeConfig.lighting.sunColor} />
+        </mesh>
+      )}
       
       {/* PMREM environment generated from the procedural skydome — #121 */}
       <PMREMEnvironment theme={routeTheme} />
@@ -3410,6 +3482,12 @@ const RowerScene: React.FC<Rower3DProps> = ({
         <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
       ) : (
         <PhotorealisticWater boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
+      )}
+
+      {/* Planar reflection plane — sits just below the Gerstner water mesh (#119).
+          Uses MeshReflectorMaterial; only active on non-low performance modes. */}
+      {!IS_TEST_MODE && performanceMode !== 'low' && !routeCurve && (
+        <WaterReflectionPlane boatZ={boatZ} theme={routeTheme} />
       )}
       
       {/* Curved riverbanks following the GPS path */}
@@ -3478,6 +3556,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
           strokePhase={strokePhase}
+          foamIntensity={themeConfig.water.foamIntensity}
         />
       )}
 
@@ -3498,7 +3577,14 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {/* Post-processing effects for photorealism - disabled in test mode */}
-      {!IS_TEST_MODE && performanceMode !== 'low' && <DynamicPostFx velocityRef={velocityRef} performanceMode={performanceMode} />}
+      {!IS_TEST_MODE && performanceMode !== 'low' && (
+        <DynamicPostFx
+          velocityRef={velocityRef}
+          performanceMode={performanceMode}
+          theme={routeTheme}
+          sunMeshRef={godRaysSunRef}
+        />
+      )}
     </AnimationProvider>
   );
 };
