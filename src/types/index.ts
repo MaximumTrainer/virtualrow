@@ -199,5 +199,6 @@ declare global {
     __ROWER3D_STROKE_RATE?: number;
     __ROWER3D_GPU_BACKEND?: string;
     __ROWER3D_WEBGL_LOST?: boolean;
+    __ROWER3D_MAX_ANISOTROPY?: number;
   }
 }
