@@ -5,11 +5,10 @@ identified during a review of the 3D rendering code (primarily `src/components/R
 `src/components/routeLandmarks/`, and the asset-generation scripts under `scripts/`).
 
 Scope rules used during the review:
-- **No in-game physics changes.** Stroke/boat/oar physics, force model, and rower kinematics are
-  intentionally out of scope.
-- **No route/course changes.** Route geometry, GPS path sampling, landmark placement logic, and
-  route data are intentionally out of scope.
-- **In scope:** rendering, shading, materials, lighting, post-processing, geometry tessellation,
+- **In scope (per follow-up request):** stroke/boat/oar kinematics and landmark placement logic
+  (but still limited to scene/animation logic, not route math).
+- **Out of scope:** route geometry, GPS path sampling, and route data model changes.
+- **Also in scope:** rendering, shading, materials, lighting, post-processing, geometry tessellation,
   memoization, draw-call counts, LOD, asset filtering, and theme/colour pipelines.
 
 Each file in this folder is a self-contained, ready-to-file GitHub issue. To file them, create a
@@ -42,16 +41,20 @@ ordered roughly by expected impact / effort ratio (highest impact, lowest effort
 15. [`15-centralise-rendering-config-and-theme-tables.md`](./15-centralise-rendering-config-and-theme-tables.md) — Extract magic numbers and theme palettes into config tables
 16. [`16-deduplicate-water-config-and-extract-buildingmesh.md`](./16-deduplicate-water-config-and-extract-buildingmesh.md) — Share water-config helper; extract `<BuildingMesh>` sub-component
 
+### Kinematics & landmarks (scene logic, not route math)
+17. [`17-align-stroke-kinematics-and-phase.md`](./17-align-stroke-kinematics-and-phase.md) — Make stroke phase/cycle a single source of truth for oars, rower, foam, and telemetry
+18. [`18-integrate-route-landmarks-and-placement.md`](./18-integrate-route-landmarks-and-placement.md) — Wire `routeLandmarks` into `Rower3D` and make landmark placement boat-relative
+
 ## Notes on methodology
 
 Findings were verified by reading the cited lines in `src/components/Rower3D.tsx` directly. A few
 candidates from the initial sweep were dropped because they overlapped with route/physics logic or
 were already mitigated (e.g. the cube-camera reflection probe already throttles to every 30 frames).
 
-None of the proposed changes alter:
-- The rowing physics model
-- Boat / oar movement equations
+Most of the proposed changes do not alter:
 - Route or GPS path sampling
-- Stroke detection or PM5 integration
+- Route geometry / curve generation
+- Route data model
 
-They are strictly visual / rendering-pipeline improvements.
+Two issues explicitly cover kinematics + landmark placement (as scene/animation concerns), because
+those were requested as follow-ups after the initial graphics-only pass.
