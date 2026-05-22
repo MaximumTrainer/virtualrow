@@ -71,6 +71,12 @@ describe('buildSessionGPX', () => {
     expect(gpx).toContain('<time>2025-01-02T10:00:00.000Z</time>');
   });
 
+  it('escapes route names in metadata and track headers', () => {
+    const session = makeSession({ routeName: 'Route & <Test>' });
+    const gpx = buildSessionGPX(session, makeRoute());
+    expect(gpx).toContain('<name>Route &amp; &lt;Test&gt;</name>');
+  });
+
   it('emits one <trkpt> per coordinate, with lat/lon attributes', () => {
     const gpx = buildSessionGPX(makeSession(), makeRoute());
     const trkptMatches = gpx.match(/<trkpt\s+lat="[^"]+"\s+lon="[^"]+">/g) ?? [];

@@ -21,7 +21,7 @@ import './Rower3D.css';
 useGLTF.preload('/models/scull.glb');
 
 // ============================================================================
-// GPS TO 3D PATH CONVERSION — see ./Rower3D/curve.ts for the pure helpers.
+// GPS TO 3D PATH CONVERSION — see ./rower3d/curve.ts for the pure helpers.
 // ============================================================================
 
 // Water channel width constant - keeps water wider than single scull (~1.5m wide)

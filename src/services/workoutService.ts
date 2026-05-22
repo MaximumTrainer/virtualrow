@@ -8,8 +8,6 @@ export const SPLIT_DISTANCE_METERS = 500;
 export class WorkoutService {
   private sessions: WorkoutSession[] = [];
   private currentSession: WorkoutSession | null = null;
-  /** Write-cursor for the heart-rate ring buffer once it has reached HR_SAMPLE_CAP. */
-  private hrWriteCursor = 0;
 
   startSession(
     routeId: string,
@@ -39,10 +37,6 @@ export class WorkoutService {
 
     this.currentSession = session;
     this.sessions.push(session);
-    // Reset HR ring-buffer cursor for the new session. We only reset here (not in
-    // endSession) because `updateSessionHeartRate` no-ops without a currentSession,
-    // so the cursor's value between sessions is unobservable.
-    this.hrWriteCursor = 0;
     try {
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('virtualrow:sessionStarted', { detail: session });
@@ -137,17 +131,14 @@ export class WorkoutService {
     if (!this.currentSession.heartRateSamples) {
       this.currentSession.heartRateSamples = [];
     }
-    // Maintain only last HR_SAMPLE_CAP samples (~10 minutes at 1s interval) to limit memory.
-    // Uses a dedicated write-cursor (NOT samples.length % CAP, which collapses to slot 0
-    // once length === CAP) so the ring buffer wraps correctly.
+    // Maintain only last HR_SAMPLE_CAP samples (~10 minutes at 1s interval) to limit memory,
+    // preserving chronological order so the last entry represents the latest sample.
     const sample: HeartRateSample = { bpm, timestamp: new Date() };
     const samples = this.currentSession.heartRateSamples;
-    if (samples.length < HR_SAMPLE_CAP) {
-      samples.push(sample);
-    } else {
-      samples[this.hrWriteCursor] = sample;
-      this.hrWriteCursor = (this.hrWriteCursor + 1) % HR_SAMPLE_CAP;
+    if (samples.length >= HR_SAMPLE_CAP) {
+      samples.shift();
     }
+    samples.push(sample);
   }
 
   getCurrentSession(): WorkoutSession | null {

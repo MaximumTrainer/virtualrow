@@ -16,6 +16,7 @@ import type { WorkoutSession, WaterRoute } from '../types/index';
  */
 export function buildSessionGPX(session: WorkoutSession, route: WaterRoute): string {
   const startTime = new Date(session.startTime).toISOString();
+  const routeName = escapeXml(session.routeName);
   const trkpts = route.coordinates
     .map((c) => `      <trkpt lat="${c.lat}" lon="${c.lng}"><ele>0</ele></trkpt>`)
     .join('\n');
@@ -23,16 +24,25 @@ export function buildSessionGPX(session: WorkoutSession, route: WaterRoute): str
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="VirtualRow">
   <metadata>
-    <name>${session.routeName}</name>
+    <name>${routeName}</name>
     <time>${startTime}</time>
   </metadata>
   <trk>
-    <name>${session.routeName}</name>
+    <name>${routeName}</name>
     <trkseg>
 ${trkpts}
     </trkseg>
   </trk>
 </gpx>`;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 /**

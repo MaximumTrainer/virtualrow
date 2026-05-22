@@ -2,6 +2,13 @@ import type { PM5Data } from '../types/index';
 import type PM5Type from '../vendor/pm5-base.js';
 import type { PM5Message } from '../vendor/pm5-base.js';
 
+type PM5Constructor = new (
+  cb_connecting: () => void,
+  cb_connected: () => void,
+  cb_disconnected: () => void,
+  cb_message: (msg: PM5Message) => void
+) => PM5Type;
+
 export class Concept2BluetoothService {
   private device: BluetoothDevice | null = null;
   private txChar: BluetoothRemoteGATTCharacteristic | null = null;
@@ -28,7 +35,7 @@ export class Concept2BluetoothService {
       
       // Dynamically import PM5 wrapper to avoid ES module issues in tests
       const pm5Module = await import('../vendor/pm5-base.js');
-      const PM5 = (pm5Module.default ?? pm5Module) as typeof PM5Type;
+      const PM5 = (pm5Module.default ?? pm5Module) as PM5Constructor;
 
       // Pass a no-op as cb_connected so the event doesn't fire mid-connect before all
       // characteristic listeners are registered. We emit 'connected' ourselves below
