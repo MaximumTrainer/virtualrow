@@ -314,7 +314,11 @@ function App() {
             const updated = workoutService.getCurrentSession();
             setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
           }
-          setCurrentSession(prev => prev ? { ...prev } : null);
+          // Read latest session data directly from the service so mutations (distance,
+          // duration, calories) are always reflected — spreading a stale React state
+          // copy would freeze distance at whatever value it had on the first spread.
+          const latestSession = workoutService.getCurrentSession();
+          setCurrentSession(latestSession ? { ...latestSession } : null);
 
           // Auto-end when distance reaches route length (skip in Playwright harness).
           if (selectedRoute && typeof window !== 'undefined' && !window.__PLAYWRIGHT_TESTING) {
@@ -341,7 +345,7 @@ function App() {
       requestAnimationFrame(() => {
         const session = workoutService.getCurrentSession();
         setHeartRateSamples(session?.heartRateSamples ? [...session.heartRateSamples] : []);
-        setCurrentSession(prev => prev ? { ...prev } : null);
+        setCurrentSession(session ? { ...session } : null);
       });
     }
   }, [isWorkoutActive]);

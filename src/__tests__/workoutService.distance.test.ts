@@ -7,6 +7,11 @@ import type { PM5Data } from '../types/index';
  *
  * These accompany the investigation in
  *   issue: "activity distance may not be calculated correctly".
+ *
+ * IMPORTANT: The React display must always read `workoutService.getCurrentSession()` to
+ * build the state update (not `{ ...prevReactStateCopy }`).  After the first state spread,
+ * React state points to a snapshot copy — subsequent spreads of *that copy* will freeze
+ * distance at its value at first-spread time (typically 0).
  */
 
 function pm5(data: Partial<PM5Data>): PM5Data {
@@ -110,5 +115,32 @@ describe('WorkoutService — distance handling (regressions)', () => {
     svc.pauseSession!();
     svc.updateSessionWithPM5Data(pm5({ distance: 600, elapsedTime: 120_000 }));
     expect(svc.getCurrentSession()!.distance).toBe(300);
+  });
+
+  it('getCurrentSession() always returns the live mutated session, not a snapshot', () => {
+    // Regression: React display must call getCurrentSession() to build state updates.
+    // If you spread a React-state copy (prev => { ...prev }) the second spread will
+    // re-use the first snapshot distance, freezing it at its initial value (0).
+    const svc = new WorkoutService();
+    svc.startSession('r-live', 'Live Session');
+
+    svc.updateSessionWithPM5Data(pm5({ distance: 0, elapsedTime: 0 }));
+    // Simulate what React does on first render tick: take a snapshot copy
+    const snapshot1 = { ...svc.getCurrentSession()! };
+    expect(snapshot1.distance).toBe(0);
+
+    // Session accumulates more distance
+    svc.updateSessionWithPM5Data(pm5({ distance: 250, elapsedTime: 50_000 }));
+    svc.updateSessionWithPM5Data(pm5({ distance: 500, elapsedTime: 100_000 }));
+
+    // BAD PATTERN: spreading the stale snapshot gives wrong distance
+    const staleCopy = { ...snapshot1 };
+    expect(staleCopy.distance).toBe(0); // frozen at first-snapshot value
+
+    // CORRECT PATTERN: read from service gives live distance
+    const liveSession = svc.getCurrentSession()!;
+    expect(liveSession.distance).toBe(500); // up-to-date
+    const correctCopy = { ...liveSession };
+    expect(correctCopy.distance).toBe(500);
   });
 });
