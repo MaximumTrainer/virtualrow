@@ -1235,8 +1235,8 @@ test.describe('docs screenshots — other route heroes', () => {
   // -------------------------------------------------------------------------
   test('captures hero screenshots for the other routes', async ({ page }) => {
     // Capturing five 3D-stage screenshots sequentially comfortably exceeds the
-    // default 120s test budget; allow generous headroom for slower CI runners.
-    test.setTimeout(360_000);
+    // default 120s test budget; allow headroom for slower CI runners.
+    test.setTimeout(240_000);
     type RouteShot = { name: string; file: string };
     const otherRoutes: RouteShot[] = [
       { name: 'Crystal Sanctum of Bled',          file: 'screenshot-route-bled.png' },
