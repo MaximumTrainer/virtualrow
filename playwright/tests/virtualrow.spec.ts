@@ -1217,6 +1217,172 @@ test.describe('docs screenshots', () => {
   });
 });
 
+test.describe('docs screenshots — other route heroes', () => {
+  const docsDir = path.resolve(__dirname, '../../docs');
+
+  // -------------------------------------------------------------------------
+  // Additional route hero screenshots — capture the 3D stage on each of the
+  // non-Willowbrook routes so the website can showcase the visual variety.
+  // The hero capture for Willowbrook River is produced by the main docs
+  // screenshots test above (`screenshot-rower-3d.png`); this test produces
+  // the companion shots used in the `See every screen` grid.
+  //
+  // This test lives in its own describe so we can install a network
+  // interceptor for the external drei cloud asset BEFORE any navigation.
+  // Some CI / sandbox environments cannot reach rawcdn.githack.com, which
+  // would otherwise trip the 3D error boundary and produce a blank fallback
+  // screenshot.
+  // -------------------------------------------------------------------------
+  test('captures hero screenshots for the other routes', async ({ page }) => {
+    // Capturing five 3D-stage screenshots sequentially comfortably exceeds the
+    // default 120s test budget; allow generous headroom for slower CI runners.
+    test.setTimeout(360_000);
+    type RouteShot = { name: string; file: string };
+    const otherRoutes: RouteShot[] = [
+      { name: 'Crystal Sanctum of Bled',          file: 'screenshot-route-bled.png' },
+      { name: 'Canale delle Anime Perdute',       file: 'screenshot-route-venice.png' },
+      { name: "The Iron Sovereign's Gauntlet",    file: 'screenshot-route-henley.png' },
+      { name: "The Leviathan's Wake",             file: 'screenshot-route-thames.png' },
+      { name: "The Architect's Infinite Equation", file: 'screenshot-route-charles.png' },
+    ];
+
+    // Stub the drei cloud texture so a network-restricted CI / sandbox does
+    // not trip the 3D error boundary. A 1x1 transparent PNG is enough for
+    // three.js's texture loader to succeed; the <Cloud> billboard then just
+    // renders without detail rather than failing the entire scene.
+    const oneByOnePng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    await page.route('**/rawcdn.githack.com/**/*.png', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: oneByOnePng }),
+    );
+
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('/');
+    await page.waitForSelector('.route-item');
+
+    // Connect PM5 + HR once; subsequent routes reuse the same connections.
+    await page.waitForSelector('button:has-text("Connect PM5")');
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+
+    for (const route of otherRoutes) {
+      // Make sure we are on the route selection view before picking the route.
+      await page.waitForSelector('.route-item', { timeout: 10_000 });
+
+      const routeLocator = page.locator(`.route-item:has-text("${route.name}")`);
+      if ((await routeLocator.count()) === 0) {
+        console.warn(`[docs-screenshots] route "${route.name}" not found — skipping`);
+        continue;
+      }
+      await routeLocator.first().click({ force: true });
+
+      await page.waitForFunction(
+        () => {
+          const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
+          return !!(btn && !btn.disabled);
+        },
+        { timeout: 10_000 },
+      );
+      await page.evaluate(() => {
+        (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+      });
+
+      await page.waitForFunction(
+        () => !!(window as any).__workoutService?.getCurrentSession?.(),
+        { timeout: 5000 },
+      );
+      await page.waitForSelector('.activity-view', { timeout: 10_000 });
+      await page.waitForFunction(
+        () => !!(window as any).__ROWER3D_GPU_BACKEND,
+        { timeout: 15_000 },
+      );
+
+      // Drive a few PM5 frames so the boat is placed on the route.
+      for (let i = 1; i <= 3; i++) {
+        await page.evaluate((frame) => {
+          const buf = new ArrayBuffer(20);
+          const dv = new DataView(buf);
+          dv.setUint16(0, Math.round(118 * 100), true);
+          dv.setUint32(2, 500 * frame, true);
+          dv.setUint32(6, 60 * frame, true);
+          dv.setUint16(10, 195, true);
+          dv.setUint8(13, 26);
+          dv.setUint8(14, 148);
+          const w = window as any;
+          if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
+          if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
+          const hrBuf = new ArrayBuffer(2);
+          const hrDv = new DataView(hrBuf);
+          hrDv.setUint8(0, 0x00);
+          hrDv.setUint8(1, 148);
+          if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+        }, i);
+        await page.waitForTimeout(600);
+      }
+
+      await page.waitForFunction(
+        () => (window as any).__ROWER3D_DISTANCE_M > 0,
+        { timeout: 5000 },
+      ).catch(() => { /* non-critical — capture regardless */ });
+      await page.waitForTimeout(1500);
+
+      // Hide in-stage overlays so the 3D scene is centre-stage, matching the
+      // style of `screenshot-rower-3d.png`.
+      await page.evaluate(() => {
+        const existing = document.getElementById('docs-hero-screenshot-style');
+        if (existing) return;
+        const style = document.createElement('style');
+        style.id = 'docs-hero-screenshot-style';
+        style.textContent = `
+          .activity-route-summary,
+          .activity-map-overlay {
+            display: none !important;
+          }
+        `;
+        document.head.appendChild(style);
+      });
+      await page.waitForFunction(() => {
+        const summary = document.querySelector('.activity-route-summary');
+        const mapOverlay = document.querySelector('.activity-map-overlay');
+        const summaryHidden = !summary || window.getComputedStyle(summary).display === 'none';
+        const mapHidden = !mapOverlay || window.getComputedStyle(mapOverlay).display === 'none';
+        return summaryHidden && mapHidden;
+      }, { timeout: 2000 });
+
+      const stage = page.locator('.activity-route-stage');
+      const stageBbox = await stage.boundingBox({ timeout: 5000 }).catch(() => null);
+      await page.screenshot({
+        path: path.join(docsDir, route.file),
+        ...(stageBbox ? { clip: stageBbox } : {}),
+      });
+      console.log(`[docs-screenshots] wrote ${route.file} for "${route.name}"`);
+
+      // Restore the page chrome and end the workout so the next iteration
+      // starts from a clean route-selection view.
+      await page.evaluate(() => {
+        document.getElementById('docs-hero-screenshot-style')?.remove();
+      });
+      await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button')) as HTMLButtonElement[];
+        const endBtn = buttons.find((b) => /End Workout/i.test(b.textContent ?? ''));
+        endBtn?.click();
+      });
+      await page.waitForSelector('.route-item', { timeout: 10_000 });
+    }
+  });
+});
+
 // ===========================================================================
 // Activity distance integrity (companion to "activity distance may not be
 // calculated correctly" investigation).
