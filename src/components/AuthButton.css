@@ -53,6 +53,7 @@
 .auth-user-menu {
   position: relative;
   display: inline-block;
+  z-index: 1001; /* establish stacking context above the fixed backdrop */
 }
 
 .auth-user-trigger {
@@ -115,6 +116,9 @@
   position: fixed;
   inset: 0;
   z-index: 999;
+  /* Ensure pointer events pass through to dropdown items above */
+  pointer-events: auto;
+  background: transparent;
 }
 
 .auth-dropdown {
