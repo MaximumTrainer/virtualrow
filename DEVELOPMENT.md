@@ -281,7 +281,7 @@ To enable "Sign in with intervals.icu":
    ```
 5. Restart the Vite dev server (required after changing `.env.local`)
 
-For production deploys, add `VITE_INTERVALS_CLIENT_ID` as a **GitHub Actions secret** in the repository settings — `deploy-pages.yml` already passes it to the build.
+For production deploys, add the client ID as a **GitHub Actions secret** named `INTERVALS_OAUTH_CLIENT_ID` in the repository settings — `deploy-pages.yml` already passes it to the build as `VITE_INTERVALS_CLIENT_ID`.
 
 ### intervals.icu OAuth Proxy
 
