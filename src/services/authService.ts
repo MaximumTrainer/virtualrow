@@ -101,6 +101,7 @@ export class AuthService {
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('redirect_uri', getRedirectUri());
     url.searchParams.set('state', state);
+    url.searchParams.set('scope', 'ACTIVITY:READ');
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
 

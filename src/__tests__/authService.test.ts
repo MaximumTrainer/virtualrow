@@ -110,6 +110,7 @@ describe('AuthService', () => {
     it('includes PKCE parameters in the URL', async () => {
       await service.startLogin();
       const url = window.location.href;
+      expect(url).toContain('scope=');
       expect(url).toContain('code_challenge=');
       expect(url).toContain('code_challenge_method=S256');
       expect(url).toContain('response_type=code');

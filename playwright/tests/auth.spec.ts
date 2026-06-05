@@ -89,6 +89,7 @@ test.describe('auth header button', () => {
 
     expect(capturedAuthUrl).toBeTruthy();
     const authUrl = new URL(capturedAuthUrl);
+    expect(authUrl.searchParams.get('scope')).toBeTruthy();
     expect(authUrl.searchParams.get('code_challenge')).toBeTruthy();
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256');
     expect(authUrl.searchParams.get('state')).toBeTruthy();
