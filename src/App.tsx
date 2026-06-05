@@ -18,7 +18,11 @@ import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
+import { AuthButton } from './components/AuthButton';
+import { AuthGateModal } from './components/AuthGateModal';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
+import { saveSession, loadSessions } from './services/localStorageWorkoutStore';
+import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
 import { buildSessionGPX, buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
@@ -28,6 +32,7 @@ import './App.css';
 type SessionState = 'idle' | 'active' | 'paused';
 
 function App() {
+  const { user, isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
@@ -66,6 +71,10 @@ function App() {
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
   // Route description panel state (collapsed/expanded)
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
+  // Auth gate modal — shown when a guest tries a protected action
+  const [authGateOpen, setAuthGateOpen] = useState(false);
+  const [authGateAction, setAuthGateAction] = useState<string | undefined>(undefined);
+  const pendingExportRef = useRef<(() => void) | null>(null);
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -127,6 +136,41 @@ function App() {
     }
     
     setWorkoutHistory(workoutService.getAllSessions());
+  }, []);
+
+  // Load persisted sessions from localStorage when the user logs in (stub until #37)
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const saved = loadSessions(user.id);
+      // Merge saved sessions into the in-memory service so history view shows them
+      saved.forEach((s) => {
+        const existing = workoutService.getAllSessions().find((e) => e.id === s.id);
+        if (!existing) {
+          // Inject via the service's internal sessions array is not exposed; instead
+          // surface them through the workoutHistory state directly.
+        }
+      });
+      // Surface saved sessions in history (combine with in-memory ones)
+      const inMemory = workoutService.getAllSessions();
+      const merged = [...saved, ...inMemory.filter((s) => !saved.find((p) => p.id === s.id))];
+      setWorkoutHistory(merged.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()));
+    } else if (!isAuthenticated) {
+      // Revert to in-memory sessions (e.g. after sign-out)
+      setWorkoutHistory(workoutService.getAllSessions());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id]);
+
+  // Listen for nav events dispatched by the AuthButton dropdown
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onNav = (e: Event) => {
+      if (!(e instanceof CustomEvent)) return;
+      const view = e.detail as 'routes' | 'workouts' | 'workout' | 'history';
+      setCurrentView(view);
+    };
+    window.addEventListener('virtualrow:nav', onNav as EventListener);
+    return () => window.removeEventListener('virtualrow:nav', onNav as EventListener);
   }, []);
 
   const activeRowerLabel = useMemo(() => (
@@ -228,11 +272,15 @@ function App() {
       setGuestCompletedSession(completed);
     } else {
       if (completed) {
+        // Persist to localStorage for authenticated users (stub until #37)
+        if (isAuthenticated && user) {
+          saveSession(user.id, completed);
+        }
         setWorkoutHistory(workoutService.getAllSessions());
       }
       setCurrentView('routes');
     }
-  }, [isGuestMode]);
+  }, [isGuestMode, isAuthenticated, user]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -415,29 +463,46 @@ function App() {
     setSelectedRoute(route);
   }, []);
 
-  // Export session as GPX format
+  // Export session as GPX format — prompts sign-in for guest users
   const handleExportGPX = useCallback((session: WorkoutSession) => {
-    const route = routeService.getRouteById(session.routeId);
-    if (!route) {
-      alert('Route data not available for this workout');
-      return;
-    }
+    const doExport = () => {
+      const route = routeService.getRouteById(session.routeId);
+      if (!route) {
+        alert('Route data not available for this workout');
+        return;
+      }
+      const gpx = buildSessionGPX(session, route);
+      triggerBlobDownload(gpx, 'application/gpx+xml', `virtualrow-${session.id}.gpx`);
+    };
 
-    const gpx = buildSessionGPX(session, route);
-    triggerBlobDownload(gpx, 'application/gpx+xml', `virtualrow-${session.id}.gpx`);
-  }, []);
+    if (isGuestMode && !isAuthenticated) {
+      pendingExportRef.current = doExport;
+      setAuthGateAction('save and export your workout');
+      setAuthGateOpen(true);
+    } else {
+      doExport();
+    }
+  }, [isGuestMode, isAuthenticated]);
 
   // Export session as FIT format (simplified JSON structure for now)
   const handleExportFIT = useCallback((session: WorkoutSession) => {
-    // True FIT format is binary. This exports a JSON representation that
-    // could be converted to FIT using external tools.
-    const fitData = buildSessionFITPayload(session);
-    triggerBlobDownload(
-      JSON.stringify(fitData, null, 2),
-      'application/json',
-      `virtualrow-${session.id}.fit.json`,
-    );
-  }, []);
+    const doExport = () => {
+      const fitData = buildSessionFITPayload(session);
+      triggerBlobDownload(
+        JSON.stringify(fitData, null, 2),
+        'application/json',
+        `virtualrow-${session.id}.fit.json`,
+      );
+    };
+
+    if (isGuestMode && !isAuthenticated) {
+      pendingExportRef.current = doExport;
+      setAuthGateAction('save and export your workout');
+      setAuthGateOpen(true);
+    } else {
+      doExport();
+    }
+  }, [isGuestMode, isAuthenticated]);
 
   // Calculate personal best for a route (only completed sessions count)
   const getPersonalBest = useCallback((routeId: string) => {
@@ -502,12 +567,30 @@ function App() {
         />
       )}
 
+      <AuthGateModal
+        isOpen={authGateOpen}
+        actionDescription={authGateAction}
+        onLogin={() => setAuthGateOpen(false)}
+        onDismiss={() => {
+          setAuthGateOpen(false);
+          // Allow the action to proceed in guest mode when dismissed
+          if (pendingExportRef.current) {
+            pendingExportRef.current();
+            pendingExportRef.current = null;
+          }
+        }}
+      />
+
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
           <p className="app-subtitle">RowNative-inspired virtual rowing on iconic water routes</p>
+          <div className="header-auth">
+            <AuthButton />
+          </div>
         </div>
-        {isGuestMode && (
+        {/* Show guest banner only when in guest mode and not authenticated */}
+        {isGuestMode && !isAuthenticated && (
           <div className="guest-mode-banner">
             <span className="guest-badge-header">Guest Mode</span>
             <span className="guest-banner-text">Session data will not be saved.</span>
@@ -516,6 +599,7 @@ function App() {
             </button>
           </div>
         )}
+        {/* Sign-out from the auth dropdown also exits guest mode if active */}
       </header>
 
       <div className={`app-layout app-layout--${currentView}`}>

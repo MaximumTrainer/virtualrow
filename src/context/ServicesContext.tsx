@@ -18,6 +18,7 @@ import { workoutGeneratorService } from '../services/workoutGeneratorService';
 import { bluetoothService } from '../services/bluetoothService';
 import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
+import { authService } from '../services/authService';
 
 /** Production-adapter bundle wired from the existing service singletons. */
 export const defaultServices: Services = {
@@ -27,6 +28,7 @@ export const defaultServices: Services = {
   pm5BluetoothService: bluetoothService,
   ftmsBluetoothService,
   heartRateBluetoothService,
+  authService,
 };
 
 const ServicesContext = createContext<Services>(defaultServices);

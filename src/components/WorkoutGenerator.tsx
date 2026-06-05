@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { StructuredWorkout } from '../types/index';
 import { workoutGeneratorService } from '../services/workoutGeneratorService';
+import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
 import './WorkoutGenerator.css';
 
 interface WorkoutGeneratorProps {
@@ -9,12 +11,16 @@ interface WorkoutGeneratorProps {
 }
 
 export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGeneratorProps) {
+  const { user } = useAuth();
   const [workouts, setWorkouts] = useState<StructuredWorkout[]>(() => workoutGeneratorService.getAllWorkouts());
   const [showImportDialog, setShowImportDialog] = useState(false);
+  // When authenticated, athlete ID is pre-filled; access token replaces API key
   const [importApiKey, setImportApiKey] = useState('');
-  const [importAthleteId, setImportAthleteId] = useState('');
+  const [importAthleteId, setImportAthleteId] = useState(() => user?.id ?? '');
   const [importWorkoutId, setImportWorkoutId] = useState('');
   const [importing, setImporting] = useState(false);
+
+  const isAuthenticatedImport = !!user && !!authService.getAccessToken();
 
   const handleSelectWorkout= (workout: StructuredWorkout) => {
     if (selectedWorkout?.id === workout.id) {
@@ -25,14 +31,23 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
   };
 
   const handleImport = async () => {
-    if (!importApiKey || !importAthleteId || !importWorkoutId) {
+    // When authenticated, use access token (empty API key is acceptable)
+    if (!isAuthenticatedImport && !importApiKey) {
+      alert('Please fill in all fields');
+      return;
+    }
+    if (!importAthleteId || !importWorkoutId) {
       alert('Please fill in all fields');
       return;
     }
 
     setImporting(true);
+    const apiKey = isAuthenticatedImport
+      ? (authService.getAccessToken() ?? '')
+      : importApiKey;
+
     const imported = await workoutGeneratorService.importFromIntervalsICU(
-      importApiKey,
+      apiKey,
       importAthleteId,
       importWorkoutId
     );
@@ -41,7 +56,7 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
       setWorkouts(workoutGeneratorService.getAllWorkouts());
       setShowImportDialog(false);
       setImportApiKey('');
-      setImportAthleteId('');
+      setImportAthleteId(user?.id ?? '');
       setImportWorkoutId('');
       alert(`Successfully imported: ${imported.name}`);
     } else {
@@ -86,15 +101,23 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
           <div className="import-dialog">
             <h3>Import from intervals.icu</h3>
             <div className="import-form">
-              <label>
-                API Key:
-                <input
-                  type="password"
-                  value={importApiKey}
-                  onChange={(e) => setImportApiKey(e.target.value)}
-                  placeholder="Your intervals.icu API key"
-                />
-              </label>
+              {/* API key only needed when not using OAuth */}
+              {!isAuthenticatedImport && (
+                <label>
+                  API Key:
+                  <input
+                    type="password"
+                    value={importApiKey}
+                    onChange={(e) => setImportApiKey(e.target.value)}
+                    placeholder="Your intervals.icu API key"
+                  />
+                </label>
+              )}
+              {isAuthenticatedImport && (
+                <p className="import-authenticated-note">
+                  ✓ Signed in as <strong>{user!.name}</strong> — no API key needed.
+                </p>
+              )}
               <label>
                 Athlete ID:
                 <input
@@ -102,6 +125,7 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
                   value={importAthleteId}
                   onChange={(e) => setImportAthleteId(e.target.value)}
                   placeholder="Your athlete ID"
+                  readOnly={isAuthenticatedImport}
                 />
               </label>
               <label>

@@ -1,0 +1,118 @@
+/* ============================================================================
+   AUTH GATE MODAL — Sign-in prompt for protected actions
+   ============================================================================ */
+
+.auth-gate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.auth-gate-modal {
+  position: relative;
+  background: var(--color-bg-secondary, #1e293b);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 16px;
+  padding: 32px 28px 24px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.auth-gate-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.auth-gate-close:hover {
+  color: var(--color-text-primary, #e2e8f0);
+}
+
+.auth-gate-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.auth-gate-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #e2e8f0);
+  margin-bottom: 10px;
+}
+
+.auth-gate-body {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary, #94a3b8);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.auth-gate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.auth-gate-btn--signin {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.auth-gate-btn--signin:hover {
+  opacity: 0.9;
+}
+
+.auth-gate-btn--guest {
+  background: transparent;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  color: var(--color-text-secondary, #94a3b8);
+  font-size: 0.85rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.auth-gate-btn--guest:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-primary, #e2e8f0);
+}
+
+.auth-gate-note {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.auth-gate-link {
+  color: #0ea5e9;
+  text-decoration: none;
+}
+
+.auth-gate-link:hover {
+  text-decoration: underline;
+}

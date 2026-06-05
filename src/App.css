@@ -61,6 +61,12 @@ body {
   gap: 24px;
 }
 
+/* Auth button slot — always right-aligned in the header */
+.header-auth {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .app-title {
   font-size: 32px;
   font-weight: 800;

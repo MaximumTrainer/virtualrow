@@ -17,6 +17,7 @@ import type { HeartRateBluetoothService } from '../services/heartRateBluetoothSe
 import type { RouteService } from '../services/routeService';
 import type { WorkoutGeneratorService } from '../services/workoutGeneratorService';
 import type { WorkoutService } from '../services/workoutService';
+import type { AuthService } from '../services/authService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Concept2BluetoothService;
@@ -36,6 +37,9 @@ export type WorkoutGeneratorPort = WorkoutGeneratorService;
 /** Port for workout session lifecycle + history. */
 export type WorkoutPort = WorkoutService;
 
+/** Port for OAuth authentication via intervals.icu. */
+export type AuthPort = AuthService;
+
 /**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
@@ -47,4 +51,5 @@ export interface Services {
   pm5BluetoothService: PM5BluetoothPort;
   ftmsBluetoothService: FTMSBluetoothPort;
   heartRateBluetoothService: HeartRateBluetoothPort;
+  authService: AuthPort;
 }

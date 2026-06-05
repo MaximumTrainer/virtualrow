@@ -254,6 +254,47 @@ npm install
 npx playwright install --with-deps
 ```
 
+### Environment Variables
+
+Create a `.env.local` file in the project root (not committed) with:
+
+```
+# OAuth client ID registered with intervals.icu for VirtualRow
+VITE_INTERVALS_CLIENT_ID=your_client_id_here
+```
+
+> **Note**: Without `VITE_INTERVALS_CLIENT_ID`, the app starts normally but the "Sign in with intervals.icu" button will throw an error when clicked. Guest mode and all rowing features remain fully functional.
+
+### intervals.icu OAuth Proxy
+
+The OAuth token exchange and API calls go through a Cloudflare Workers CORS proxy at:
+
+```
+https://mt-intervals-proxy.intervals-login.workers.dev/proxy/<path>
+```
+
+The proxy forwards `/proxy/<path>?<query>` to `https://intervals.icu/<path>?<query>`.
+
+**ALLOWED_ORIGINS** must include VirtualRow's domains to work. The proxy source is in the [MaximumTrainer_Redux repo](https://github.com/MaximumTrainer/MaximumTrainer_Redux/blob/master/workers/intervals-cors-proxy/worker.js). Update `ALLOWED_ORIGINS` to include:
+
+```js
+'http://localhost:5173',    // Vite default dev port
+'http://127.0.0.1:5173',
+'https://your-production-url.com',
+```
+
+Then redeploy: `cd workers/intervals-cors-proxy && npx wrangler deploy`.
+
+### E2E Auth Tests
+
+Auth E2E tests require GitHub Actions secrets (not local `.env.local`):
+
+| Secret | Purpose |
+|---|---|
+| `INTERVALS_CLIENT_ID` | OAuth client ID for test environment |
+| `INTERVALS_TEST_ATHLETE_ID` | Test account athlete ID |
+| `INTERVALS_TEST_ACCESS_TOKEN` | Long-lived access token for the test account |
+
 ## Deployment
 
 ```bash

@@ -117,6 +117,30 @@ export interface UserProfile {
   };
 }
 
+/**
+ * Authenticated user from intervals.icu OAuth.
+ * Access token is never included here — it lives in AuthService memory only.
+ */
+export interface AuthUser {
+  /** intervals.icu athlete ID (e.g. "i12345") */
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+/** OAuth token pair. Access token is memory-only; refresh token in sessionStorage. */
+export interface OAuthTokens {
+  accessToken: string;
+  /** Seconds until the access token expires (relative to issuance) */
+  expiresIn: number;
+  /** Unix timestamp (ms) at which the access token expires */
+  expiresAt: number;
+  refreshToken?: string;
+  tokenType: string;
+  athleteId: string;
+}
+
 // Bluetooth message types for PM5 communication
 export interface PM5Message {
   type: string;
@@ -200,5 +224,8 @@ declare global {
     __ROWER3D_GPU_BACKEND?: string;
     __ROWER3D_WEBGL_LOST?: boolean;
     __ROWER3D_MAX_ANISOTROPY?: number;
+    // Auth testing — set by E2E tests to inject a mock authenticated user
+    __AUTH_USER?: AuthUser | null;
+    __AUTH_TOKENS?: OAuthTokens | null;
   }
 }
