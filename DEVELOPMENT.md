@@ -263,7 +263,25 @@ Create a `.env.local` file in the project root (not committed) with:
 VITE_INTERVALS_CLIENT_ID=your_client_id_here
 ```
 
-> **Note**: Without `VITE_INTERVALS_CLIENT_ID`, the app starts normally but the "Sign in with intervals.icu" button will throw an error when clicked. Guest mode and all rowing features remain fully functional.
+> **Note**: Without `VITE_INTERVALS_CLIENT_ID`, the app starts normally but the "Sign in with intervals.icu" button will display an error when clicked. Guest mode and all rowing features remain fully functional.
+
+### Registering an intervals.icu OAuth Application
+
+To enable "Sign in with intervals.icu":
+
+1. Log in to [intervals.icu](https://intervals.icu) and go to **Settings → API** (or [intervals.icu/settings/api](https://intervals.icu/settings/api))
+2. Create a new OAuth application with:
+   - **Redirect URIs** — add both:
+     - `http://localhost:5173/` — local dev
+     - `https://maximumtrainer.github.io/virtualrow/app/` — GitHub Pages production
+3. Copy the **Client ID** that intervals.icu generates
+4. Add it to `.env.local`:
+   ```
+   VITE_INTERVALS_CLIENT_ID=<your-client-id>
+   ```
+5. Restart the Vite dev server (required after changing `.env.local`)
+
+For production deploys, add `VITE_INTERVALS_CLIENT_ID` as a **GitHub Actions secret** in the repository settings — `deploy-pages.yml` already passes it to the build.
 
 ### intervals.icu OAuth Proxy
 
@@ -280,7 +298,7 @@ The proxy forwards `/proxy/<path>?<query>` to `https://intervals.icu/<path>?<que
 ```js
 'http://localhost:5173',    // Vite default dev port
 'http://127.0.0.1:5173',
-'https://your-production-url.com',
+'https://maximumtrainer.github.io',
 ```
 
 Then redeploy: `cd workers/intervals-cors-proxy && npx wrangler deploy`.

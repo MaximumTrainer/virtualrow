@@ -5,6 +5,7 @@ import './AuthButton.css';
 export function AuthButton() {
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleDropdownToggle = () => setDropdownOpen((o) => !o);
@@ -21,15 +22,30 @@ export function AuthButton() {
 
   if (!isAuthenticated || !user) {
     return (
-      <button
-        type="button"
-        className="auth-button auth-button--signin"
-        onClick={() => void login()}
-        aria-label="Sign in with intervals.icu"
-      >
-        <span className="auth-icu-icon" aria-hidden="true">🔑</span>
-        Sign in with intervals.icu
-      </button>
+      <div className="auth-signin-wrapper">
+        <button
+          type="button"
+          className="auth-button auth-button--signin"
+          onClick={() => {
+            setLoginError(null);
+            login().catch((err: unknown) => {
+              const msg = err instanceof Error ? err.message : 'Login failed';
+              setLoginError(msg);
+            });
+          }}
+          aria-label="Sign in with intervals.icu"
+        >
+          <span className="auth-icu-icon" aria-hidden="true">🔑</span>
+          Sign in with intervals.icu
+        </button>
+        {loginError && (
+          <div className="auth-login-error" role="alert" title={loginError}>
+            ⚠️ {loginError.includes('VITE_INTERVALS_CLIENT_ID')
+              ? 'OAuth client ID not configured — check DEVELOPMENT.md'
+              : loginError}
+          </div>
+        )}
+      </div>
     );
   }
 

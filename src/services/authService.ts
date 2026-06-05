@@ -42,7 +42,12 @@ function getClientId(): string {
 
 function getRedirectUri(): string {
   if (typeof window === 'undefined') return '';
-  return window.location.origin;
+  const { origin, pathname } = window.location;
+  // Use the full origin + current path so sub-path deployments (e.g.
+  // /virtualrow/app/) receive the callback at the correct URL.
+  // Strip any trailing query/hash; ensure a trailing slash.
+  const base = pathname.replace(/\/$/, '') + '/';
+  return origin + base;
 }
 
 interface RawTokenResponse {

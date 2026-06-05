@@ -49,6 +49,7 @@ jobs:
         run: npx vite build --base=/virtualrow/app/
         env:
           NODE_ENV: production
+          VITE_INTERVALS_CLIENT_ID: ${{ secrets.VITE_INTERVALS_CLIENT_ID }}
 
       - name: Copy app build into docs/app/
         run: |
