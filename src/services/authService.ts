@@ -42,12 +42,11 @@ function getClientId(): string {
 
 function getRedirectUri(): string {
   if (typeof window === 'undefined') return '';
-  const { origin, pathname } = window.location;
-  // Use the full origin + current path so sub-path deployments (e.g.
-  // /virtualrow/app/) receive the callback at the correct URL.
-  // Strip any trailing query/hash; ensure a trailing slash.
-  const base = pathname.replace(/\/$/, '') + '/';
-  return origin + base;
+  // import.meta.env.BASE_URL is set by Vite at build time (e.g. '/virtualrow/app/'
+  // in production, '/' in development).  Using it here gives a stable redirect
+  // URI regardless of which page the user happens to be on when they click login.
+  const base = (import.meta.env.BASE_URL as string).replace(/\/$/, '') + '/';
+  return window.location.origin + base + 'auth/callback/';
 }
 
 interface RawTokenResponse {

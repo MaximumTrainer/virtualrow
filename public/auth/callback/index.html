@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VirtualRow – Signing in…</title>
+  </head>
+  <body>
+    <script>
+      // Forward the OAuth callback parameters (?code=&state=) to the main app.
+      // Strips /auth/callback/ from the current path to derive the app root.
+      // The resulting appRoot is origin-relative (starts with '/'), so
+      // window.location.replace() stays on the same origin — no open redirect.
+      var params = window.location.search;
+      var appRoot = window.location.pathname.replace(/\/auth\/callback\/?$/, '/');
+      window.location.replace(appRoot + params);
+    </script>
+  </body>
+</html>
