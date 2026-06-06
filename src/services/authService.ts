@@ -102,12 +102,11 @@ export class AuthService {
     url.searchParams.set('redirect_uri', getRedirectUri());
     url.searchParams.set('state', state);
     url.searchParams.set('scope', [
-      'CALENDAR:CALENDAR_UPDATED',
-      'ACTIVITY:ACTIVITY_UPLOADED',
-      'ACTIVITY:ACTIVITY_ACHIEVEMENTS',
-      'WELLNESS:WELLNESS_UPDATED',
-      'WELLNESS:FITNESS_UPDATED',
-      'SETTINGS:SPORT_SETTINGS_UPDATED',
+      'ACTIVITY:WRITE',
+      'WELLNESS:READ',
+      'SETTINGS:WRITE',
+      'CALENDAR:WRITE',
+      'LIBRARY:READ',
     ].join(' '));
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
