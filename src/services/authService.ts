@@ -43,11 +43,12 @@ function getClientId(): string {
 function getRedirectUri(): string {
   if (typeof window === 'undefined') return '';
   const { origin, pathname } = window.location;
-  // Use the full origin + current path so sub-path deployments (e.g.
-  // /virtualrow/app/) receive the callback at the correct URL.
-  // Strip any trailing query/hash; ensure a trailing slash.
+  // Derive the app root from the current path, then append the dedicated
+  // callback route.  This keeps the redirect URI stable across page
+  // navigations and works for both the root deployment and sub-path
+  // deployments (e.g. /virtualrow/app/).
   const base = pathname.replace(/\/$/, '') + '/';
-  return origin + base;
+  return origin + base + 'auth/callback/';
 }
 
 interface RawTokenResponse {
