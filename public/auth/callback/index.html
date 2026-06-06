@@ -8,7 +8,9 @@
   <body>
     <script>
       // Forward the OAuth callback parameters (?code=&state=) to the main app.
-      // Strips /auth/callback/ from the path to derive the app root.
+      // Strips /auth/callback/ from the current path to derive the app root.
+      // The resulting appRoot is origin-relative (starts with '/'), so
+      // window.location.replace() stays on the same origin — no open redirect.
       var params = window.location.search;
       var appRoot = window.location.pathname.replace(/\/auth\/callback\/?$/, '/');
       window.location.replace(appRoot + params);
