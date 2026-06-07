@@ -95,22 +95,25 @@ export class AuthService {
     sessionStorage.setItem(SK_CODE_VERIFIER, verifier);
     sessionStorage.setItem(SK_STATE, state);
 
-    const url = new URL(ICU_AUTHORIZE_URL);
-    url.searchParams.set('client_id', clientId);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('redirect_uri', getRedirectUri());
-    url.searchParams.set('state', state);
-    url.searchParams.set('scope', [
+    const scopes = [
       'ACTIVITY:WRITE',
       'WELLNESS:READ',
       'SETTINGS:WRITE',
       'CALENDAR:WRITE',
       'LIBRARY:READ',
-    ].join(' '));
-    url.searchParams.set('code_challenge', challenge);
-    url.searchParams.set('code_challenge_method', 'S256');
+    ];
 
-    window.location.href = url.toString();
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: getRedirectUri(),
+      state,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    });
+    const encodedScope = scopes.map(encodeURIComponent).join('%20');
+
+    window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}&scope=${encodedScope}`;
   }
 
   /**
