@@ -116,7 +116,7 @@ describe('AuthService', () => {
       expect(url).toContain('response_type=code');
     });
 
-    it('encodes scope separators as %20 instead of +', async () => {
+    it('includes properly encoded scopes in the authorization URL', async () => {
       await service.startLogin();
       const url = window.location.href;
       expect(url).toContain(
