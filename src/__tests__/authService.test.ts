@@ -115,6 +115,15 @@ describe('AuthService', () => {
       expect(url).toContain('code_challenge_method=S256');
       expect(url).toContain('response_type=code');
     });
+
+    it('encodes scope separators as %20 instead of +', async () => {
+      await service.startLogin();
+      const url = window.location.href;
+      expect(url).toContain(
+        'scope=ACTIVITY%3AWRITE%20WELLNESS%3AREAD%20SETTINGS%3AWRITE%20CALENDAR%3AWRITE%20LIBRARY%3AREAD',
+      );
+      expect(url).not.toContain('scope=ACTIVITY%3AWRITE+WELLNESS%3AREAD');
+    });
   });
 
   describe('handleCallback', () => {
