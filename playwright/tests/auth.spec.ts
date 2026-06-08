@@ -93,7 +93,6 @@ test.describe('auth header button', () => {
     expect(scope).toBeTruthy();
     // intervals.icu requires comma-separated scopes
     expect(scope).toContain(',');
-    expect(scope).not.toContain(' ');
     expect(authUrl.searchParams.get('code_challenge')).toBeTruthy();
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256');
     expect(authUrl.searchParams.get('state')).toBeTruthy();

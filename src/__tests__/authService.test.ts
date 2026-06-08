@@ -122,8 +122,6 @@ describe('AuthService', () => {
       const parsedUrl = new URL(url);
       const scope = parsedUrl.searchParams.get('scope');
       expect(scope).toBe('ACTIVITY:WRITE,WELLNESS:READ,SETTINGS:WRITE,CALENDAR:WRITE,LIBRARY:READ');
-      expect(url).not.toContain('scope=ACTIVITY%3AWRITE+WELLNESS%3AREAD');
-      expect(url).not.toContain('scope=ACTIVITY%3AWRITE%20WELLNESS%3AREAD');
     });
   });
 
