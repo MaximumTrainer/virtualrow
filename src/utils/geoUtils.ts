@@ -30,60 +30,35 @@ export function distanceBetweenLatLng(lat1:number, lng1:number, lat2:number, lng
   return EARTH_RADIUS_M * c;
 }
 
-/**
- * Calculates the bearing (direction) from one coordinate to another.
- * Returns the bearing in degrees (0-360), where 0° is North, 90° is East, etc.
- *
- * @param lat1 - Starting latitude
- * @param lng1 - Starting longitude
- * @param lat2 - Ending latitude
- * @param lng2 - Ending longitude
- * @returns Bearing in degrees (0-360)
- */
-export function bearingBetweenLatLng(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const lat1Rad = lat1 * DEG_TO_RAD;
-  const lat2Rad = lat2 * DEG_TO_RAD;
-  const dLng = (lng2 - lng1) * DEG_TO_RAD;
+export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const phi1 = lat1 * DEG_TO_RAD;
+  const phi2 = lat2 * DEG_TO_RAD;
+  const deltaLambda = (lng2 - lng1) * DEG_TO_RAD;
 
-  const y = Math.sin(dLng) * Math.cos(lat2Rad);
-  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
-  const bearing = Math.atan2(y, x) * RAD_TO_DEG;
+  const y = Math.sin(deltaLambda) * Math.cos(phi2);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
 
-  // Normalize to 0-360
-  return (bearing + 360) % 360;
+  return (Math.atan2(y, x) * RAD_TO_DEG + 360) % 360;
 }
 
-/**
- * Calculates the bearing difference (delta) between two bearings.
- * Returns the smallest angle between the bearings (-180 to +180 degrees).
- * Positive values indicate a right turn, negative values a left turn.
- *
- * @param bearing1 - First bearing in degrees (0-360)
- * @param bearing2 - Second bearing in degrees (0-360)
- * @returns Bearing delta in degrees (-180 to +180)
- */
-export function bearingDelta(bearing1: number, bearing2: number): number {
-  let delta = bearing2 - bearing1;
-
-  // Normalize to -180 to +180
-  while (delta > 180) delta -= 360;
-  while (delta < -180) delta += 360;
-
-  return delta;
+export function bearingBetweenLatLng(lat1: number, lng1: number, lat2: number, lng2: number) {
+  return calculateBearing(lat1, lng1, lat2, lng2);
 }
 
-/**
- * Upsamples a route's coordinates to achieve a minimum resolution.
- * Inserts interpolated points between existing coordinates if they are
- * spaced further apart than the target resolution.
- *
- * @param coords - Original route coordinates
- * @param minResolutionMeters - Target resolution in meters (default: 10m)
- * @returns Upsampled coordinates array
- */
+export function bearingDelta(bearing1: number, bearing2: number) {
+  const delta = ((bearing2 - bearing1 + 540) % 360) - 180;
+  return delta === -180 ? 180 : delta;
+}
+
+export function normalizeBearingDelta(fromBearing: number, toBearing: number) {
+  return Math.abs(bearingDelta(fromBearing, toBearing));
+}
+
 export function upsampleCoordinates(
   coords: Array<{ lat: number; lng: number }>,
-  minResolutionMeters = 10
+  minResolutionMeters = 10,
 ): Array<{ lat: number; lng: number }> {
   if (coords.length < 2) return [...coords];
 
@@ -94,10 +69,8 @@ export function upsampleCoordinates(
     const curr = coords[i];
     const distance = distanceBetweenLatLng(prev.lat, prev.lng, curr.lat, curr.lng);
 
-    // If distance is greater than min resolution, insert interpolated points
     if (distance > minResolutionMeters) {
       const numSegments = Math.ceil(distance / minResolutionMeters);
-      // Endpoints fall back to clamped tangents, which intentionally trends toward linear interpolation.
       const prevPrev = i > 1 ? coords[i - 2] : prev;
       const nextNext = i < coords.length - 1 ? coords[i + 1] : curr;
       const m1Lat = (curr.lat - prevPrev.lat) * 0.5;
@@ -125,17 +98,9 @@ export function upsampleCoordinates(
   return upsampled;
 }
 
-/**
- * Segments a route into chunks based on distance.
- * Each segment will be approximately segmentLengthMeters long.
- *
- * @param coords - Route coordinates
- * @param segmentLengthMeters - Target segment length in meters (default: 50m)
- * @returns Array of segment indices and distances
- */
 export function segmentRoute(
   coords: Array<{ lat: number; lng: number }>,
-  segmentLengthMeters = 50
+  segmentLengthMeters = 50,
 ): Array<{ startIndex: number; endIndex: number; distance: number }> {
   if (coords.length < 2) return [];
 
@@ -149,7 +114,6 @@ export function segmentRoute(
     const segmentDist = distanceBetweenLatLng(prev.lat, prev.lng, curr.lat, curr.lng);
     currentSegmentDistance += segmentDist;
 
-    // If we've accumulated enough distance, create a segment
     if (currentSegmentDistance >= segmentLengthMeters) {
       segments.push({
         startIndex: currentSegmentStart,
@@ -161,7 +125,6 @@ export function segmentRoute(
     }
   }
 
-  // Add final segment if there's any remaining distance
   if (currentSegmentStart < coords.length - 1) {
     segments.push({
       startIndex: currentSegmentStart,

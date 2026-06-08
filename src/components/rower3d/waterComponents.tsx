@@ -8,6 +8,10 @@ import { useAnimationFrame } from './AnimationContext';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { attachGerstnerShader, createWaterNormalMap } from './helpers';
+import {
+  getWaterWidthSceneUnitsForProgress,
+  type RouteEnrichmentData,
+} from '../../services/routeEnrichmentService';
 
 // ============================================================================
 // WATER REFLECTION PROBE — CubeCamera providing real-time env reflections
@@ -34,10 +38,11 @@ export const WaterReflectionProbe: React.FC<{
   });
 
   useEffect(() => {
+    const material = materialRef.current;
     return () => {
-      if (materialRef.current) {
-        materialRef.current.envMap = null;
-        materialRef.current.needsUpdate = true;
+      if (material) {
+        material.envMap = null;
+        material.needsUpdate = true;
       }
     };
   }, [materialRef]);
@@ -52,11 +57,18 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   const timeUniformRef = useRef({ value: 0 });
+  const waterNormalMapRef = useRef<THREE.Texture | null>(null);
 
   const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
 
   const waterNormalMap = useMemo(() => createWaterNormalMap(3.0), []);
-  useEffect(() => () => { waterNormalMap.dispose(); }, [waterNormalMap]);
+  useEffect(() => {
+    waterNormalMapRef.current = waterNormalMap;
+    return () => {
+      waterNormalMapRef.current = null;
+      waterNormalMap.dispose();
+    };
+  }, [waterNormalMap]);
 
   useEffect(() => {
     if (IS_TEST_MODE) return;
@@ -64,7 +76,7 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
     if (!mat) return;
     attachGerstnerShader(mat, timeUniformRef.current, 'z', theme, waterConfig.waveAmplitude, waterConfig.waveFrequency);
     mat.needsUpdate = true;
-  }, [theme]);
+  }, [theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
@@ -77,9 +89,12 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
       materialRef.current.emissiveIntensity = waterConfig.emissiveIntensity + causticPulse;
     }
 
-    waterNormalMap.offset.x = (time * 0.02) % 1;
-    waterNormalMap.offset.y = (time * 0.01) % 1;
-    waterNormalMap.needsUpdate = true;
+    const normalMap = waterNormalMapRef.current;
+    if (normalMap) {
+      normalMap.offset.x = (time * 0.02) % 1;
+      normalMap.offset.y = (time * 0.01) % 1;
+      normalMap.needsUpdate = true;
+    }
   });
 
   return (
@@ -180,22 +195,42 @@ export const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 export interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
+  enrichment?: RouteEnrichmentData | null;
 }
 
-export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, theme }) => {
+export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
+  curve,
+  theme,
+  enrichment,
+}) => {
   const meshRef        = useRef<THREE.Mesh>(null);
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
 
-  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
+  const waterConfig = useMemo(() => {
+    const baseConfig = getThemeConfig(theme).water;
+    return {
+      ...baseConfig,
+      color: enrichment?.waterColor ?? baseConfig.color,
+      waveAmplitude: baseConfig.waveAmplitude * (enrichment?.waveIntensity ?? 1),
+      waveFrequency: baseConfig.waveFrequency * (enrichment?.waveIntensity ?? 1),
+    };
+  }, [enrichment?.waterColor, enrichment?.waveIntensity, theme]);
 
   useEffect(() => {
     if (IS_TEST_MODE) return;
     const mat = materialRef.current;
     if (!mat) return;
-    attachGerstnerShader(mat, timeUniformRef.current, 'y', `curved-${theme}`);
+    attachGerstnerShader(
+      mat,
+      timeUniformRef.current,
+      'y',
+      `curved-${theme}`,
+      waterConfig.waveAmplitude,
+      waterConfig.waveFrequency,
+    );
     mat.needsUpdate = true;
-  }, [theme]);
+  }, [theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
@@ -209,7 +244,6 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, t
     if (!curve) return null;
 
     const segments = 200;
-    const halfWidth = WATER_CHANNEL_WIDTH / 2;
 
     const positions: number[] = [];
     const normals: number[] = [];
@@ -223,6 +257,12 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, t
 
       const up = new THREE.Vector3(0, 1, 0);
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      const halfWidth =
+        getWaterWidthSceneUnitsForProgress(
+          enrichment?.segmentProfiles,
+          enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / 0.1,
+          t,
+        ) / 2;
 
       const left = new THREE.Vector3().copy(point).addScaledVector(perp, -halfWidth);
       const right = new THREE.Vector3().copy(point).addScaledVector(perp, halfWidth);
@@ -253,7 +293,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({ curve, t
     geometry.setIndex(indices);
 
     return geometry;
-  }, [curve]);
+  }, [curve, enrichment]);
 
   useEffect(() => {
     return () => {

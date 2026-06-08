@@ -22,11 +22,13 @@ import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { AuthGateModal } from './components/AuthGateModal';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
+import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { saveSession, loadSessions } from './services/localStorageWorkoutStore';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
 import { buildSessionGPX, buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
+import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
 
 // Session state type for workout controls
@@ -77,6 +79,8 @@ function App() {
   const [authGateAction, setAuthGateAction] = useState<string | undefined>(undefined);
   const [kmlImportOpenSignal, setKmlImportOpenSignal] = useState(0);
   const pendingExportRef = useRef<(() => void) | null>(null);
+  const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
+  const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -139,6 +143,54 @@ function App() {
     
     setWorkoutHistory(workoutService.getAllSessions());
   }, []);
+
+  useEffect(() => {
+    if (!selectedRoute) return;
+
+    let cancelled = false;
+    const cached = routeEnrichmentService.readCached(selectedRoute.id);
+    const cachedData = cached.data;
+    if (cachedData) {
+      setRouteEnrichments((current) => ({
+        ...current,
+        [selectedRoute.id]: cachedData,
+      }));
+    }
+
+    if (cachedData && !cached.stale) {
+      setRouteEnrichmentLoading((current) => ({
+        ...current,
+        [selectedRoute.id]: false,
+      }));
+      return;
+    }
+
+    setRouteEnrichmentLoading((current) => ({
+      ...current,
+      [selectedRoute.id]: true,
+    }));
+
+    void routeEnrichmentService
+      .enrichRoute(selectedRoute)
+      .then((enrichment) => {
+        if (cancelled) return;
+        setRouteEnrichments((current) => ({
+          ...current,
+          [selectedRoute.id]: enrichment,
+        }));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRouteEnrichmentLoading((current) => ({
+          ...current,
+          [selectedRoute.id]: false,
+        }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRoute]);
 
   // Load persisted sessions from localStorage when the user logs in (stub until #37)
   useEffect(() => {
@@ -216,6 +268,8 @@ function App() {
 
   // The Willowbrook River route (id '1') is the default guest route
   const willowbrookRoute = useMemo(() => routes.find(r => r.id === '1') ?? null, [routes]);
+  const selectedRouteEnrichment = selectedRoute ? routeEnrichments[selectedRoute.id] ?? null : null;
+  const selectedRouteEnrichmentLoading = selectedRoute ? !!routeEnrichmentLoading[selectedRoute.id] : false;
 
   const handleQuickStart = useCallback(() => {
     setIsGuestMode(true);
@@ -782,6 +836,10 @@ function App() {
                     ))}
                   </div>
 
+                  {selectedRouteEnrichmentLoading && (
+                    <p className="route-enrichment-status">Loading route data…</p>
+                  )}
+
                   {!isGuestMode && selectedWorkout && (
                     <div className="selected-workout-info">
                       <span>🎯 {selectedWorkout.name}</span>
@@ -849,6 +907,9 @@ function App() {
                           <span>•</span>
                           <span>{route.estimatedTime} min</span>
                         </div>
+                        {routeEnrichmentLoading[route.id] && (
+                          <p className="route-item-status">Loading route data…</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -891,6 +952,7 @@ function App() {
                   >
                     <Rower3D
                       route={selectedRoute!}
+                      enrichment={selectedRouteEnrichment}
                       paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined}
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}

@@ -503,6 +503,14 @@ body {
   color: var(--color-text-secondary);
 }
 
+.route-enrichment-status,
+.route-item-status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
 .route-info-overlay .route-description {
   margin: 0;
   font-size: 15px;

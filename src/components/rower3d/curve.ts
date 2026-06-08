@@ -8,7 +8,102 @@
  */
 import * as THREE from 'three';
 import type { Coordinate } from '../../types/index';
-import { latLngToMeters } from '../../utils/geoUtils';
+import { distanceBetweenLatLng, latLngToMeters } from '../../utils/geoUtils';
+
+export const DEFAULT_ROUTE_POINT_RESOLUTION_METERS = 10;
+
+const cubicHermite = (
+  p0: number,
+  p1: number,
+  m0: number,
+  m1: number,
+  t: number,
+): number => {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (
+    (2 * t3 - 3 * t2 + 1) * p0 +
+    (t3 - 2 * t2 + t) * m0 +
+    (-2 * t3 + 3 * t2) * p1 +
+    (t3 - t2) * m1
+  );
+};
+
+export const upsampleRouteCoordinates = (
+  coordinates: Coordinate[],
+  minResolutionMeters: number = DEFAULT_ROUTE_POINT_RESOLUTION_METERS,
+): Coordinate[] => {
+  if (coordinates.length < 2 || minResolutionMeters <= 0) {
+    return coordinates;
+  }
+
+  const tangents = coordinates.map((coord, index) => {
+    const previous = coordinates[Math.max(0, index - 1)];
+    const next = coordinates[Math.min(coordinates.length - 1, index + 1)];
+
+    if (index === 0) {
+      return {
+        lat: next.lat - coord.lat,
+        lng: next.lng - coord.lng,
+      };
+    }
+
+    if (index === coordinates.length - 1) {
+      return {
+        lat: coord.lat - previous.lat,
+        lng: coord.lng - previous.lng,
+      };
+    }
+
+    return {
+      lat: (next.lat - previous.lat) / 2,
+      lng: (next.lng - previous.lng) / 2,
+    };
+  });
+
+  const upsampled: Coordinate[] = [];
+
+  for (let index = 0; index < coordinates.length - 1; index++) {
+    const start = coordinates[index];
+    const end = coordinates[index + 1];
+    upsampled.push(start);
+
+    const segmentDistance = distanceBetweenLatLng(
+      start.lat,
+      start.lng,
+      end.lat,
+      end.lng,
+    );
+    const subdivisions = Math.ceil(segmentDistance / minResolutionMeters);
+
+    if (subdivisions <= 1) continue;
+
+    const startTangent = tangents[index];
+    const endTangent = tangents[index + 1];
+    for (let step = 1; step < subdivisions; step++) {
+      const t = step / subdivisions;
+      upsampled.push({
+        lat: cubicHermite(
+          start.lat,
+          end.lat,
+          startTangent.lat,
+          endTangent.lat,
+          t,
+        ),
+        lng: cubicHermite(
+          start.lng,
+          end.lng,
+          startTangent.lng,
+          endTangent.lng,
+          t,
+        ),
+      });
+    }
+  }
+
+  upsampled.push(coordinates[coordinates.length - 1]);
+  return upsampled;
+};
 
 /**
  * Convert a polyline of GPS coordinates into 3D scene points.
@@ -49,8 +144,12 @@ export const gpsToScenePoints = (
 export const createRouteCurve = (
   coordinates: Coordinate[],
   sceneScale: number = 0.1,
+  minResolutionMeters: number = DEFAULT_ROUTE_POINT_RESOLUTION_METERS,
 ): THREE.CatmullRomCurve3 | null => {
-  const points = gpsToScenePoints(coordinates, sceneScale);
+  const points = gpsToScenePoints(
+    upsampleRouteCoordinates(coordinates, minResolutionMeters),
+    sceneScale,
+  );
   if (points.length < 2) return null;
 
   return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);

@@ -1,522 +1,807 @@
-import type { Coordinate } from '../types/index';
-import { distanceBetweenLatLng } from '../utils/geoUtils';
+import type { Coordinate, WaterRoute } from '../types/index';
+import {
+  calculateBearing,
+  distanceBetweenLatLng,
+  normalizeBearingDelta,
+  routeTotalDistanceMeters,
+} from '../utils/geoUtils';
 
-// OpenTopoData API endpoint for SRTM 30m elevation data
-const OPENTOPO_API_URL = 'https://api.opentopodata.org/v1/srtm30m';
+export const OPEN_TOPO_DATA_BATCH_LIMIT = 100;
+export const ROUTE_SEGMENT_LENGTH_METERS = 50;
+export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
+export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
+const ROUTE_ENRICHMENT_CACHE_PREFIX = 'virtualrow:route-enrichment:';
+const SCENE_SCALE = 0.1;
 
-// OSM Overpass API endpoint
-const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
-
-// Cache TTL: 7 days in milliseconds
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-// Maximum points per OpenTopoData batch request
-const ELEVATION_BATCH_SIZE = 100;
-
-// Margin around route bounding box for OSM queries (meters)
-const OSM_QUERY_MARGIN_M = 200;
-
-/**
- * Scenery profile types derived from OSM tags
- */
 export type SceneryProfile =
-  | 'dense-forest'
+  | 'forest'
   | 'residential'
   | 'commercial'
   | 'farmland'
   | 'beach'
   | 'wetland'
-  | 'default';
+  | 'fallback';
 
-/**
- * Water body types from OSM
- */
-export type WaterBodyType = 'river' | 'canal' | 'lake' | 'stream' | 'unknown';
+export type WaterBodyType =
+  | 'river'
+  | 'canal'
+  | 'stream'
+  | 'lake'
+  | 'reservoir'
+  | 'unknown';
 
-/**
- * OSM feature data for a route segment
- */
-export interface OSMFeature {
-  type: 'node' | 'way' | 'relation';
-  id: number;
+export interface RouteSegmentEnrichment {
+  index: number;
+  startMeters: number;
+  endMeters: number;
+  sceneryProfile: SceneryProfile;
+  treeDensity: number;
+  vegetationDensity: number;
+  buildingDensity: number;
+  objectScale: number;
+  waterWidthMeters: number;
+  dragMultiplier: number;
+  bearing: number;
+  bearingDelta: number;
+}
+
+export interface RouteEnrichmentData {
+  routeId: string;
+  elevations: number[];
+  segmentProfiles: RouteSegmentEnrichment[];
+  waterBodyType: WaterBodyType;
+  waterWidthMeters: number;
+  waterColor: string;
+  waveIntensity: number;
+  fetchedAt: number;
+  source: 'network' | 'cache' | 'fallback';
+}
+
+interface CachedRouteEnrichment {
+  savedAt: number;
+  data: RouteEnrichmentData;
+}
+
+interface BoundingBox {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
+interface OverpassGeometryPoint {
+  lat: number;
+  lon: number;
+}
+
+export interface OverpassElement {
+  type: string;
+  id?: number;
   lat?: number;
   lon?: number;
-  tags: Record<string, string>;
-  geometry?: Array<{ lat: number; lon: number }>;
+  bounds?: {
+    minlat: number;
+    minlon: number;
+    maxlat: number;
+    maxlon: number;
+  };
+  geometry?: OverpassGeometryPoint[];
+  tags?: Record<string, string>;
 }
 
-/**
- * Enrichment data for a single route coordinate
- */
-export interface RoutePointEnrichment {
-  elevation?: number; // meters above sea level
-  sceneryProfile: SceneryProfile;
-  waterBodyType: WaterBodyType;
-  bankWidth?: number; // meters
+interface OverpassResponse {
+  elements?: OverpassElement[];
 }
 
-/**
- * Complete enrichment data for a route
- */
-export interface RouteEnrichment {
-  routeId: string;
-  points: RoutePointEnrichment[];
-  osmFeatures: OSMFeature[];
-  waterBodyType: WaterBodyType;
-  defaultBankWidth: number;
-  cachedAt: number; // timestamp
+interface OpenTopoDataResponse {
+  results?: Array<{ elevation: number | null }>;
 }
 
-/**
- * Cache entry structure
- */
-interface CacheEntry {
-  data: RouteEnrichment;
-  timestamp: number;
+interface CacheLookupResult {
+  data: RouteEnrichmentData | null;
+  stale: boolean;
 }
 
-/**
- * Maps OSM tags to VirtualRow scenery profiles
- */
-export function osmTagsToSceneryProfile(tags: Record<string, string>): SceneryProfile {
-  // Forest/woods - dense trees
-  if (tags.landuse === 'forest' || tags.natural === 'wood') {
-    return 'dense-forest';
+export const SCENERY_PROFILE_CONFIG: Record<
+  SceneryProfile,
+  Pick<
+    RouteSegmentEnrichment,
+    'treeDensity' | 'vegetationDensity' | 'buildingDensity' | 'objectScale'
+  >
+> = {
+  forest: {
+    treeDensity: 1,
+    vegetationDensity: 0.85,
+    buildingDensity: 0.05,
+    objectScale: 1.15,
+  },
+  residential: {
+    treeDensity: 0.55,
+    vegetationDensity: 0.55,
+    buildingDensity: 0.4,
+    objectScale: 1,
+  },
+  commercial: {
+    treeDensity: 0.15,
+    vegetationDensity: 0.2,
+    buildingDensity: 0.8,
+    objectScale: 1.05,
+  },
+  farmland: {
+    treeDensity: 0.22,
+    vegetationDensity: 0.45,
+    buildingDensity: 0.08,
+    objectScale: 0.9,
+  },
+  beach: {
+    treeDensity: 0.18,
+    vegetationDensity: 0.35,
+    buildingDensity: 0.04,
+    objectScale: 0.95,
+  },
+  wetland: {
+    treeDensity: 0.3,
+    vegetationDensity: 0.8,
+    buildingDensity: 0.03,
+    objectScale: 0.92,
+  },
+  fallback: {
+    treeDensity: 0.45,
+    vegetationDensity: 0.5,
+    buildingDensity: 0.1,
+    objectScale: 1,
+  },
+};
+
+const defaultStorage = () => {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+};
+
+export const getRouteEnrichmentCacheKey = (routeId: string) =>
+  `${ROUTE_ENRICHMENT_CACHE_PREFIX}${routeId}`;
+
+export const splitCoordinatesIntoElevationBatches = (
+  coordinates: Coordinate[],
+  batchSize: number = OPEN_TOPO_DATA_BATCH_LIMIT,
+) => {
+  const batches: Coordinate[][] = [];
+  for (let index = 0; index < coordinates.length; index += batchSize) {
+    batches.push(coordinates.slice(index, index + batchSize));
   }
+  return batches;
+};
 
-  // Residential - mixed trees + buildings
-  if (tags.landuse === 'residential') {
-    return 'residential';
-  }
-
-  // Commercial/industrial - buildings, low vegetation
-  if (tags.landuse === 'commercial' || tags.landuse === 'industrial') {
+export const mapOsmTagsToSceneryProfile = (
+  tags: Record<string, string> = {},
+): SceneryProfile => {
+  if (tags.landuse === 'forest' || tags.natural === 'wood') return 'forest';
+  if (tags.landuse === 'residential') return 'residential';
+  if (
+    tags.landuse === 'commercial' ||
+    tags.landuse === 'industrial' ||
+    tags.building
+  ) {
     return 'commercial';
   }
-
-  // Farmland/grass - sparse vegetation, open fields
-  if (tags.landuse === 'farmland' || tags.landuse === 'grass' || tags.landuse === 'meadow') {
+  if (
+    tags.landuse === 'farmland' ||
+    tags.landuse === 'grass' ||
+    tags.landuse === 'meadow'
+  ) {
     return 'farmland';
   }
+  if (tags.natural === 'beach' || tags.natural === 'sand') return 'beach';
+  if (tags.natural === 'wetland') return 'wetland';
+  return 'fallback';
+};
 
-  // Beach/sand - sandy texture, palms/reeds
-  if (tags.natural === 'beach' || tags.natural === 'sand') {
-    return 'beach';
-  }
-
-  // Wetland - reeds, low scrub
-  if (tags.natural === 'wetland') {
-    return 'wetland';
-  }
-
-  return 'default';
-}
-
-/**
- * Determines water body type from OSM waterway tags
- */
-export function osmTagsToWaterBodyType(tags: Record<string, string>): WaterBodyType {
+export const inferWaterBodyType = (
+  tags: Record<string, string> = {},
+): WaterBodyType => {
   if (tags.waterway === 'river') return 'river';
   if (tags.waterway === 'canal') return 'canal';
   if (tags.waterway === 'stream') return 'stream';
   if (tags.natural === 'water') {
-    // Check if it's a lake/reservoir
-    if (tags.water === 'lake' || tags.water === 'reservoir') return 'lake';
+    if (tags.water === 'reservoir' || tags.water === 'basin') return 'reservoir';
+    return 'lake';
   }
   return 'unknown';
-}
+};
 
-/**
- * Gets default bank width for a water body type
- */
-export function getDefaultBankWidth(waterBodyType: WaterBodyType, osmWidth?: string): number {
-  // Try to parse OSM width attribute first
-  if (osmWidth) {
-    const parsed = parseFloat(osmWidth);
-    if (!isNaN(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  // Fall back to type defaults
+export const getDefaultWaterWidthMeters = (waterBodyType: WaterBodyType) => {
   switch (waterBodyType) {
     case 'river':
-      return 55; // 30-80m range, use middle
+      return 55;
     case 'canal':
-      return 15; // 10-20m range, use middle
+      return 15;
     case 'stream':
-      return 7.5; // 5-10m range, use middle
+      return 7;
     case 'lake':
-      return 100; // Variable, use larger default
+    case 'reservoir':
+      return 45;
     default:
-      return 40; // Reasonable default for unknown
+      return 30;
   }
-}
+};
 
-/**
- * Calculates bounding box for coordinates with margin
- */
-export function calculateBoundingBox(
+const parseWidthMeters = (widthValue?: string) => {
+  if (!widthValue) return null;
+  const parsed = Number.parseFloat(widthValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getWaterAppearance = (waterBodyType: WaterBodyType) => {
+  switch (waterBodyType) {
+    case 'canal':
+      return { waterColor: '#537a94', waveIntensity: 0.78 };
+    case 'stream':
+      return { waterColor: '#487d88', waveIntensity: 0.92 };
+    case 'lake':
+    case 'reservoir':
+      return { waterColor: '#3f7ea8', waveIntensity: 0.88 };
+    case 'river':
+      return { waterColor: '#2f6f93', waveIntensity: 1.1 };
+    default:
+      return { waterColor: '#3a7aa2', waveIntensity: 1 };
+  }
+};
+
+export const calculateBearingDragModifier = (bearingDelta: number) => {
+  if (bearingDelta <= 5) return 1;
+  const clamped = Math.min(45, Math.max(5, bearingDelta));
+  return 1 + ((clamped - 5) / 40) * 0.05;
+};
+
+export const calculateBearingDeltaForSegments = (bearings: number[]) =>
+  bearings.map((bearing, index) =>
+    index === 0 ? 0 : normalizeBearingDelta(bearings[index - 1], bearing),
+  );
+
+const interpolateCoordinateAtDistance = (
   coordinates: Coordinate[],
-  marginMeters = OSM_QUERY_MARGIN_M,
-): { minLat: number; maxLat: number; minLng: number; maxLng: number } {
+  distanceMeters: number,
+): Coordinate => {
+  if (coordinates.length === 0) return { lat: 0, lng: 0 };
+  if (coordinates.length === 1 || distanceMeters <= 0) return coordinates[0];
+
+  let travelled = 0;
+  for (let index = 1; index < coordinates.length; index++) {
+    const start = coordinates[index - 1];
+    const end = coordinates[index];
+    const segmentDistance = distanceBetweenLatLng(
+      start.lat,
+      start.lng,
+      end.lat,
+      end.lng,
+    );
+    if (travelled + segmentDistance >= distanceMeters && segmentDistance > 0) {
+      const t = (distanceMeters - travelled) / segmentDistance;
+      return {
+        lat: start.lat + (end.lat - start.lat) * t,
+        lng: start.lng + (end.lng - start.lng) * t,
+      };
+    }
+    travelled += segmentDistance;
+  }
+
+  return coordinates[coordinates.length - 1];
+};
+
+export const buildBoundingBox = (
+  coordinates: Coordinate[],
+  marginMeters = 200,
+): BoundingBox => {
   if (coordinates.length === 0) {
     throw new Error('Cannot calculate bounding box for empty coordinates');
   }
 
-  let minLat = coordinates[0].lat;
-  let maxLat = coordinates[0].lat;
-  let minLng = coordinates[0].lng;
-  let maxLng = coordinates[0].lng;
-
-  for (const coord of coordinates) {
-    minLat = Math.min(minLat, coord.lat);
-    maxLat = Math.max(maxLat, coord.lat);
-    minLng = Math.min(minLng, coord.lng);
-    maxLng = Math.max(maxLng, coord.lng);
-  }
-
-  // Convert margin from meters to approximate degrees
-  // At equator: 1 degree lat ≈ 111km, 1 degree lng varies by latitude
-  const latMargin = marginMeters / 111000;
-  const avgLat = (minLat + maxLat) / 2;
-  const cosLat = Math.max(Math.abs(Math.cos((avgLat * Math.PI) / 180)), 0.01);
-  const lngMargin = Math.min(marginMeters / (111000 * cosLat), 180);
+  const lats = coordinates.map((coordinate) => coordinate.lat);
+  const lngs = coordinates.map((coordinate) => coordinate.lng);
+  const centerLat =
+    lats.reduce((total, lat) => total + lat, 0) / Math.max(1, coordinates.length);
+  const latMargin = marginMeters / 111320;
+  const lngMargin =
+    marginMeters / (111320 * Math.max(Math.cos((centerLat * Math.PI) / 180), 0.1));
 
   return {
-    minLat: minLat - latMargin,
-    maxLat: maxLat + latMargin,
-    minLng: minLng - lngMargin,
-    maxLng: maxLng + lngMargin,
+    minLat: Math.min(...lats) - latMargin,
+    minLng: Math.min(...lngs) - lngMargin,
+    maxLat: Math.max(...lats) + latMargin,
+    maxLng: Math.max(...lngs) + lngMargin,
   };
-}
+};
 
-/**
- * RouteEnrichmentService handles geospatial data enrichment for routes
- */
+export const osmTagsToSceneryProfile = mapOsmTagsToSceneryProfile;
+export const osmTagsToWaterBodyType = inferWaterBodyType;
+export const calculateBoundingBox = buildBoundingBox;
+
+export const getDefaultBankWidth = (
+  waterBodyType: WaterBodyType,
+  osmWidth?: string,
+) => {
+  const parsedWidth = parseWidthMeters(osmWidth);
+  if (parsedWidth !== null) return parsedWidth;
+
+  switch (waterBodyType) {
+    case 'river':
+      return 55;
+    case 'canal':
+      return 15;
+    case 'stream':
+      return 7.5;
+    case 'lake':
+    case 'reservoir':
+      return 100;
+    default:
+      return 40;
+  }
+};
+
+export const buildOverpassQuery = (coordinates: Coordinate[]) => {
+  const bounds = buildBoundingBox(coordinates);
+  const bbox = `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
+
+  return `
+[out:json][timeout:25];
+(
+  way["landuse"](${bbox});
+  way["natural"](${bbox});
+  way["waterway"](${bbox});
+  way["building"](${bbox});
+  way["leisure"](${bbox});
+  relation["landuse"](${bbox});
+  relation["natural"](${bbox});
+  relation["waterway"](${bbox});
+  relation["building"](${bbox});
+  relation["leisure"](${bbox});
+  node["natural"](${bbox});
+  node["waterway"](${bbox});
+);
+out geom;
+`;
+};
+
+const getElementBounds = (element: OverpassElement): BoundingBox | null => {
+  if (element.bounds) {
+    return {
+      minLat: element.bounds.minlat,
+      minLng: element.bounds.minlon,
+      maxLat: element.bounds.maxlat,
+      maxLng: element.bounds.maxlon,
+    };
+  }
+
+  if (element.geometry && element.geometry.length > 0) {
+    return buildBoundingBox(
+      element.geometry.map((point) => ({ lat: point.lat, lng: point.lon })),
+      0,
+    );
+  }
+
+  if (Number.isFinite(element.lat) && Number.isFinite(element.lon)) {
+    return {
+      minLat: element.lat!,
+      minLng: element.lon!,
+      maxLat: element.lat!,
+      maxLng: element.lon!,
+    };
+  }
+
+  return null;
+};
+
+const pointInBounds = (coordinate: Coordinate, bounds: BoundingBox) =>
+  coordinate.lat >= bounds.minLat &&
+  coordinate.lat <= bounds.maxLat &&
+  coordinate.lng >= bounds.minLng &&
+  coordinate.lng <= bounds.maxLng;
+
+const findNearestFeature = (
+  coordinate: Coordinate,
+  elements: OverpassElement[],
+): OverpassElement | null => {
+  let nearest: OverpassElement | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const element of elements) {
+    const bounds = getElementBounds(element);
+    if (!bounds) continue;
+    if (pointInBounds(coordinate, bounds)) return element;
+
+    const center = {
+      lat: (bounds.minLat + bounds.maxLat) / 2,
+      lng: (bounds.minLng + bounds.maxLng) / 2,
+    };
+    const distance = distanceBetweenLatLng(
+      coordinate.lat,
+      coordinate.lng,
+      center.lat,
+      center.lng,
+    );
+    if (distance < nearestDistance) {
+      nearest = element;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestDistance <= 250 ? nearest : null;
+};
+
+const inferFallbackSceneryProfile = (route: WaterRoute): SceneryProfile => {
+  if (route.tags.includes('forest')) return 'forest';
+  if (route.tags.includes('lake')) return 'beach';
+  if (route.tags.includes('urban')) return 'commercial';
+  if (route.tags.includes('meadow')) return 'farmland';
+  return 'fallback';
+};
+
+const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
+  if (route.tags.includes('canal')) return 'canal';
+  if (route.tags.includes('stream')) return 'stream';
+  if (route.tags.includes('lake')) return 'lake';
+  if (route.tags.includes('reservoir')) return 'reservoir';
+  if (route.tags.includes('river')) return 'river';
+  return 'unknown';
+};
+
+export const createFallbackRouteEnrichment = (
+  route: WaterRoute,
+): RouteEnrichmentData => {
+  const waterBodyType = inferRouteWaterBodyType(route);
+  const sceneryProfile = inferFallbackSceneryProfile(route);
+  const totalDistance = routeTotalDistanceMeters(route.coordinates);
+  const segmentCount = Math.max(1, Math.ceil(totalDistance / ROUTE_SEGMENT_LENGTH_METERS));
+  const widthMeters = getDefaultWaterWidthMeters(waterBodyType);
+  const profileConfig = SCENERY_PROFILE_CONFIG[sceneryProfile];
+  const segmentProfiles: RouteSegmentEnrichment[] = [];
+
+  for (let index = 0; index < segmentCount; index++) {
+    const startMeters = index * ROUTE_SEGMENT_LENGTH_METERS;
+    const endMeters = Math.min(totalDistance, startMeters + ROUTE_SEGMENT_LENGTH_METERS);
+    const startCoord = interpolateCoordinateAtDistance(route.coordinates, startMeters);
+    const endCoord = interpolateCoordinateAtDistance(route.coordinates, endMeters);
+    const bearing = calculateBearing(
+      startCoord.lat,
+      startCoord.lng,
+      endCoord.lat,
+      endCoord.lng,
+    );
+    const previousBearing =
+      segmentProfiles[segmentProfiles.length - 1]?.bearing ?? bearing;
+    const bearingDelta =
+      index === 0 ? 0 : normalizeBearingDelta(previousBearing, bearing);
+
+    segmentProfiles.push({
+      index,
+      startMeters,
+      endMeters,
+      sceneryProfile,
+      waterWidthMeters: widthMeters,
+      dragMultiplier: calculateBearingDragModifier(bearingDelta),
+      bearing,
+      bearingDelta,
+      ...profileConfig,
+    });
+  }
+
+  return {
+    routeId: route.id,
+    elevations: route.coordinates.map(() => 0),
+    segmentProfiles,
+    waterBodyType,
+    waterWidthMeters: widthMeters,
+    ...getWaterAppearance(waterBodyType),
+    fetchedAt: Date.now(),
+    source: 'fallback',
+  };
+};
+
+export const loadCachedRouteEnrichment = (
+  routeId: string,
+  storage: Storage | null = defaultStorage(),
+): CacheLookupResult => {
+  if (!storage) {
+    return { data: null, stale: false };
+  }
+
+  try {
+    const raw = storage.getItem(getRouteEnrichmentCacheKey(routeId));
+    if (!raw) return { data: null, stale: false };
+    const parsed = JSON.parse(raw) as CachedRouteEnrichment;
+    if (!parsed?.data || typeof parsed.savedAt !== 'number') {
+      return { data: null, stale: false };
+    }
+    const stale = Date.now() - parsed.savedAt > ROUTE_ENRICHMENT_CACHE_TTL_MS;
+    return {
+      data: { ...parsed.data, source: 'cache' },
+      stale,
+    };
+  } catch {
+    return { data: null, stale: false };
+  }
+};
+
+export const saveCachedRouteEnrichment = (
+  routeId: string,
+  data: RouteEnrichmentData,
+  storage: Storage | null = defaultStorage(),
+) => {
+  if (!storage) return;
+  const entry: CachedRouteEnrichment = {
+    savedAt: Date.now(),
+    data,
+  };
+  try {
+    storage.setItem(getRouteEnrichmentCacheKey(routeId), JSON.stringify(entry));
+  } catch {
+    return;
+  }
+};
+
+export const getDragMultiplierForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  progress: number,
+) => {
+  if (!segmentProfiles || segmentProfiles.length === 0) return 1;
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const lastIndex = segmentProfiles.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+
+  const lower = segmentProfiles[lowerIndex];
+  const upper = segmentProfiles[upperIndex];
+  return lower.dragMultiplier + (upper.dragMultiplier - lower.dragMultiplier) * blend;
+};
+
+export const getWaterWidthSceneUnitsForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  fallbackWidthMeters: number,
+  progress: number,
+) => {
+  if (!segmentProfiles || segmentProfiles.length === 0) {
+    return fallbackWidthMeters * SCENE_SCALE;
+  }
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const lastIndex = segmentProfiles.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+  const widthMeters =
+    segmentProfiles[lowerIndex].waterWidthMeters +
+    (segmentProfiles[upperIndex].waterWidthMeters -
+      segmentProfiles[lowerIndex].waterWidthMeters) *
+      blend;
+
+  return widthMeters * SCENE_SCALE;
+};
+
+const createSegmentProfilesFromFeatures = (
+  route: WaterRoute,
+  elements: OverpassElement[],
+): RouteSegmentEnrichment[] => {
+  const fallback = createFallbackRouteEnrichment(route);
+  const waterFeatures = elements.filter(
+    (element) => inferWaterBodyType(element.tags) !== 'unknown',
+  );
+  const landFeatures = elements.filter(
+    (element) => mapOsmTagsToSceneryProfile(element.tags) !== 'fallback',
+  );
+  const totalDistance = routeTotalDistanceMeters(route.coordinates);
+  const segmentCount = Math.max(1, Math.ceil(totalDistance / ROUTE_SEGMENT_LENGTH_METERS));
+  const segmentProfiles: RouteSegmentEnrichment[] = [];
+
+  let dominantWaterBodyType = fallback.waterBodyType;
+  let dominantWidth = fallback.waterWidthMeters;
+  if (waterFeatures.length > 0) {
+    const tags = waterFeatures[0].tags ?? {};
+    dominantWaterBodyType = inferWaterBodyType(tags);
+    dominantWidth =
+      parseWidthMeters(tags.width) ?? getDefaultWaterWidthMeters(dominantWaterBodyType);
+  }
+
+  for (let index = 0; index < segmentCount; index++) {
+    const startMeters = index * ROUTE_SEGMENT_LENGTH_METERS;
+    const endMeters = Math.min(totalDistance, startMeters + ROUTE_SEGMENT_LENGTH_METERS);
+    const midpoint = interpolateCoordinateAtDistance(
+      route.coordinates,
+      startMeters + (endMeters - startMeters) / 2,
+    );
+    const startCoord = interpolateCoordinateAtDistance(route.coordinates, startMeters);
+    const endCoord = interpolateCoordinateAtDistance(route.coordinates, endMeters);
+    const bearing = calculateBearing(
+      startCoord.lat,
+      startCoord.lng,
+      endCoord.lat,
+      endCoord.lng,
+    );
+    const nearestLandFeature = findNearestFeature(midpoint, landFeatures);
+    const nearestWaterFeature = findNearestFeature(midpoint, waterFeatures);
+    const sceneryProfile = nearestLandFeature
+      ? mapOsmTagsToSceneryProfile(nearestLandFeature.tags)
+      : fallback.segmentProfiles[Math.min(index, fallback.segmentProfiles.length - 1)]
+          .sceneryProfile;
+    const profileConfig = SCENERY_PROFILE_CONFIG[sceneryProfile];
+    const waterBodyType = nearestWaterFeature
+      ? inferWaterBodyType(nearestWaterFeature.tags)
+      : dominantWaterBodyType;
+    const widthMeters = nearestWaterFeature
+      ? parseWidthMeters(nearestWaterFeature.tags?.width) ??
+        getDefaultWaterWidthMeters(waterBodyType)
+      : dominantWidth;
+
+    dominantWaterBodyType = waterBodyType === 'unknown' ? dominantWaterBodyType : waterBodyType;
+    dominantWidth = widthMeters;
+
+    const previousBearing =
+      segmentProfiles[segmentProfiles.length - 1]?.bearing ?? bearing;
+    const bearingDelta =
+      index === 0 ? 0 : normalizeBearingDelta(previousBearing, bearing);
+
+    segmentProfiles.push({
+      index,
+      startMeters,
+      endMeters,
+      sceneryProfile,
+      waterWidthMeters: widthMeters,
+      dragMultiplier: calculateBearingDragModifier(bearingDelta),
+      bearing,
+      bearingDelta,
+      ...profileConfig,
+    });
+  }
+
+  return segmentProfiles;
+};
+
 export class RouteEnrichmentService {
   private readonly fetchImpl: typeof fetch;
-  private readonly cacheKeyPrefix = 'vr_route_enrichment_';
-  private readonly backgroundRefreshes = new Set<string>();
+  private readonly storage: Storage | null;
+  private readonly inflight = new Map<string, Promise<RouteEnrichmentData>>();
 
-  constructor(fetchImpl: typeof fetch = fetch) {
+  constructor(fetchImpl: typeof fetch = fetch, storage: Storage | null = defaultStorage()) {
     this.fetchImpl = fetchImpl;
+    this.storage = storage;
   }
 
-  /**
-   * Gets cached enrichment data if available and not stale
-   */
-  private getCachedEnrichment(routeId: string): { data: RouteEnrichment; isStale: boolean } | null {
-    try {
-      const cached = localStorage.getItem(this.cacheKeyPrefix + routeId);
-      if (!cached) return null;
-
-      const entry: CacheEntry = JSON.parse(cached);
-      const age = Date.now() - entry.timestamp;
-      return {
-        data: entry.data,
-        isStale: age > CACHE_TTL_MS,
-      };
-    } catch {
-      return null;
-    }
+  readCached(routeId: string) {
+    return loadCachedRouteEnrichment(routeId, this.storage);
   }
 
-  /**
-   * Saves enrichment data to cache
-   */
-  private setCachedEnrichment(routeId: string, data: RouteEnrichment): void {
-    try {
-      const entry: CacheEntry = {
-        data,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem(this.cacheKeyPrefix + routeId, JSON.stringify(entry));
-    } catch {
-      // Ignore localStorage errors (quota exceeded, etc.)
-    }
+  clearCache(routeId: string) {
+    this.storage?.removeItem(getRouteEnrichmentCacheKey(routeId));
   }
 
-  /**
-   * Fetches elevation data from OpenTopoData API in batches
-   */
-  async fetchElevationData(coordinates: Coordinate[]): Promise<Array<number | undefined>> {
-    const elevations: Array<number | undefined> = [];
+  clearAllCache() {
+    if (!this.storage) return;
 
-    // Process in batches of 100 points (API limit)
-    for (let i = 0; i < coordinates.length; i += ELEVATION_BATCH_SIZE) {
-      const batch = coordinates.slice(i, i + ELEVATION_BATCH_SIZE);
-      const locations = batch.map((c) => `${c.lat},${c.lng}`).join('|');
-
-      try {
-        const response = await this.fetchImpl(`${OPENTOPO_API_URL}?locations=${encodeURIComponent(locations)}`);
-        if (!response.ok) {
-          throw new Error(`OpenTopoData API returned ${response.status}`);
-        }
-
-        const data = (await response.json()) as {
-          results: Array<{ elevation: number | null }>;
-        };
-
-        for (const result of data.results) {
-          elevations.push(result.elevation ?? undefined);
-        }
-      } catch (error) {
-        console.warn(
-          `[RouteEnrichment] OpenTopoData batch ${Math.floor(i / ELEVATION_BATCH_SIZE) + 1} failed:`,
-          error,
-        );
-        // Fill with undefined for failed batch
-        for (let j = 0; j < batch.length; j++) {
-          elevations.push(undefined);
-        }
+    for (let index = this.storage.length - 1; index >= 0; index -= 1) {
+      const key = this.storage.key(index);
+      if (key?.startsWith(ROUTE_ENRICHMENT_CACHE_PREFIX)) {
+        this.storage.removeItem(key);
       }
+    }
+  }
+
+  private async fetchElevations(coordinates: Coordinate[]) {
+    const batches = splitCoordinatesIntoElevationBatches(coordinates);
+    const elevations: number[] = [];
+
+    for (const [index, batch] of batches.entries()) {
+      if (import.meta.env?.DEV) {
+        console.debug(
+          `[route-enrichment] OpenTopoData batch ${index + 1}/${batches.length} (${batch.length} points)`,
+        );
+      }
+
+      const locations = batch
+        .map((coordinate) => `${coordinate.lat},${coordinate.lng}`)
+        .join('|');
+      const response = await this.fetchImpl(
+        `${OPEN_TOPO_DATA_URL}?locations=${encodeURIComponent(locations)}`,
+      );
+      if (!response.ok) {
+        throw new Error(`OpenTopoData request failed with HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as OpenTopoDataResponse;
+      elevations.push(
+        ...(payload.results ?? []).map((result) => result.elevation ?? 0),
+      );
+    }
+
+    if (import.meta.env?.DEV) {
+      console.debug(
+        `[route-enrichment] received ${elevations.length} elevation points`,
+      );
     }
 
     return elevations;
   }
 
-  /**
-   * Queries OSM Overpass API for features in route bounding box
-   */
-  async fetchOSMFeatures(coordinates: Coordinate[]): Promise<OSMFeature[]> {
-    const bbox = calculateBoundingBox(coordinates);
+  private async fetchOverpassElements(coordinates: Coordinate[]) {
+    const query = buildOverpassQuery(coordinates);
+    const response = await this.fetchImpl(OVERPASS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: `data=${encodeURIComponent(query)}`,
+    });
 
-    // Overpass QL query for landuse, natural, waterway, building, leisure tags
-    const query = `
-      [out:json][timeout:25];
-      (
-        way["landuse"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        relation["landuse"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        way["natural"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        relation["natural"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        way["waterway"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        relation["waterway"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        way["building"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        relation["building"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        way["leisure"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-        relation["leisure"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
-      );
-      out geom;
-    `.trim();
-
-    try {
-      const response = await this.fetchImpl(OVERPASS_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8',
-        },
-        body: query,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Overpass API returned ${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        elements: Array<{
-          type: string;
-          id: number;
-          lat?: number;
-          lon?: number;
-          tags?: Record<string, string>;
-          geometry?: Array<{ lat: number; lon: number }>;
-        }>;
-      };
-
-      return data.elements.map((el) => ({
-        type: el.type as 'node' | 'way' | 'relation',
-        id: el.id,
-        lat: el.lat,
-        lon: el.lon,
-        tags: el.tags || {},
-        geometry: el.geometry,
-      }));
-    } catch (error) {
-      console.warn('[RouteEnrichment] Overpass API query failed:', error);
-      return [];
+    if (!response.ok) {
+      throw new Error(`Overpass request failed with HTTP ${response.status}`);
     }
+
+    const payload = (await response.json()) as OverpassResponse;
+    return payload.elements ?? [];
   }
 
-  /**
-   * Determines the dominant water body type and width from OSM features
-   */
-  private determineWaterBodyType(osmFeatures: OSMFeature[]): { type: WaterBodyType; width?: string } {
-    const waterwayFeatures = osmFeatures.filter((f) => f.tags.waterway || f.tags.natural === 'water');
-
-    if (waterwayFeatures.length === 0) {
-      return { type: 'unknown' };
-    }
-
-    // Count occurrences of each recognized type
-    const typeCounts = new Map<WaterBodyType, number>();
-    const unknownFeatures: OSMFeature[] = [];
-    const widthByType = new Map<WaterBodyType, string>();
-
-    for (const feature of waterwayFeatures) {
-      const type = osmTagsToWaterBodyType(feature.tags);
-      if (type === 'unknown') {
-        unknownFeatures.push(feature);
-        continue;
-      }
-      typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
-
-      // Store the first width found for each type
-      if (feature.tags.width && !widthByType.has(type)) {
-        widthByType.set(type, feature.tags.width);
-      }
-    }
-
-    if (typeCounts.size === 0) {
-      const firstUnknownWithWidth = unknownFeatures.find((f) => Boolean(f.tags.width));
-      return {
-        type: 'unknown',
-        width: firstUnknownWithWidth?.tags.width,
-      };
-    }
-
-    // Return most common recognized type
-    let maxCount = 0;
-    let dominantType: WaterBodyType = 'unknown';
-    for (const [type, count] of typeCounts) {
-      if (count > maxCount) {
-        maxCount = count;
-        dominantType = type;
-      }
-    }
-
-    return {
-      type: dominantType,
-      width: widthByType.get(dominantType),
-    };
-  }
-
-  /**
-   * Assigns scenery profiles to route points based on OSM features
-   */
-  private assignSceneryProfiles(coordinates: Coordinate[], osmFeatures: OSMFeature[]): SceneryProfile[] {
-    const profiles: SceneryProfile[] = new Array(coordinates.length).fill('default');
-
-    // For each coordinate, find nearby OSM features and determine profile
-    // This is a simplified implementation - in production you'd use spatial indexing
-    for (let i = 0; i < coordinates.length; i++) {
-      const coord = coordinates[i];
-      let bestProfile: SceneryProfile = 'default';
-      let minDistance = Infinity;
-
-      // Find closest feature to this coordinate
-      for (const feature of osmFeatures) {
-        if (!feature.geometry || feature.geometry.length === 0) continue;
-
-        // Check distance to feature geometry
-        for (const point of feature.geometry) {
-          const distance = distanceBetweenLatLng(coord.lat, coord.lng, point.lat, point.lon);
-
-          if (distance < minDistance) {
-            minDistance = distance;
-            bestProfile = osmTagsToSceneryProfile(feature.tags);
-          }
-        }
-      }
-
-      profiles[i] = bestProfile;
-    }
-
-    return profiles;
-  }
-
-  /**
-   * Enriches a route with geospatial data
-   * @param routeId - Unique identifier for the route
-   * @param coordinates - GPS coordinates of the route
-   * @returns Promise resolving to enrichment data
-   */
-  async enrichRoute(routeId: string, coordinates: Coordinate[]): Promise<RouteEnrichment> {
-    // Check cache first
-    const cached = this.getCachedEnrichment(routeId);
-    if (cached) {
-      if (cached.isStale) {
-        console.log(`[RouteEnrichment] Using stale cache for route ${routeId}, refreshing in background...`);
-        void this.refreshEnrichmentInBackground(routeId, coordinates);
-      }
-      console.log(`[RouteEnrichment] Using cached data for route ${routeId}`);
+  async enrichRoute(route: WaterRoute): Promise<RouteEnrichmentData> {
+    const cached = this.readCached(route.id);
+    if (cached.data && !cached.stale) {
       return cached.data;
     }
 
-    return this.fetchAndCacheEnrichment(routeId, coordinates);
-  }
-
-  private async fetchAndCacheEnrichment(routeId: string, coordinates: Coordinate[]): Promise<RouteEnrichment> {
-    console.log(`[RouteEnrichment] Fetching enrichment data for route ${routeId}...`);
-
-    // Fetch elevation and OSM data in parallel
-    const [elevations, osmFeatures] = await Promise.all([this.fetchElevationData(coordinates), this.fetchOSMFeatures(coordinates)]);
-
-    console.log(`[RouteEnrichment] Received ${elevations.length} elevation points, ${osmFeatures.length} OSM features`);
-
-    // Determine water body type and default bank width
-    const waterBodyInfo = this.determineWaterBodyType(osmFeatures);
-    const waterBodyType = waterBodyInfo.type;
-    const defaultBankWidth = getDefaultBankWidth(waterBodyType, waterBodyInfo.width);
-
-    // Assign scenery profiles to each coordinate
-    const sceneryProfiles = this.assignSceneryProfiles(coordinates, osmFeatures);
-
-    // Build enrichment data
-    const points: RoutePointEnrichment[] = coordinates.map((_coord, i) => ({
-      elevation: elevations[i],
-      sceneryProfile: sceneryProfiles[i],
-      waterBodyType,
-      bankWidth: defaultBankWidth,
-    }));
-
-    const enrichment: RouteEnrichment = {
-      routeId,
-      points,
-      osmFeatures,
-      waterBodyType,
-      defaultBankWidth,
-      cachedAt: Date.now(),
-    };
-
-    // Cache the result
-    this.setCachedEnrichment(routeId, enrichment);
-
-    return enrichment;
-  }
-
-  private async refreshEnrichmentInBackground(routeId: string, coordinates: Coordinate[]): Promise<void> {
-    if (this.backgroundRefreshes.has(routeId)) {
-      return;
+    const inflightRequest = this.inflight.get(route.id);
+    if (inflightRequest) {
+      return inflightRequest;
     }
 
-    this.backgroundRefreshes.add(routeId);
-    try {
-      await this.fetchAndCacheEnrichment(routeId, coordinates);
-    } catch {
-      // Keep stale cache if background refresh fails
-    } finally {
-      this.backgroundRefreshes.delete(routeId);
+    if (route.coordinates.length === 0) {
+      return createFallbackRouteEnrichment(route);
     }
-  }
 
-  /**
-   * Clears cached enrichment data for a specific route
-   */
-  clearCache(routeId: string): void {
-    localStorage.removeItem(this.cacheKeyPrefix + routeId);
-  }
+    const request = (async () => {
+      let fallback: RouteEnrichmentData | null = null;
+      const getFallback = () => {
+        fallback ??= createFallbackRouteEnrichment(route);
+        return fallback;
+      };
+      try {
+        const [elevations, elements] = await Promise.all([
+          this.fetchElevations(route.coordinates),
+          this.fetchOverpassElements(route.coordinates),
+        ]);
+        const segmentProfiles = createSegmentProfilesFromFeatures(route, elements);
+        const waterFeatures = elements.filter(
+          (element) => inferWaterBodyType(element.tags) !== 'unknown',
+        );
+        const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
+        const waterBodyType = nearestWaterFeature
+          ? inferWaterBodyType(nearestWaterFeature.tags)
+          : getFallback().waterBodyType;
+        const resolvedWaterBodyType =
+          waterBodyType === 'unknown' ? getFallback().waterBodyType : waterBodyType;
+        const waterWidthMeters =
+          segmentProfiles[0]?.waterWidthMeters ?? getFallback().waterWidthMeters;
 
-  /**
-   * Clears all cached enrichment data
-   */
-  clearAllCache(): void {
-    const keys = Object.keys(localStorage);
-    for (const key of keys) {
-      if (key.startsWith(this.cacheKeyPrefix)) {
-        localStorage.removeItem(key);
+        const enrichment: RouteEnrichmentData = {
+          routeId: route.id,
+          elevations,
+          segmentProfiles,
+          waterBodyType: resolvedWaterBodyType,
+          waterWidthMeters,
+          ...getWaterAppearance(resolvedWaterBodyType),
+          fetchedAt: Date.now(),
+          source: 'network',
+        };
+        saveCachedRouteEnrichment(route.id, enrichment, this.storage);
+        return enrichment;
+      } catch {
+        return getFallback();
       }
-    }
+    })().finally(() => {
+      this.inflight.delete(route.id);
+    });
+
+    this.inflight.set(route.id, request);
+    return request;
   }
 }
 

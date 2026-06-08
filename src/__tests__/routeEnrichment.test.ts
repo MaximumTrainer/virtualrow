@@ -1,651 +1,305 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WaterRoute } from '../types/index';
 import {
+  ROUTE_ENRICHMENT_CACHE_TTL_MS,
   RouteEnrichmentService,
-  osmTagsToSceneryProfile,
-  osmTagsToWaterBodyType,
-  getDefaultBankWidth,
-  calculateBoundingBox,
+  buildOverpassQuery,
+  calculateBearingDeltaForSegments,
+  createFallbackRouteEnrichment,
+  getRouteEnrichmentCacheKey,
+  loadCachedRouteEnrichment,
+  mapOsmTagsToSceneryProfile,
+  saveCachedRouteEnrichment,
+  splitCoordinatesIntoElevationBatches,
 } from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
+
+const routeFixture: WaterRoute = {
+  id: 'route-1',
+  name: 'Test Canal',
+  description: 'Test route',
+  distance: 2,
+  difficulty: 'moderate',
+  location: 'Somewhere',
+  coordinates: [
+    { lat: 51.5, lng: -0.11 },
+    { lat: 51.5005, lng: -0.1097 },
+    { lat: 51.501, lng: -0.1091 },
+    { lat: 51.5014, lng: -0.1084 },
+  ],
+  elevationGain: 0,
+  estimatedTime: 20,
+  tags: ['canal'],
+  createdAt: new Date('2025-01-01T00:00:00Z'),
+};
+
+const routeWithoutWaterTags: WaterRoute = {
+  ...routeFixture,
+  id: 'route-2',
+  tags: [],
+};
+
+describe('route enrichment helpers', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('maps OSM tags to scenery profiles', () => {
+    expect(mapOsmTagsToSceneryProfile({ landuse: 'forest' })).toBe('forest');
+    expect(mapOsmTagsToSceneryProfile({ landuse: 'farmland' })).toBe('farmland');
+    expect(mapOsmTagsToSceneryProfile({ natural: 'wetland' })).toBe('wetland');
+    expect(mapOsmTagsToSceneryProfile({ building: 'yes' })).toBe('commercial');
+    expect(mapOsmTagsToSceneryProfile({})).toBe('fallback');
+  });
+
+  it('splits elevation requests into batches of 100 points', () => {
+    const coordinates = Array.from({ length: 205 }, (_, index) => ({
+      lat: 51 + index * 0.0001,
+      lng: -0.1,
+    }));
+
+    const batches = splitCoordinatesIntoElevationBatches(coordinates);
+
+    expect(batches).toHaveLength(3);
+    expect(batches[0]).toHaveLength(100);
+    expect(batches[1]).toHaveLength(100);
+    expect(batches[2]).toHaveLength(5);
+  });
+
+  it('calculates bearing deltas between consecutive segments', () => {
+    expect(calculateBearingDeltaForSegments([10, 12, 45, 355])).toEqual([
+      0,
+      2,
+      33,
+      50,
+    ]);
+  });
+
+  it('reads fresh and stale cache entries correctly', () => {
+    const cached = createFallbackRouteEnrichment(routeFixture);
+    saveCachedRouteEnrichment(routeFixture.id, cached, localStorage);
+
+    expect(loadCachedRouteEnrichment(routeFixture.id, localStorage)).toMatchObject({
+      stale: false,
+      data: expect.objectContaining({ routeId: routeFixture.id }),
+    });
+
+    const key = getRouteEnrichmentCacheKey(routeFixture.id);
+    const raw = JSON.parse(localStorage.getItem(key) ?? '{}');
+    raw.savedAt = Date.now() - ROUTE_ENRICHMENT_CACHE_TTL_MS - 1000;
+    localStorage.setItem(key, JSON.stringify(raw));
+
+    expect(loadCachedRouteEnrichment(routeFixture.id, localStorage).stale).toBe(true);
+  });
+
+  it('builds an Overpass query with the expected tag filters', () => {
+    const query = buildOverpassQuery(routeFixture.coordinates);
+
+    expect(query).toContain('way["landuse"]');
+    expect(query).toContain('way["waterway"]');
+    expect(query).toContain('relation["building"]');
+    expect(query).toContain('node["natural"]');
+  });
+});
 
 describe('RouteEnrichmentService', () => {
-  describe('osmTagsToSceneryProfile', () => {
-    it('returns dense-forest for forest landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'forest' })).toBe('dense-forest');
-    });
-
-    it('returns dense-forest for wood natural tag', () => {
-      expect(osmTagsToSceneryProfile({ natural: 'wood' })).toBe('dense-forest');
-    });
-
-    it('returns residential for residential landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'residential' })).toBe('residential');
-    });
-
-    it('returns commercial for commercial landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'commercial' })).toBe('commercial');
-    });
-
-    it('returns commercial for industrial landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'industrial' })).toBe('commercial');
-    });
-
-    it('returns farmland for farmland landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'farmland' })).toBe('farmland');
-    });
-
-    it('returns farmland for grass landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'grass' })).toBe('farmland');
-    });
-
-    it('returns farmland for meadow landuse', () => {
-      expect(osmTagsToSceneryProfile({ landuse: 'meadow' })).toBe('farmland');
-    });
-
-    it('returns beach for beach natural tag', () => {
-      expect(osmTagsToSceneryProfile({ natural: 'beach' })).toBe('beach');
-    });
-
-    it('returns beach for sand natural tag', () => {
-      expect(osmTagsToSceneryProfile({ natural: 'sand' })).toBe('beach');
-    });
-
-    it('returns wetland for wetland natural tag', () => {
-      expect(osmTagsToSceneryProfile({ natural: 'wetland' })).toBe('wetland');
-    });
-
-    it('returns default for unknown tags', () => {
-      expect(osmTagsToSceneryProfile({})).toBe('default');
-      expect(osmTagsToSceneryProfile({ foo: 'bar' })).toBe('default');
-    });
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  describe('osmTagsToWaterBodyType', () => {
-    it('returns river for waterway=river', () => {
-      expect(osmTagsToWaterBodyType({ waterway: 'river' })).toBe('river');
-    });
-
-    it('returns canal for waterway=canal', () => {
-      expect(osmTagsToWaterBodyType({ waterway: 'canal' })).toBe('canal');
-    });
-
-    it('returns stream for waterway=stream', () => {
-      expect(osmTagsToWaterBodyType({ waterway: 'stream' })).toBe('stream');
-    });
-
-    it('returns lake for natural=water with water=lake', () => {
-      expect(osmTagsToWaterBodyType({ natural: 'water', water: 'lake' })).toBe('lake');
-    });
-
-    it('returns lake for natural=water with water=reservoir', () => {
-      expect(osmTagsToWaterBodyType({ natural: 'water', water: 'reservoir' })).toBe('lake');
-    });
-
-    it('returns unknown for natural=water without water type', () => {
-      expect(osmTagsToWaterBodyType({ natural: 'water' })).toBe('unknown');
-    });
-
-    it('returns unknown for unrecognized tags', () => {
-      expect(osmTagsToWaterBodyType({})).toBe('unknown');
-      expect(osmTagsToWaterBodyType({ foo: 'bar' })).toBe('unknown');
-    });
-  });
-
-  describe('getDefaultBankWidth', () => {
-    it('returns parsed OSM width when valid', () => {
-      expect(getDefaultBankWidth('river', '45.5')).toBe(45.5);
-      expect(getDefaultBankWidth('canal', '12')).toBe(12);
-    });
-
-    it('returns default for river when no OSM width', () => {
-      expect(getDefaultBankWidth('river')).toBe(55);
-    });
-
-    it('returns default for canal when no OSM width', () => {
-      expect(getDefaultBankWidth('canal')).toBe(15);
-    });
-
-    it('returns default for stream when no OSM width', () => {
-      expect(getDefaultBankWidth('stream')).toBe(7.5);
-    });
-
-    it('returns default for lake when no OSM width', () => {
-      expect(getDefaultBankWidth('lake')).toBe(100);
-    });
-
-    it('returns default for unknown when no OSM width', () => {
-      expect(getDefaultBankWidth('unknown')).toBe(40);
-    });
-
-    it('ignores invalid OSM width and uses default', () => {
-      expect(getDefaultBankWidth('river', 'invalid')).toBe(55);
-      expect(getDefaultBankWidth('river', '-10')).toBe(55);
-      expect(getDefaultBankWidth('river', '0')).toBe(55);
-    });
-  });
-
-  describe('calculateBoundingBox', () => {
-    it('calculates correct bounding box for single point', () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-      const bbox = calculateBoundingBox(coords, 200);
-
-      expect(bbox.minLat).toBeLessThan(50.0);
-      expect(bbox.maxLat).toBeGreaterThan(50.0);
-      expect(bbox.minLng).toBeLessThan(10.0);
-      expect(bbox.maxLng).toBeGreaterThan(10.0);
-    });
-
-    it('calculates correct bounding box for multiple points', () => {
-      const coords: Coordinate[] = [
-        { lat: 50.0, lng: 10.0 },
-        { lat: 51.0, lng: 11.0 },
-        { lat: 49.5, lng: 9.5 },
-      ];
-      const bbox = calculateBoundingBox(coords, 0);
-
-      expect(bbox.minLat).toBe(49.5);
-      expect(bbox.maxLat).toBe(51.0);
-      expect(bbox.minLng).toBe(9.5);
-      expect(bbox.maxLng).toBe(11.0);
-    });
-
-    it('applies margin correctly', () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-      const bboxNoMargin = calculateBoundingBox(coords, 0);
-      const bboxWithMargin = calculateBoundingBox(coords, 200);
-
-      expect(bboxWithMargin.minLat).toBeLessThan(bboxNoMargin.minLat);
-      expect(bboxWithMargin.maxLat).toBeGreaterThan(bboxNoMargin.maxLat);
-      expect(bboxWithMargin.minLng).toBeLessThan(bboxNoMargin.minLng);
-      expect(bboxWithMargin.maxLng).toBeGreaterThan(bboxNoMargin.maxLng);
-    });
-
-    it('throws error for empty coordinates', () => {
-      expect(() => calculateBoundingBox([])).toThrow('Cannot calculate bounding box for empty coordinates');
-    });
-
-    it('keeps longitude bounds finite near the poles', () => {
-      const coords: Coordinate[] = [{ lat: 89.9999, lng: 10.0 }];
-      const bbox = calculateBoundingBox(coords, 200);
-
-      expect(Number.isFinite(bbox.minLng)).toBe(true);
-      expect(Number.isFinite(bbox.maxLng)).toBe(true);
-    });
-  });
-
-  describe('RouteEnrichmentService - caching', () => {
-    let service: RouteEnrichmentService;
-    let mockFetch: any;
-
-    beforeEach(() => {
-      localStorage.clear();
-      mockFetch = vi.fn();
-      service = new RouteEnrichmentService(mockFetch);
-    });
-
-    it('caches enrichment data after first fetch', async () => {
-      const coords: Coordinate[] = [
-        { lat: 50.0, lng: 10.0 },
-        { lat: 50.01, lng: 10.01 },
-      ];
-
-      // Mock API responses
-      mockFetch.mockImplementation((url: string) => {
-        if (typeof url === 'string' && url.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }, { elevation: 105 }],
-              }),
-          });
-        }
-        // OSM Overpass
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [],
-            }),
-        });
-      });
-
-      // First call - should hit APIs
-      const result1 = await service.enrichRoute('test-route', coords);
-      expect(mockFetch).toHaveBeenCalled();
-      expect(result1.points).toHaveLength(2);
-
-      // Reset mock
-      mockFetch.mockClear();
-
-      // Second call - should use cache
-      const result2 = await service.enrichRoute('test-route', coords);
-      expect(mockFetch).not.toHaveBeenCalled();
-      expect(result2.points).toHaveLength(2);
-      expect(result2.routeId).toBe('test-route');
-    });
-
-    it('clears cache for specific route', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockImplementation((url: string) => {
-        if (typeof url === 'string' && url.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }],
-              }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [],
-            }),
-        });
-      });
-
-      // First call
-      await service.enrichRoute('test-route', coords);
-      mockFetch.mockClear();
-
-      // Clear cache
-      service.clearCache('test-route');
-
-      // Should hit APIs again
-      await service.enrichRoute('test-route', coords);
-      expect(mockFetch).toHaveBeenCalled();
-    });
-
-    it('clears all cached enrichment data', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockImplementation((url: string) => {
-        if (typeof url === 'string' && url.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }],
-              }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [],
-            }),
-        });
-      });
-
-      // Cache multiple routes
-      await service.enrichRoute('route-1', coords);
-      await service.enrichRoute('route-2', coords);
-      mockFetch.mockClear();
-
-      // Clear all
-      service.clearAllCache();
-
-      // Should hit APIs for both
-      await service.enrichRoute('route-1', coords);
-      await service.enrichRoute('route-2', coords);
-      expect(mockFetch.mock.calls.length).toBeGreaterThan(0);
-    });
-
-    it('returns stale cache immediately and refreshes in background', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-      const staleData = {
-        routeId: 'test-route',
-        points: [
-          {
-            elevation: 50,
-            sceneryProfile: 'default',
-            waterBodyType: 'unknown',
-            bankWidth: 40,
-          },
-        ],
-        osmFeatures: [],
-        waterBodyType: 'unknown',
-        defaultBankWidth: 40,
-        cachedAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
-      };
-      localStorage.setItem(
-        'vr_route_enrichment_test-route',
-        JSON.stringify({
-          data: staleData,
-          timestamp: Date.now() - 8 * 24 * 60 * 60 * 1000,
+  it('fetches enrichment data, caches it, and reuses the cache on subsequent loads', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: routeFixture.coordinates.map((_, index) => ({
+            elevation: 5 + index,
+          })),
         }),
-      );
-
-      mockFetch.mockImplementation((url: string) => {
-        if (url.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }],
-              }),
-          });
-        }
-
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [],
-            }),
-        });
-      });
-
-      const result = await service.enrichRoute('test-route', coords);
-      expect(result.points[0].elevation).toBe(50);
-      expect(mockFetch).toHaveBeenCalled();
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      mockFetch.mockClear();
-
-      const refreshed = await service.enrichRoute('test-route', coords);
-      expect(refreshed.points[0].elevation).toBe(100);
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('RouteEnrichmentService - elevation fetching', () => {
-    let service: RouteEnrichmentService;
-    let mockFetch: any;
-
-    beforeEach(() => {
-      mockFetch = vi.fn();
-      service = new RouteEnrichmentService(mockFetch);
-    });
-
-    it('fetches elevation data for coordinates', async () => {
-      const coords: Coordinate[] = [
-        { lat: 50.0, lng: 10.0 },
-        { lat: 50.01, lng: 10.01 },
-      ];
-
-      mockFetch.mockResolvedValue({
+      } as Response)
+      .mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            results: [{ elevation: 100 }, { elevation: 105 }],
-          }),
-      });
-
-      const elevations = await service.fetchElevationData(coords);
-
-      expect(elevations).toEqual([100, 105]);
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('opentopodata'));
-    });
-
-    it('batches elevation requests at 100 points', async () => {
-      // Create 250 coordinates (should result in 3 batches: 100, 100, 50)
-      const coords: Coordinate[] = Array.from({ length: 250 }, (_, i) => ({
-        lat: 50.0 + i * 0.001,
-        lng: 10.0 + i * 0.001,
-      }));
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            results: Array(100).fill({ elevation: 100 }),
-          }),
-      });
-
-      await service.fetchElevationData(coords);
-
-      // Should make 3 API calls (250 / 100 = 3 batches)
-      expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(3);
-    });
-
-    it('handles elevation API errors gracefully', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
-
-      const elevations = await service.fetchElevationData(coords);
-
-      expect(elevations).toEqual([undefined]);
-    });
-
-    it('handles null elevation values', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            results: [{ elevation: null }],
-          }),
-      });
-
-      const elevations = await service.fetchElevationData(coords);
-
-      expect(elevations).toEqual([undefined]);
-    });
-  });
-
-  describe('RouteEnrichmentService - OSM fetching', () => {
-    let service: RouteEnrichmentService;
-    let mockFetch: any;
-
-    beforeEach(() => {
-      mockFetch = vi.fn();
-      service = new RouteEnrichmentService(mockFetch);
-    });
-
-    it('fetches OSM features for route bounding box', async () => {
-      const coords: Coordinate[] = [
-        { lat: 50.0, lng: 10.0 },
-        { lat: 50.01, lng: 10.01 },
-      ];
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            elements: [
-              {
-                type: 'way',
-                id: 123,
-                tags: { landuse: 'forest' },
-                geometry: [
-                  { lat: 50.0, lon: 10.0 },
-                  { lat: 50.005, lon: 10.005 },
-                ],
+        json: async () => ({
+          elements: [
+            {
+              type: 'way',
+              tags: { landuse: 'forest' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
               },
-            ],
-          }),
-      });
-
-      const features = await service.fetchOSMFeatures(coords);
-
-      expect(features).toHaveLength(1);
-      expect(features[0].tags.landuse).toBe('forest');
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('overpass'), expect.any(Object));
-      const overpassRequest = mockFetch.mock.calls[0][1];
-      expect(overpassRequest.method).toBe('POST');
-      expect(overpassRequest.headers['Content-Type']).toBe('text/plain;charset=UTF-8');
-      expect(overpassRequest.body).toContain('relation["landuse"]');
-      expect(overpassRequest.body).toContain('relation["natural"]');
-      expect(overpassRequest.body).toContain('relation["waterway"]');
-    });
-
-    it('handles OSM API errors gracefully', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
-
-      const features = await service.fetchOSMFeatures(coords);
-
-      expect(features).toEqual([]);
-    });
-
-    it('handles missing tags in OSM features', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            elements: [
-              {
-                type: 'way',
-                id: 123,
-                // No tags
+            },
+            {
+              type: 'way',
+              tags: { waterway: 'canal', width: '14' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
               },
-            ],
-          }),
-      });
+            },
+          ],
+        }),
+      } as Response);
 
-      const features = await service.fetchOSMFeatures(coords);
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
 
-      expect(features[0].tags).toEqual({});
-    });
+    const first = await service.enrichRoute(routeFixture);
+    const second = await service.enrichRoute(routeFixture);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(first.source).toBe('network');
+    expect(first.elevations).toHaveLength(routeFixture.coordinates.length);
+    expect(first.waterBodyType).toBe('canal');
+    expect(first.segmentProfiles[0].sceneryProfile).toBe('forest');
+    expect(first.segmentProfiles[0].waterWidthMeters).toBe(14);
+    expect(first.segmentProfiles.length).toBeGreaterThan(0);
+    expect(second.source).toBe('cache');
   });
 
-  describe('RouteEnrichmentService - integration', () => {
-    let service: RouteEnrichmentService;
-    let mockFetch: any;
+  it('falls back quietly when the APIs fail', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
 
-    beforeEach(() => {
-      localStorage.clear();
-      mockFetch = vi.fn();
-      service = new RouteEnrichmentService(mockFetch);
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(enrichment.source).toBe('fallback');
+    expect(enrichment.elevations).toHaveLength(routeFixture.coordinates.length);
+    expect(enrichment.segmentProfiles.length).toBeGreaterThan(0);
+  });
+
+  it('returns fallback immediately for routes without coordinates', async () => {
+    const fetchMock = vi.fn();
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
+
+    const enrichment = await service.enrichRoute({
+      ...routeFixture,
+      id: 'route-empty',
+      coordinates: [],
     });
 
-    it('enriches route with full data pipeline', async () => {
-      const coords: Coordinate[] = [
-        { lat: 50.0, lng: 10.0 },
-        { lat: 50.01, lng: 10.01 },
-      ];
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(enrichment.source).toBe('fallback');
+    expect(enrichment.elevations).toEqual([]);
+  });
 
-      mockFetch.mockImplementation((url: string | Request) => {
-        const urlString = typeof url === 'string' ? url : url.url;
-        if (urlString.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }, { elevation: 105 }],
-              }),
-          });
-        }
-        // OSM Overpass
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [
-                {
-                  type: 'way',
-                  id: 123,
-                  tags: { waterway: 'river', width: '50' },
-                  geometry: [
-                    { lat: 50.0, lon: 10.0 },
-                    { lat: 50.005, lon: 10.005 },
-                  ],
-                },
-                {
-                  type: 'way',
-                  id: 124,
-                  tags: { landuse: 'forest' },
-                  geometry: [
-                    { lat: 50.0, lon: 10.0 },
-                    { lat: 50.005, lon: 10.005 },
-                  ],
-                },
-              ],
-            }),
-        });
-      });
-
-      const enrichment = await service.enrichRoute('test-route', coords);
-
-      expect(enrichment.routeId).toBe('test-route');
-      expect(enrichment.points).toHaveLength(2);
-      expect(enrichment.waterBodyType).toBe('river');
-      expect(enrichment.defaultBankWidth).toBe(50); // From OSM width tag
-      expect(enrichment.osmFeatures).toHaveLength(2);
-      expect(enrichment.cachedAt).toBeGreaterThan(0);
-
-      // Check individual points
-      expect(enrichment.points[0].elevation).toBe(100);
-      expect(enrichment.points[1].elevation).toBe(105);
+  it('returns network enrichment when cache writes fail', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: routeFixture.coordinates.map((_, index) => ({
+            elevation: 5 + index,
+          })),
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          elements: [
+            {
+              type: 'way',
+              tags: { landuse: 'forest' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+            {
+              type: 'way',
+              tags: { waterway: 'canal', width: '14' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+          ],
+        }),
+      } as Response);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
     });
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
 
-    it('falls back gracefully when all APIs fail', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
+    const enrichment = await service.enrichRoute(routeFixture);
 
-      mockFetch.mockRejectedValue(new Error('Network error'));
+    expect(setItem).toHaveBeenCalled();
+    expect(enrichment.source).toBe('network');
+    expect(enrichment.waterBodyType).toBe('canal');
+  });
 
-      const enrichment = await service.enrichRoute('test-route', coords);
+  it('derives the water body type from nearby water features even when land features appear first', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: routeWithoutWaterTags.coordinates.map((_, index) => ({
+            elevation: 5 + index,
+          })),
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          elements: [
+            {
+              type: 'way',
+              tags: { landuse: 'forest' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+            {
+              type: 'way',
+              tags: { waterway: 'canal', width: '14' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+          ],
+        }),
+      } as Response);
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
 
-      expect(enrichment.routeId).toBe('test-route');
-      expect(enrichment.points).toHaveLength(1);
-      expect(enrichment.points[0].elevation).toBeUndefined();
-      expect(enrichment.points[0].sceneryProfile).toBe('default');
-      expect(enrichment.waterBodyType).toBe('unknown');
-      expect(enrichment.osmFeatures).toEqual([]);
-    });
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
 
-    it('prefers recognized waterway type over unknown when mixed', async () => {
-      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
-
-      mockFetch.mockImplementation((url: string | Request) => {
-        const urlString = typeof url === 'string' ? url : url.url;
-        if (urlString.includes('opentopodata')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                results: [{ elevation: 100 }],
-              }),
-          });
-        }
-
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              elements: [
-                {
-                  type: 'way',
-                  id: 123,
-                  tags: { waterway: 'river', width: '35' },
-                  geometry: [{ lat: 50.0, lon: 10.0 }],
-                },
-                {
-                  type: 'way',
-                  id: 124,
-                  tags: { natural: 'water' },
-                  geometry: [{ lat: 50.0, lon: 10.0 }],
-                },
-                {
-                  type: 'way',
-                  id: 125,
-                  tags: { natural: 'water' },
-                  geometry: [{ lat: 50.0, lon: 10.0 }],
-                },
-              ],
-            }),
-        });
-      });
-
-      const enrichment = await service.enrichRoute('test-route', coords);
-      expect(enrichment.waterBodyType).toBe('river');
-      expect(enrichment.defaultBankWidth).toBe(35);
-    });
+    expect(enrichment.source).toBe('network');
+    expect(enrichment.waterBodyType).toBe('canal');
   });
 });

@@ -7,6 +7,10 @@ import { useAnimationFrame } from './AnimationContext';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { makeSwayFoliageMaterial } from './vegetationComponents';
+import {
+  getWaterWidthSceneUnitsForProgress,
+  type RouteEnrichmentData,
+} from '../../services/routeEnrichmentService';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -14,17 +18,20 @@ import { makeSwayFoliageMaterial } from './vegetationComponents';
 export interface CurvedRiverbanksProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
+  enrichment?: RouteEnrichmentData | null;
 }
 
-export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme }) => {
+export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
+  curve,
+  theme,
+  enrichment,
+}) => {
   const bankConfig = useMemo(() => getThemeConfig(theme).bank, [theme]);
   
   const { leftBankGeometry, rightBankGeometry } = useMemo(() => {
     if (!curve) return { leftBankGeometry: null, rightBankGeometry: null };
     
     const segments = 200;
-    const waterHalfWidth = WATER_CHANNEL_WIDTH / 2;
-    const bankWidth = RIVERBANK_WIDTH;
     const createBankGeometry = (side: 'left' | 'right') => {
       const positions: number[] = [];
       const normals: number[] = [];
@@ -38,6 +45,13 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme
         
         const up = new THREE.Vector3(0, 1, 0);
         const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+        const waterWidth = getWaterWidthSceneUnitsForProgress(
+          enrichment?.segmentProfiles,
+          enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / 0.1,
+          t,
+        );
+        const waterHalfWidth = waterWidth / 2;
+        const bankWidth = Math.max(RIVERBANK_WIDTH * 0.25, waterWidth * 2.25);
         
         const innerOffset = side === 'left' ? -waterHalfWidth : waterHalfWidth;
         const outerOffset = side === 'left' ? -(waterHalfWidth + bankWidth) : (waterHalfWidth + bankWidth);
@@ -77,7 +91,7 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({ curve, theme
       leftBankGeometry: createBankGeometry('left'),
       rightBankGeometry: createBankGeometry('right')
     };
-  }, [curve]);
+  }, [curve, enrichment]);
 
   useEffect(() => {
     return () => {
@@ -127,9 +141,49 @@ interface CurvedLandscapeProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
   boatProgress: number;
+  enrichment?: RouteEnrichmentData | null;
 }
 
-export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve, theme, boatProgress }) => {
+const getSegmentStyle = (
+  enrichment: RouteEnrichmentData | null | undefined,
+  progress: number,
+) => {
+  const segmentProfiles = enrichment?.segmentProfiles;
+  if (!segmentProfiles || segmentProfiles.length === 0) {
+    return {
+      treeDensity: 0.45,
+      vegetationDensity: 0.5,
+      buildingDensity: 0.12,
+      objectScale: 1,
+    };
+  }
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const lastIndex = segmentProfiles.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+  const lower = segmentProfiles[lowerIndex];
+  const upper = segmentProfiles[upperIndex];
+
+  return {
+    treeDensity: lower.treeDensity + (upper.treeDensity - lower.treeDensity) * blend,
+    vegetationDensity:
+      lower.vegetationDensity +
+      (upper.vegetationDensity - lower.vegetationDensity) * blend,
+    buildingDensity:
+      lower.buildingDensity + (upper.buildingDensity - lower.buildingDensity) * blend,
+    objectScale: lower.objectScale + (upper.objectScale - lower.objectScale) * blend,
+  };
+};
+
+export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
+  curve,
+  theme,
+  boatProgress,
+  enrichment,
+}) => {
   const landscapeElements = useMemo(() => {
     if (!curve) return { leftElements: [], rightElements: [] };
     
@@ -145,42 +199,46 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve,
       const tangent = curve.getTangentAt(t).normalize();
       const up = new THREE.Vector3(0, 1, 0);
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      const segmentStyle = getSegmentStyle(enrichment, t);
       
-      const leftOffset = minOffset + seededRandom(elemIdx * 7 + 1) * 30;
-      const rightOffset = minOffset + seededRandom(elemIdx * 7 + 2) * 30;
+      const leftOffset =
+        minOffset +
+        seededRandom(elemIdx * 7 + 1) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
+      const rightOffset =
+        minOffset +
+        seededRandom(elemIdx * 7 + 2) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
       
       const getElementType = (seedOffset: number): 'tree' | 'mountain' | 'building' => {
         const rand = seededRandom(elemIdx * 7 + seedOffset);
-        switch (theme) {
-          case 'dystopian-thames':
-          case 'scifi-boston':
-            return rand < 0.3 ? 'building' : rand < 0.6 ? 'mountain' : 'tree';
-          case 'crystal-bled':
-          case 'willowbrook':
-            return rand < 0.4 ? 'mountain' : 'tree';
-          default:
-            return rand < 0.2 ? 'building' : rand < 0.4 ? 'mountain' : 'tree';
-        }
+        const buildingThreshold = Math.min(0.8, segmentStyle.buildingDensity * 0.85);
+        const treeThreshold = Math.min(
+          0.98,
+          buildingThreshold + Math.max(0.18, segmentStyle.treeDensity * 0.75),
+        );
+        if (rand < buildingThreshold) return 'building';
+        if (rand < treeThreshold) return 'tree';
+        return 'mountain';
       };
       
-      if (seededRandom(elemIdx * 7 + 4) < 0.6) {
+      const placementChance = 0.1 + segmentStyle.treeDensity * 0.55 + segmentStyle.vegetationDensity * 0.2;
+      if (seededRandom(elemIdx * 7 + 4) < placementChance) {
         const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
         leftPos.y = 0;
         leftElements.push({
           position: leftPos,
           type: getElementType(3),
-          scale: 0.8 + seededRandom(elemIdx * 7 + 5) * 0.8,
+          scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * segmentStyle.objectScale,
           rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2
         });
       }
       
-      if (seededRandom(elemIdx * 7 + 6) < 0.6) {
+      if (seededRandom(elemIdx * 7 + 6) < placementChance) {
         const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
         rightPos.y = 0;
         rightElements.push({
           position: rightPos,
           type: getElementType(7),
-          scale: 0.8 + seededRandom(elemIdx * 7 + 8) * 0.8,
+          scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * segmentStyle.objectScale,
           rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2
         });
       }
@@ -188,7 +246,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve,
     }
     
     return { leftElements, rightElements };
-  }, [curve, theme]);
+  }, [curve, enrichment]);
   
   const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
   const archConfig = useMemo(() => getThemeConfig(theme).architecture, [theme]);
@@ -200,7 +258,6 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({ curve,
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.74, metalness: 0.0, transmission: 0.10, thickness: 0.5, sheen: 0.52, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.65 }, swayTime),
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.4, sheen: 0.58, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.6 }, swayTime),
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.68, metalness: 0.0, transmission: 0.14, thickness: 0.3, sheen: 0.65, sheenColor: new THREE.Color(colors.treeHighlight) }, swayTime),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [colors, swayTime]);
   useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
   useAnimationFrame((time) => { swayTime.value = time; });
