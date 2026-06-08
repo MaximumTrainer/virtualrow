@@ -116,13 +116,14 @@ describe('AuthService', () => {
       expect(url).toContain('response_type=code');
     });
 
-    it('includes properly encoded scopes in the authorization URL', async () => {
+    it('includes comma-separated scopes in the authorization URL', async () => {
       await service.startLogin();
       const url = window.location.href;
-      expect(url).toContain(
-        'scope=ACTIVITY%3AWRITE%20WELLNESS%3AREAD%20SETTINGS%3AWRITE%20CALENDAR%3AWRITE%20LIBRARY%3AREAD',
-      );
+      const parsedUrl = new URL(url);
+      const scope = parsedUrl.searchParams.get('scope');
+      expect(scope).toBe('ACTIVITY:WRITE,WELLNESS:READ,SETTINGS:WRITE,CALENDAR:WRITE,LIBRARY:READ');
       expect(url).not.toContain('scope=ACTIVITY%3AWRITE+WELLNESS%3AREAD');
+      expect(url).not.toContain('scope=ACTIVITY%3AWRITE%20WELLNESS%3AREAD');
     });
   });
 
