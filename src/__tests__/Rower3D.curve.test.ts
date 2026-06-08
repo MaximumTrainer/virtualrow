@@ -7,6 +7,7 @@ import {
   getRoutePositionAtProgress,
   getCurveDistances,
   distanceToProgress,
+  upsampleRouteCoordinates,
 } from '../components/rower3d/curve';
 
 describe('Rower3D curve helpers', () => {
@@ -61,6 +62,19 @@ describe('Rower3D curve helpers', () => {
       ];
       const curve = createRouteCurve(coords);
       expect(curve).toBeInstanceOf(THREE.CatmullRomCurve3);
+    });
+
+    it('upsamples sparse GPS points to the default 10m resolution', () => {
+      const coords: Coordinate[] = [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.001 }, // ~111 m apart
+      ];
+
+      const upsampled = upsampleRouteCoordinates(coords);
+      const curve = createRouteCurve(coords);
+
+      expect(upsampled.length).toBeGreaterThan(2);
+      expect(curve?.points.length).toBe(upsampled.length);
     });
   });
 

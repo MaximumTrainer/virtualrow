@@ -8,6 +8,10 @@ import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import {
+  getDragMultiplierForProgress,
+  type RouteEnrichmentData,
+} from '../services/routeEnrichmentService';
+import {
   createRouteCurve,
   getRoutePositionAtProgress,
   getCurveDistances,
@@ -60,6 +64,7 @@ const detectRouteTheme = (route: WaterRoute): RouteTheme => {
 
 interface Rower3DProps {
   route: WaterRoute;
+  enrichment?: RouteEnrichmentData | null;
   paceSPer500?: number | null;
   distanceMeters?: number | null;
   isPlaying?: boolean;
@@ -94,6 +99,7 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 // ============================================================================
 const RowerScene: React.FC<Rower3DProps> = ({ 
   route, 
+  enrichment,
   paceSPer500, 
   distanceMeters, 
   isPlaying, 
@@ -157,9 +163,16 @@ const RowerScene: React.FC<Rower3DProps> = ({
     }
     
     let targetProgress = boatProgressRef.current;
+    const visualDragMultiplier = getDragMultiplierForProgress(
+      enrichment?.segmentProfiles,
+      boatProgressRef.current,
+    );
+    // Cosmetic-only slowdown on bends: this changes rendered route travel slightly
+    // without altering the WASM physics model or stroke timing.
+    const renderedSpeedMps = speedMps / visualDragMultiplier;
     
     if (isPlaying && speedMps > 0 && totalDistance > 0 && curveData.length > 0) {
-      const progressRate = (speedMps / totalDistance);
+      const progressRate = renderedSpeedMps / totalDistance;
       targetProgress = Math.min(1, boatProgressRef.current + progressRate * delta);
       boatProgressRef.current = targetProgress;
     } else if (!isPlaying && distanceMeters !== null && distanceMeters !== undefined && totalDistance > 0) {
@@ -229,7 +242,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
           totalDistance,
           curveLength: curveData.length
         };
-        window.__ROWER3D_SPEED_MPS = speedMps;
+        window.__ROWER3D_SPEED_MPS = renderedSpeedMps;
         window.__ROWER3D_STROKE_PHASE = boatStateRef.current.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
       }
@@ -356,7 +369,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       <PMREMEnvironment theme={routeTheme} />
       
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
       ) : (
         <PhotorealisticWater boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
       )}
@@ -366,7 +379,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
       
       {routeCurve && (
-        <CurvedRiverbanks curve={routeCurve} theme={routeTheme} />
+        <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
       )}
       
       <MistLayer boatZ={boatZ} theme={routeTheme} />
@@ -376,7 +389,12 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
       
       {routeCurve ? (
-        <CurvedLandscapeElements curve={routeCurve} theme={routeTheme} boatProgress={boatProgress} />
+        <CurvedLandscapeElements
+          curve={routeCurve}
+          theme={routeTheme}
+          boatProgress={boatProgress}
+          enrichment={enrichment}
+        />
       ) : (
         renderThemedLandscape()
       )}
