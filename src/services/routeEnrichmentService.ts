@@ -432,7 +432,7 @@ export class RouteEnrichmentService {
     const sceneryProfiles = this.assignSceneryProfiles(coordinates, osmFeatures);
 
     // Build enrichment data
-    const points: RoutePointEnrichment[] = coordinates.map((coord, i) => ({
+    const points: RoutePointEnrichment[] = coordinates.map((_coord, i) => ({
       elevation: elevations[i],
       sceneryProfile: sceneryProfiles[i],
       waterBodyType,

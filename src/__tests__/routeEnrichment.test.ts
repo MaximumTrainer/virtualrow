@@ -5,10 +5,8 @@ import {
   osmTagsToWaterBodyType,
   getDefaultBankWidth,
   calculateBoundingBox,
-  type Coordinate,
-  type OSMFeature,
-  type RouteEnrichment,
 } from '../services/routeEnrichmentService';
+import type { Coordinate } from '../types/index';
 
 describe('RouteEnrichmentService', () => {
   describe('osmTagsToSceneryProfile', () => {
@@ -169,7 +167,7 @@ describe('RouteEnrichmentService', () => {
 
   describe('RouteEnrichmentService - caching', () => {
     let service: RouteEnrichmentService;
-    let mockFetch: ReturnType<typeof vi.fn>;
+    let mockFetch: any;
 
     beforeEach(() => {
       localStorage.clear();
@@ -292,7 +290,7 @@ describe('RouteEnrichmentService', () => {
 
   describe('RouteEnrichmentService - elevation fetching', () => {
     let service: RouteEnrichmentService;
-    let mockFetch: ReturnType<typeof vi.fn>;
+    let mockFetch: any;
 
     beforeEach(() => {
       mockFetch = vi.fn();
@@ -372,7 +370,7 @@ describe('RouteEnrichmentService', () => {
 
   describe('RouteEnrichmentService - OSM fetching', () => {
     let service: RouteEnrichmentService;
-    let mockFetch: ReturnType<typeof vi.fn>;
+    let mockFetch: any;
 
     beforeEach(() => {
       mockFetch = vi.fn();
@@ -448,7 +446,7 @@ describe('RouteEnrichmentService', () => {
 
   describe('RouteEnrichmentService - integration', () => {
     let service: RouteEnrichmentService;
-    let mockFetch: ReturnType<typeof vi.fn>;
+    let mockFetch: any;
 
     beforeEach(() => {
       localStorage.clear();
