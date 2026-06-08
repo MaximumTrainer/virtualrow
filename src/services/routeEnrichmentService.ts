@@ -707,7 +707,11 @@ export class RouteEnrichmentService {
     }
 
     const request = (async () => {
-      const fallback = createFallbackRouteEnrichment(route);
+      let fallback: RouteEnrichmentData | null = null;
+      const getFallback = () => {
+        fallback ??= createFallbackRouteEnrichment(route);
+        return fallback;
+      };
       try {
         const [elevations, elements] = await Promise.all([
           this.fetchElevations(route.coordinates),
@@ -721,26 +725,26 @@ export class RouteEnrichmentService {
         const waterBodyType =
           segmentProfiles.find((segment) => segment.waterWidthMeters > 0)
             ? inferWaterBodyType(nearestWaterFeature?.tags)
-            : fallback.waterBodyType;
+            : getFallback().waterBodyType;
+        const resolvedWaterBodyType =
+          waterBodyType === 'unknown' ? getFallback().waterBodyType : waterBodyType;
         const waterWidthMeters =
-          segmentProfiles[0]?.waterWidthMeters ?? fallback.waterWidthMeters;
+          segmentProfiles[0]?.waterWidthMeters ?? getFallback().waterWidthMeters;
 
         const enrichment: RouteEnrichmentData = {
           routeId: route.id,
           elevations,
           segmentProfiles,
-          waterBodyType: waterBodyType === 'unknown' ? fallback.waterBodyType : waterBodyType,
+          waterBodyType: resolvedWaterBodyType,
           waterWidthMeters,
-          ...getWaterAppearance(
-            waterBodyType === 'unknown' ? fallback.waterBodyType : waterBodyType,
-          ),
+          ...getWaterAppearance(resolvedWaterBodyType),
           fetchedAt: Date.now(),
           source: 'network',
         };
         saveCachedRouteEnrichment(route.id, enrichment, this.storage);
         return enrichment;
       } catch {
-        return fallback;
+        return getFallback();
       }
     })().finally(() => {
       this.inflight.delete(route.id);
