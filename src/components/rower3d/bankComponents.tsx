@@ -246,7 +246,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     }
     
     return { leftElements, rightElements };
-  }, [curve, enrichment, theme]);
+  }, [curve, enrichment]);
   
   const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
   const archConfig = useMemo(() => getThemeConfig(theme).architecture, [theme]);
@@ -258,7 +258,6 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.74, metalness: 0.0, transmission: 0.10, thickness: 0.5, sheen: 0.52, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.65 }, swayTime),
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.4, sheen: 0.58, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.6 }, swayTime),
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.68, metalness: 0.0, transmission: 0.14, thickness: 0.3, sheen: 0.65, sheenColor: new THREE.Color(colors.treeHighlight) }, swayTime),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [colors, swayTime]);
   useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
   useAnimationFrame((time) => { swayTime.value = time; });

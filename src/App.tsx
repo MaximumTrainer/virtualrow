@@ -149,14 +149,15 @@ function App() {
 
     let cancelled = false;
     const cached = routeEnrichmentService.readCached(selectedRoute.id);
-    if (cached.data) {
+    const cachedData = cached.data;
+    if (cachedData) {
       setRouteEnrichments((current) => ({
         ...current,
-        [selectedRoute.id]: cached.data,
+        [selectedRoute.id]: cachedData,
       }));
     }
 
-    if (cached.data && !cached.stale) {
+    if (cachedData && !cached.stale) {
       setRouteEnrichmentLoading((current) => ({
         ...current,
         [selectedRoute.id]: false,

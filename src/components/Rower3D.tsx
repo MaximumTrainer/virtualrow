@@ -112,8 +112,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
   const landmarkConfig = useMemo(
-    () => getRouteLandmarkConfig(route?.name, route?.tags),
-    [route?.name, route?.tags],
+    () => getRouteLandmarkConfig(route.name, route.tags),
+    [route.name, route.tags],
   );
   
   const routeCurve = useMemo(() => {

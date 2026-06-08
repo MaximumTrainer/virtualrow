@@ -38,10 +38,11 @@ export const WaterReflectionProbe: React.FC<{
   });
 
   useEffect(() => {
+    const material = materialRef.current;
     return () => {
-      if (materialRef.current) {
-        materialRef.current.envMap = null;
-        materialRef.current.needsUpdate = true;
+      if (material) {
+        material.envMap = null;
+        material.needsUpdate = true;
       }
     };
   }, [materialRef]);
@@ -56,11 +57,18 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   const timeUniformRef = useRef({ value: 0 });
+  const waterNormalMapRef = useRef<THREE.Texture | null>(null);
 
   const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
 
   const waterNormalMap = useMemo(() => createWaterNormalMap(3.0), []);
-  useEffect(() => () => { waterNormalMap.dispose(); }, [waterNormalMap]);
+  useEffect(() => {
+    waterNormalMapRef.current = waterNormalMap;
+    return () => {
+      waterNormalMapRef.current = null;
+      waterNormalMap.dispose();
+    };
+  }, [waterNormalMap]);
 
   useEffect(() => {
     if (IS_TEST_MODE) return;
@@ -68,7 +76,7 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
     if (!mat) return;
     attachGerstnerShader(mat, timeUniformRef.current, 'z', theme, waterConfig.waveAmplitude, waterConfig.waveFrequency);
     mat.needsUpdate = true;
-  }, [theme]);
+  }, [theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
@@ -81,9 +89,12 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
       materialRef.current.emissiveIntensity = waterConfig.emissiveIntensity + causticPulse;
     }
 
-    waterNormalMap.offset.x = (time * 0.02) % 1;
-    waterNormalMap.offset.y = (time * 0.01) % 1;
-    waterNormalMap.needsUpdate = true;
+    const normalMap = waterNormalMapRef.current;
+    if (normalMap) {
+      normalMap.offset.x = (time * 0.02) % 1;
+      normalMap.offset.y = (time * 0.01) % 1;
+      normalMap.needsUpdate = true;
+    }
   });
 
   return (
