@@ -185,7 +185,13 @@ export const mapOsmTagsToSceneryProfile = (
   ) {
     return 'commercial';
   }
-  if (tags.landuse === 'farmland' || tags.landuse === 'grass') return 'farmland';
+  if (
+    tags.landuse === 'farmland' ||
+    tags.landuse === 'grass' ||
+    tags.landuse === 'meadow'
+  ) {
+    return 'farmland';
+  }
   if (tags.natural === 'beach' || tags.natural === 'sand') return 'beach';
   if (tags.natural === 'wetland') return 'wetland';
   return 'fallback';
@@ -223,7 +229,7 @@ export const getDefaultWaterWidthMeters = (waterBodyType: WaterBodyType) => {
 const parseWidthMeters = (widthValue?: string) => {
   if (!widthValue) return null;
   const parsed = Number.parseFloat(widthValue);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 const getWaterAppearance = (waterBodyType: WaterBodyType) => {
@@ -287,6 +293,10 @@ export const buildBoundingBox = (
   coordinates: Coordinate[],
   marginMeters = 200,
 ): BoundingBox => {
+  if (coordinates.length === 0) {
+    throw new Error('Cannot calculate bounding box for empty coordinates');
+  }
+
   const lats = coordinates.map((coordinate) => coordinate.lat);
   const lngs = coordinates.map((coordinate) => coordinate.lng);
   const centerLat =
@@ -301,6 +311,32 @@ export const buildBoundingBox = (
     maxLat: Math.max(...lats) + latMargin,
     maxLng: Math.max(...lngs) + lngMargin,
   };
+};
+
+export const osmTagsToSceneryProfile = mapOsmTagsToSceneryProfile;
+export const osmTagsToWaterBodyType = inferWaterBodyType;
+export const calculateBoundingBox = buildBoundingBox;
+
+export const getDefaultBankWidth = (
+  waterBodyType: WaterBodyType,
+  osmWidth?: string,
+) => {
+  const parsedWidth = parseWidthMeters(osmWidth);
+  if (parsedWidth !== null) return parsedWidth;
+
+  switch (waterBodyType) {
+    case 'river':
+      return 55;
+    case 'canal':
+      return 15;
+    case 'stream':
+      return 7.5;
+    case 'lake':
+    case 'reservoir':
+      return 100;
+    default:
+      return 40;
+  }
 };
 
 export const buildOverpassQuery = (coordinates: Coordinate[]) => {
@@ -632,6 +668,21 @@ export class RouteEnrichmentService {
 
   readCached(routeId: string) {
     return loadCachedRouteEnrichment(routeId, this.storage);
+  }
+
+  clearCache(routeId: string) {
+    this.storage?.removeItem(getRouteEnrichmentCacheKey(routeId));
+  }
+
+  clearAllCache() {
+    if (!this.storage) return;
+
+    for (let index = this.storage.length - 1; index >= 0; index -= 1) {
+      const key = this.storage.key(index);
+      if (key?.startsWith(ROUTE_ENRICHMENT_CACHE_PREFIX)) {
+        this.storage.removeItem(key);
+      }
+    }
   }
 
   private async fetchElevations(coordinates: Coordinate[]) {
