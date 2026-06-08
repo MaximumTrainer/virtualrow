@@ -228,8 +228,44 @@ describe('RouteService creation & search', () => {
       imageUrl: undefined,
     });
     expect(newRoute.distance).toBeGreaterThan(0);
+    expect(newRoute.source).toBeUndefined();
     const found = routeService.searchRoutes('Test Custom');
     expect(found.some(r => r.id === newRoute.id)).toBe(true);
+  });
+
+  it('creates a rownative route with source metadata', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '99',
+      name: 'Sample Rownative Course',
+      country: 'Netherlands',
+      distanceMeters: 5000,
+      coordinates: [
+        { lat: 52.37, lng: 4.89 },
+        { lat: 52.38, lng: 4.9 },
+      ],
+      status: 'established',
+    });
+
+    expect(route.source).toBe('rownative');
+    expect(route.distance).toBe(5);
+    expect(route.tags).toContain('rownative');
+    expect(route.tags).toContain('status:established');
+  });
+
+  it('does not add a status tag when rownative status is missing', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '100',
+      name: 'Statusless Course',
+      country: 'Canada',
+      distanceMeters: 3000,
+      coordinates: [
+        { lat: 45.42, lng: -75.69 },
+        { lat: 45.43, lng: -75.68 },
+      ],
+    });
+
+    expect(route.tags).toContain('rownative');
+    expect(route.tags.some((tag) => tag.startsWith('status:'))).toBe(false);
   });
 });
 
@@ -275,6 +311,7 @@ describe('RouteService KML import', () => {
     if (result.status === 'success') {
       expect(result.route.coordinates.length).toBe(3);
       expect(result.route.name).toBe('Test Route');
+      expect(result.route.source).toBe('imported');
     }
   });
 

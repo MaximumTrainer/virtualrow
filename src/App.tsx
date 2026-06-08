@@ -4,6 +4,7 @@ import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
 import { HeartRateSimulator } from './components/HeartRateSimulator';
 import { RouteImport } from './components/RouteImport';
+import { RownativeRouteImport } from './components/RownativeRouteImport';
 import { FTMSDevice } from './components/FTMSDevice';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
@@ -74,6 +75,7 @@ function App() {
   // Auth gate modal — shown when a guest tries a protected action
   const [authGateOpen, setAuthGateOpen] = useState(false);
   const [authGateAction, setAuthGateAction] = useState<string | undefined>(undefined);
+  const [kmlImportOpenSignal, setKmlImportOpenSignal] = useState(0);
   const pendingExportRef = useRef<(() => void) | null>(null);
 
   // Activate guest mode if the URL contains ?guest=true
@@ -463,6 +465,10 @@ function App() {
     setSelectedRoute(route);
   }, []);
 
+  const handleOpenKmlImport = useCallback(() => {
+    setKmlImportOpenSignal((value) => value + 1);
+  }, []);
+
   // Export session as GPX format — prompts sign-in for guest users
   const handleExportGPX = useCallback((session: WorkoutSession) => {
     const doExport = () => {
@@ -802,7 +808,15 @@ function App() {
                   <div className="routes-list">
                     <div className="routes-list-header">
                       <h3>Routes</h3>
-                      <RouteImport onRouteImported={handleRouteImported} />
+                      <RownativeRouteImport
+                        onRouteImported={handleRouteImported}
+                        onOpenKmlImport={handleOpenKmlImport}
+                      />
+                      <RouteImport
+                        key={kmlImportOpenSignal}
+                        onRouteImported={handleRouteImported}
+                        initiallyOpen={kmlImportOpenSignal > 0}
+                      />
                       <div className="route-filters">
                         <div className="filter-group">
                           {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
