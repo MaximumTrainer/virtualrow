@@ -9,6 +9,16 @@ export interface Coordinate {
   lng: number;
 }
 
+// Route enrichment metadata (optional - only present when route has been enriched)
+export interface RouteEnrichmentMetadata {
+  enrichedAt: number; // timestamp when enrichment was performed
+  hasElevationData: boolean;
+  hasOSMData: boolean;
+  waterBodyType: 'river' | 'canal' | 'lake' | 'stream' | 'unknown';
+  defaultBankWidth: number;
+  pointCount: number; // number of enriched coordinate points
+}
+
 // Water route definition
 export interface WaterRoute {
   id: string;
@@ -25,6 +35,7 @@ export interface WaterRoute {
   createdAt: Date;
   userRating?: number;
   source?: 'manual' | 'imported' | 'rownative';
+  enrichment?: RouteEnrichmentMetadata; // Optional enrichment metadata
 }
 
 // Workout session data

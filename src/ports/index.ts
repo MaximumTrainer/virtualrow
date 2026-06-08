@@ -19,6 +19,7 @@ import type { WorkoutGeneratorService } from '../services/workoutGeneratorServic
 import type { WorkoutService } from '../services/workoutService';
 import type { AuthService } from '../services/authService';
 import type { RownativeService } from '../services/rownativeService';
+import type { RouteEnrichmentService } from '../services/routeEnrichmentService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Concept2BluetoothService;
@@ -44,6 +45,9 @@ export type AuthPort = AuthService;
 /** Port for rownative course discovery/import. */
 export type RownativePort = RownativeService;
 
+/** Port for route geospatial data enrichment. */
+export type RouteEnrichmentPort = RouteEnrichmentService;
+
 /**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
@@ -57,4 +61,5 @@ export interface Services {
   heartRateBluetoothService: HeartRateBluetoothPort;
   authService: AuthPort;
   rownativeService: RownativePort;
+  routeEnrichmentService: RouteEnrichmentPort;
 }

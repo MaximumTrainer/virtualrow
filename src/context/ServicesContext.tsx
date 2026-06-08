@@ -20,6 +20,7 @@ import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
 import { authService } from '../services/authService';
 import { rownativeService } from '../services/rownativeService';
+import { routeEnrichmentService } from '../services/routeEnrichmentService';
 
 /** Production-adapter bundle wired from the existing service singletons. */
 export const defaultServices: Services = {
@@ -31,6 +32,7 @@ export const defaultServices: Services = {
   heartRateBluetoothService,
   authService,
   rownativeService,
+  routeEnrichmentService,
 };
 
 const ServicesContext = createContext<Services>(defaultServices);
