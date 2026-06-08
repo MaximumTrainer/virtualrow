@@ -15,6 +15,15 @@ export interface KMLImportCandidate {
   coordinates: Coordinate[];
 }
 
+export interface RownativeRouteImportData {
+  id: string;
+  name: string;
+  country: string;
+  distanceMeters: number;
+  coordinates: Coordinate[];
+  status?: string;
+}
+
 /**
  * Discriminated union returned by importRouteFromKML:
  * - success: exactly one route was found and created
@@ -160,21 +169,22 @@ export class RouteService {
   }
 
   createRoute(data: RouteFormData): WaterRoute {
+    const calculatedDistance = this.calculateRouteDistance(data.coordinates);
+    const distanceKm = data.distanceKm ?? calculatedDistance;
     const newRoute: WaterRoute = {
       id: Date.now().toString(),
       name: data.name,
       description: data.description,
-      distance: this.calculateRouteDistance(data.coordinates),
+      distance: distanceKm,
       difficulty: data.difficulty,
       location: data.location,
       coordinates: data.coordinates,
       elevationGain: 0, // Would be calculated from elevation data
-      estimatedTime: Math.round(
-        (this.calculateRouteDistance(data.coordinates) / 3.5) * 60
-      ), // Rough estimate
+      estimatedTime: data.estimatedTimeMin ?? Math.round((distanceKm / 3.5) * 60), // Rough estimate
       imageUrl: data.imageUrl,
       tags: data.tags,
       createdAt: new Date(),
+      source: data.source,
     };
 
     this.routes.push(newRoute);
@@ -453,6 +463,25 @@ export class RouteService {
       difficulty: meta.difficulty || 'moderate',
       coordinates: candidate.coordinates,
       tags: meta.tags ?? ['imported', 'kml'],
+      source: 'imported',
+    });
+  }
+
+  importRouteFromRownative(data: RownativeRouteImportData): WaterRoute {
+    const distanceKm = Number((data.distanceMeters / 1000).toFixed(2));
+    const difficulty = distanceKm < 4 ? 'easy' : distanceKm < 7 ? 'moderate' : 'hard';
+    const sourceTag = data.status?.trim() ? `status:${data.status.trim().toLowerCase()}` : undefined;
+
+    return this.createRoute({
+      name: data.name,
+      description: `Imported from rownative.icu course ${data.id}.`,
+      location: data.country,
+      difficulty,
+      coordinates: data.coordinates,
+      distanceKm,
+      estimatedTimeMin: Math.round((distanceKm / 3.5) * 60),
+      tags: ['rownative', 'imported', sourceTag].filter((tag): tag is string => Boolean(tag)),
+      source: 'rownative',
     });
   }
 

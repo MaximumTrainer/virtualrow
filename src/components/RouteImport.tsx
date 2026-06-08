@@ -6,12 +6,13 @@ import './RouteImport.css';
 
 interface RouteImportProps {
   onRouteImported: (route: WaterRoute) => void;
+  initiallyOpen?: boolean;
 }
 
 type Difficulty = 'easy' | 'moderate' | 'hard';
 
-export function RouteImport({ onRouteImported }: RouteImportProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function RouteImport({ onRouteImported, initiallyOpen = false }: RouteImportProps) {
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<KMLImportCandidate[] | null>(null);
   const [pendingMeta, setPendingMeta] = useState<{ name: string; difficulty: Difficulty } | null>(null);

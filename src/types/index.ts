@@ -24,6 +24,7 @@ export interface WaterRoute {
   tags: string[];
   createdAt: Date;
   userRating?: number;
+  source?: 'manual' | 'imported' | 'rownative';
 }
 
 // Workout session data
@@ -156,6 +157,9 @@ export interface RouteFormData {
   coordinates: Coordinate[];
   tags: string[];
   imageUrl?: string;
+  distanceKm?: number;
+  estimatedTimeMin?: number;
+  source?: WaterRoute['source'];
 }
 
 // Structured workout with intervals (like intervals.icu)

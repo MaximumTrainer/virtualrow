@@ -228,8 +228,28 @@ describe('RouteService creation & search', () => {
       imageUrl: undefined,
     });
     expect(newRoute.distance).toBeGreaterThan(0);
+    expect(newRoute.source).toBeUndefined();
     const found = routeService.searchRoutes('Test Custom');
     expect(found.some(r => r.id === newRoute.id)).toBe(true);
+  });
+
+  it('creates a rownative route with source metadata', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '99',
+      name: 'Sample Rownative Course',
+      country: 'Netherlands',
+      distanceMeters: 5000,
+      coordinates: [
+        { lat: 52.37, lng: 4.89 },
+        { lat: 52.38, lng: 4.9 },
+      ],
+      status: 'established',
+    });
+
+    expect(route.source).toBe('rownative');
+    expect(route.distance).toBe(5);
+    expect(route.tags).toContain('rownative');
+    expect(route.tags).toContain('status:established');
   });
 });
 
