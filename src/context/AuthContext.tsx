@@ -77,18 +77,22 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
       return;
     }
 
-    // Strip the OAuth params from the URL immediately (before async work)
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete('code');
-    cleanUrl.searchParams.delete('state');
-    window.history.replaceState({}, '', cleanUrl.toString());
-
     setIsLoading(true);
     service.handleCallback(code, state).then((authUser) => {
       setUser(authUser);
       setIsLoading(false);
+      
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('code');
+      cleanUrl.searchParams.delete('state');
+      window.history.replaceState({}, '', cleanUrl.toString());
     }).catch(() => {
       setIsLoading(false);
+      
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('code');
+      cleanUrl.searchParams.delete('state');
+      window.history.replaceState({}, '', cleanUrl.toString());
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

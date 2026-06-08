@@ -192,6 +192,44 @@ describe('AuthProvider', () => {
     expect(service.handleCallback).not.toHaveBeenCalled();
   });
 
+  it('handles React 18 Strict Mode double mount without losing authentication', async () => {
+    const callbackUser: AuthUser = { id: 'i5', name: 'Strict Mode User', email: '' };
+    let resolveCallback: (u: AuthUser | null) => void;
+    const promise = new Promise<AuthUser | null>((resolve) => {
+      resolveCallback = resolve;
+    });
+    
+    const handleCallbackMock = vi.fn(() => promise);
+    const service = makeServiceStub({
+      handleCallback: handleCallbackMock,
+    });
+
+    window.history.replaceState({}, '', '/?code=strict-code&state=strict-state');
+
+    const { unmount } = render(
+      <AuthProvider service={service}>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    
+    unmount();
+
+    render(
+      <AuthProvider service={service}>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    
+    await act(async () => {
+      resolveCallback!(callbackUser);
+      await promise;
+    });
+    
+    expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    expect(screen.getByTestId('user-name').textContent).toBe('Strict Mode User');
+    expect(handleCallbackMock).toHaveBeenCalledTimes(2);
+  });
+
   // Intentionally not testing that we remembered originalSearch to stop TS warning  
   void originalSearch;
 });

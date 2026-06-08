@@ -116,6 +116,8 @@ export class AuthService {
     window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}`;
   }
 
+  private callbackPromise: Promise<AuthUser | null> | null = null;
+
   /**
    * Handle the OAuth callback after the user grants permission on intervals.icu.
    * Validates the state parameter, exchanges the code for tokens via the proxy,
@@ -124,6 +126,17 @@ export class AuthService {
    * @returns The authenticated user, or null if the flow failed.
    */
   async handleCallback(code: string, state: string): Promise<AuthUser | null> {
+    if (this.callbackPromise) return this.callbackPromise;
+
+    this.callbackPromise = this._doHandleCallback(code, state);
+    try {
+      return await this.callbackPromise;
+    } finally {
+      this.callbackPromise = null;
+    }
+  }
+
+  private async _doHandleCallback(code: string, state: string): Promise<AuthUser | null> {
     const storedState = sessionStorage.getItem(SK_STATE);
     if (!storedState || storedState !== state) {
       console.error('[AuthService] State mismatch — possible CSRF attack');
