@@ -722,10 +722,9 @@ export class RouteEnrichmentService {
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
         );
         const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
-        const waterBodyType =
-          segmentProfiles.find((segment) => segment.waterWidthMeters > 0)
-            ? inferWaterBodyType(nearestWaterFeature?.tags)
-            : getFallback().waterBodyType;
+        const waterBodyType = nearestWaterFeature
+          ? inferWaterBodyType(nearestWaterFeature.tags)
+          : getFallback().waterBodyType;
         const resolvedWaterBodyType =
           waterBodyType === 'unknown' ? getFallback().waterBodyType : waterBodyType;
         const waterWidthMeters =
