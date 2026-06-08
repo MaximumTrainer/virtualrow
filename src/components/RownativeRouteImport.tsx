@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { rownativeService, type RownativeCourseSummary } from '../services/rownativeService';
+import { useServices } from '../context/ServicesContext';
+import type { RownativeCourseSummary } from '../services/rownativeService';
 import type { WaterRoute } from '../types/index';
 import './RownativeRouteImport.css';
 
@@ -9,6 +10,7 @@ interface RownativeRouteImportProps {
 }
 
 export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: RownativeRouteImportProps) {
+  const { rownativeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [query, setQuery] = useState('');

@@ -21,6 +21,7 @@ describe('ServicesProvider / useServices', () => {
     expect(resolved!.workoutService).toBe(defaultServices.workoutService);
     expect(resolved!.routeService).toBe(defaultServices.routeService);
     expect(resolved!.pm5BluetoothService).toBe(defaultServices.pm5BluetoothService);
+    expect(resolved!.rownativeService).toBe(defaultServices.rownativeService);
   });
 
   it('falls back to defaultServices when no provider is mounted (so legacy tests still work)', () => {
@@ -52,6 +53,8 @@ describe('ServicesProvider / useServices', () => {
       'pm5BluetoothService',
       'ftmsBluetoothService',
       'heartRateBluetoothService',
+      'authService',
+      'rownativeService',
     ];
     for (const key of expected) {
       expect(defaultServices[key]).toBeDefined();

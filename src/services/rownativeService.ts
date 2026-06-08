@@ -45,6 +45,7 @@ export interface RownativeCourseSummary {
 
 export class RownativeService {
   private courseIndexCache: RownativeCourseSummary[] | null = null;
+  private courseIndexPromise: Promise<RownativeCourseSummary[]> | null = null;
   private readonly fetchImpl: typeof fetch;
   private readonly importRoute: (data: RownativeRouteImportData) => WaterRoute;
 
@@ -59,7 +60,7 @@ export class RownativeService {
   private async fetchJson<T>(url: string): Promise<T> {
     const response = await this.fetchImpl(url);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} from ${url}`);
+      throw new Error(`Unable to load rownative course data (HTTP ${response.status}).`);
     }
     return response.json() as Promise<T>;
   }
@@ -68,18 +69,27 @@ export class RownativeService {
     if (this.courseIndexCache) {
       return this.courseIndexCache;
     }
+    if (this.courseIndexPromise) {
+      return this.courseIndexPromise;
+    }
 
-    const raw = await this.fetchJson<RownativeCourseIndexEntry[]>(ROWNATIVE_INDEX_URL);
-    this.courseIndexCache = raw
-      .filter((course) => typeof course.id === 'string' && typeof course.name === 'string')
-      .map((course) => ({
-        id: course.id,
-        name: course.name,
-        country: course.country ?? 'Unknown',
-        distanceMeters: course.distance_m ?? 0,
-        status: course.status,
-      }));
-    return this.courseIndexCache;
+    this.courseIndexPromise = this.fetchJson<RownativeCourseIndexEntry[]>(ROWNATIVE_INDEX_URL)
+      .then((raw) => {
+        this.courseIndexCache = raw
+          .filter((course) => typeof course.id === 'string' && typeof course.name === 'string')
+          .map((course) => ({
+            id: course.id,
+            name: course.name,
+            country: course.country ?? 'Unknown',
+            distanceMeters: course.distance_m ?? 0,
+            status: course.status,
+          }));
+        return this.courseIndexCache;
+      })
+      .finally(() => {
+        this.courseIndexPromise = null;
+      });
+    return this.courseIndexPromise;
   }
 
   async searchCourses(query: string, limit = 30): Promise<RownativeCourseSummary[]> {

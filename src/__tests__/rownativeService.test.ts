@@ -81,4 +81,37 @@ describe('RownativeService', () => {
 
     await expect(service.importCourse(course)).rejects.toThrow('Broken Course (9) has insufficient coordinate data');
   });
+
+  it('reuses the same in-flight index fetch for concurrent callers', async () => {
+    let resolveJson!: (value: Array<{ id: string; name: string; country: string; distance_m: number }>) => void;
+    const jsonPromise = new Promise<Array<{ id: string; name: string; country: string; distance_m: number }>>((resolve) => {
+      resolveJson = resolve;
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => jsonPromise,
+    } as Response);
+
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+    const first = service.searchCourses('river');
+    const second = service.searchCourses('river');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveJson([{ id: '1', name: 'River Course', country: 'Germany', distance_m: 6200 }]);
+
+    const [firstResults, secondResults] = await Promise.all([first, second]);
+    expect(firstResults).toEqual(secondResults);
+  });
+
+  it('does not include raw URLs in HTTP errors', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.searchCourses('river')).rejects.toThrow('Unable to load rownative course data (HTTP 404).');
+    await expect(service.searchCourses('river')).rejects.not.toThrow('raw.githubusercontent.com');
+  });
 });
