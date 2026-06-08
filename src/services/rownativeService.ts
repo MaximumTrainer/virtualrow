@@ -60,7 +60,7 @@ export class RownativeService {
   private async fetchJson<T>(url: string): Promise<T> {
     const response = await this.fetchImpl(url);
     if (!response.ok) {
-      throw new Error(`Unable to load rownative course data (HTTP ${response.status}).`);
+      throw new Error(`Unable to load rownative course data (HTTP ${response.status}). Please try again.`);
     }
     return response.json() as Promise<T>;
   }

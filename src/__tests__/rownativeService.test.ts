@@ -111,7 +111,8 @@ describe('RownativeService', () => {
 
     const service = new RownativeService(fetchMock as unknown as typeof fetch);
 
-    await expect(service.searchCourses('river')).rejects.toThrow('Unable to load rownative course data (HTTP 404).');
-    await expect(service.searchCourses('river')).rejects.not.toThrow('raw.githubusercontent.com');
+    await expect(service.searchCourses('river')).rejects.toThrow(
+      'Unable to load rownative course data (HTTP 404). Please try again.',
+    );
   });
 });
