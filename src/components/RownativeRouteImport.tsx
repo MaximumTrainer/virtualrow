@@ -54,7 +54,7 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
       onRouteImported(imported);
       setIsOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to import rownative course.');
+      setError(e instanceof Error ? e.message : `Failed to import course "${course.name}".`);
     } finally {
       setImportingId(null);
     }

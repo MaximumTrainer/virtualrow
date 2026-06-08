@@ -169,8 +169,7 @@ export class RouteService {
   }
 
   createRoute(data: RouteFormData): WaterRoute {
-    const calculatedDistance = this.calculateRouteDistance(data.coordinates);
-    const distanceKm = data.distanceKm ?? calculatedDistance;
+    const distanceKm = data.distanceKm ?? this.calculateRouteDistance(data.coordinates);
     const newRoute: WaterRoute = {
       id: Date.now().toString(),
       name: data.name,
@@ -430,6 +429,7 @@ export class RouteService {
           difficulty: meta.difficulty || 'moderate',
           coordinates: candidates[0].coordinates,
           tags: meta.tags ?? ['imported', 'kml'],
+          source: 'imported',
         });
         return { status: 'success', route };
       }
@@ -468,9 +468,10 @@ export class RouteService {
   }
 
   importRouteFromRownative(data: RownativeRouteImportData): WaterRoute {
-    const distanceKm = Number((data.distanceMeters / 1000).toFixed(2));
+    const distanceKm = Math.round(data.distanceMeters / 10) / 100;
     const difficulty = distanceKm < 4 ? 'easy' : distanceKm < 7 ? 'moderate' : 'hard';
-    const sourceTag = data.status?.trim() ? `status:${data.status.trim().toLowerCase()}` : undefined;
+    const normalizedStatus = data.status?.trim().toLowerCase();
+    const sourceTag = normalizedStatus ? `status:${normalizedStatus}` : undefined;
 
     return this.createRoute({
       name: data.name,
