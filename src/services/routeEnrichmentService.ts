@@ -1,4 +1,5 @@
 import type { Coordinate } from '../types/index';
+import { distanceBetweenLatLng } from '../utils/geoUtils';
 
 // OpenTopoData API endpoint for SRTM 30m elevation data
 const OPENTOPO_API_URL = 'https://api.opentopodata.org/v1/srtm30m';
@@ -179,7 +180,8 @@ export function calculateBoundingBox(
   // At equator: 1 degree lat ≈ 111km, 1 degree lng varies by latitude
   const latMargin = marginMeters / 111000;
   const avgLat = (minLat + maxLat) / 2;
-  const lngMargin = marginMeters / (111000 * Math.cos((avgLat * Math.PI) / 180));
+  const cosLat = Math.max(Math.abs(Math.cos((avgLat * Math.PI) / 180)), 0.01);
+  const lngMargin = Math.min(marginMeters / (111000 * cosLat), 180);
 
   return {
     minLat: minLat - latMargin,
@@ -195,6 +197,7 @@ export function calculateBoundingBox(
 export class RouteEnrichmentService {
   private readonly fetchImpl: typeof fetch;
   private readonly cacheKeyPrefix = 'vr_route_enrichment_';
+  private readonly backgroundRefreshes = new Set<string>();
 
   constructor(fetchImpl: typeof fetch = fetch) {
     this.fetchImpl = fetchImpl;
@@ -203,21 +206,17 @@ export class RouteEnrichmentService {
   /**
    * Gets cached enrichment data if available and not stale
    */
-  private getCachedEnrichment(routeId: string): RouteEnrichment | null {
+  private getCachedEnrichment(routeId: string): { data: RouteEnrichment; isStale: boolean } | null {
     try {
       const cached = localStorage.getItem(this.cacheKeyPrefix + routeId);
       if (!cached) return null;
 
       const entry: CacheEntry = JSON.parse(cached);
       const age = Date.now() - entry.timestamp;
-
-      if (age > CACHE_TTL_MS) {
-        // Stale cache, remove it
-        localStorage.removeItem(this.cacheKeyPrefix + routeId);
-        return null;
-      }
-
-      return entry.data;
+      return {
+        data: entry.data,
+        isStale: age > CACHE_TTL_MS,
+      };
     } catch {
       return null;
     }
@@ -263,7 +262,10 @@ export class RouteEnrichmentService {
           elevations.push(result.elevation ?? undefined);
         }
       } catch (error) {
-        console.warn(`[RouteEnrichment] OpenTopoData batch ${i / ELEVATION_BATCH_SIZE + 1} failed:`, error);
+        console.warn(
+          `[RouteEnrichment] OpenTopoData batch ${Math.floor(i / ELEVATION_BATCH_SIZE) + 1} failed:`,
+          error,
+        );
         // Fill with undefined for failed batch
         for (let j = 0; j < batch.length; j++) {
           elevations.push(undefined);
@@ -285,10 +287,15 @@ export class RouteEnrichmentService {
       [out:json][timeout:25];
       (
         way["landuse"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
+        relation["landuse"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
         way["natural"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
+        relation["natural"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
         way["waterway"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
+        relation["waterway"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
         way["building"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
+        relation["building"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
         way["leisure"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
+        relation["leisure"](${bbox.minLat},${bbox.minLng},${bbox.maxLat},${bbox.maxLng});
       );
       out geom;
     `.trim();
@@ -296,6 +303,9 @@ export class RouteEnrichmentService {
     try {
       const response = await this.fetchImpl(OVERPASS_API_URL, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
         body: query,
       });
 
@@ -338,12 +348,17 @@ export class RouteEnrichmentService {
       return { type: 'unknown' };
     }
 
-    // Count occurrences of each type
+    // Count occurrences of each recognized type
     const typeCounts = new Map<WaterBodyType, number>();
+    const unknownFeatures: OSMFeature[] = [];
     const widthByType = new Map<WaterBodyType, string>();
 
     for (const feature of waterwayFeatures) {
       const type = osmTagsToWaterBodyType(feature.tags);
+      if (type === 'unknown') {
+        unknownFeatures.push(feature);
+        continue;
+      }
       typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
 
       // Store the first width found for each type
@@ -352,7 +367,15 @@ export class RouteEnrichmentService {
       }
     }
 
-    // Return most common type
+    if (typeCounts.size === 0) {
+      const firstUnknownWithWidth = unknownFeatures.find((f) => Boolean(f.tags.width));
+      return {
+        type: 'unknown',
+        width: firstUnknownWithWidth?.tags.width,
+      };
+    }
+
+    // Return most common recognized type
     let maxCount = 0;
     let dominantType: WaterBodyType = 'unknown';
     for (const [type, count] of typeCounts) {
@@ -364,7 +387,7 @@ export class RouteEnrichmentService {
 
     return {
       type: dominantType,
-      width: widthByType.get(dominantType)
+      width: widthByType.get(dominantType),
     };
   }
 
@@ -387,7 +410,7 @@ export class RouteEnrichmentService {
 
         // Check distance to feature geometry
         for (const point of feature.geometry) {
-          const distance = Math.sqrt(Math.pow(coord.lat - point.lat, 2) + Math.pow(coord.lng - point.lon, 2));
+          const distance = distanceBetweenLatLng(coord.lat, coord.lng, point.lat, point.lon);
 
           if (distance < minDistance) {
             minDistance = distance;
@@ -412,10 +435,18 @@ export class RouteEnrichmentService {
     // Check cache first
     const cached = this.getCachedEnrichment(routeId);
     if (cached) {
+      if (cached.isStale) {
+        console.log(`[RouteEnrichment] Using stale cache for route ${routeId}, refreshing in background...`);
+        void this.refreshEnrichmentInBackground(routeId, coordinates);
+      }
       console.log(`[RouteEnrichment] Using cached data for route ${routeId}`);
-      return cached;
+      return cached.data;
     }
 
+    return this.fetchAndCacheEnrichment(routeId, coordinates);
+  }
+
+  private async fetchAndCacheEnrichment(routeId: string, coordinates: Coordinate[]): Promise<RouteEnrichment> {
     console.log(`[RouteEnrichment] Fetching enrichment data for route ${routeId}...`);
 
     // Fetch elevation and OSM data in parallel
@@ -452,6 +483,21 @@ export class RouteEnrichmentService {
     this.setCachedEnrichment(routeId, enrichment);
 
     return enrichment;
+  }
+
+  private async refreshEnrichmentInBackground(routeId: string, coordinates: Coordinate[]): Promise<void> {
+    if (this.backgroundRefreshes.has(routeId)) {
+      return;
+    }
+
+    this.backgroundRefreshes.add(routeId);
+    try {
+      await this.fetchAndCacheEnrichment(routeId, coordinates);
+    } catch {
+      // Keep stale cache if background refresh fails
+    } finally {
+      this.backgroundRefreshes.delete(routeId);
+    }
   }
 
   /**

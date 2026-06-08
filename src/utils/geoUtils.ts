@@ -97,12 +97,24 @@ export function upsampleCoordinates(
     // If distance is greater than min resolution, insert interpolated points
     if (distance > minResolutionMeters) {
       const numSegments = Math.ceil(distance / minResolutionMeters);
+      // Endpoints fall back to clamped tangents, which intentionally trends toward linear interpolation.
+      const prevPrev = i > 1 ? coords[i - 2] : prev;
+      const nextNext = i < coords.length - 1 ? coords[i + 1] : curr;
+      const m1Lat = (curr.lat - prevPrev.lat) * 0.5;
+      const m1Lng = (curr.lng - prevPrev.lng) * 0.5;
+      const m2Lat = (nextNext.lat - prev.lat) * 0.5;
+      const m2Lng = (nextNext.lng - prev.lng) * 0.5;
 
       for (let j = 1; j <= numSegments; j++) {
         const t = j / numSegments;
-        // Linear interpolation (simple but effective for short distances)
-        const lat = prev.lat + (curr.lat - prev.lat) * t;
-        const lng = prev.lng + (curr.lng - prev.lng) * t;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        const h00 = 2 * t3 - 3 * t2 + 1;
+        const h10 = t3 - 2 * t2 + t;
+        const h01 = -2 * t3 + 3 * t2;
+        const h11 = t3 - t2;
+        const lat = h00 * prev.lat + h10 * m1Lat + h01 * curr.lat + h11 * m2Lat;
+        const lng = h00 * prev.lng + h10 * m1Lng + h01 * curr.lng + h11 * m2Lng;
         upsampled.push({ lat, lng });
       }
     } else {

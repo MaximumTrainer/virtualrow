@@ -16,12 +16,12 @@ describe('geoUtils', () => {
 
     it('calculates bearing from west to east (90°)', () => {
       const bearing = bearingBetweenLatLng(50.0, -1.0, 50.0, 1.0);
-      expect(bearing).toBeCloseTo(90, -1); // Allow 1° tolerance for Earth curvature
+      expect(Math.abs(bearing - 90)).toBeLessThanOrEqual(1); // Allow 1° tolerance for floating-point precision
     });
 
     it('calculates bearing from east to west (270°)', () => {
       const bearing = bearingBetweenLatLng(50.0, 1.0, 50.0, -1.0);
-      expect(bearing).toBeCloseTo(270, -1); // Allow 1° tolerance for Earth curvature
+      expect(Math.abs(bearing - 270)).toBeLessThanOrEqual(1); // Allow 1° tolerance for floating-point precision
     });
 
     it('calculates bearing from south to north (0°)', () => {

@@ -8,9 +8,9 @@ The complete enrichment pipeline is ready:
   - OpenTopoData elevation API integration (batched 100 points per request)
   - OSM Overpass API integration for landscape classification
   - Water body type detection (river, canal, lake, stream)
-  - 7-day cache in localStorage (with fallback for auth users)
+  - 7-day cache in localStorage
   - Graceful error handling with fallback to default scenery
-  - **42 passing unit tests**
+  - Comprehensive unit test coverage
 
 - **OSM Tag Mapping**:
   - `landuse=forest` / `natural=wood` → Dense forest profile
@@ -31,7 +31,7 @@ The complete enrichment pipeline is ready:
 - **geoUtils.ts enhancements**:
   - `bearingBetweenLatLng()` - Calculate direction between coordinates (0-360°)
   - `bearingDelta()` - Calculate smallest angle between bearings (-180 to +180°)
-  - `upsampleCoordinates()` - Ensure ≤10m resolution via linear interpolation
+  - `upsampleCoordinates()` - Ensure ≤10m resolution via cubic Hermite interpolation
   - `segmentRoute()` - Divide routes into distance-based chunks (default 50m)
   - **27 passing unit tests**
 
@@ -221,10 +221,15 @@ The complete enrichment pipeline is ready:
   [out:json][timeout:25];
   (
     way["landuse"](bbox);
+    relation["landuse"](bbox);
     way["natural"](bbox);
+    relation["natural"](bbox);
     way["waterway"](bbox);
+    relation["waterway"](bbox);
     way["building"](bbox);
+    relation["building"](bbox);
     way["leisure"](bbox);
+    relation["leisure"](bbox);
   );
   out geom;
   ```

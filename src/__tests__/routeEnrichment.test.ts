@@ -163,6 +163,14 @@ describe('RouteEnrichmentService', () => {
     it('throws error for empty coordinates', () => {
       expect(() => calculateBoundingBox([])).toThrow('Cannot calculate bounding box for empty coordinates');
     });
+
+    it('keeps longitude bounds finite near the poles', () => {
+      const coords: Coordinate[] = [{ lat: 89.9999, lng: 10.0 }];
+      const bbox = calculateBoundingBox(coords, 200);
+
+      expect(Number.isFinite(bbox.minLng)).toBe(true);
+      expect(Number.isFinite(bbox.maxLng)).toBe(true);
+    });
   });
 
   describe('RouteEnrichmentService - caching', () => {
@@ -286,6 +294,63 @@ describe('RouteEnrichmentService', () => {
       await service.enrichRoute('route-2', coords);
       expect(mockFetch.mock.calls.length).toBeGreaterThan(0);
     });
+
+    it('returns stale cache immediately and refreshes in background', async () => {
+      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
+      const staleData = {
+        routeId: 'test-route',
+        points: [
+          {
+            elevation: 50,
+            sceneryProfile: 'default',
+            waterBodyType: 'unknown',
+            bankWidth: 40,
+          },
+        ],
+        osmFeatures: [],
+        waterBodyType: 'unknown',
+        defaultBankWidth: 40,
+        cachedAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
+      };
+      localStorage.setItem(
+        'vr_route_enrichment_test-route',
+        JSON.stringify({
+          data: staleData,
+          timestamp: Date.now() - 8 * 24 * 60 * 60 * 1000,
+        }),
+      );
+
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('opentopodata')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                results: [{ elevation: 100 }],
+              }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              elements: [],
+            }),
+        });
+      });
+
+      const result = await service.enrichRoute('test-route', coords);
+      expect(result.points[0].elevation).toBe(50);
+      expect(mockFetch).toHaveBeenCalled();
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      mockFetch.mockClear();
+
+      const refreshed = await service.enrichRoute('test-route', coords);
+      expect(refreshed.points[0].elevation).toBe(100);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe('RouteEnrichmentService - elevation fetching', () => {
@@ -406,6 +471,12 @@ describe('RouteEnrichmentService', () => {
       expect(features).toHaveLength(1);
       expect(features[0].tags.landuse).toBe('forest');
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('overpass'), expect.any(Object));
+      const overpassRequest = mockFetch.mock.calls[0][1];
+      expect(overpassRequest.method).toBe('POST');
+      expect(overpassRequest.headers['Content-Type']).toBe('text/plain;charset=UTF-8');
+      expect(overpassRequest.body).toContain('relation["landuse"]');
+      expect(overpassRequest.body).toContain('relation["natural"]');
+      expect(overpassRequest.body).toContain('relation["waterway"]');
     });
 
     it('handles OSM API errors gracefully', async () => {
@@ -527,6 +598,54 @@ describe('RouteEnrichmentService', () => {
       expect(enrichment.points[0].sceneryProfile).toBe('default');
       expect(enrichment.waterBodyType).toBe('unknown');
       expect(enrichment.osmFeatures).toEqual([]);
+    });
+
+    it('prefers recognized waterway type over unknown when mixed', async () => {
+      const coords: Coordinate[] = [{ lat: 50.0, lng: 10.0 }];
+
+      mockFetch.mockImplementation((url: string | Request) => {
+        const urlString = typeof url === 'string' ? url : url.url;
+        if (urlString.includes('opentopodata')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                results: [{ elevation: 100 }],
+              }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              elements: [
+                {
+                  type: 'way',
+                  id: 123,
+                  tags: { waterway: 'river', width: '35' },
+                  geometry: [{ lat: 50.0, lon: 10.0 }],
+                },
+                {
+                  type: 'way',
+                  id: 124,
+                  tags: { natural: 'water' },
+                  geometry: [{ lat: 50.0, lon: 10.0 }],
+                },
+                {
+                  type: 'way',
+                  id: 125,
+                  tags: { natural: 'water' },
+                  geometry: [{ lat: 50.0, lon: 10.0 }],
+                },
+              ],
+            }),
+        });
+      });
+
+      const enrichment = await service.enrichRoute('test-route', coords);
+      expect(enrichment.waterBodyType).toBe('river');
+      expect(enrichment.defaultBankWidth).toBe(35);
     });
   });
 });
