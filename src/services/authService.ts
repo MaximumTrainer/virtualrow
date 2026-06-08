@@ -108,12 +108,12 @@ export class AuthService {
       response_type: 'code',
       redirect_uri: getRedirectUri(),
       state,
+      scope: scopes.join(','),
       code_challenge: challenge,
       code_challenge_method: 'S256',
     });
-    const encodedScope = scopes.map(encodeURIComponent).join('%20');
 
-    window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}&scope=${encodedScope}`;
+    window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}`;
   }
 
   /**
