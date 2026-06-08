@@ -32,6 +32,12 @@ const routeFixture: WaterRoute = {
   createdAt: new Date('2025-01-01T00:00:00Z'),
 };
 
+const routeWithoutWaterTags: WaterRoute = {
+  ...routeFixture,
+  id: 'route-2',
+  tags: [],
+};
+
 describe('route enrichment helpers', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -175,5 +181,125 @@ describe('RouteEnrichmentService', () => {
     expect(enrichment.source).toBe('fallback');
     expect(enrichment.elevations).toHaveLength(routeFixture.coordinates.length);
     expect(enrichment.segmentProfiles.length).toBeGreaterThan(0);
+  });
+
+  it('returns fallback immediately for routes without coordinates', async () => {
+    const fetchMock = vi.fn();
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
+
+    const enrichment = await service.enrichRoute({
+      ...routeFixture,
+      id: 'route-empty',
+      coordinates: [],
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(enrichment.source).toBe('fallback');
+    expect(enrichment.elevations).toEqual([]);
+  });
+
+  it('returns network enrichment when cache writes fail', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: routeFixture.coordinates.map((_, index) => ({
+            elevation: 5 + index,
+          })),
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          elements: [
+            {
+              type: 'way',
+              tags: { landuse: 'forest' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+            {
+              type: 'way',
+              tags: { waterway: 'canal', width: '14' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+          ],
+        }),
+      } as Response);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
+
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(setItem).toHaveBeenCalled();
+    expect(enrichment.source).toBe('network');
+    expect(enrichment.waterBodyType).toBe('canal');
+  });
+
+  it('derives the water body type from nearby water features even when land features appear first', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: routeWithoutWaterTags.coordinates.map((_, index) => ({
+            elevation: 5 + index,
+          })),
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          elements: [
+            {
+              type: 'way',
+              tags: { landuse: 'forest' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+            {
+              type: 'way',
+              tags: { waterway: 'canal', width: '14' },
+              bounds: {
+                minlat: 51.499,
+                minlon: -0.112,
+                maxlat: 51.503,
+                maxlon: -0.107,
+              },
+            },
+          ],
+        }),
+      } as Response);
+    const service = new RouteEnrichmentService(
+      fetchMock as unknown as typeof fetch,
+      localStorage,
+    );
+
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
+
+    expect(enrichment.source).toBe('network');
+    expect(enrichment.waterBodyType).toBe('canal');
   });
 });

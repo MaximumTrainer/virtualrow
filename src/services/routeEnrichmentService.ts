@@ -533,7 +533,11 @@ export const saveCachedRouteEnrichment = (
     savedAt: Date.now(),
     data,
   };
-  storage.setItem(getRouteEnrichmentCacheKey(routeId), JSON.stringify(entry));
+  try {
+    storage.setItem(getRouteEnrichmentCacheKey(routeId), JSON.stringify(entry));
+  } catch {
+    return;
+  }
 };
 
 export const getDragMultiplierForProgress = (
@@ -749,6 +753,10 @@ export class RouteEnrichmentService {
       return inflightRequest;
     }
 
+    if (route.coordinates.length === 0) {
+      return createFallbackRouteEnrichment(route);
+    }
+
     const request = (async () => {
       const fallback = createFallbackRouteEnrichment(route);
       try {
@@ -757,11 +765,13 @@ export class RouteEnrichmentService {
           this.fetchOverpassElements(route.coordinates),
         ]);
         const segmentProfiles = createSegmentProfilesFromFeatures(route, elements);
+        const waterFeatures = elements.filter(
+          (element) => inferWaterBodyType(element.tags) !== 'unknown',
+        );
+        const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
         const waterBodyType =
           segmentProfiles.find((segment) => segment.waterWidthMeters > 0)
-            ? inferWaterBodyType(
-                findNearestFeature(route.coordinates[0], elements)?.tags,
-              )
+            ? inferWaterBodyType(nearestWaterFeature?.tags)
             : fallback.waterBodyType;
         const waterWidthMeters =
           segmentProfiles[0]?.waterWidthMeters ?? fallback.waterWidthMeters;
