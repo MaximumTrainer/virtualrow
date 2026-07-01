@@ -70,8 +70,10 @@ export function RouteThumbnail({
     sampled.push(coordinates[i]);
   }
   // Always include the last point
-  if (sampled[sampled.length - 1] !== coordinates[coordinates.length - 1]) {
-    sampled.push(coordinates[coordinates.length - 1]);
+  const last = coordinates[coordinates.length - 1];
+  const sampledLast = sampled[sampled.length - 1];
+  if (sampledLast?.lat !== last.lat || sampledLast?.lng !== last.lng) {
+    sampled.push(last);
   }
 
   const points = sampled.map(toSVG).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');

@@ -35,6 +35,11 @@ import './App.css';
 // Session state type for workout controls
 type SessionState = 'idle' | 'active' | 'paused';
 
+/** Extract the rownative.icu status value from route tags (e.g. "status:provisional" → "provisional"). */
+function extractRouteStatus(tags: string[] | undefined): string | undefined {
+  return tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
+}
+
 function App() {
   const { user, isAuthenticated } = useAuth();
   const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
@@ -896,7 +901,7 @@ function App() {
                       </div>
                     </div>
                     {filteredRoutes.map((route) => {
-                       const rownativeStatus = route.tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
+                       const rownativeStatus = extractRouteStatus(route.tags);
                        return (
                          <div
                            key={route.id}
