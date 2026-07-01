@@ -1891,12 +1891,13 @@ body {
   flex-wrap: wrap;
 }
 
-/* In guest mode, place the rower and HR device panels side by side */
+/* Place the rower and HR device panels side by side (both guest and non-guest routes view) */
 .guest-devices-row {
   display: flex;
   flex-direction: row;
   gap: 8px;
   align-items: stretch;
+  grid-column: 1 / -1;
 }
 
 .guest-devices-row > .device-panel {
