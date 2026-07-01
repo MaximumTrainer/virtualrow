@@ -302,7 +302,7 @@ export class AuthService {
 
         if (!res.ok) {
           console.error('[AuthService] Profile fetch failed:', res.status, profilePath);
-          const canFallback = index === 0 && res.status === 404 && profilePaths.length > 1;
+          const canFallback = this.shouldAttemptProfileFallback(index, res.status, profilePaths.length);
           if (canFallback) continue;
 
           this.lastError = res.status === 401
@@ -415,6 +415,10 @@ export class AuthService {
   private getProfilePaths(athleteId?: string): string[] {
     if (!athleteId) return [ICU_PROFILE_PATH];
     return [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`, ICU_PROFILE_PATH];
+  }
+
+  private shouldAttemptProfileFallback(index: number, status: number, pathCount: number): boolean {
+    return index === 0 && status === 404 && pathCount > 1;
   }
 }
 

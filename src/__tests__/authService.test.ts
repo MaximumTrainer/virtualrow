@@ -196,6 +196,7 @@ describe('AuthService', () => {
         `${PROXY_BASE}${ICU_PROFILE_PATH}/i123`,
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
       );
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('fetches the current athlete profile when the token response omits athlete id', async () => {
