@@ -180,7 +180,7 @@ test.describe('device and connectivity guards', () => {
   test.beforeEach(async ({ page }) => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
   });
 
   test('only PM5 and FTMS are available rower device options', async ({ page }) => {
@@ -267,7 +267,7 @@ test.describe('FTMS rower device support', () => {
   test.beforeEach(async ({ page }) => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
   });
 
   test('device discovery: FTMS rower is selectable in the rower device panel', async ({ page }) => {
@@ -388,7 +388,7 @@ test.describe('Simulated e2e route playback', () => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
 
-    await page.goto('/');
+    await page.goto('./');
     await captureTestEvidence(page, testInfo, '01-initial-page-load');
 
     // Connect PM5
@@ -684,7 +684,7 @@ test.describe('Simulated e2e route playback', () => {
     page.on('pageerror', (err) => console.log('PAGE ERROR:', err.message));
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
     await captureTestEvidence(page, testInfo, '01-multi-route-initial-load');
 
     // Connect PM5
@@ -915,7 +915,7 @@ test.describe('Simulated e2e route playback', () => {
     page.on('pageerror', (err) => console.log('PAGE ERROR:', err.message));
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
 
     // Connect PM5
     await page.waitForSelector('button:has-text("Connect PM5")');
@@ -1021,7 +1021,7 @@ test.describe('docs screenshots', () => {
   test.beforeEach(async ({ page }) => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForSelector('.route-item');
   });
 
@@ -1260,7 +1260,7 @@ test.describe('docs screenshots — other route heroes', () => {
 
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForSelector('.route-item');
 
     // Connect PM5 + HR once; subsequent routes reuse the same connections.
@@ -1396,7 +1396,7 @@ test.describe('activity distance integrity', () => {
   test.beforeEach(async ({ page }) => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
-    await page.goto('/');
+    await page.goto('./');
 
     // Connect PM5
     await page.click('button:has-text("Connect PM5")');

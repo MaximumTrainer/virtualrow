@@ -38,11 +38,23 @@ const INVALID_TEST_EMAIL = 'invalid-test-account@example-does-not-exist.invalid'
 const INVALID_TEST_PASSWORD = 'WrongPassword!@#$%^&*InvalidTest123';
 
 /**
- * True when real OAuth credentials have been injected via environment variables.
- * Both tests in this file require a live intervals.icu client ID to reach the
- * login form, so we gate on the same flag for the sad-path test as well.
+ * True when a real (non-placeholder) intervals.icu OAuth client ID is in use.
+ * When BASE_URL is set we assume the deployed app has a real registered client ID.
+ * When running locally, VITE_INTERVALS_CLIENT_ID must be present and must not be
+ * the CI placeholder value ("playwright-e2e-client").
  */
-const CREDENTIALS_AVAILABLE = TEST_USER.length > 0 && TEST_PASSWORD.length > 0;
+const CLIENT_ID = process.env.VITE_INTERVALS_CLIENT_ID ?? '';
+const HAS_REAL_CLIENT_ID =
+  !!process.env.BASE_URL ||
+  (CLIENT_ID.length > 0 && CLIENT_ID !== 'playwright-e2e-client');
+
+/**
+ * True when real OAuth credentials and a real client ID have been injected via
+ * environment variables. Both tests in this file require a live intervals.icu
+ * client ID to reach the login form, so we gate on the same flag for the
+ * sad-path test as well.
+ */
+const CREDENTIALS_AVAILABLE = TEST_USER.length > 0 && TEST_PASSWORD.length > 0 && HAS_REAL_CLIENT_ID;
 
 // Basic sanity-check on the credential format to surface configuration mistakes early.
 if (CREDENTIALS_AVAILABLE && !TEST_USER.includes('@')) {
@@ -53,7 +65,7 @@ if (CREDENTIALS_AVAILABLE && !TEST_USER.includes('@')) {
 async function gotoWithMocks(page: Page): Promise<void> {
   const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
   await page.addInitScript({ content: initScript });
-  await page.goto('/');
+  await page.goto('./');
   await page.waitForSelector('.app-header', { timeout: 10_000 });
 }
 
@@ -114,13 +126,15 @@ test.describe('intervals.icu authentication flow', () => {
 
       // 4. After a successful credential check, intervals.icu may show an OAuth
       //    consent / authorization screen before redirecting back to the app.
-      //    Wait briefly for the button to appear, then click it if present.
+      //    Only click the consent button if it becomes visible; ignore if absent.
       const authorizeBtn = page.getByRole('button', {
         name: /authoriz|allow|grant|connect/i,
       });
-      await authorizeBtn.waitFor({ state: 'visible', timeout: 8_000 }).catch(() => null);
-      if ((await authorizeBtn.count()) > 0) {
-        await authorizeBtn.click();
+      try {
+        await authorizeBtn.first().waitFor({ state: 'visible', timeout: 8_000 });
+        await authorizeBtn.first().click();
+      } catch {
+        // No consent screen appeared — intervals.icu redirected straight back
       }
 
       // 5. Wait for the OAuth callback redirect back to the VirtualRow app
@@ -178,7 +192,7 @@ test.describe('intervals.icu authentication flow', () => {
       ).toBeVisible({ timeout: 2_000 });
 
       // 7. Navigate back to the app and confirm the user is still unauthenticated
-      await page.goto('/');
+      await page.goto('./');
       await page.waitForSelector('.app-header', { timeout: 10_000 });
       await expect(page.locator('.auth-button--signin')).toBeVisible({ timeout: 5_000 });
       await expect(page.locator('.auth-user-trigger')).not.toBeVisible();
