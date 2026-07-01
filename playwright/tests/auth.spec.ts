@@ -20,7 +20,7 @@ const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 async function gotoWithMocks(page: Page) {
   const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
   await page.addInitScript({ content: initScript });
-  await page.goto('/');
+  await page.goto('./');
   // Wait for the app to mount (app header is a reliable sentinel)
   await page.waitForSelector('.app-header', { timeout: 10_000 });
 }
@@ -121,7 +121,7 @@ test.describe('OAuth callback URL cleanup', () => {
     // Simulate arriving back from intervals.icu with callback params
     // The state won't match sessionStorage so handleCallback returns null,
     // but the URL should still be cleaned up
-    await page.goto('/?code=test-code&state=test-state&other=keep');
+    await page.goto('./?code=test-code&state=test-state&other=keep');
     await page.waitForSelector('.app-header', { timeout: 10_000 });
 
     // Give the useEffect a moment to run
@@ -145,7 +145,7 @@ test.describe('OAuth callback URL cleanup', () => {
       await route.abort();
     });
 
-    await page.goto('/?code=test-code&state=test-state');
+    await page.goto('./?code=test-code&state=test-state');
     await page.waitForSelector('.app-header', { timeout: 10_000 });
 
     // The app starts with isLoading=true when code+state are in URL
@@ -177,7 +177,7 @@ test.describe('authenticated user state', () => {
     // Mock the token refresh call so it returns quickly (to avoid waiting)
     await page.route('**/proxy/api/oauth/token', (route) => route.abort());
 
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForSelector('.app-header', { timeout: 10_000 });
 
     // Give time for async restoreSession to complete
@@ -218,7 +218,7 @@ test.describe('authenticated user state', () => {
       });
     });
 
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForSelector('.app-header', { timeout: 10_000 });
     await page.waitForTimeout(1500);
 

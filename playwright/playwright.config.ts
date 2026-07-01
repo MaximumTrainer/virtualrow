@@ -16,7 +16,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.BASE_URL || 'http://localhost:5173',
     headless: true,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10_000, // 10 seconds
@@ -46,7 +46,7 @@ export default defineConfig({
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },
-  webServer: {
+  webServer: process.env.BASE_URL ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: false,
