@@ -45,10 +45,11 @@
 .auth-login-error {
   font-size: 0.7rem;
   color: var(--color-danger, #f87171);
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 280px;
+  text-align: left;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .auth-spinner {

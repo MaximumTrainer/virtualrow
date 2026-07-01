@@ -698,7 +698,7 @@ function App() {
           </nav>
 
           {currentView === 'routes' && (
-            <div className={isGuestMode ? 'guest-devices-row' : undefined}>
+            <div className="routes-devices-row">
               <div className="device-panel device-panel--selection">
                 <div className="device-panel-heading">
                   <h3 className="panel-title">Rower Device</h3>
