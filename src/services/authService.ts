@@ -271,7 +271,7 @@ export class AuthService {
   private async fetchProfile(accessToken: string): Promise<AuthUser | null> {
     try {
       const res = await fetch(`${PROXY_BASE}${ICU_PROFILE_PATH}`, {
-        headers: { Authorization: ['Bearer', accessToken].join(' ') },
+        headers: { Authorization: 'Bearer '.concat(accessToken) },
       });
 
       if (!res.ok) {
@@ -280,19 +280,19 @@ export class AuthService {
       }
 
       const raw = await res.json() as RawAthleteProfile;
-      const athleteId = raw.id != null ? String(raw.id) : '';
+      if (raw.id == null) {
+        console.error('[AuthService] Profile response missing athlete ID');
+        return null;
+      }
+
+      const athleteId = String(raw.id);
       const fullName = [raw.firstname?.trim(), raw.lastname?.trim()]
         .filter(Boolean)
         .join(' ');
       const name = raw.name?.trim()
         || fullName
         || raw.email?.trim()
-        || (athleteId ? `Athlete ${athleteId}` : '');
-
-      if (!athleteId) {
-        console.error('[AuthService] Profile response missing athlete ID');
-        return null;
-      }
+        || `Athlete ${athleteId}`;
 
       return {
         id: athleteId,

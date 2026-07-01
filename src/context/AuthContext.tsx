@@ -98,7 +98,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
       setIsLoading(false);
 
       if (!authUser) {
-        setAuthError('Sign-in failed: VirtualRow could not load your intervals.icu profile.');
+        setAuthError('Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.');
       }
 
       clearCallbackParams();
