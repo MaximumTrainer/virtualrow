@@ -18,6 +18,7 @@ const Rower3D = lazy(() => import('./components/Rower3D'));
 import { WorkoutGenerator } from './components/WorkoutGenerator';
 import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
 import { HeartRateZonesChart } from './components/HeartRateZonesChart';
+import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { AuthGateModal } from './components/AuthGateModal';
@@ -412,6 +413,11 @@ function App() {
             if (progress) {
               setWorkoutProgress(progress);
               workoutService.updateWorkoutProgress(progress);
+              // Auto-end when the structured workout finishes its final segment
+              if (progress.isComplete) {
+                handleEndWorkout();
+                return;
+              }
             }
           }
           if (latest.heartRate) {
@@ -889,29 +895,50 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    {filteredRoutes.map((route) => (
-                      <div
-                        key={route.id}
-                        className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
-                        onClick={() => handleRouteSelect(route)}
-                      >
-                        <div className="route-item-header">
-                          <h4>{route.name}</h4>
-                          <span className={`badge badge-${route.difficulty}`}>
-                            {route.difficulty}
-                          </span>
-                        </div>
-                        <p className="route-item-location">{route.location}</p>
-                        <div className="route-item-meta">
-                          <span>{route.distance} km</span>
-                          <span>•</span>
-                          <span>{route.estimatedTime} min</span>
-                        </div>
-                        {routeEnrichmentLoading[route.id] && (
-                          <p className="route-item-status">Loading route data…</p>
-                        )}
-                      </div>
-                    ))}
+                    {filteredRoutes.map((route) => {
+                       const rownativeStatus = route.tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
+                       return (
+                         <div
+                           key={route.id}
+                           className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
+                           onClick={() => handleRouteSelect(route)}
+                         >
+                           <div className="route-item-header">
+                             <h4>{route.name}</h4>
+                             <div className="route-item-badges">
+                               <span className={`badge badge-${route.difficulty}`}>
+                                 {route.difficulty}
+                               </span>
+                               {route.source === 'rownative' && (
+                                 <span className="badge badge-source">rownative.icu</span>
+                               )}
+                               {rownativeStatus && (
+                                 <span className={`badge badge-status badge-status--${rownativeStatus}`}>
+                                   {rownativeStatus.charAt(0).toUpperCase() + rownativeStatus.slice(1)}
+                                 </span>
+                               )}
+                             </div>
+                           </div>
+                           <p className="route-item-location">{route.location}</p>
+                           <div className="route-item-meta">
+                             <span>{route.distance} km</span>
+                             <span>•</span>
+                             <span>{route.estimatedTime} min</span>
+                           </div>
+                           {route.coordinates && route.coordinates.length >= 2 && (
+                             <RouteThumbnail
+                               coordinates={route.coordinates}
+                               width={120}
+                               height={60}
+                               className="route-item-thumbnail"
+                             />
+                           )}
+                           {routeEnrichmentLoading[route.id] && (
+                             <p className="route-item-status">Loading route data…</p>
+                           )}
+                         </div>
+                       );
+                     })}
                   </div>
                 )}
               </div>

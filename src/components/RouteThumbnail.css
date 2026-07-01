@@ -1,0 +1,22 @@
+.route-thumbnail {
+  display: block;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.route-thumbnail--placeholder {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.route-thumbnail-line {
+  stroke: var(--color-primary, #4ade80);
+  stroke-width: 2.5;
+  opacity: 0.85;
+}
+
+.route-item.active .route-thumbnail-line {
+  stroke: #ffffff;
+  opacity: 1;
+}

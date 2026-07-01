@@ -133,6 +133,41 @@ describe('WorkoutGeneratorService', () => {
     expect(service.getCurrentProgress()).toBeNull();
   });
 
+  it('should mark progress as complete after the final segment finishes', () => {
+    const service2 = new WorkoutGeneratorService();
+    const singleSegmentWorkout = {
+      id: 'single-seg',
+      name: 'Single Segment Test',
+      description: '',
+      type: 'custom' as const,
+      segments: [
+        {
+          id: 'only-seg',
+          order: 0,
+          type: 'work' as const,
+          duration: 10, // 10 seconds
+        },
+      ],
+      totalDuration: 10,
+      targetMetric: 'time' as const,
+      createdAt: new Date(),
+      source: 'manual' as const,
+    };
+    service2.addWorkout(singleSegmentWorkout);
+    service2.startWorkout('single-seg');
+
+    // Advance past the segment duration — triggers advanceToNextSegment with no next segment
+    const pm5Data: PM5Data = {
+      distance: 100,
+      elapsedTime: 15000, // 15 seconds — past the 10s segment duration
+    };
+    const progress = service2.updateProgress(pm5Data);
+
+    expect(progress?.isComplete).toBe(true);
+    expect(progress?.totalProgress).toBe(100);
+    expect(progress?.segmentProgress).toBe(100);
+  });
+
   it('should add a new workout', () => {
     const initialCount = service.getAllWorkouts().length;
     
