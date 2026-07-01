@@ -177,6 +177,27 @@ describe('AuthService', () => {
       expect(result?.name).toBe('Test Rower');
     });
 
+    it('requests the athlete-specific profile endpoint when the token response includes athlete id', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockTokenResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockUser),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await service.handleCallback('auth-code', 'valid-state');
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete/i123',
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
+      );
+    });
+
     it('fetches the current athlete profile when the token response omits athlete id', async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
@@ -218,6 +239,42 @@ describe('AuthService', () => {
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
       );
       expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe('i999');
+    });
+
+    it('falls back to the current-athlete profile endpoint when the athlete-specific endpoint fails', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockTokenResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i123',
+            firstname: 'Fallback',
+            lastname: 'Current Athlete',
+            email: 'fallback-current@example.com',
+          }),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result?.name).toBe('Fallback Current Athlete');
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete/i123',
+        expect.any(Object),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        3,
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete',
+        expect.any(Object),
+      );
     });
 
     it('falls back to email when the profile has no display name', async () => {
@@ -324,12 +381,35 @@ describe('AuthService', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 400 }));
       const result = await service.handleCallback('bad-code', 'valid-state');
       expect(result).toBeNull();
+      expect(service.getLastError()).toContain('could not exchange your intervals.icu authorization code');
     });
 
     it('clears callback storage on state mismatch', async () => {
       await service.handleCallback('code', 'wrong-state');
       expect(sessionStorage.getItem('vr_auth_state')).toBeNull();
       expect(sessionStorage.getItem('vr_auth_code_verifier')).toBeNull();
+    });
+
+    it('stores a user-facing error when the profile fetch fails', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockTokenResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        }),
+      );
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result).toBeNull();
+      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
     });
   });
 

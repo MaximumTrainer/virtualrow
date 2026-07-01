@@ -24,6 +24,7 @@ function TestConsumer() {
 function makeServiceStub(overrides: Partial<{
   getUser: () => AuthUser | null;
   handleCallback: (code: string, state: string) => Promise<AuthUser | null>;
+  getLastError: () => string | null;
   startLogin: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -32,6 +33,7 @@ function makeServiceStub(overrides: Partial<{
     getUser: vi.fn(() => null),
     startLogin: vi.fn(() => Promise.resolve()),
     handleCallback: vi.fn(() => Promise.resolve(null)),
+    getLastError: vi.fn(() => null),
     refreshAccessToken: vi.fn(() => Promise.resolve(false)),
     logout: vi.fn(),
     getAccessToken: vi.fn(() => null),
@@ -131,6 +133,7 @@ describe('AuthProvider', () => {
   it('stays unauthenticated when handleCallback returns null (bad state)', async () => {
     const service = makeServiceStub({
       handleCallback: vi.fn(() => Promise.resolve(null)),
+      getLastError: vi.fn(() => 'Sign-in failed: Your login session expired or became invalid. Please retry.'),
     });
 
     window.history.replaceState({}, '', '/?code=bad-code&state=bad-state');
@@ -147,7 +150,7 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('user-name').textContent).toBe('null');
     expect(screen.getByTestId('auth-error').textContent)
-      .toContain('could not load your intervals.icu profile');
+      .toContain('login session expired or became invalid');
   });
 
   it('surfaces a retryable error when callback finalization throws', async () => {
