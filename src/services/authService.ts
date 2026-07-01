@@ -17,10 +17,10 @@
 import type { AuthUser, OAuthTokens } from '../types/index';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
 
-const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
+export const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
 const ICU_AUTHORIZE_URL = 'https://intervals.icu/oauth/authorize';
 const ICU_TOKEN_PATH = '/api/oauth/token';
-const ICU_PROFILE_PATH = '/api/v1/athlete';
+export const ICU_PROFILE_PATH = '/api/v1/athlete';
 
 // sessionStorage keys — scoped to VirtualRow to avoid collisions
 const SK_CODE_VERIFIER = 'vr_auth_code_verifier';
@@ -76,6 +76,8 @@ export class AuthService {
   private accessToken: string | null = null;
   /** Cached user object (also persisted to sessionStorage as JSON). */
   private currentUser: AuthUser | null = null;
+  /** Latest callback/login error intended for UI display. */
+  private lastError: string | null = null;
   /** Handle returned by setTimeout for the silent-refresh timer. */
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -91,6 +93,7 @@ export class AuthService {
    * sessionStorage, then redirects the browser to intervals.icu.
    */
   async startLogin(): Promise<void> {
+    this.lastError = null;
     const clientId = getClientId();
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
@@ -133,6 +136,7 @@ export class AuthService {
    * @returns The authenticated user, or null if the flow failed.
    */
   async handleCallback(code: string, state: string): Promise<AuthUser | null> {
+    this.lastError = null;
     if (this.callbackPromise) return this.callbackPromise;
 
     this.callbackPromise = this._doHandleCallback(code, state);
@@ -147,6 +151,7 @@ export class AuthService {
     const storedState = sessionStorage.getItem(SK_STATE);
     if (!storedState || storedState !== state) {
       console.error('[AuthService] State mismatch — possible CSRF attack');
+      this.lastError = 'Sign-in failed: Your login session expired or became invalid. Please retry.';
       this.clearCallbackStorage();
       return null;
     }
@@ -154,6 +159,7 @@ export class AuthService {
     const verifier = sessionStorage.getItem(SK_CODE_VERIFIER);
     if (!verifier) {
       console.error('[AuthService] Missing PKCE code verifier');
+      this.lastError = 'Sign-in failed: VirtualRow could not verify your login request. Please retry.';
       this.clearCallbackStorage();
       return null;
     }
@@ -163,7 +169,7 @@ export class AuthService {
     const tokens = await this.exchangeCode(code, verifier);
     if (!tokens) return null;
 
-    const user = await this.fetchProfile(tokens.accessToken);
+    const user = await this.fetchProfile(tokens.accessToken, tokens.athleteId);
     if (!user) return null;
 
     this.applyTokens(tokens, user);
@@ -218,6 +224,7 @@ export class AuthService {
     this.cancelRefreshTimer();
     this.accessToken = null;
     this.currentUser = null;
+    this.lastError = null;
     sessionStorage.removeItem(SK_REFRESH_TOKEN);
     sessionStorage.removeItem(SK_ATHLETE_ID);
     sessionStorage.removeItem(SK_USER);
@@ -231,6 +238,11 @@ export class AuthService {
   /** Returns the current authenticated user, or null. */
   getUser(): AuthUser | null {
     return this.currentUser;
+  }
+
+  /** Returns the latest user-facing auth error captured by the service. */
+  getLastError(): string | null {
+    return this.lastError;
   }
 
   /** True when the user is authenticated and an access token is available. */
@@ -260,56 +272,76 @@ export class AuthService {
 
       if (!res.ok) {
         console.error('[AuthService] Token exchange failed:', res.status);
+        this.lastError = 'Sign-in failed: VirtualRow could not exchange your intervals.icu authorization code. Please retry.';
         return null;
       }
 
       const raw = await res.json() as RawTokenResponse;
       const athleteId = String(raw.athlete_id ?? raw.id ?? '');
-      return this.parseTokenResponse(raw, athleteId);
+      const tokens = this.parseTokenResponse(raw, athleteId);
+      if (!tokens) {
+        this.lastError = 'Sign-in failed: intervals.icu returned an invalid token response. Please retry.';
+      }
+      return tokens;
     } catch (err) {
       console.error('[AuthService] Token exchange error:', err);
+      this.lastError = 'Sign-in failed: VirtualRow could not contact intervals.icu to finish login. Please retry.';
       return null;
     }
   }
 
   /** Fetch the current athlete profile from the intervals.icu API via proxy. */
-  private async fetchProfile(accessToken: string): Promise<AuthUser | null> {
+  private async fetchProfile(accessToken: string, athleteId?: string): Promise<AuthUser | null> {
     try {
-      const res = await fetch(`${PROXY_BASE}${ICU_PROFILE_PATH}`, {
-        headers: { Authorization: 'Bearer '.concat(accessToken) },
-      });
+      const profilePaths = this.getProfilePaths(athleteId);
 
-      if (!res.ok) {
-        console.error('[AuthService] Profile fetch failed:', res.status);
-        return null;
+      for (const [index, profilePath] of profilePaths.entries()) {
+        const res = await fetch(`${PROXY_BASE}${profilePath}`, {
+          headers: { Authorization: 'Bearer '.concat(accessToken) },
+        });
+
+        if (!res.ok) {
+          console.error('[AuthService] Profile fetch failed:', res.status, profilePath);
+          const canFallback = this.shouldAttemptProfileFallback(index, res.status, profilePaths.length);
+          if (canFallback) continue;
+
+          this.lastError = res.status === 401
+            ? 'Sign-in failed: Your intervals.icu session was not authorized. Please retry.'
+            : 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+          return null;
+        }
+
+        const raw = await res.json() as RawAthleteProfile;
+        if (raw.id == null) {
+          console.error('[AuthService] Profile response missing athlete ID');
+          continue;
+        }
+
+        const resolvedAthleteId = String(raw.id);
+        const fullName = [
+          raw.firstname?.trim() || raw.first_name?.trim(),
+          raw.lastname?.trim() || raw.last_name?.trim(),
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const name = raw.name?.trim()
+          || fullName
+          || raw.email?.trim()
+          || `Athlete ${resolvedAthleteId}`;
+
+        return {
+          id: resolvedAthleteId,
+          name,
+          email: raw.email ?? '',
+          avatarUrl: raw.avatar ?? raw.avatarUrl,
+        };
       }
 
-      const raw = await res.json() as RawAthleteProfile;
-      if (raw.id == null) {
-        console.error('[AuthService] Profile response missing athlete ID');
-        return null;
-      }
-
-      const athleteId = String(raw.id);
-      const fullName = [
-        raw.firstname?.trim() || raw.first_name?.trim(),
-        raw.lastname?.trim() || raw.last_name?.trim(),
-      ]
-        .filter(Boolean)
-        .join(' ');
-      const name = raw.name?.trim()
-        || fullName
-        || raw.email?.trim()
-        || `Athlete ${athleteId}`;
-
-      return {
-        id: athleteId,
-        name,
-        email: raw.email ?? '',
-        avatarUrl: raw.avatar ?? raw.avatarUrl,
-      };
+      this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+      return null;
     } catch (err) {
       console.error('[AuthService] Profile fetch error:', err);
+      this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
       return null;
     }
   }
@@ -378,6 +410,15 @@ export class AuthService {
   private clearCallbackStorage(): void {
     sessionStorage.removeItem(SK_CODE_VERIFIER);
     sessionStorage.removeItem(SK_STATE);
+  }
+
+  private getProfilePaths(athleteId?: string): string[] {
+    if (!athleteId) return [ICU_PROFILE_PATH];
+    return [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`, ICU_PROFILE_PATH];
+  }
+
+  private shouldAttemptProfileFallback(index: number, status: number, pathCount: number): boolean {
+    return index === 0 && status === 404 && pathCount > 1;
   }
 }
 

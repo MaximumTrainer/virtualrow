@@ -218,6 +218,7 @@ export interface WorkoutProgress {
   totalProgress: number; // percentage (0-100)
   isOnTarget: boolean; // whether user is meeting target metrics
   deviationPercent?: number; // how far off target (positive = too fast, negative = too slow)
+  isComplete?: boolean; // true when the final segment has completed
 }
 
 // Global window extensions used by Playwright E2E tests and dev tooling

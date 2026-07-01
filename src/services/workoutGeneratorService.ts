@@ -526,8 +526,13 @@ export class WorkoutGeneratorService {
       }
     }
 
-    // Calculate total progress
-    this.currentProgress.totalProgress = (this.currentProgress.totalElapsedTime / this.currentWorkout.totalDuration) * 100;
+    // Calculate total progress — capped at 100 when the workout is complete
+    if (!this.currentProgress.isComplete) {
+      this.currentProgress.totalProgress = Math.min(
+        100,
+        (this.currentProgress.totalElapsedTime / this.currentWorkout.totalDuration) * 100,
+      );
+    }
 
     // Check if on target
     this.checkTargetCompliance(pm5Data);
@@ -575,6 +580,11 @@ export class WorkoutGeneratorService {
       this.currentProgress.currentSegment = expandedSegments[nextIndex];
       this.currentProgress.segmentElapsedTime = 0;
       this.currentProgress.segmentProgress = 0;
+    } else {
+      // Final segment completed — mark the workout as complete
+      this.currentProgress.isComplete = true;
+      this.currentProgress.segmentProgress = 100;
+      this.currentProgress.totalProgress = 100;
     }
   }
 

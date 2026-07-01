@@ -11,6 +11,18 @@ export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgres
     return null;
   }
 
+  if (progress.isComplete) {
+    return (
+      <div className="workout-progress-display workout-complete">
+        <div className="workout-complete-banner">
+          <span className="workout-complete-icon">🎉</span>
+          <h3>Workout Complete!</h3>
+          <p>Great work — all segments finished.</p>
+        </div>
+      </div>
+    );
+  }
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
