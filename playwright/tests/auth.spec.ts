@@ -139,7 +139,7 @@ test.describe('OAuth callback URL cleanup', () => {
     await page.addInitScript({ content: initScript });
 
     // Intercept the token exchange call so it hangs — lets us observe loading state
-    await page.route('**/proxy/oauth/token', async (route) => {
+    await page.route('**/proxy/api/oauth/token', async (route) => {
       // Delay the response significantly so we can observe loading state
       await new Promise((r) => setTimeout(r, 3000));
       await route.abort();
@@ -175,7 +175,7 @@ test.describe('authenticated user state', () => {
     });
 
     // Mock the token refresh call so it returns quickly (to avoid waiting)
-    await page.route('**/proxy/oauth/token', (route) => route.abort());
+    await page.route('**/proxy/api/oauth/token', (route) => route.abort());
 
     await page.goto('/');
     await page.waitForSelector('.app-header', { timeout: 10_000 });
@@ -208,7 +208,7 @@ test.describe('authenticated user state', () => {
     });
 
     // Stub the token refresh endpoint so restoreSession completes quickly
-    await page.route('**/proxy/oauth/token', async (route) => {
+    await page.route('**/proxy/api/oauth/token', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
