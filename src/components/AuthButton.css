@@ -48,7 +48,8 @@
   max-width: 280px;
   text-align: left;
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .auth-spinner {

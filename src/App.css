@@ -1892,7 +1892,7 @@ body {
 }
 
 /* Place the rower and HR device panels side by side (both guest and non-guest routes view) */
-.guest-devices-row {
+.routes-devices-row {
   display: flex;
   flex-direction: row;
   gap: 8px;
@@ -1900,76 +1900,82 @@ body {
   grid-column: 1 / -1;
 }
 
-.guest-devices-row > .device-panel {
+/* On wide non-guest layouts the nav-tabs occupy column 1; keep the devices
+   row in columns 2–end so they don't force tabs to wrap below. */
+.app-layout--routes .app-sidebar:not(.app-sidebar--guest) .routes-devices-row {
+  grid-column: 2 / -1;
+}
+
+.routes-devices-row > .device-panel {
   flex: 1;
   min-width: 0;
   padding: 10px 12px;
 }
 
 /* Compact the inner component content for the side-by-side layout */
-.guest-devices-row .bluetooth-device-container {
+.routes-devices-row .bluetooth-device-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.guest-devices-row .device-header {
+.routes-devices-row .device-header {
   gap: 6px;
 }
 
-.guest-devices-row .device-name {
+.routes-devices-row .device-name {
   font-size: 12px;
   margin: 0;
 }
 
-.guest-devices-row .device-status {
+.routes-devices-row .device-status {
   font-size: 10px;
   margin: 0;
 }
 
-.guest-devices-row .metrics-grid {
+.routes-devices-row .metrics-grid {
   gap: 4px;
 }
 
-.guest-devices-row .metric {
+.routes-devices-row .metric {
   padding: 4px 6px;
 }
 
-.guest-devices-row .metric-value {
+.routes-devices-row .metric-value {
   font-size: 16px;
 }
 
-.guest-devices-row .device-note {
+.routes-devices-row .device-note {
   font-size: 10px;
   margin: 0;
 }
 
-.guest-devices-row .device-actions {
+.routes-devices-row .device-actions {
   margin-top: 4px;
 }
 
-.guest-devices-row .device-panel-heading {
+.routes-devices-row .device-panel-heading {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
 }
 
-.guest-devices-row .device-panel-heading .panel-title {
+.routes-devices-row .device-panel-heading .panel-title {
   font-size: 12px;
   margin: 0;
 }
 
-.guest-devices-row .device-panel-status {
+.routes-devices-row .device-panel-status {
   font-size: 10px;
   padding: 3px 8px;
 }
 
-.guest-devices-row .device-selector-tabs {
+.routes-devices-row .device-selector-tabs {
   width: 100%;
   padding: 4px;
 }
 
-.guest-devices-row .device-selector-tab {
+.routes-devices-row .device-selector-tab {
   flex: 1;
   padding: 4px 6px;
   font-size: 11px;
@@ -2001,7 +2007,7 @@ body {
 }
 
 /* The wrapper div that holds both panels spans all remaining width */
-.app-sidebar--guest .guest-devices-row {
+.app-sidebar--guest .routes-devices-row {
   display: flex;
   flex: 1;
   flex-direction: row;
