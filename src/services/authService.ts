@@ -292,8 +292,8 @@ export class AuthService {
 
       const athleteId = String(raw.id);
       const fullName = [
-        raw.firstname?.trim() ?? raw.first_name?.trim(),
-        raw.lastname?.trim() ?? raw.last_name?.trim(),
+        raw.firstname?.trim() || raw.first_name?.trim(),
+        raw.lastname?.trim() || raw.last_name?.trim(),
       ]
         .filter(Boolean)
         .join(' ');
