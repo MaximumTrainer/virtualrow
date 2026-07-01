@@ -110,12 +110,15 @@ export class AuthService {
       response_type: 'code',
       redirect_uri: getRedirectUri(),
       state,
-      scope: scopes.join(','),
       code_challenge: challenge,
       code_challenge_method: 'S256',
     });
 
-    window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}`;
+    // Append scope separately so that ':' separators inside each token remain
+    // unencoded.  URLSearchParams encodes ':' as '%3A', which intervals.icu does
+    // not accept. Colons and commas are valid unencoded in URL query strings per
+    // RFC 3986 §3.4, so no encoding is required here.
+    window.location.href = `${ICU_AUTHORIZE_URL}?${params.toString()}&scope=${scopes.join(',')}`;
   }
 
   private callbackPromise: Promise<AuthUser | null> | null = null;
