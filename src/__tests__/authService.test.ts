@@ -169,6 +169,44 @@ describe('AuthService', () => {
       expect(result?.name).toBe('Test Rower');
     });
 
+    it('fetches the current athlete profile when the token response omits athlete id', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'access-abc',
+            refresh_token: 'refresh-xyz',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i999',
+            firstname: 'Fallback',
+            lastname: 'Rower',
+            email: 'fallback@example.com',
+          }),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result).toEqual({
+        id: 'i999',
+        name: 'Fallback Rower',
+        email: 'fallback@example.com',
+        avatarUrl: undefined,
+      });
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete',
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
+      );
+      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe('i999');
+    });
+
     it('sets isAuthenticated after successful callback', async () => {
       vi.stubGlobal('fetch', vi.fn()
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTokenResponse) })
