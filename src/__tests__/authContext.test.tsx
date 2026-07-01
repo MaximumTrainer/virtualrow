@@ -152,7 +152,7 @@ describe('AuthProvider', () => {
 
   it('surfaces a retryable error when callback finalization throws', async () => {
     const service = makeServiceStub({
-      handleCallback: vi.fn(() => Promise.reject('network down')),
+      handleCallback: vi.fn(() => Promise.reject(new Error('network down'))),
     });
 
     window.history.replaceState({}, '', '/?code=bad-code&state=bad-state');
@@ -168,7 +168,7 @@ describe('AuthProvider', () => {
 
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('auth-error').textContent)
-      .toContain('Please retry');
+      .toBe('network down');
   });
 
   it('transitions to authenticated state when callback resolves a fallback-profile user', async () => {

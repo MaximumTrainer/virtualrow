@@ -200,6 +200,11 @@ describe('AuthService', () => {
         avatarUrl: undefined,
       });
       expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/oauth/token',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
         2,
         'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete',
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),

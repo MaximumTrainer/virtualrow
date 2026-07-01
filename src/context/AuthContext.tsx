@@ -94,12 +94,12 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
     setIsLoading(true);
     setAuthError(null);
     service.handleCallback(code, state).then((authUser) => {
-      setUser(authUser);
-      setIsLoading(false);
-
       if (!authUser) {
         setAuthError('Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.');
       }
+
+      setUser(authUser);
+      setIsLoading(false);
 
       clearCallbackParams();
     }).catch((err: unknown) => {
