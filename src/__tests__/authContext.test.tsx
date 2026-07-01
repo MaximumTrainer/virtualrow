@@ -150,6 +150,27 @@ describe('AuthProvider', () => {
       .toContain('could not load your intervals.icu profile');
   });
 
+  it('surfaces a retryable error when callback finalization throws', async () => {
+    const service = makeServiceStub({
+      handleCallback: vi.fn(() => Promise.reject('network down')),
+    });
+
+    window.history.replaceState({}, '', '/?code=bad-code&state=bad-state');
+
+    await act(async () => {
+      render(
+        <AuthProvider service={service}>
+          <TestConsumer />
+        </AuthProvider>
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    expect(screen.getByTestId('auth-error').textContent)
+      .toContain('Please retry');
+  });
+
   it('transitions to authenticated state when callback resolves a fallback-profile user', async () => {
     const callbackUser: AuthUser = { id: 'i999', name: 'Fallback Rower', email: 'fallback@example.com' };
     const service = makeServiceStub({

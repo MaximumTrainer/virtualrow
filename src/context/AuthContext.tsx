@@ -107,7 +107,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
 
       setAuthError(err instanceof Error
         ? err.message
-        : 'Sign-in completed, but VirtualRow could not finalize your login.');
+        : 'Sign-in completed, but VirtualRow could not finalize your login. Please retry.');
 
       clearCallbackParams();
     });

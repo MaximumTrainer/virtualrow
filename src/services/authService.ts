@@ -281,8 +281,11 @@ export class AuthService {
 
       const raw = await res.json() as RawAthleteProfile;
       const athleteId = raw.id != null ? String(raw.id) : '';
+      const fullName = [raw.firstname?.trim(), raw.lastname?.trim()]
+        .filter(Boolean)
+        .join(' ');
       const name = raw.name?.trim()
-        || `${raw.firstname ?? ''} ${raw.lastname ?? ''}`.trim()
+        || fullName
         || raw.email?.trim()
         || (athleteId ? `Athlete ${athleteId}` : '');
 
