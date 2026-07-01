@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
-import { AuthService } from '../services/authService';
+import { AuthService, PROXY_BASE, ICU_PROFILE_PATH } from '../services/authService';
 
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 
@@ -193,7 +193,7 @@ describe('AuthService', () => {
 
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete/i123',
+        `${PROXY_BASE}${ICU_PROFILE_PATH}/i123`,
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
       );
     });
@@ -230,12 +230,12 @@ describe('AuthService', () => {
       });
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/oauth/token',
+        `${PROXY_BASE}/api/oauth/token`,
         expect.objectContaining({ method: 'POST' }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete',
+        `${PROXY_BASE}${ICU_PROFILE_PATH}`,
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
       );
       expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe('i999');
@@ -267,12 +267,12 @@ describe('AuthService', () => {
       expect(result?.name).toBe('Fallback Current Athlete');
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete/i123',
+        `${PROXY_BASE}${ICU_PROFILE_PATH}/i123`,
         expect.any(Object),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
         3,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/v1/athlete',
+        `${PROXY_BASE}${ICU_PROFILE_PATH}`,
         expect.any(Object),
       );
     });

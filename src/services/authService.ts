@@ -17,10 +17,10 @@
 import type { AuthUser, OAuthTokens } from '../types/index';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
 
-const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
+export const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
 const ICU_AUTHORIZE_URL = 'https://intervals.icu/oauth/authorize';
 const ICU_TOKEN_PATH = '/api/oauth/token';
-const ICU_PROFILE_PATH = '/api/v1/athlete';
+export const ICU_PROFILE_PATH = '/api/v1/athlete';
 
 // sessionStorage keys — scoped to VirtualRow to avoid collisions
 const SK_CODE_VERIFIER = 'vr_auth_code_verifier';
@@ -293,18 +293,22 @@ export class AuthService {
   /** Fetch the current athlete profile from the intervals.icu API via proxy. */
   private async fetchProfile(accessToken: string, athleteId?: string): Promise<AuthUser | null> {
     try {
-      const profilePaths = athleteId
-        ? [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`, ICU_PROFILE_PATH]
-        : [ICU_PROFILE_PATH];
+      const profilePaths = this.getProfilePaths(athleteId);
 
-      for (const profilePath of profilePaths) {
+      for (const [index, profilePath] of profilePaths.entries()) {
         const res = await fetch(`${PROXY_BASE}${profilePath}`, {
           headers: { Authorization: 'Bearer '.concat(accessToken) },
         });
 
         if (!res.ok) {
           console.error('[AuthService] Profile fetch failed:', res.status, profilePath);
-          continue;
+          const canFallback = index === 0 && res.status === 404 && profilePaths.length > 1;
+          if (canFallback) continue;
+
+          this.lastError = res.status === 401
+            ? 'Sign-in failed: Your intervals.icu session was not authorized. Please retry.'
+            : 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+          return null;
         }
 
         const raw = await res.json() as RawAthleteProfile;
@@ -406,6 +410,11 @@ export class AuthService {
   private clearCallbackStorage(): void {
     sessionStorage.removeItem(SK_CODE_VERIFIER);
     sessionStorage.removeItem(SK_STATE);
+  }
+
+  private getProfilePaths(athleteId?: string): string[] {
+    if (!athleteId) return [ICU_PROFILE_PATH];
+    return [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`, ICU_PROFILE_PATH];
   }
 }
 
