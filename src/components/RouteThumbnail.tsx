@@ -64,7 +64,7 @@ export function RouteThumbnail({
 
   // Sample the coordinates to keep the SVG small (≤ 200 points)
   const maxPoints = 200;
-  const step = coordinates.length > maxPoints ? Math.floor(coordinates.length / maxPoints) : 1;
+  const step = coordinates.length > maxPoints ? Math.ceil(coordinates.length / maxPoints) : 1;
   const sampled: Coordinate[] = [];
   for (let i = 0; i < coordinates.length; i += step) {
     sampled.push(coordinates[i]);
@@ -85,7 +85,6 @@ export function RouteThumbnail({
       width={width}
       height={height}
       aria-hidden="true"
-      role="img"
     >
       <polyline
         points={points}

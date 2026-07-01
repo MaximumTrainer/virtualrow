@@ -4,11 +4,15 @@
  * Parses geographic coordinates from common interchange formats (KML and
  * GeoJSON) into the internal `Coordinate` type (`{ lat, lng }`).
  *
- * Both functions return `null` and silently discard values that are
- * non-finite, NaN, or outside valid WGS-84 bounds.
+ * All parsing functions return `null` (or skip the entry, for list parsers)
+ * and silently discard values that are non-numeric, non-finite, NaN, or
+ * outside valid WGS-84 bounds.
  */
 
 import type { Coordinate } from '../types/index';
+
+/** Strict numeric regex: optional sign, digits, optional decimal, optional exponent. */
+const NUMERIC_RE = /^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/;
 
 /**
  * Parse a single KML coordinate tuple into a `Coordinate`.
@@ -25,8 +29,12 @@ export function parseKMLCoordinate(text: string): Coordinate | null {
   const parts = text.trim().split(',');
   if (parts.length < 2) return null;
 
-  const lng = parseFloat(parts[0].trim());
-  const lat = parseFloat(parts[1].trim());
+  const lngStr = parts[0].trim();
+  const latStr = parts[1].trim();
+  if (!NUMERIC_RE.test(lngStr) || !NUMERIC_RE.test(latStr)) return null;
+
+  const lng = parseFloat(lngStr);
+  const lat = parseFloat(latStr);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90) return null;

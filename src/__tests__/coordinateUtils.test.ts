@@ -55,6 +55,10 @@ describe('coordinateUtils', () => {
       expect(parseKMLCoordinate('abc,def')).toBeNull();
     });
 
+    it('returns null for numeric-prefixed junk (e.g. "13abc,52")', () => {
+      expect(parseKMLCoordinate('13abc,52')).toBeNull();
+    });
+
     it('returns null for empty string', () => {
       expect(parseKMLCoordinate('')).toBeNull();
     });
