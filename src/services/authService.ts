@@ -19,7 +19,7 @@ import { generateCodeVerifier, generateCodeChallenge, generateState } from '../u
 
 const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
 const ICU_AUTHORIZE_URL = 'https://intervals.icu/oauth/authorize';
-const ICU_TOKEN_PATH = '/oauth/token';
+const ICU_TOKEN_PATH = '/api/oauth/token';
 const ICU_PROFILE_PATH = '/api/v1/athlete';
 
 // sessionStorage keys — scoped to VirtualRow to avoid collisions
@@ -64,6 +64,8 @@ interface RawAthleteProfile {
   name?: string;
   firstname?: string;
   lastname?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
   avatar?: string;
   avatarUrl?: string;
@@ -289,7 +291,10 @@ export class AuthService {
       }
 
       const athleteId = String(raw.id);
-      const fullName = [raw.firstname?.trim(), raw.lastname?.trim()]
+      const fullName = [
+        raw.firstname?.trim() || raw.first_name?.trim(),
+        raw.lastname?.trim() || raw.last_name?.trim(),
+      ]
         .filter(Boolean)
         .join(' ');
       const name = raw.name?.trim()

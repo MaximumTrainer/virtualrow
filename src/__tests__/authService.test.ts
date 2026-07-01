@@ -209,7 +209,7 @@ describe('AuthService', () => {
       });
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
-        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/oauth/token',
+        'https://mt-intervals-proxy.intervals-login.workers.dev/proxy/api/oauth/token',
         expect.objectContaining({ method: 'POST' }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -244,6 +244,34 @@ describe('AuthService', () => {
 
       expect(result?.name).toBe('email-only@example.com');
       expect(result?.id).toBe('i1000');
+    });
+
+    it('builds the profile name from snake_case fields returned by intervals.icu', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'access-abc',
+            refresh_token: 'refresh-xyz',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i1002',
+            first_name: 'Snake',
+            last_name: 'Case',
+            email: 'snake@example.com',
+          }),
+        }),
+      );
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result?.name).toBe('Snake Case');
+      expect(result?.id).toBe('i1002');
     });
 
     it('falls back to athlete id when the profile has no name or email', async () => {
