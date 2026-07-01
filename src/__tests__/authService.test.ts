@@ -123,6 +123,14 @@ describe('AuthService', () => {
       const scope = parsedUrl.searchParams.get('scope');
       expect(scope).toBe('ACTIVITY:WRITE,WELLNESS:READ,SETTINGS:WRITE,CALENDAR:WRITE,LIBRARY:READ');
     });
+
+    it('does not percent-encode colons in scope tokens (intervals.icu requires literal colons)', async () => {
+      await service.startLogin();
+      const url = window.location.href;
+      // Verify the raw URL string contains the full scope with unencoded colons and commas.
+      // searchParams.get() would silently decode %3A, so we check the raw string.
+      expect(url).toContain('scope=ACTIVITY:WRITE,WELLNESS:READ,SETTINGS:WRITE,CALENDAR:WRITE,LIBRARY:READ');
+    });
   });
 
   describe('handleCallback', () => {
