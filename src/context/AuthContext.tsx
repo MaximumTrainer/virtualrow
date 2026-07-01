@@ -98,7 +98,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
       setIsLoading(false);
 
       if (!authUser) {
-        setAuthError('Sign-in completed, but VirtualRow could not load your intervals.icu profile.');
+        setAuthError('Sign-in failed: VirtualRow could not load your intervals.icu profile.');
       }
 
       clearCallbackParams();
@@ -107,7 +107,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
 
       setAuthError(err instanceof Error
         ? err.message
-        : 'Sign-in completed, but VirtualRow could not finalize your login. Please retry.');
+        : 'Sign-in failed: VirtualRow could not finalize your login. Please retry.');
 
       clearCallbackParams();
     });

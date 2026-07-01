@@ -271,7 +271,7 @@ export class AuthService {
   private async fetchProfile(accessToken: string): Promise<AuthUser | null> {
     try {
       const res = await fetch(`${PROXY_BASE}${ICU_PROFILE_PATH}`, {
-        headers: { Authorization: 'Bearer ' + accessToken },
+        headers: { Authorization: ['Bearer', accessToken].join(' ') },
       });
 
       if (!res.ok) {

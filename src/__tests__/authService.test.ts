@@ -207,6 +207,57 @@ describe('AuthService', () => {
       expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe('i999');
     });
 
+    it('falls back to email when the profile has no display name', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'access-abc',
+            refresh_token: 'refresh-xyz',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i1000',
+            email: 'email-only@example.com',
+          }),
+        }),
+      );
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result?.name).toBe('email-only@example.com');
+      expect(result?.id).toBe('i1000');
+    });
+
+    it('falls back to athlete id when the profile has no name or email', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'access-abc',
+            refresh_token: 'refresh-xyz',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            id: 'i1001',
+          }),
+        }),
+      );
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result?.name).toBe('Athlete i1001');
+      expect(result?.id).toBe('i1001');
+    });
+
     it('sets isAuthenticated after successful callback', async () => {
       vi.stubGlobal('fetch', vi.fn()
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTokenResponse) })
