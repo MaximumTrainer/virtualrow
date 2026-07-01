@@ -62,6 +62,8 @@ interface RawTokenResponse {
 interface RawAthleteProfile {
   id?: string | number;
   name?: string;
+  firstname?: string;
+  lastname?: string;
   email?: string;
   avatar?: string;
   avatarUrl?: string;
@@ -156,7 +158,7 @@ export class AuthService {
     const tokens = await this.exchangeCode(code, verifier);
     if (!tokens) return null;
 
-    const user = await this.fetchProfile(tokens.athleteId, tokens.accessToken);
+    const user = await this.fetchProfile(tokens.accessToken);
     if (!user) return null;
 
     this.applyTokens(tokens, user);
@@ -265,11 +267,11 @@ export class AuthService {
     }
   }
 
-  /** Fetch the athlete profile from the intervals.icu API via proxy. */
-  private async fetchProfile(athleteId: string, accessToken: string): Promise<AuthUser | null> {
+  /** Fetch the current athlete profile from the intervals.icu API via proxy. */
+  private async fetchProfile(accessToken: string): Promise<AuthUser | null> {
     try {
-      const res = await fetch(`${PROXY_BASE}${ICU_PROFILE_PATH}/${athleteId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const res = await fetch(`${PROXY_BASE}${ICU_PROFILE_PATH}`, {
+        headers: { Authorization: 'Bearer '.concat(accessToken) },
       });
 
       if (!res.ok) {
@@ -278,9 +280,23 @@ export class AuthService {
       }
 
       const raw = await res.json() as RawAthleteProfile;
+      if (raw.id == null) {
+        console.error('[AuthService] Profile response missing athlete ID');
+        return null;
+      }
+
+      const athleteId = String(raw.id);
+      const fullName = [raw.firstname?.trim(), raw.lastname?.trim()]
+        .filter(Boolean)
+        .join(' ');
+      const name = raw.name?.trim()
+        || fullName
+        || raw.email?.trim()
+        || `Athlete ${athleteId}`;
+
       return {
-        id: String(raw.id ?? athleteId),
-        name: raw.name ?? '',
+        id: athleteId,
+        name,
         email: raw.email ?? '',
         avatarUrl: raw.avatar ?? raw.avatarUrl,
       };
@@ -312,7 +328,7 @@ export class AuthService {
     if (tokens.refreshToken) {
       sessionStorage.setItem(SK_REFRESH_TOKEN, tokens.refreshToken);
     }
-    sessionStorage.setItem(SK_ATHLETE_ID, tokens.athleteId);
+    sessionStorage.setItem(SK_ATHLETE_ID, user.id);
     sessionStorage.setItem(SK_USER, JSON.stringify(user));
 
     this.scheduleRefresh(tokens.expiresAt);

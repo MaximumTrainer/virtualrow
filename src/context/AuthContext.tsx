@@ -30,10 +30,14 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   /** True while the OAuth callback is being processed. */
   isLoading: boolean;
+  /** Latest authentication error visible to the UI. */
+  authError: string | null;
   /** Start the OAuth login flow (redirects the browser). */
   login: () => Promise<void>;
   /** Sign out: clears tokens and resets auth state. */
   logout: () => void;
+  /** Clear any visible authentication error. */
+  clearAuthError: () => void;
   /**
    * An action identifier that was blocked by an auth gate in guest mode.
    * After sign-in completes, the caller should retry the action.
@@ -46,8 +50,10 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isAuthenticated: false,
   isLoading: false,
+  authError: null,
   login: async () => {},
   logout: () => {},
+  clearAuthError: () => {},
   pendingAction: null,
   setPendingAction: () => {},
 });
@@ -61,7 +67,15 @@ export interface AuthProviderProps {
 export function AuthProvider({ children, service = authService }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(() => service.getUser());
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  const clearCallbackParams = useCallback(() => {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('code');
+    cleanUrl.searchParams.delete('state');
+    window.history.replaceState({}, '', cleanUrl.toString());
+  }, []);
 
   // On mount: check for OAuth callback params in the URL
   useEffect(() => {
@@ -78,32 +92,37 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
     }
 
     setIsLoading(true);
+    setAuthError(null);
     service.handleCallback(code, state).then((authUser) => {
+      if (!authUser) {
+        setAuthError('Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.');
+      }
+
       setUser(authUser);
       setIsLoading(false);
-      
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('code');
-      cleanUrl.searchParams.delete('state');
-      window.history.replaceState({}, '', cleanUrl.toString());
-    }).catch(() => {
+
+      clearCallbackParams();
+    }).catch((err: unknown) => {
       setIsLoading(false);
-      
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('code');
-      cleanUrl.searchParams.delete('state');
-      window.history.replaceState({}, '', cleanUrl.toString());
+
+      setAuthError(err instanceof Error
+        ? err.message
+        : 'Sign-in failed: VirtualRow could not finalize your login. Please retry.');
+
+      clearCallbackParams();
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(async () => {
+    setAuthError(null);
     await service.startLogin();
   }, [service]);
 
   const logout = useCallback(() => {
     service.logout();
     setUser(null);
+    setAuthError(null);
     setPendingAction(null);
   }, [service]);
 
@@ -113,8 +132,10 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
         user,
         isAuthenticated: user !== null,
         isLoading,
+        authError,
         login,
         logout,
+        clearAuthError: () => setAuthError(null),
         pendingAction,
         setPendingAction,
       }}

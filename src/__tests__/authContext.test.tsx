@@ -9,13 +9,14 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
 function TestConsumer() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, authError } = useAuth();
   return (
     <div>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="user-name">{user?.name ?? 'null'}</span>
       <span data-testid="user-id">{user?.id ?? 'null'}</span>
+      <span data-testid="auth-error">{authError ?? 'null'}</span>
     </div>
   );
 }
@@ -101,6 +102,7 @@ describe('AuthProvider', () => {
     expect(service.handleCallback).toHaveBeenCalledWith('auth-code', 'csrf-state');
     expect(screen.getByTestId('user-name').textContent).toBe('Bob');
     expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    expect(screen.getByTestId('auth-error').textContent).toBe('null');
   });
 
   it('strips code and state from URL after callback', async () => {
@@ -144,6 +146,51 @@ describe('AuthProvider', () => {
 
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('user-name').textContent).toBe('null');
+    expect(screen.getByTestId('auth-error').textContent)
+      .toContain('could not load your intervals.icu profile');
+  });
+
+  it('surfaces a retryable error when callback finalization throws', async () => {
+    const service = makeServiceStub({
+      handleCallback: vi.fn(() => Promise.reject(new Error('network down'))),
+    });
+
+    window.history.replaceState({}, '', '/?code=bad-code&state=bad-state');
+
+    await act(async () => {
+      render(
+        <AuthProvider service={service}>
+          <TestConsumer />
+        </AuthProvider>
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    expect(screen.getByTestId('auth-error').textContent)
+      .toBe('network down');
+  });
+
+  it('transitions to authenticated state when callback resolves a fallback-profile user', async () => {
+    const callbackUser: AuthUser = { id: 'i999', name: 'Fallback Rower', email: 'fallback@example.com' };
+    const service = makeServiceStub({
+      handleCallback: vi.fn(() => Promise.resolve(callbackUser)),
+    });
+
+    window.history.replaceState({}, '', '/?code=fallback-code&state=fallback-state');
+
+    await act(async () => {
+      render(
+        <AuthProvider service={service}>
+          <TestConsumer />
+        </AuthProvider>
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    expect(screen.getByTestId('user-id').textContent).toBe('i999');
+    expect(screen.getByTestId('auth-error').textContent).toBe('null');
   });
 
   it('clears user on logout', async () => {
