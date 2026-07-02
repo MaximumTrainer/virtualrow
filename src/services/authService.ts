@@ -49,6 +49,11 @@ function getRedirectUri(): string {
   return window.location.origin + base + 'auth/callback/';
 }
 
+function getTokenProxyUrl(clientId: string): string {
+  const params = new URLSearchParams({ client_id: clientId });
+  return `${PROXY_BASE}${ICU_TOKEN_PATH}?${params.toString()}`;
+}
+
 interface RawTokenResponse {
   access_token: string;
   refresh_token?: string;
@@ -192,7 +197,8 @@ export class AuthService {
         client_id: clientId,
       });
 
-      const res = await fetch(`${PROXY_BASE}${ICU_TOKEN_PATH}`, {
+      const tokenProxyUrl = getTokenProxyUrl(clientId);
+      const res = await fetch(tokenProxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
@@ -264,7 +270,8 @@ export class AuthService {
         code_verifier: verifier,
       });
 
-      const res = await fetch(`${PROXY_BASE}${ICU_TOKEN_PATH}`, {
+      const tokenProxyUrl = getTokenProxyUrl(clientId);
+      const res = await fetch(tokenProxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
