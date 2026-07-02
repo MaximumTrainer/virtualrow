@@ -197,7 +197,6 @@ export class AuthService {
         client_id: clientId,
       });
 
-      const res = await fetch(`${PROXY_BASE}${ICU_TOKEN_PATH}`, {
       const tokenProxyUrl = getTokenProxyUrl(clientId);
       const res = await fetch(tokenProxyUrl, {
         method: 'POST',
