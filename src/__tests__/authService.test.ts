@@ -199,6 +199,31 @@ describe('AuthService', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('passes client_id to the proxy URL during token exchange', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockTokenResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockUser),
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await service.handleCallback('auth-code', 'valid-state');
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        `${PROXY_BASE}/api/oauth/token?client_id=test-client-id`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: expect.stringContaining('client_id=test-client-id'),
+        }),
+      );
+    });
+
     it('fetches the current athlete profile when the token response omits athlete id', async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
@@ -231,7 +256,7 @@ describe('AuthService', () => {
       });
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
-        `${PROXY_BASE}/api/oauth/token`,
+        `${PROXY_BASE}/api/oauth/token?client_id=test-client-id`,
         expect.objectContaining({ method: 'POST' }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -459,6 +484,33 @@ describe('AuthService', () => {
 
       const result = await service.refreshAccessToken();
       expect(result).toBe(true);
+    });
+
+    it('passes client_id to the proxy URL during token refresh', async () => {
+      sessionStorage.setItem('vr_auth_refresh_token', 'stale-refresh');
+
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          access_token: 'new-access',
+          refresh_token: 'new-refresh',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          athlete_id: 'i123',
+        }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await service.refreshAccessToken();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${PROXY_BASE}/api/oauth/token?client_id=test-client-id`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: expect.stringContaining('client_id=test-client-id'),
+        }),
+      );
     });
 
     it('returns false on token endpoint error', async () => {

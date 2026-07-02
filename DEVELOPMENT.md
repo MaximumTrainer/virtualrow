@@ -293,6 +293,8 @@ https://mt-intervals-proxy.intervals-login.workers.dev/proxy/<path>
 
 The proxy forwards `/proxy/<path>?<query>` to `https://intervals.icu/<path>?<query>`.
 
+OAuth token requests must pass `client_id` both in the form-encoded POST body and as a proxy URL query parameter so the Cloudflare Worker can look up the matching client secret before forwarding the request to intervals.icu.
+
 **ALLOWED_ORIGINS** must include VirtualRow's domains to work. The proxy source is in the [MaximumTrainer_Redux repo](https://github.com/MaximumTrainer/MaximumTrainer_Redux/blob/master/workers/intervals-cors-proxy/worker.js). Update `ALLOWED_ORIGINS` to include:
 
 ```js
