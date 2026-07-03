@@ -224,7 +224,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('fetches the current athlete profile when the token response omits athlete id', async () => {
+    it('returns null when the token response omits athlete id (intervals.icu requires an ID in the profile path)', async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -233,49 +233,38 @@ describe('AuthService', () => {
             refresh_token: 'refresh-xyz',
             expires_in: 3600,
             token_type: 'Bearer',
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            id: 'i999',
-            firstname: 'Fallback',
-            lastname: 'Rower',
-            email: 'fallback@example.com',
+            // No athlete_id field — intervals.icu GET /api/v1/athlete (no ID) returns 405
           }),
         });
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await service.handleCallback('auth-code', 'valid-state');
 
-      expect(result).toEqual({
-        id: 'i999',
-        name: 'Fallback Rower',
-        email: 'fallback@example.com',
-        avatarUrl: undefined,
-      });
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        1,
-        `${PROXY_BASE}/api/oauth/token?client_id=test-client-id`,
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
-        `${PROXY_BASE}${ICU_PROFILE_PATH}`,
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
-      );
-      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe('i999');
+      // Without an athlete ID we cannot construct a valid profile path
+      expect(result).toBeNull();
+      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
+      // Only the token exchange fetch should have been made (no profile fetch)
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to the current-athlete profile endpoint when the athlete-specific endpoint fails', async () => {
+    it('falls back to the i-prefixed athlete-specific profile endpoint when the numeric athlete-specific endpoint returns 404', async () => {
+      // When the token returns a numeric athlete_id (e.g. from intervals.icu), the code
+      // first tries /api/v1/athlete/{numericId} and then the i-prefixed variant on 404.
+      const numericTokenResponse = {
+        access_token: 'access-abc',
+        refresh_token: 'refresh-xyz',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        athlete_id: 123, // numeric as returned by intervals.icu
+      };
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve(mockTokenResponse),
+          json: () => Promise.resolve(numericTokenResponse),
         })
         .mockResolvedValueOnce({
           ok: false,
-          status: 404,
+          status: 404, // numeric path /api/v1/athlete/123 returns 404
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -293,12 +282,13 @@ describe('AuthService', () => {
       expect(result?.name).toBe('Fallback Current Athlete');
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        `${PROXY_BASE}${ICU_PROFILE_PATH}/i123`,
+        `${PROXY_BASE}${ICU_PROFILE_PATH}/123`,
         expect.any(Object),
       );
+      // Falls back to the i-prefixed path on 404 from the numeric path
       expect(fetchMock).toHaveBeenNthCalledWith(
         3,
-        `${PROXY_BASE}${ICU_PROFILE_PATH}`,
+        `${PROXY_BASE}${ICU_PROFILE_PATH}/i123`,
         expect.any(Object),
       );
     });
@@ -312,6 +302,7 @@ describe('AuthService', () => {
             refresh_token: 'refresh-xyz',
             expires_in: 3600,
             token_type: 'Bearer',
+            athlete_id: 'i1000',
           }),
         })
         .mockResolvedValueOnce({
@@ -338,6 +329,7 @@ describe('AuthService', () => {
             refresh_token: 'refresh-xyz',
             expires_in: 3600,
             token_type: 'Bearer',
+            athlete_id: 'i1002',
           }),
         })
         .mockResolvedValueOnce({
@@ -366,6 +358,7 @@ describe('AuthService', () => {
             refresh_token: 'refresh-xyz',
             expires_in: 3600,
             token_type: 'Bearer',
+            athlete_id: 'i1001',
           }),
         })
         .mockResolvedValueOnce({
@@ -477,29 +470,58 @@ describe('AuthService', () => {
       expect((profileInit as RequestInit).headers as Record<string, string>).not.toHaveProperty('Authorization', '');
     });
 
-    it('fetches generic athlete profile at /proxy/api/v1/athlete with Authorization header when no athlete_id in token', async () => {
+    it('returns null without making a profile request when no athlete_id in token (intervals.icu /api/v1/athlete without ID returns 405)', async () => {
       const tokenNoId = {
         access_token: 'tok-generic',
         refresh_token: 'tok-refresh',
         expires_in: 3600,
         token_type: 'Bearer',
+        // No athlete_id — GET /api/v1/athlete (no ID) returns 405 from intervals.icu
       };
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNoId) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 'i888', firstname: 'Bob', email: 'bob@example.com' }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNoId) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      // Must fail gracefully without attempting the 405-returning no-ID endpoint
+      expect(result).toBeNull();
+      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
+      // Only the token exchange fetch — no profile fetch should be attempted
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('fetches numeric athlete_id path then i-prefixed path on 404 (intervals.icu token returns numeric id)', async () => {
+      // intervals.icu token response returns athlete_id as a number (e.g. 777).
+      // The REST API uses the 'i'-prefixed form for internal athletes (i777).
+      const tokenNumericId = { ...tokenResponse, athlete_id: 777 };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNumericId) })
+        .mockResolvedValueOnce({ ok: false, status: 404 }) // /api/v1/athlete/777 → 404
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(athleteProfile) }); // /api/v1/athlete/i777 → 200
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await service.handleCallback('auth-code', 'valid-state');
 
       expect(result).not.toBeNull();
-      const [profileUrl, profileInit] = fetchMock.mock.calls[1];
-      // URL: must target the generic athlete proxy path (no id suffix)
-      expect(profileUrl).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}`);
-      // Authorization header must be present and constructed by authService.
-      expect((profileInit as RequestInit).headers).toMatchObject({
-        Authorization: expect.any(String),
-      });
-      expect((profileInit as RequestInit).headers as Record<string, string>).not.toHaveProperty('Authorization', '');
+      expect(result?.id).toBe('i777');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/777`);
+      expect(fetchMock.mock.calls[2][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/i777`);
+    });
+
+    it('succeeds immediately with numeric athlete_id when numeric path works', async () => {
+      const tokenNumericId = { ...tokenResponse, athlete_id: 777 };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNumericId) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(athleteProfile) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result).not.toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/777`);
     });
 
     it('does NOT fall back to /proxy/api/v1/athlete when athlete-specific endpoint returns 405', async () => {
@@ -518,10 +540,11 @@ describe('AuthService', () => {
       expect(service.getLastError()).toContain('could not load your intervals.icu profile');
     });
 
-    it('falls back to /proxy/api/v1/athlete only on 404 from the athlete-specific endpoint', async () => {
+    it('falls back to i-prefixed path only on 404 from the numeric athlete-specific endpoint', async () => {
+      const tokenNumericId = { ...tokenResponse, athlete_id: 777 };
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) })
-        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNumericId) })
+        .mockResolvedValueOnce({ ok: false, status: 404 }) // numeric path returns 404
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 'i777', firstname: 'Jane', email: 'jane@example.com' }) });
       vi.stubGlobal('fetch', fetchMock);
 
@@ -529,8 +552,22 @@ describe('AuthService', () => {
 
       expect(result).not.toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(3);
-      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/i777`);
-      expect(fetchMock.mock.calls[2][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}`);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/777`);
+      expect(fetchMock.mock.calls[2][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/i777`);
+    });
+
+    it('returns null when both numeric and i-prefixed paths fail', async () => {
+      const tokenNumericId = { ...tokenResponse, athlete_id: 777 };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNumericId) })
+        .mockResolvedValueOnce({ ok: false, status: 404 }) // numeric path → 404
+        .mockResolvedValueOnce({ ok: false, status: 404 }); // i-prefixed path → 404
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result).toBeNull();
+      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
     });
 
     it('surfaces auth error message on 401 from athlete profile endpoint', async () => {
@@ -545,13 +582,11 @@ describe('AuthService', () => {
       expect(service.getLastError()).toContain('not authorized');
     });
 
-    it('returns null when profile response body is missing the id field for the generic profile path', async () => {
-      // Simulate a response body with no `id` field for both endpoints.
+    it('returns null when profile response body is missing the id field', async () => {
+      // Simulate a response body with no `id` field.
       const noIdProfile = { firstname: 'Ghost', email: 'ghost@example.com' };
-      const tokenNoId = { access_token: 'tok-noid', expires_in: 3600, token_type: 'Bearer' };
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNoId) })
-        // Generic endpoint (no athlete_id in token → only one path attempted)
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) })
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(noIdProfile) });
       vi.stubGlobal('fetch', fetchMock);
 
