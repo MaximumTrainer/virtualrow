@@ -247,7 +247,7 @@ describe('AuthService', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to the current-athlete profile endpoint when the athlete-specific endpoint fails', async () => {
+    it('falls back to the i-prefixed athlete-specific profile endpoint when the numeric athlete-specific endpoint returns 404', async () => {
       // When the token returns a numeric athlete_id (e.g. from intervals.icu), the code
       // first tries /api/v1/athlete/{numericId} and then the i-prefixed variant on 404.
       const numericTokenResponse = {
