@@ -143,6 +143,105 @@ test.describe('login integration: OAuth callback flow', () => {
       expect(athleteId).toBe('i12345');
     },
   );
+
+  test(
+    'login end-to-end verification: token response returns athlete_id, profile request uses it, and authenticated user is created',
+    async ({ page }) => {
+      // Focused verification of the full login round-trip. Explicitly asserts:
+      //  1. Token exchange responds with a non-empty athlete_id
+      //  2. Profile request URL contains that same athlete_id
+      //  3. Profile response contains an id
+      //  4. The authenticated user menu appears (isAuthenticated === true)
+      //  5. The athlete id is persisted in sessionStorage for subsequent sessions
+      //
+      // This is the scenario the user was hitting in production: verify the
+      // whole handshake works and the athlete_id is present at every hop.
+
+      const TOKEN_ATHLETE_ID = 'i98765';
+      const bluetoothScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+      await page.addInitScript({ content: bluetoothScript });
+
+      await page.addInitScript(
+        ({ state, verifier }: { state: string; verifier: string }) => {
+          sessionStorage.setItem('vr_auth_state', state);
+          sessionStorage.setItem('vr_auth_code_verifier', verifier);
+        },
+        { state: OAUTH_STATE, verifier: PKCE_VERIFIER },
+      );
+
+      // Capture the exact token response body served to the app
+      let tokenResponseBody: Record<string, unknown> | null = null;
+      await page.route('**/proxy/api/oauth/token**', async (route) => {
+        tokenResponseBody = {
+          access_token: 'verified-access-token',
+          refresh_token: 'verified-refresh-token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+          athlete_id: TOKEN_ATHLETE_ID,
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(tokenResponseBody),
+        });
+      });
+
+      // Capture the exact profile URL that the app requests
+      let profileRequestUrl: string | null = null;
+      let profileResponseBody: Record<string, unknown> | null = null;
+      await page.route(`**/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`, async (route) => {
+        profileRequestUrl = route.request().url();
+        profileResponseBody = {
+          id: TOKEN_ATHLETE_ID,
+          firstname: 'Verified',
+          lastname: 'Rower',
+          email: 'verified@example.com',
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(profileResponseBody),
+        });
+      });
+
+      await page.goto(`./?code=${OAUTH_CODE}&state=${OAUTH_STATE}`);
+      await page.waitForSelector('.app-header', { timeout: 10_000 });
+
+      // 4. Wait for authenticated user state
+      await expect(page.locator('.auth-user-trigger')).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('.auth-button--signin')).not.toBeVisible();
+
+      // 1. The token response was served with a non-empty athlete_id
+      expect(tokenResponseBody, 'token exchange must have been called').not.toBeNull();
+      expect(tokenResponseBody!['athlete_id'], 'token response must include a non-empty athlete_id')
+        .toBeTruthy();
+      expect(String(tokenResponseBody!['athlete_id']).length).toBeGreaterThan(0);
+
+      // 2. The profile request URL contains the athlete_id from the token
+      expect(profileRequestUrl, 'profile request must have been made').not.toBeNull();
+      expect(profileRequestUrl!).toContain(`/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`);
+      // The profile URL must NOT be the ID-less /proxy/api/v1/athlete endpoint (returns 405)
+      expect(profileRequestUrl!).not.toMatch(/\/proxy\/api\/v1\/athlete(?:\?|$)/);
+
+      // 3. The profile response contained an id
+      expect(profileResponseBody, 'profile response must have been served').not.toBeNull();
+      expect(profileResponseBody!['id'], 'profile response must include an id').toBe(TOKEN_ATHLETE_ID);
+
+      // 5. The athlete id is persisted in sessionStorage
+      const persistedAthleteId = await page.evaluate(() => sessionStorage.getItem('vr_auth_athlete_id'));
+      expect(persistedAthleteId).toBe(TOKEN_ATHLETE_ID);
+
+      // Also verify the user object was stored with the correct id
+      const persistedUserJson = await page.evaluate(() => sessionStorage.getItem('vr_auth_user'));
+      expect(persistedUserJson, 'user must be persisted in sessionStorage').not.toBeNull();
+      const persistedUser = JSON.parse(persistedUserJson!) as { id: string; name: string };
+      expect(persistedUser.id).toBe(TOKEN_ATHLETE_ID);
+      expect(persistedUser.name).toBe('Verified Rower');
+
+      // No sign-in error should be visible
+      await expect(page.locator('.auth-login-error')).not.toBeVisible();
+    },
+  );
 });
 
 // ─── Sad-path tests ────────────────────────────────────────────────────────────

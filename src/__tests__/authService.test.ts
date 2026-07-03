@@ -597,6 +597,130 @@ describe('AuthService', () => {
     });
   });
 
+  // ─── End-to-end login verification ───────────────────────────────────────────
+  // Focused tests that verify the full login flow succeeds and the athlete ID is
+  // returned from the intervals.icu request and is correctly persisted.
+  // These reproduce the production login scenario reported by the user and
+  // guard against regressions of the "Sign-in failed: VirtualRow could not
+  // load your intervals.icu profile" error path.
+
+  describe('login end-to-end verification', () => {
+    beforeEach(() => {
+      sessionStorage.setItem('vr_auth_state', 'valid-state');
+      sessionStorage.setItem('vr_auth_code_verifier', 'valid-verifier');
+    });
+
+    it('login returns a user whose id matches the athlete_id returned by the intervals.icu token endpoint (i-prefixed)', async () => {
+      const returnedAthleteId = 'i98765';
+      const tokenResponse = {
+        access_token: 'access-token-e2e',
+        refresh_token: 'refresh-token-e2e',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        athlete_id: returnedAthleteId,
+      };
+      const profileResponse = {
+        id: returnedAthleteId,
+        firstname: 'Verified',
+        lastname: 'Rower',
+        email: 'verified@example.com',
+      };
+
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(profileResponse) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      // The login must succeed and return a user
+      expect(result).not.toBeNull();
+      // The user's id must match the athlete_id from the token response
+      expect(result?.id).toBe(returnedAthleteId);
+      // The service must be authenticated with the returned access token
+      expect(service.isAuthenticated).toBe(true);
+      expect(service.getAccessToken()).toBe(tokenResponse.access_token);
+      // The athlete id must be persisted to sessionStorage
+      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(returnedAthleteId);
+      // The profile request URL must include the athlete_id — verifying the
+      // token → profile handoff worked end-to-end
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${returnedAthleteId}`);
+      // No user-facing error must be set
+      expect(service.getLastError()).toBeNull();
+    });
+
+    it('login returns a user whose id matches the athlete_id returned by the intervals.icu token endpoint (numeric → i-prefix fallback)', async () => {
+      // intervals.icu returns athlete_id as a numeric integer; the profile REST
+      // API requires an i-prefixed form for internal athletes.
+      const numericAthleteId = 98765;
+      const iPrefixedAthleteId = 'i98765';
+      const tokenResponse = {
+        access_token: 'access-token-e2e-numeric',
+        refresh_token: 'refresh-token-e2e-numeric',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        athlete_id: numericAthleteId,
+      };
+      const profileResponse = {
+        id: iPrefixedAthleteId,
+        firstname: 'Numeric',
+        lastname: 'Athlete',
+        email: 'numeric@example.com',
+      };
+
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) })
+        // /api/v1/athlete/98765 → 404 (numeric path not accepted for internal athletes)
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        // /api/v1/athlete/i98765 → 200 (i-prefixed path succeeds)
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(profileResponse) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      // Login succeeds despite the intermediate 404
+      expect(result).not.toBeNull();
+      // The resolved user id is the i-prefixed id returned by the successful profile call
+      expect(result?.id).toBe(iPrefixedAthleteId);
+      expect(service.isAuthenticated).toBe(true);
+      // The persisted athlete ID is the resolved (i-prefixed) id
+      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(iPrefixedAthleteId);
+      // Verify the profile request sequence: first numeric, then i-prefixed
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${numericAthleteId}`);
+      expect(fetchMock.mock.calls[2][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${iPrefixedAthleteId}`);
+      expect(service.getLastError()).toBeNull();
+    });
+
+    it('login fails with the user-visible error when the intervals.icu token response omits athlete_id', async () => {
+      // Regression guard for the exact error reported by the user:
+      // "Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry."
+      const tokenResponse = {
+        access_token: 'access-token-no-athlete',
+        refresh_token: 'refresh-token-no-athlete',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        // No athlete_id / id — reproduces the failure mode where the profile
+        // path cannot be constructed and the app must NOT hit /api/v1/athlete
+        // (which returns 405).
+      };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+
+      expect(result).toBeNull();
+      expect(service.isAuthenticated).toBe(false);
+      expect(service.getUser()).toBeNull();
+      // Exactly the user-facing error string surfaced by the AuthContext
+      expect(service.getLastError())
+        .toBe('Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.');
+      // No profile request must have been made — protects against the 405 path
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('logout', () => {
     it('clears authentication state', async () => {
       // Set up a logged-in state
