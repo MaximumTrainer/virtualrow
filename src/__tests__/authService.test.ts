@@ -470,7 +470,7 @@ describe('AuthService', () => {
       const [profileUrl, profileInit] = fetchMock.mock.calls[1];
       // URL: must target the athlete-specific proxy path
       expect(profileUrl).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/i777`);
-      // Authorization header must be present (value is `****** constructed by authService)
+      // Authorization header must be present and constructed by authService.
       expect((profileInit as RequestInit).headers).toMatchObject({
         Authorization: expect.any(String),
       });
@@ -495,7 +495,7 @@ describe('AuthService', () => {
       const [profileUrl, profileInit] = fetchMock.mock.calls[1];
       // URL: must target the generic athlete proxy path (no id suffix)
       expect(profileUrl).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}`);
-      // Authorization header must be present (value is `****** constructed by authService)
+      // Authorization header must be present and constructed by authService.
       expect((profileInit as RequestInit).headers).toMatchObject({
         Authorization: expect.any(String),
       });
@@ -545,7 +545,7 @@ describe('AuthService', () => {
       expect(service.getLastError()).toContain('not authorized');
     });
 
-    it('returns null when profile response body is missing the id field and both paths are exhausted', async () => {
+    it('returns null when profile response body is missing the id field for the generic profile path', async () => {
       // Simulate a response body with no `id` field for both endpoints.
       const noIdProfile = { firstname: 'Ghost', email: 'ghost@example.com' };
       const tokenNoId = { access_token: 'tok-noid', expires_in: 3600, token_type: 'Bearer' };
