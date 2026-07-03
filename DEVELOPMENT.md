@@ -272,8 +272,8 @@ To enable "Sign in with intervals.icu":
 1. Log in to [intervals.icu](https://intervals.icu) and go to **Settings → API** (or [intervals.icu/settings/api](https://intervals.icu/settings/api))
 2. Create a new OAuth application with:
    - **Redirect URIs** — add both:
-     - `http://localhost:5173/` — local dev
-     - `https://maximumtrainer.github.io/virtualrow/app/` — GitHub Pages production
+     - `http://localhost:5173/auth/callback/` — local dev
+     - `https://maximumtrainer.github.io/virtualrow/app/auth/callback/` — GitHub Pages production
 3. Copy the **Client ID** that intervals.icu generates
 4. Add it to `.env.local`:
    ```

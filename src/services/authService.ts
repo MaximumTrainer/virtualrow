@@ -59,7 +59,8 @@ interface RawTokenResponse {
   refresh_token?: string;
   expires_in: number;
   token_type: string;
-  athlete_id?: string;
+  /** intervals.icu returns the athlete ID as a numeric integer (e.g. 12345, not 'i12345'). */
+  athlete_id?: string | number;
   /** intervals.icu may return athlete ID as part of the token response */
   id?: string | number;
 }
@@ -302,6 +303,12 @@ export class AuthService {
     try {
       const profilePaths = this.getProfilePaths(athleteId);
 
+      if (profilePaths.length === 0) {
+        console.error('[AuthService] Cannot fetch profile: athlete ID not available from token response');
+        this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+        return null;
+      }
+
       for (const [index, profilePath] of profilePaths.entries()) {
         const res = await fetch(`${PROXY_BASE}${profilePath}`, {
           headers: { Authorization: 'Bearer '.concat(accessToken) },
@@ -420,8 +427,21 @@ export class AuthService {
   }
 
   private getProfilePaths(athleteId?: string): string[] {
-    if (!athleteId) return [ICU_PROFILE_PATH];
-    return [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`, ICU_PROFILE_PATH];
+    if (!athleteId) {
+      // intervals.icu requires an athlete ID in the path — GET /api/v1/athlete without
+      // an ID returns 405 Method Not Allowed. Return an empty list so the caller fails
+      // gracefully rather than making an invalid request.
+      return [];
+    }
+    const paths = [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`];
+    // intervals.icu returns athlete_id as a plain integer in the token response
+    // (e.g. 12345) but the REST API requires the 'i'-prefixed form for internal
+    // athletes (e.g. i12345). When the stored ID is purely numeric, append the
+    // 'i'-prefixed variant as a 404-triggered fallback.
+    if (/^\d+$/.test(athleteId)) {
+      paths.push(`${ICU_PROFILE_PATH}/i${athleteId}`);
+    }
+    return paths;
   }
 
   private shouldAttemptProfileFallback(index: number, status: number, pathCount: number): boolean {
