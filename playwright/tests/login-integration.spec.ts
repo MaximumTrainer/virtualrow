@@ -148,11 +148,11 @@ test.describe('login integration: OAuth callback flow', () => {
     'login end-to-end verification: token response returns athlete_id, profile request uses it, and authenticated user is created',
     async ({ page }) => {
       // Focused verification of the full login round-trip. Explicitly asserts:
-      //  1. Token exchange responds with a non-empty athlete_id
-      //  2. Profile request URL contains that same athlete_id
-      //  3. Profile response contains an id
-      //  4. The authenticated user menu appears (isAuthenticated === true)
-      //  5. The athlete id is persisted in sessionStorage for subsequent sessions
+      //  - Token exchange endpoint is hit with a non-empty athlete_id in the response
+      //  - Profile request URL contains that athlete_id (never the 405-returning ID-less form)
+      //  - Profile response contains an id
+      //  - The authenticated user menu appears (isAuthenticated === true)
+      //  - The athlete id + user are persisted in sessionStorage for subsequent sessions
       //
       // This is the scenario the user was hitting in production: verify the
       // whole handshake works and the athlete_id is present at every hop.
@@ -169,69 +169,82 @@ test.describe('login integration: OAuth callback flow', () => {
         { state: OAUTH_STATE, verifier: PKCE_VERIFIER },
       );
 
-      // Capture the exact token response body served to the app
-      let tokenResponseBody: Record<string, unknown> | null = null;
+      // Observe every request the app makes to the proxy — this gives us a
+      // complete picture of the observed traffic (unlike a route filter, which
+      // silently misses non-matching URLs). We use this to prove that the
+      // ID-less /proxy/api/v1/athlete endpoint was never called.
+      const observedAthleteRequestUrls: string[] = [];
+      page.on('request', (req) => {
+        const url = req.url();
+        if (url.includes('/proxy/api/v1/athlete')) {
+          observedAthleteRequestUrls.push(url);
+        }
+      });
+
+      // Serve a token response with a non-empty athlete_id
       await page.route('**/proxy/api/oauth/token**', async (route) => {
-        tokenResponseBody = {
-          access_token: 'verified-access-token',
-          refresh_token: 'verified-refresh-token',
-          expires_in: 3600,
-          token_type: 'Bearer',
-          athlete_id: TOKEN_ATHLETE_ID,
-        };
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(tokenResponseBody),
+          body: JSON.stringify({
+            access_token: 'verified-access-token',
+            refresh_token: 'verified-refresh-token',
+            expires_in: 3600,
+            token_type: 'Bearer',
+            athlete_id: TOKEN_ATHLETE_ID,
+          }),
         });
       });
 
-      // Capture the exact profile URL that the app requests
-      let profileRequestUrl: string | null = null;
-      let profileResponseBody: Record<string, unknown> | null = null;
+      // Serve the profile response for the expected athlete-specific URL.
+      // Any other URL the app hits will be recorded above but not fulfilled by
+      // this handler, which is exactly what we want for the regression guard.
+      let profileFulfilled = false;
       await page.route(`**/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`, async (route) => {
-        profileRequestUrl = route.request().url();
-        profileResponseBody = {
-          id: TOKEN_ATHLETE_ID,
-          firstname: 'Verified',
-          lastname: 'Rower',
-          email: 'verified@example.com',
-        };
+        profileFulfilled = true;
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(profileResponseBody),
+          body: JSON.stringify({
+            id: TOKEN_ATHLETE_ID,
+            firstname: 'Verified',
+            lastname: 'Rower',
+            email: 'verified@example.com',
+          }),
         });
       });
 
       await page.goto(`./?code=${OAUTH_CODE}&state=${OAUTH_STATE}`);
       await page.waitForSelector('.app-header', { timeout: 10_000 });
 
-      // 4. Wait for authenticated user state
+      // Wait for authenticated user state — proves the full handshake succeeded
       await expect(page.locator('.auth-user-trigger')).toBeVisible({ timeout: 15_000 });
       await expect(page.locator('.auth-button--signin')).not.toBeVisible();
 
-      // 1. The token response was served with a non-empty athlete_id
-      expect(tokenResponseBody, 'token exchange must have been called').not.toBeNull();
-      expect(tokenResponseBody!['athlete_id'], 'token response must include a non-empty athlete_id')
-        .toBeTruthy();
-      expect(String(tokenResponseBody!['athlete_id']).length).toBeGreaterThan(0);
+      // The app must have hit the athlete-specific profile endpoint
+      expect(profileFulfilled, 'app must call the athlete-specific profile endpoint').toBe(true);
 
-      // 2. The profile request URL contains the athlete_id from the token
-      expect(profileRequestUrl, 'profile request must have been made').not.toBeNull();
-      expect(profileRequestUrl!).toContain(`/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`);
-      // The profile URL must NOT be the ID-less /proxy/api/v1/athlete endpoint (returns 405)
-      expect(profileRequestUrl!).not.toMatch(/\/proxy\/api\/v1\/athlete(?:\?|$)/);
+      // Every observed athlete request must have included an ID segment — the
+      // app must NEVER hit the 405-returning /proxy/api/v1/athlete (no ID) URL.
+      expect(observedAthleteRequestUrls.length).toBeGreaterThan(0);
+      for (const url of observedAthleteRequestUrls) {
+        expect(
+          url,
+          `unexpected ID-less athlete endpoint request: ${url}`,
+        ).not.toMatch(/\/proxy\/api\/v1\/athlete(?:\?|$)/);
+        expect(
+          url,
+          `athlete request should include the athlete_id path segment: ${url}`,
+        ).toMatch(/\/proxy\/api\/v1\/athlete\/[^/?#]+/);
+      }
+      // At least one athlete request must have used the athlete_id from the token
+      expect(observedAthleteRequestUrls.some((u) => u.includes(`/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`)))
+        .toBe(true);
 
-      // 3. The profile response contained an id
-      expect(profileResponseBody, 'profile response must have been served').not.toBeNull();
-      expect(profileResponseBody!['id'], 'profile response must include an id').toBe(TOKEN_ATHLETE_ID);
-
-      // 5. The athlete id is persisted in sessionStorage
+      // The athlete id and user must be persisted in sessionStorage
       const persistedAthleteId = await page.evaluate(() => sessionStorage.getItem('vr_auth_athlete_id'));
       expect(persistedAthleteId).toBe(TOKEN_ATHLETE_ID);
 
-      // Also verify the user object was stored with the correct id
       const persistedUserJson = await page.evaluate(() => sessionStorage.getItem('vr_auth_user'));
       expect(persistedUserJson, 'user must be persisted in sessionStorage').not.toBeNull();
       const persistedUser = JSON.parse(persistedUserJson!) as { id: string; name: string };
