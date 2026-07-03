@@ -7,11 +7,6 @@
  *  2. Intercepting the CORS proxy endpoints so no real intervals.icu calls are made.
  *  3. Navigating to the app root with OAuth callback query params (?code=&state=).
  *  4. Asserting that the app transitions to the authenticated state.
- *
- * The tests exercise the exact failure path reported in issue #NNN:
- *  - intervals.icu returns athlete_id as a plain integer in the token response.
- *  - The app must try /api/v1/athlete/{numericId} first, then /api/v1/athlete/i{numericId}
- *    as a 404-triggered fallback (the generic /api/v1/athlete path returns 405).
  */
 
 import { test, expect, type Page } from '@playwright/test';

@@ -61,7 +61,7 @@ interface RawTokenResponse {
   token_type: string;
   /** intervals.icu returns the athlete ID as a numeric integer (e.g. 12345, not 'i12345'). */
   athlete_id?: string | number;
-  /** intervals.icu may return athlete ID as part of the token response */
+  /** intervals.icu may return athlete ID as part of the token response (numeric, same format as athlete_id). */
   id?: string | number;
 }
 
