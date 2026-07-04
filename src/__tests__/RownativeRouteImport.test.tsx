@@ -61,7 +61,7 @@ describe('RownativeRouteImport', () => {
       rownativeDisplayName: 'Rownative User',
       linkedAt: Date.now(),
     });
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false } as Window));
 
     renderWithServices({
       authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
@@ -141,5 +141,106 @@ describe('RownativeRouteImport', () => {
 
     expect(screen.getByRole('alert').textContent).toContain('No valid route found in KML.');
     expect(screen.getByText('Pull failed')).toBeTruthy();
+  });
+
+  it('finalizes first KML candidate when multiple candidates are returned', async () => {
+    const user = userEvent.setup();
+    const pulledRoute = createImportedRoute('Candidate Route');
+    const pullLinkedRouteKml = vi.fn().mockResolvedValue({
+      kml: '<kml></kml>',
+      routeName: 'Candidate Route',
+      location: 'Harbor',
+    });
+    const importRouteFromKML = vi.fn().mockReturnValue({
+      status: 'selectionRequired',
+      candidates: [{ name: 'Candidate A', description: '', coordinates: [{ lat: 1, lng: 2 }, { lat: 2, lng: 3 }] }],
+    });
+    const finalizeKMLImport = vi.fn().mockReturnValue(pulledRoute);
+
+    const { onRouteImported } = renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
+        pullLinkedRouteKml,
+      } as unknown as Services['rownativeService']),
+      routeService: ({
+        ...defaultServices.routeService,
+        importRouteFromKML,
+        finalizeKMLImport,
+      } as unknown as Services['routeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
+
+    expect(finalizeKMLImport).toHaveBeenCalledOnce();
+    expect(onRouteImported).toHaveBeenCalledWith(pulledRoute);
+  });
+
+  it('shows an error when browser blocks the rownative link popup', async () => {
+    const user = userEvent.setup();
+    const startLinkFlow = vi.fn().mockResolvedValue({ linkUrl: 'https://rownative.icu/link' });
+    vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => null,
+        startLinkFlow,
+      } as unknown as Services['rownativeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
+
+    expect(screen.getByRole('alert').textContent).toContain('blocked the rownative link window');
+    expect(screen.getByText('Link failed')).toBeTruthy();
+  });
+
+  it('shows a pull failure when selectionRequired returns no candidates', async () => {
+    const user = userEvent.setup();
+    const pullLinkedRouteKml = vi.fn().mockResolvedValue({ kml: '<kml></kml>' });
+    const importRouteFromKML = vi.fn().mockReturnValue({ status: 'selectionRequired', candidates: [] });
+
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
+        pullLinkedRouteKml,
+      } as unknown as Services['rownativeService']),
+      routeService: ({
+        ...defaultServices.routeService,
+        importRouteFromKML,
+      } as unknown as Services['routeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
+
+    expect(screen.getByRole('alert').textContent).toContain('No selectable routes were found in the pulled KML.');
+    expect(screen.getByText('Pull failed')).toBeTruthy();
+  });
+
+  it('unlinks an existing linked account and resets status', async () => {
+    const user = userEvent.setup();
+    const unlinkAccount = vi.fn().mockResolvedValue(undefined);
+
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
+        unlinkAccount,
+      } as unknown as Services['rownativeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /unlink rownative account/i }));
+
+    expect(unlinkAccount).toHaveBeenCalledWith('vr-1');
+    expect(screen.getByText('Not linked')).toBeTruthy();
   });
 });

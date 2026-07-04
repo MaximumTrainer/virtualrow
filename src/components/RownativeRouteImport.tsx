@@ -58,7 +58,12 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
     setError(null);
     try {
       const result = await rownativeService.startLinkFlow(currentUserId);
-      window.open(result.linkUrl, '_blank', 'noopener,noreferrer');
+      const popup = window.open(result.linkUrl, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        setStatus('Link failed');
+        setError('Your browser blocked the rownative link window. Allow pop-ups and try again.');
+        return;
+      }
       setLinkRequestId(result.requestId);
       setStatus('Linking');
     } catch (e) {
@@ -125,11 +130,16 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
 
       const imported = importResult.status === 'success'
         ? importResult.route
-        : routeService.finalizeKMLImport(importResult.candidates[0], {
-            name: kmlResult.routeName,
-            location: kmlResult.location ?? 'rownative.icu',
-            tags: ['rownative', 'imported', 'kml'],
-          });
+        : (() => {
+            if (importResult.candidates.length === 0) {
+              throw new Error('No selectable routes were found in the pulled KML.');
+            }
+            return routeService.finalizeKMLImport(importResult.candidates[0], {
+              name: kmlResult.routeName,
+              location: kmlResult.location ?? 'rownative.icu',
+              tags: ['rownative', 'imported', 'kml'],
+            });
+          })();
       onRouteImported(imported);
       setStatus('Pull success');
       setIsOpen(false);

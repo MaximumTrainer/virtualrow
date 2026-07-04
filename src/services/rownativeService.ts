@@ -108,179 +108,179 @@ export class RownativeService {
   }
 
   getLinkedAccount(virtualRowUserId: string): RownativeLinkedAccount | null {
-      if (!virtualRowUserId || typeof window === 'undefined') return null;
-      const json = sessionStorage.getItem(this.getLinkedAccountStorageKey(virtualRowUserId));
-      if (!json) return null;
-      try {
-        const parsed = JSON.parse(json) as Partial<RownativeLinkedAccount>;
-        if (
-          parsed.virtualRowUserId !== virtualRowUserId
-          || typeof parsed.rownativeUserId !== 'string'
-          || parsed.rownativeUserId.length === 0
-          || typeof parsed.linkedAt !== 'number'
-          || !Number.isFinite(parsed.linkedAt)
-        ) {
-          return null;
-        }
-
-        return {
-          virtualRowUserId,
-          rownativeUserId: parsed.rownativeUserId,
-          rownativeDisplayName: typeof parsed.rownativeDisplayName === 'string' && parsed.rownativeDisplayName.trim().length > 0
-            ? parsed.rownativeDisplayName
-            : undefined,
-          linkedAt: parsed.linkedAt,
-        };
-      } catch {
+    if (!virtualRowUserId || typeof window === 'undefined') return null;
+    const json = sessionStorage.getItem(this.getLinkedAccountStorageKey(virtualRowUserId));
+    if (!json) return null;
+    try {
+      const parsed = JSON.parse(json) as Partial<RownativeLinkedAccount>;
+      if (
+        parsed.virtualRowUserId !== virtualRowUserId
+        || typeof parsed.rownativeUserId !== 'string'
+        || parsed.rownativeUserId.length === 0
+        || typeof parsed.linkedAt !== 'number'
+        || !Number.isFinite(parsed.linkedAt)
+      ) {
         return null;
       }
+
+      return {
+        virtualRowUserId,
+        rownativeUserId: parsed.rownativeUserId,
+        rownativeDisplayName: typeof parsed.rownativeDisplayName === 'string' && parsed.rownativeDisplayName.trim().length > 0
+          ? parsed.rownativeDisplayName
+          : undefined,
+        linkedAt: parsed.linkedAt,
+      };
+    } catch {
+      return null;
     }
+  }
 
   private validateVirtualRowUserId(virtualRowUserId: string): string {
-      const normalized = virtualRowUserId.trim();
-      if (!normalized) {
-        throw new Error('You need to sign in before linking a rownative account.');
-      }
-      return normalized;
+    const normalized = virtualRowUserId.trim();
+    if (!normalized) {
+      throw new Error('You need to sign in before linking a rownative account.');
     }
+    return normalized;
+  }
 
   private validateRouteSelection(input: { routeId?: string; routeUrl?: string }): { routeId?: string; routeUrl?: string } {
-      const routeId = input.routeId?.trim();
-      const routeUrl = input.routeUrl?.trim();
-      if (!routeId && !routeUrl) return {};
+    const routeId = input.routeId?.trim();
+    const routeUrl = input.routeUrl?.trim();
+    if (!routeId && !routeUrl) return {};
 
-      if (routeId) {
-        if (!ROUTE_ID_PATTERN.test(routeId)) {
-          throw new Error('Route ID is invalid. Use letters, numbers, dash, or underscore only.');
-        }
-        return { routeId };
+    if (routeId) {
+      if (!ROUTE_ID_PATTERN.test(routeId)) {
+        throw new Error('Route ID is invalid. Use letters, numbers, dash, or underscore only.');
       }
-
-      try {
-        const parsed = new URL(routeUrl ?? '');
-        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-          throw new Error('Route URL must start with https:// or http://.');
-        }
-        return { routeUrl: parsed.toString() };
-      } catch {
-        throw new Error('Route URL is invalid.');
-      }
+      return { routeId };
     }
+
+    try {
+      const parsed = new URL(routeUrl ?? '');
+      if (parsed.protocol !== 'https:') {
+        throw new Error('Route URL must start with https://.');
+      }
+      return { routeUrl: parsed.toString() };
+    } catch {
+      throw new Error('Route URL is invalid.');
+    }
+  }
 
   private async fetchWorkerJson<T>(path: string, init: RequestInit): Promise<T> {
-      const response = await this.fetchImpl(`${ROWNATIVE_WORKER_BASE_URL}${path}`, init);
-      if (!response.ok) {
-        throw new Error(`Rownative API request failed (HTTP ${response.status}).`);
-      }
-      return response.json() as Promise<T>;
+    const response = await this.fetchImpl(`${ROWNATIVE_WORKER_BASE_URL}${path}`, init);
+    if (!response.ok) {
+      throw new Error(`Rownative API request failed (HTTP ${response.status}).`);
     }
+    return response.json() as Promise<T>;
+  }
 
   async startLinkFlow(virtualRowUserId: string): Promise<StartRownativeLinkResult> {
-      const userId = this.validateVirtualRowUserId(virtualRowUserId);
-      const result = await this.fetchWorkerJson<{ linkUrl?: string; requestId?: string }>(
-        '/link/start',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ virtualRowUserId: userId }),
-        },
-      );
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    const result = await this.fetchWorkerJson<{ linkUrl?: string; requestId?: string }>(
+      '/link/start',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId }),
+      },
+    );
 
-      if (typeof result.linkUrl !== 'string' || result.linkUrl.trim().length === 0) {
-        throw new Error('Rownative link setup failed. Please try again.');
-      }
-      let linkUrl: URL;
-      try {
-        linkUrl = new URL(result.linkUrl);
-      } catch {
-        throw new Error('Rownative link setup failed. Please try again.');
-      }
-      if (linkUrl.protocol !== 'https:' && linkUrl.protocol !== 'http:') {
-        throw new Error('Rownative link setup failed. Please try again.');
-      }
-
-      return {
-        linkUrl: linkUrl.toString(),
-        requestId: typeof result.requestId === 'string' && result.requestId.trim().length > 0 ? result.requestId.trim() : undefined,
-      };
+    if (typeof result.linkUrl !== 'string' || result.linkUrl.trim().length === 0) {
+      throw new Error('Rownative link setup failed. Please try again.');
     }
+    let linkUrl: URL;
+    try {
+      linkUrl = new URL(result.linkUrl);
+    } catch {
+      throw new Error('Rownative link setup failed. Please try again.');
+    }
+    if (linkUrl.protocol !== 'https:' && linkUrl.protocol !== 'http:') {
+      throw new Error('Rownative link setup failed. Please try again.');
+    }
+
+    return {
+      linkUrl: linkUrl.toString(),
+      requestId: typeof result.requestId === 'string' && result.requestId.trim().length > 0 ? result.requestId.trim() : undefined,
+    };
+  }
 
   async completeLinkFlow(virtualRowUserId: string, requestId?: string): Promise<RownativeLinkedAccount> {
-      const userId = this.validateVirtualRowUserId(virtualRowUserId);
-      const body: { virtualRowUserId: string; requestId?: string } = { virtualRowUserId: userId };
-      if (requestId?.trim()) {
-        body.requestId = requestId.trim();
-      }
-
-      const result = await this.fetchWorkerJson<{
-        rownativeUserId?: string;
-        rownativeDisplayName?: string;
-        linkedAt?: number;
-      }>(
-        '/link/complete',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      );
-
-      if (typeof result.rownativeUserId !== 'string' || result.rownativeUserId.trim().length === 0) {
-        throw new Error('Linking could not be confirmed yet. Please finish linking on rownative.icu and retry.');
-      }
-
-      const account: RownativeLinkedAccount = {
-        virtualRowUserId: userId,
-        rownativeUserId: result.rownativeUserId.trim(),
-        rownativeDisplayName: typeof result.rownativeDisplayName === 'string' && result.rownativeDisplayName.trim().length > 0
-          ? result.rownativeDisplayName.trim()
-          : undefined,
-        linkedAt: typeof result.linkedAt === 'number' && Number.isFinite(result.linkedAt)
-          ? result.linkedAt
-          : Date.now(),
-      };
-      this.persistLinkedAccount(account);
-      return account;
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    const body: { virtualRowUserId: string; requestId?: string } = { virtualRowUserId: userId };
+    if (requestId?.trim()) {
+      body.requestId = requestId.trim();
     }
+
+    const result = await this.fetchWorkerJson<{
+      rownativeUserId?: string;
+      rownativeDisplayName?: string;
+      linkedAt?: number;
+    }>(
+      '/link/complete',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (typeof result.rownativeUserId !== 'string' || result.rownativeUserId.trim().length === 0) {
+      throw new Error('Linking could not be confirmed yet. Please finish linking on rownative.icu and retry.');
+    }
+
+    const account: RownativeLinkedAccount = {
+      virtualRowUserId: userId,
+      rownativeUserId: result.rownativeUserId.trim(),
+      rownativeDisplayName: typeof result.rownativeDisplayName === 'string' && result.rownativeDisplayName.trim().length > 0
+        ? result.rownativeDisplayName.trim()
+        : undefined,
+      linkedAt: typeof result.linkedAt === 'number' && Number.isFinite(result.linkedAt)
+        ? result.linkedAt
+        : Date.now(),
+    };
+    this.persistLinkedAccount(account);
+    return account;
+  }
 
   async unlinkAccount(virtualRowUserId: string): Promise<void> {
-      const userId = this.validateVirtualRowUserId(virtualRowUserId);
-      await this.fetchWorkerJson<{ ok?: boolean }>(
-        '/link/unlink',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ virtualRowUserId: userId }),
-        },
-      );
-      this.clearLinkedAccount(userId);
-    }
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    await this.fetchWorkerJson<{ ok?: boolean }>(
+      '/link/unlink',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId }),
+      },
+    );
+    this.clearLinkedAccount(userId);
+  }
 
   async pullLinkedRouteKml(input: PullRownativeKmlRequest): Promise<PullRownativeKmlResult> {
-      const userId = this.validateVirtualRowUserId(input.virtualRowUserId);
-      const selection = this.validateRouteSelection(input);
-      const result = await this.fetchWorkerJson<{ kml?: string; routeName?: string; location?: string }>(
-        '/routes/pull-kml',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ virtualRowUserId: userId, ...selection }),
-        },
-      );
+    const userId = this.validateVirtualRowUserId(input.virtualRowUserId);
+    const selection = this.validateRouteSelection(input);
+    const result = await this.fetchWorkerJson<{ kml?: string; routeName?: string; location?: string }>(
+      '/routes/pull-kml',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId, ...selection }),
+      },
+    );
 
-      if (typeof result.kml !== 'string' || result.kml.trim().length === 0) {
-        throw new Error('Rownative did not return KML data for that route.');
-      }
-      if (result.kml.length > MAX_KML_BYTES) {
-        throw new Error('The KML response is too large to import.');
-      }
-
-      return {
-        kml: result.kml,
-        routeName: typeof result.routeName === 'string' && result.routeName.trim().length > 0 ? result.routeName.trim() : undefined,
-        location: typeof result.location === 'string' && result.location.trim().length > 0 ? result.location.trim() : undefined,
-      };
+    if (typeof result.kml !== 'string' || result.kml.trim().length === 0) {
+      throw new Error('Rownative did not return KML data for that route.');
     }
+    if (result.kml.length > MAX_KML_BYTES) {
+      throw new Error('The KML response is too large to import.');
+    }
+
+    return {
+      kml: result.kml,
+      routeName: typeof result.routeName === 'string' && result.routeName.trim().length > 0 ? result.routeName.trim() : undefined,
+      location: typeof result.location === 'string' && result.location.trim().length > 0 ? result.location.trim() : undefined,
+    };
+  }
   async getCourseIndex(): Promise<RownativeCourseSummary[]> {
     if (this.courseIndexCache) {
       return this.courseIndexCache;
