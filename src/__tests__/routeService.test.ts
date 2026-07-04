@@ -301,6 +301,23 @@ describe('RouteService import routines', () => {
     expect(imported).toBeDefined();
     expect(imported!.coordinates.length).toBe(2);
   });
+
+  it('skips out-of-range GeoJSON positions and keeps valid [lng,lat] points', () => {
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [[181, 0], [13.405, 52.52], [13.406, 52.521]],
+      },
+      properties: {},
+    });
+    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Filtered', difficulty: 'easy' });
+    expect(imported).toBeDefined();
+    expect(imported!.coordinates).toEqual([
+      { lat: 52.52, lng: 13.405 },
+      { lat: 52.521, lng: 13.406 },
+    ]);
+  });
 });
 
 describe('RouteService KML import', () => {
