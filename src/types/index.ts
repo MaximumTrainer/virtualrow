@@ -189,6 +189,27 @@ export interface StructuredWorkout {
   routeId?: string; // Optional: specific route to use with this workout
 }
 
+export interface IntervalBlock {
+  id: string;
+  type: WorkoutSegment['type'];
+  label: string;
+  durationSec: number;
+  targetPowerWatts?: number;
+  targetPaceMin?: number;
+  targetPaceMax?: number;
+  intensity?: WorkoutSegment['intensity'];
+}
+
+export interface WorkoutPlan {
+  id: string;
+  name: string;
+  summary: string;
+  scheduledDate?: string;
+  source: 'intervals.icu' | 'manual' | 'imported';
+  blocks: IntervalBlock[];
+  totalDurationSec: number;
+}
+
 // Individual segment/interval in a structured workout
 export interface WorkoutSegment {
   id: string;
