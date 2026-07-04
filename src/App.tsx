@@ -524,7 +524,7 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
-          <p className="app-subtitle">Willowbrook demo rowing plus rownative.icu route imports</p>
+          <p className="app-subtitle">Row the Willowbrook demo or import rownative.icu routes</p>
           <div className="header-auth">
             <AuthButton />
           </div>

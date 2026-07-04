@@ -88,7 +88,8 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
           {showManualFallback && (
             <div className="rownative-fallback">
               <p>
-                Browse courses directly on{' '}
+                Browse courses directly on
+                {' '}
                 <a href="https://rownative.icu/" target="_blank" rel="noreferrer">
                   rownative.icu
                 </a>
