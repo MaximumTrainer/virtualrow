@@ -23,6 +23,7 @@ describe('RownativeRouteImport', () => {
     await user.click(screen.getByRole('button', { name: /search rownative\.icu/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load courses from rownative.icu right now.');
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(screen.queryByText('No matching courses.')).not.toBeInTheDocument();
     expect(searchCourses).toHaveBeenCalledWith('');
   });
