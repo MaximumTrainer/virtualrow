@@ -10,8 +10,8 @@
  *    was blocked and will be retried after sign-in)
  *
  * On mount, AuthProvider checks for ?code=&state= query params to complete
- * an OAuth callback, and silently restores an existing session from
- * sessionStorage.
+ * an OAuth callback, and silently restores an existing session from the
+ * encrypted auth cookie.
  */
 
 import {

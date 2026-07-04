@@ -2,6 +2,42 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
 import { AuthService, PROXY_BASE, ICU_PROFILE_PATH } from '../services/authService';
 
+const AUTH_COOKIE_NAME = 'vr_auth_session';
+const AUTH_SESSION_KEY = 'vr_auth_session_key';
+const AUTH_COOKIE_TTL_MS = 2 * 60 * 60 * 1000;
+
+function getCookieValue(name: string): string | null {
+  const prefix = `${name}=`;
+  const entry = document.cookie.split('; ').find((cookie) => cookie.startsWith(prefix));
+  return entry ? decodeURIComponent(entry.slice(prefix.length)) : null;
+}
+
+async function readAuthCookiePayload() {
+  const encrypted = getCookieValue(AUTH_COOKIE_NAME);
+  const keyMaterial = sessionStorage.getItem(AUTH_SESSION_KEY);
+  if (!encrypted || !keyMaterial) return null;
+
+  const [encodedIv, encodedCiphertext] = encrypted.split('.');
+  if (!encodedIv || !encodedCiphertext) return null;
+
+  const decodeBase64Url = (value: string) => {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  };
+
+  const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyMaterial));
+  const key = await crypto.subtle.importKey('raw', hashed, { name: 'AES-GCM' }, false, ['decrypt']);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: decodeBase64Url(encodedIv) },
+    key,
+    decodeBase64Url(encodedCiphertext),
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext)) as { athleteId: string; expiresAt: number; user: { id: string; name: string } };
+}
+
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 
 describe('generateCodeVerifier', () => {
@@ -68,6 +104,7 @@ describe('AuthService', () => {
 
     // Use the real jsdom sessionStorage; clear it between tests
     sessionStorage.clear();
+    document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/`;
 
     // Stub location.href setter to prevent actual navigation
     Object.defineProperty(window, 'location', {
@@ -83,6 +120,7 @@ describe('AuthService', () => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     sessionStorage.clear();
+    document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/`;
     consoleSpy.error.mockClear();
     consoleSpy.warn.mockClear();
   });
@@ -644,8 +682,10 @@ describe('AuthService', () => {
       // The service must be authenticated with the returned access token
       expect(service.isAuthenticated).toBe(true);
       expect(service.getAccessToken()).toBe(tokenResponse.access_token);
-      // The athlete id must be persisted to sessionStorage
-      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(returnedAthleteId);
+      const cookiePayload = await readAuthCookiePayload();
+      expect(cookiePayload?.athleteId).toBe(returnedAthleteId);
+      expect(cookiePayload?.user.id).toBe(returnedAthleteId);
+      expect(cookiePayload?.expiresAt).toBeGreaterThan(Date.now());
       // The profile request URL must include the athlete_id — verifying the
       // token → profile handoff worked end-to-end
       expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${returnedAthleteId}`);
@@ -687,8 +727,9 @@ describe('AuthService', () => {
       // The resolved user id is the i-prefixed id returned by the successful profile call
       expect(result?.id).toBe(iPrefixedAthleteId);
       expect(service.isAuthenticated).toBe(true);
-      // The persisted athlete ID is the resolved (i-prefixed) id
-      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(iPrefixedAthleteId);
+      const cookiePayload = await readAuthCookiePayload();
+      expect(cookiePayload?.athleteId).toBe(iPrefixedAthleteId);
+      expect(cookiePayload?.user.id).toBe(iPrefixedAthleteId);
       // Verify the profile request sequence: first numeric, then i-prefixed
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${numericAthleteId}`);
@@ -726,11 +767,10 @@ describe('AuthService', () => {
   });
 
   describe('logout', () => {
-    it('clears authentication state', async () => {
-      // Set up a logged-in state
+    it('clears authentication state and encrypted auth cookie', async () => {
       sessionStorage.setItem('vr_auth_refresh_token', 'refresh-xyz');
-      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Test' }));
-      sessionStorage.setItem('vr_auth_athlete_id', 'i123');
+      sessionStorage.setItem('vr_auth_session_key', 'test-session-key');
+      document.cookie = `${AUTH_COOKIE_NAME}=fake.encrypted.payload; Path=/`;
 
       service.logout();
 
@@ -738,6 +778,7 @@ describe('AuthService', () => {
       expect(service.getUser()).toBeNull();
       expect(service.getAccessToken()).toBeNull();
       expect(sessionStorage.getItem('vr_auth_refresh_token')).toBeNull();
+      expect(getCookieValue(AUTH_COOKIE_NAME)).toBeNull();
     });
   });
 
@@ -749,8 +790,6 @@ describe('AuthService', () => {
 
     it('returns true and updates access token on success', async () => {
       sessionStorage.setItem('vr_auth_refresh_token', 'old-refresh');
-      sessionStorage.setItem('vr_auth_athlete_id', 'i123');
-      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Tester', email: '' }));
 
       // Stub fetch before constructing so the restore-session refresh is served
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -760,10 +799,34 @@ describe('AuthService', () => {
           refresh_token: 'new-refresh',
           expires_in: 3600,
           token_type: 'Bearer',
+          athlete_id: 'i123',
         }),
       }));
 
-      // Reconstruct service so it restores session and calls refreshAccessToken
+      // Seed encrypted cookie so restore-session can recover the user and refresh.
+      sessionStorage.setItem('vr_auth_session_key', 'session-key-for-test');
+      const now = Date.now();
+      const payload = {
+        user: { id: 'i123', name: 'Tester', email: '' },
+        athleteId: 'i123',
+        expiresAt: now + AUTH_COOKIE_TTL_MS,
+      };
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('session-key-for-test'));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+      const toBase64Url = (bytes: Uint8Array) =>
+        btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      // Reconstruct service so it restores cookie session and calls refreshAccessToken.
       service = new AuthService();
       // Wait for the async restore-session refresh to finish
       await new Promise(r => setTimeout(r, 0));
@@ -804,6 +867,42 @@ describe('AuthService', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 401 }));
       const result = await service.refreshAccessToken();
       expect(result).toBe(false);
+    });
+  });
+
+  describe('cookie session restore', () => {
+    it('refreshes encrypted cookie TTL when session is restored on reload', async () => {
+      const sessionKey = 'restore-session-key';
+      const originalExpiresAt = Date.now() + 30_000;
+      const payload = {
+        user: { id: 'i123', name: 'Reload User', email: 'reload@example.com' },
+        athleteId: 'i123',
+        expiresAt: originalExpiresAt,
+      };
+
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sessionKey));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+      const toBase64Url = (bytes: Uint8Array) =>
+        btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+      sessionStorage.setItem(AUTH_SESSION_KEY, sessionKey);
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      service = new AuthService();
+      await new Promise(r => setTimeout(r, 0));
+
+      const refreshed = await readAuthCookiePayload();
+      expect(refreshed?.user.name).toBe('Reload User');
+      expect(refreshed?.expiresAt ?? 0).toBeGreaterThan(originalExpiresAt + (AUTH_COOKIE_TTL_MS / 2));
     });
   });
 });
