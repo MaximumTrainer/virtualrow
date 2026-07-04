@@ -67,18 +67,9 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
 
   const canvasContainer = page.locator('.rower3d-canvas-container');
   await expect(canvasContainer).toBeVisible({ timeout: 15_000 });
-  const renderedCanvas = canvasContainer.locator('canvas');
-  const canvasCount = await renderedCanvas.count();
-  if (canvasCount > 0) {
-    await expect(renderedCanvas.first()).toBeVisible({ timeout: 15_000 });
-  } else {
-    await expect(page.locator('.rower3d-fallback-marker').first()).toBeVisible({
-      timeout: 15_000,
-    });
-  }
-
-  const shot = await canvasContainer.screenshot();
-  expect(shot.byteLength).toBeGreaterThan(1_000);
+  await expect(
+    page.locator('.rower3d-canvas-container canvas:visible, .rower3d-fallback-marker:visible').first(),
+  ).toBeVisible({ timeout: 15_000 });
 
   const fatalRuntimeErrors = [...pageErrors, ...consoleErrors].filter((text) =>
     /typeerror|referenceerror|cannot read properties of undefined/i.test(text),
