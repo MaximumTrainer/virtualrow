@@ -38,6 +38,14 @@ async function readAuthCookiePayload() {
   return JSON.parse(new TextDecoder().decode(plaintext)) as { athleteId: string; expiresAt: number; user: { id: string; name: string } };
 }
 
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 
 describe('generateCodeVerifier', () => {
@@ -820,8 +828,6 @@ describe('AuthService', () => {
         key,
         new TextEncoder().encode(JSON.stringify(payload)),
       );
-      const toBase64Url = (bytes: Uint8Array) =>
-        btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
       document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
         `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
       )}; Path=/`;
@@ -833,6 +839,7 @@ describe('AuthService', () => {
 
       const result = await service.refreshAccessToken();
       expect(result).toBe(true);
+      expect(sessionStorage.getItem('vr_auth_refresh_token')).toBe('new-refresh');
     });
 
     it('passes client_id to the proxy URL during token refresh', async () => {
@@ -889,8 +896,6 @@ describe('AuthService', () => {
         key,
         new TextEncoder().encode(JSON.stringify(payload)),
       );
-      const toBase64Url = (bytes: Uint8Array) =>
-        btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 
       sessionStorage.setItem(AUTH_SESSION_KEY, sessionKey);
       document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
@@ -898,11 +903,18 @@ describe('AuthService', () => {
       )}; Path=/`;
 
       service = new AuthService();
-      await new Promise(r => setTimeout(r, 0));
-
-      const refreshed = await readAuthCookiePayload();
+      let refreshed = await readAuthCookiePayload();
+      for (let i = 0; i < 50 && (refreshed?.expiresAt ?? 0) <= originalExpiresAt; i += 1) {
+        await new Promise(r => setTimeout(r, 10));
+        refreshed = await readAuthCookiePayload();
+      }
+      if ((refreshed?.expiresAt ?? 0) <= originalExpiresAt) {
+        throw new Error('Encrypted auth cookie TTL was not refreshed after restore');
+      }
+      const now = Date.now();
       expect(refreshed?.user.name).toBe('Reload User');
-      expect(refreshed?.expiresAt ?? 0).toBeGreaterThan(originalExpiresAt + (AUTH_COOKIE_TTL_MS / 2));
+      expect(refreshed?.expiresAt ?? 0).toBeGreaterThanOrEqual(now + AUTH_COOKIE_TTL_MS - 5_000);
+      expect(refreshed?.expiresAt ?? 0).toBeLessThanOrEqual(now + AUTH_COOKIE_TTL_MS + 5_000);
     });
   });
 });

@@ -225,10 +225,13 @@ export class AuthService {
       const tokens = this.parseTokenResponse(raw, athleteId);
       if (!tokens) return false;
 
-      // Keep current user; only update the access token and schedule next refresh
-      if (this.currentUser) {
-        await this.applyTokens(tokens, this.currentUser);
+      // Keep current user; only update the access token and schedule next refresh.
+      if (!this.currentUser) {
+        console.warn('[AuthService] Token refreshed but no user session is available');
+        return false;
       }
+
+      await this.applyTokens(tokens, this.currentUser);
       return true;
     } catch (err) {
       console.warn('[AuthService] Token refresh error:', err);
@@ -468,6 +471,7 @@ export class AuthService {
     if (existing) return existing;
 
     if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+      console.error('[AuthService] Web Crypto unavailable: encrypted auth cookie session cannot be persisted');
       return null;
     }
 
@@ -484,9 +488,10 @@ export class AuthService {
     try {
       const key = await this.deriveEncryptionKey(keyMaterial);
       const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ivBytes = new Uint8Array(iv);
       const plaintext = new TextEncoder().encode(JSON.stringify(payload));
       const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        { name: 'AES-GCM', iv: ivBytes },
         key,
         plaintext,
       );
@@ -506,11 +511,13 @@ export class AuthService {
     try {
       const iv = this.base64UrlToBytes(encodedIv);
       const ciphertext = this.base64UrlToBytes(encodedCiphertext);
+      const ivBytes = new Uint8Array(iv);
+      const ciphertextBytes = new Uint8Array(ciphertext);
       const key = await this.deriveEncryptionKey(keyMaterial);
       const plaintext = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        { name: 'AES-GCM', iv: ivBytes },
         key,
-        ciphertext as unknown as BufferSource,
+        ciphertextBytes,
       );
       const decoded = JSON.parse(new TextDecoder().decode(plaintext)) as AuthCookiePayload;
       if (!decoded?.user?.id || !decoded?.athleteId || typeof decoded.expiresAt !== 'number') {
@@ -534,6 +541,8 @@ export class AuthService {
   }
 
   private setAuthCookie(value: string, maxAgeSeconds: number): void {
+    // HttpOnly cannot be set here because this SPA must read/decrypt the cookie
+    // in-browser to restore auth state after reload.
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = `${CK_SESSION}=${encodeURIComponent(value)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
   }
@@ -550,11 +559,11 @@ export class AuthService {
   }
 
   private bytesToBase64Url(bytes: Uint8Array): string {
-    let binary = '';
+    const chars: string[] = [];
     for (let i = 0; i < bytes.length; i += 1) {
-      binary += String.fromCharCode(bytes[i]);
+      chars.push(String.fromCharCode(bytes[i]));
     }
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    return btoa(chars.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
   }
 
   private base64UrlToBytes(value: string): Uint8Array {
