@@ -211,12 +211,12 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
   const profileConfig = SCENERY_PROFILES[sceneryProfile];
 
   // Filter the theme's ground cover types to those permitted by the profile.
-  const allowedTypes = new Set(profileConfig.groundCover.types);
   const filteredTypes = useMemo(
-    () => gcConfig.types.filter(t => allowedTypes.has(t.type)),
-    // allowedTypes is derived from profileConfig which is stable per-render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gcConfig, sceneryProfile],
+    () => {
+      const allowedTypes = new Set(profileConfig.groundCover.types);
+      return gcConfig.types.filter(t => allowedTypes.has(t.type));
+    },
+    [gcConfig.types, profileConfig.groundCover.types],
   );
   const activeTypes = filteredTypes.length > 0 ? filteredTypes : gcConfig.types;
 

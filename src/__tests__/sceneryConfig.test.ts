@@ -239,6 +239,16 @@ describe('getSegmentSceneryProfile', () => {
     expect(getSegmentSceneryProfile(enrichment, -0.5)).toBe('beach');
     expect(getSegmentSceneryProfile(enrichment, 2)).toBe('farmland');
   });
+
+  it('handles non-finite progress values safely', () => {
+    const enrichment = makeEnrichment([
+      { sceneryProfile: 'forest' },
+      { sceneryProfile: 'wetland' },
+    ]);
+    expect(getSegmentSceneryProfile(enrichment, Number.NaN)).toBe('forest');
+    expect(getSegmentSceneryProfile(enrichment, Number.POSITIVE_INFINITY)).toBe('wetland');
+    expect(getSegmentSceneryProfile(enrichment, Number.NEGATIVE_INFINITY)).toBe('forest');
+  });
 });
 
 describe('BASE_BUILDING_HEIGHT', () => {
