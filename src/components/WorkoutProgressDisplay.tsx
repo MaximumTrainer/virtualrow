@@ -13,6 +13,26 @@ interface WorkoutProgressDisplayProps {
   currentPower?: number;
 }
 
+interface PowerMarkerProps {
+  powerStatus: 'on-target' | 'under-target' | 'over-target';
+  currentPowerRatio: number;
+}
+
+function PowerMarker({ powerStatus, currentPowerRatio }: PowerMarkerProps) {
+  return (
+    <span
+      className={`power-marker power-marker--${powerStatus}`}
+      style={{
+        bottom: `${Math.max(
+          POWER_MARKER_MIN_POSITION_PERCENT,
+          Math.min(100, currentPowerRatio * POWER_MARKER_VERTICAL_SCALE_PERCENT),
+        )}%`,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function WorkoutProgressDisplay({ progress, allSegments, currentPower }: WorkoutProgressDisplayProps) {
   if (!progress) {
     return null;
@@ -152,16 +172,7 @@ export function WorkoutProgressDisplay({ progress, allSegments, currentPower }: 
             >
               {index === progress.currentSegmentIndex && <span className="current-marker">▼</span>}
               {index === progress.currentSegmentIndex && powerStatus && currentPowerRatio !== undefined && (
-                <span
-                  className={`power-marker power-marker--${powerStatus}`}
-                  style={{
-                    bottom: `${Math.max(
-                      POWER_MARKER_MIN_POSITION_PERCENT,
-                      Math.min(100, currentPowerRatio * POWER_MARKER_VERTICAL_SCALE_PERCENT),
-                    )}%`,
-                  }}
-                  aria-hidden="true"
-                />
+                <PowerMarker powerStatus={powerStatus} currentPowerRatio={currentPowerRatio} />
               )}
             </div>
           ))}

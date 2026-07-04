@@ -159,7 +159,9 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
                       <button onClick={() => handleSelectPlannedWorkout(plan)}>
                         {isSelected ? 'Selected' : 'Select Workout'}
                       </button>
-                      <button onClick={() => handleSelectPlannedWorkout(null)}>Skip</button>
+                      <button onClick={() => handleSelectPlannedWorkout(null)} aria-label="Skip this workout">
+                        Skip
+                      </button>
                     </div>
                   </div>
                 );
