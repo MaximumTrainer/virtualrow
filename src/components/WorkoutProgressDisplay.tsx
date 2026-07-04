@@ -4,9 +4,10 @@ import './WorkoutProgressDisplay.css';
 interface WorkoutProgressDisplayProps {
   progress: WorkoutProgress | null;
   allSegments: WorkoutSegment[];
+  currentPower?: number;
 }
 
-export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgressDisplayProps) {
+export function WorkoutProgressDisplay({ progress, allSegments, currentPower }: WorkoutProgressDisplayProps) {
   if (!progress) {
     return null;
   }
@@ -43,6 +44,22 @@ export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgres
   };
 
   const segment = progress.currentSegment;
+  const totalTimelineDuration = allSegments.reduce((sum, seg) => sum + (seg.duration || 0), 0);
+  const timelinePlayheadPercent = totalTimelineDuration > 0
+    ? Math.min(100, (progress.totalElapsedTime / totalTimelineDuration) * 100)
+    : progress.totalProgress;
+  const currentSegmentTimeRemaining = segment.duration !== undefined
+    ? Math.max(0, segment.duration - progress.segmentElapsedTime)
+    : undefined;
+  const powerStatus = (() => {
+    if (!segment.targetPower || currentPower === undefined) return null;
+    const tolerance = segment.targetPower * 0.1;
+    if (Math.abs(currentPower - segment.targetPower) <= tolerance) return 'on-target';
+    return currentPower < segment.targetPower ? 'under-target' : 'over-target';
+  })();
+  const currentPowerRatio = segment.targetPower && currentPower !== undefined
+    ? Math.min(1.5, Math.max(0, currentPower / segment.targetPower))
+    : undefined;
   const targetInfo = [];
 
   if (segment.targetPaceMin !== undefined && segment.targetPaceMax !== undefined) {
@@ -115,6 +132,7 @@ export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgres
       <div className="upcoming-segments">
         <h4>Workout Structure</h4>
         <div className="segments-timeline">
+          <div className="timeline-playhead" style={{ left: `${timelinePlayheadPercent}%` }} />
           {allSegments.map((seg, index) => (
             <div
               key={seg.id}
@@ -127,8 +145,27 @@ export function WorkoutProgressDisplay({ progress, allSegments }: WorkoutProgres
               title={`${seg.type}: ${seg.description || ''}`}
             >
               {index === progress.currentSegmentIndex && <span className="current-marker">▼</span>}
+              {index === progress.currentSegmentIndex && powerStatus && currentPowerRatio !== undefined && (
+                <span
+                  className={`power-marker power-marker--${powerStatus}`}
+                  style={{ bottom: `${Math.min(100, currentPowerRatio * 70)}%` }}
+                  aria-hidden="true"
+                />
+              )}
             </div>
           ))}
+        </div>
+        <div className="timeline-footer">
+          {currentSegmentTimeRemaining !== undefined && (
+            <span className="timeline-meta">
+              Current interval: {formatTime(currentSegmentTimeRemaining)} remaining
+            </span>
+          )}
+          {segment.targetPower !== undefined && currentPower !== undefined && (
+            <span className={`timeline-power timeline-power--${powerStatus ?? 'neutral'}`}>
+              Power {currentPower}W / Target {segment.targetPower}W
+            </span>
+          )}
         </div>
       </div>
     </div>

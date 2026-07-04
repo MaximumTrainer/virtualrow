@@ -180,6 +180,16 @@
   padding: 3px;
 }
 
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #f8fafc;
+  box-shadow: 0 0 8px rgba(248, 250, 252, 0.8);
+  z-index: 20;
+}
+
 .timeline-segment {
   min-width: 24px;
   display: flex;
@@ -212,6 +222,54 @@
   font-weight: 800;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+.power-marker {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.6);
+}
+
+.power-marker--on-target {
+  background: #22c55e;
+}
+
+.power-marker--under-target {
+  background: #0ea5e9;
+}
+
+.power-marker--over-target {
+  background: #f97316;
+}
+
+.timeline-footer {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.timeline-meta,
+.timeline-power {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.timeline-power--on-target {
+  color: #22c55e;
+}
+
+.timeline-power--under-target {
+  color: #0ea5e9;
+}
+
+.timeline-power--over-target {
+  color: #f97316;
 }
 
 @keyframes pulse {

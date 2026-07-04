@@ -53,7 +53,9 @@ function App() {
   const [hrConnected, setHrConnected] = useState(false);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
-  const [selectedWorkout, setSelectedWorkout] = useState<StructuredWorkout | null>(null);
+  const [preActivityConfig, setPreActivityConfig] = useState<{ activeWorkout: StructuredWorkout | null }>({
+    activeWorkout: null,
+  });
   const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
   const [activeRowerType, setActiveRowerType] = useState<'pm5' | 'ftms'>('pm5');
   // Filter state for routes
@@ -87,6 +89,7 @@ function App() {
   const pendingExportRef = useRef<(() => void) | null>(null);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
+  const selectedWorkout = preActivityConfig.activeWorkout;
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -379,11 +382,11 @@ function App() {
   }, []);
 
   const handleSelectWorkout = useCallback((workout: StructuredWorkout | null) => {
-    setSelectedWorkout(workout);
+    setPreActivityConfig((current) => ({ ...current, activeWorkout: workout }));
   }, []);
 
   const handleClearWorkout = useCallback(() => {
-    setSelectedWorkout(null);
+    setPreActivityConfig((current) => ({ ...current, activeWorkout: null }));
   }, []);
 
   // Get filtered routes based on current filter settings
@@ -1064,7 +1067,8 @@ function App() {
                     <div className="activity-progress-panel">
                       <WorkoutProgressDisplay
                         progress={workoutProgress}
-                        allSegments={workoutGeneratorService.getCurrentWorkout()?.segments || []}
+                        allSegments={workoutGeneratorService.getExpandedCurrentSegments()}
+                        currentPower={pm5Data?.power}
                       />
                     </div>
                   )}

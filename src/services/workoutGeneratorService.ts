@@ -650,7 +650,17 @@ export class WorkoutGeneratorService {
 
   // Add a new workout
   addWorkout(workout: StructuredWorkout): void {
+    const existingIndex = this.workouts.findIndex((candidate) => candidate.id === workout.id);
+    if (existingIndex >= 0) {
+      this.workouts[existingIndex] = workout;
+      return;
+    }
     this.workouts.push(workout);
+  }
+
+  getExpandedCurrentSegments(): WorkoutSegment[] {
+    if (!this.currentWorkout) return [];
+    return this.expandSegments(this.currentWorkout.segments);
   }
 
   // Import workout from intervals.icu format
