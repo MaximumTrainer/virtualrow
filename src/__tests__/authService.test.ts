@@ -610,6 +610,10 @@ describe('AuthService', () => {
       sessionStorage.setItem('vr_auth_code_verifier', 'valid-verifier');
     });
 
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     it('login returns a user whose id matches the athlete_id returned by the intervals.icu token endpoint (i-prefixed)', async () => {
       const returnedAthleteId = 'i98765';
       const tokenResponse = {

@@ -200,7 +200,7 @@ test.describe('login integration: OAuth callback flow', () => {
       // Any other URL the app hits will be recorded above but not fulfilled by
       // this handler, which is exactly what we want for the regression guard.
       let profileFulfilled = false;
-      await page.route(`**/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`, async (route) => {
+      await page.route(`**/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}**`, async (route) => {
         profileFulfilled = true;
         await route.fulfill({
           status: 200,
