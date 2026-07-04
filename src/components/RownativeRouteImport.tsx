@@ -128,7 +128,7 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
       const kmlMeta = {
         name: kmlResult.routeName,
         location: kmlResult.location ?? 'rownative.icu',
-        tags: ['rownative', 'imported', 'kml'] as string[],
+        tags: ['rownative', 'imported', 'kml'],
       };
       const importResult = routeService.importRouteFromKML(kmlResult.kml, kmlMeta);
 

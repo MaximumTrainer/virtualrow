@@ -205,6 +205,29 @@ describe('RownativeRouteImport', () => {
     expect(screen.getByText('Link failed')).toBeTruthy();
   });
 
+  it('closes the popup and shows an error when startLinkFlow throws', async () => {
+    const user = userEvent.setup();
+    const startLinkFlow = vi.fn().mockRejectedValue(new Error('Worker unavailable'));
+    const mockPopup = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
+
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => null,
+        startLinkFlow,
+      } as unknown as Services['rownativeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
+
+    expect(mockPopup.close).toHaveBeenCalledOnce();
+    expect(screen.getByRole('alert').textContent).toContain('Worker unavailable');
+    expect(screen.getByText('Link failed')).toBeTruthy();
+  });
+
   it('shows a pull failure when selectionRequired returns no candidates', async () => {
     const user = userEvent.setup();
     const pullLinkedRouteKml = vi.fn().mockResolvedValue({ kml: '<kml></kml>' });
@@ -289,8 +312,8 @@ describe('RownativeRouteImport', () => {
     await user.click(screen.getByRole('button', { name: /complete linking/i }));
     expect(completeLinkFlow).toHaveBeenLastCalledWith('vr-1', 'req-stale');
 
-    // Unlink to return to not-linked state (handleUnlink already clears its own requestId,
-    // but we verify the cleared state from completeLinkFlow success as well)
+    // Unlink to return to not-linked state; both handleUnlink and handleCompleteLink
+    // call setLinkRequestId(undefined) — we verify the cleared state is respected on retry.
     await user.click(screen.getByRole('button', { name: /unlink rownative account/i }));
 
     // Complete linking without a new start flow — requestId must be undefined, not the stale one
