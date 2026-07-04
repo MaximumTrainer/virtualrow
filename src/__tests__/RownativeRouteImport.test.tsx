@@ -61,7 +61,8 @@ describe('RownativeRouteImport', () => {
       rownativeDisplayName: 'Rownative User',
       linkedAt: Date.now(),
     });
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false } as Window));
+    const mockPopup = { location: { href: '' }, close: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
 
     renderWithServices({
       authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
@@ -76,7 +77,8 @@ describe('RownativeRouteImport', () => {
     await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
     await user.click(screen.getByRole('button', { name: /link rownative account/i }));
     expect(startLinkFlow).toHaveBeenCalledWith('vr-1');
-    expect(openSpy).toHaveBeenCalledWith('https://rownative.icu/link', '_blank', 'noopener,noreferrer');
+    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(mockPopup.location.href).toBe('https://rownative.icu/link');
     expect(screen.getByText('Linking')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: /complete linking/i }));
@@ -143,7 +145,7 @@ describe('RownativeRouteImport', () => {
     expect(screen.getByText('Pull failed')).toBeTruthy();
   });
 
-  it('finalizes first KML candidate when multiple candidates are returned', async () => {
+  it('shows a candidate selection UI when KML contains multiple routes', async () => {
     const user = userEvent.setup();
     const pulledRoute = createImportedRoute('Candidate Route');
     const pullLinkedRouteKml = vi.fn().mockResolvedValue({
@@ -174,6 +176,10 @@ describe('RownativeRouteImport', () => {
     await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
     await user.click(screen.getByRole('button', { name: /pull route kml/i }));
 
+    expect(screen.getByText(/multiple routes found/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /candidate a/i })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /candidate a/i }));
     expect(finalizeKMLImport).toHaveBeenCalledOnce();
     expect(onRouteImported).toHaveBeenCalledWith(pulledRoute);
   });
@@ -242,5 +248,53 @@ describe('RownativeRouteImport', () => {
 
     expect(unlinkAccount).toHaveBeenCalledWith('vr-1');
     expect(screen.getByText('Not linked')).toBeTruthy();
+  });
+
+  it('disables the Link rownative account button when the user is not signed in', async () => {
+    const user = userEvent.setup();
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => null } as Services['authService'],
+      rownativeService: ({ ...defaultServices.rownativeService, getLinkedAccount: () => null } as unknown as Services['rownativeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    expect(screen.getByRole('button', { name: /link rownative account/i })).toBeDisabled();
+  });
+
+  it('clears linkRequestId after successful completeLinkFlow to prevent stale reuse', async () => {
+    const user = userEvent.setup();
+    const startLinkFlow = vi.fn().mockResolvedValue({ linkUrl: 'https://rownative.icu/link', requestId: 'req-stale' });
+    const completeLinkFlow = vi.fn().mockResolvedValue({
+      virtualRowUserId: 'vr-1',
+      rownativeUserId: 'rn-1',
+      linkedAt: Date.now(),
+    });
+    const unlinkAccount = vi.fn().mockResolvedValue(undefined);
+    const mockPopup = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
+
+    renderWithServices({
+      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
+      rownativeService: ({
+        ...defaultServices.rownativeService,
+        getLinkedAccount: () => null,
+        startLinkFlow,
+        completeLinkFlow,
+        unlinkAccount,
+      } as unknown as Services['rownativeService']),
+    });
+
+    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
+    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
+    await user.click(screen.getByRole('button', { name: /complete linking/i }));
+    expect(completeLinkFlow).toHaveBeenLastCalledWith('vr-1', 'req-stale');
+
+    // Unlink to return to not-linked state (handleUnlink already clears its own requestId,
+    // but we verify the cleared state from completeLinkFlow success as well)
+    await user.click(screen.getByRole('button', { name: /unlink rownative account/i }));
+
+    // Complete linking without a new start flow — requestId must be undefined, not the stale one
+    await user.click(screen.getByRole('button', { name: /complete linking/i }));
+    expect(completeLinkFlow).toHaveBeenLastCalledWith('vr-1', undefined);
   });
 });

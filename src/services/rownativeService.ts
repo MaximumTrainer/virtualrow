@@ -195,7 +195,9 @@ export class RownativeService {
     } catch {
       throw new Error('Rownative link setup failed. Please try again.');
     }
-    if (linkUrl.protocol !== 'https:' && linkUrl.protocol !== 'http:') {
+    const isLocalHttp = linkUrl.protocol === 'http:'
+      && (linkUrl.hostname === 'localhost' || linkUrl.hostname === '127.0.0.1');
+    if (linkUrl.protocol !== 'https:' && !isLocalHttp) {
       throw new Error('Rownative link setup failed. Please try again.');
     }
 
@@ -271,7 +273,7 @@ export class RownativeService {
     if (typeof result.kml !== 'string' || result.kml.trim().length === 0) {
       throw new Error('Rownative did not return KML data for that route.');
     }
-    if (result.kml.length > MAX_KML_BYTES) {
+    if (new TextEncoder().encode(result.kml).length > MAX_KML_BYTES) {
       throw new Error('The KML response is too large to import.');
     }
 
