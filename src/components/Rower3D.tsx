@@ -291,8 +291,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
           <>
             <ProceduralTerrain side="left" boatZ={boatZ} />
             <ProceduralTerrain side="right" boatZ={boatZ} />
-            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} />
-            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} />
+            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
+            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
           </>
         );
     }
@@ -472,7 +472,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
+        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 
       {!IS_TEST_MODE && (
