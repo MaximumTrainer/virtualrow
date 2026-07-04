@@ -71,6 +71,10 @@ describe('coordinateUtils', () => {
       const coord = parseKMLCoordinate(' 13.405 , 52.52 ');
       expect(coord).toEqual({ lat: 52.52, lng: 13.405 });
     });
+
+    it('accepts leading-decimal values', () => {
+      expect(parseKMLCoordinate('.5,-.5')).toEqual({ lat: -0.5, lng: 0.5 });
+    });
   });
 
   describe('parseGeoJSONCoordinate', () => {
