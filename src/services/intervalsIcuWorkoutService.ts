@@ -40,6 +40,9 @@ interface IntervalsPlannedEvent {
   steps?: IntervalsWorkoutStep[];
 }
 
+const PACE_TARGET_TOLERANCE_SECONDS = 5;
+const DEFAULT_LOOKAHEAD_DAYS = 7;
+
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -109,8 +112,8 @@ function buildBlocks(steps: IntervalsWorkoutStep[]): IntervalBlock[] {
         label: step.description || step.name || step.type || `Step ${index + 1}`,
         durationSec,
         targetPowerWatts: step.target_power,
-        targetPaceMin: step.target_pace ? step.target_pace - 5 : undefined,
-        targetPaceMax: step.target_pace ? step.target_pace + 5 : undefined,
+        targetPaceMin: step.target_pace ? step.target_pace - PACE_TARGET_TOLERANCE_SECONDS : undefined,
+        targetPaceMax: step.target_pace ? step.target_pace + PACE_TARGET_TOLERANCE_SECONDS : undefined,
         intensity: mapIntensity(step.intensity),
       } satisfies IntervalBlock;
     });
@@ -119,7 +122,11 @@ function buildBlocks(steps: IntervalsWorkoutStep[]): IntervalBlock[] {
 }
 
 export class IntervalsIcuWorkoutService {
-  async fetchPlannedRowingWorkouts(accessToken: string, athleteId: string, daysAhead = 7): Promise<WorkoutPlan[]> {
+  async fetchPlannedRowingWorkouts(
+    accessToken: string,
+    athleteId: string,
+    daysAhead = DEFAULT_LOOKAHEAD_DAYS,
+  ): Promise<WorkoutPlan[]> {
     if (!accessToken || !athleteId) {
       throw new Error('Intervals.icu credentials are missing.');
     }

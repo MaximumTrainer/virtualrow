@@ -74,4 +74,17 @@ describe('IntervalsIcuWorkoutService', () => {
       'Unable to load planned workouts (500).',
     );
   });
+
+  it('uses the requested daysAhead window when querying planned workouts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    } as Response);
+
+    await service.fetchPlannedRowingWorkouts('token', 'i123', 14);
+
+    const endpoint = String(fetchSpy.mock.calls[0]?.[0] ?? '');
+    expect(endpoint).toContain('newest=');
+    expect(endpoint).toContain('oldest=');
+  });
 });
