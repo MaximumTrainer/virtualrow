@@ -181,7 +181,7 @@ const getSegmentStyle = (
 };
 
 /** Returns the scenery profile of the nearest segment for the given progress (0–1). */
-const getSegmentSceneryProfile = (
+export const getSegmentSceneryProfile = (
   enrichment: RouteEnrichmentData | null | undefined,
   progress: number,
 ): SceneryProfile => {
@@ -191,6 +191,9 @@ const getSegmentSceneryProfile = (
   const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
   return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;
 };
+
+/** Baseline building height in scene units; profile heightRange multiplies this value. */
+export const BASE_BUILDING_HEIGHT = 12.5;
 
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
@@ -361,7 +364,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
         const profileConfig = SCENERY_PROFILES[el.sceneryProfile];
         const [hMin, hMax] = profileConfig.buildings.heightRange;
         const buildingHeightMultiplier = hMin + seededRandom(index * 23 + 11) * (hMax - hMin);
-        const buildingHeight = 12.5 * buildingHeightMultiplier;
+        const buildingHeight = BASE_BUILDING_HEIGHT * buildingHeightMultiplier;
         const roofY = buildingHeight * 1.04;
         const halfHeight = buildingHeight / 2;
         return (

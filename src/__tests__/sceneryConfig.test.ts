@@ -3,7 +3,12 @@ import {
   SCENERY_PROFILES,
   type SceneryProfileConfig,
 } from '../components/rower3d/sceneryConfig';
+import {
+  getSegmentSceneryProfile,
+  BASE_BUILDING_HEIGHT,
+} from '../components/rower3d/bankComponents';
 import type { SceneryProfile } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
 
 const ALL_PROFILES: SceneryProfile[] = [
   'forest',
@@ -147,5 +152,108 @@ describe('SCENERY_PROFILES', () => {
       forestSpecies.size === commercialSpecies.size &&
       [...forestSpecies].every(s => commercialSpecies.has(s));
     expect(identical).toBe(false);
+  });
+});
+
+// ============================================================================
+// Helpers from bankComponents
+// ============================================================================
+
+const makeEnrichment = (profiles: Array<{ sceneryProfile: SceneryProfile }>): RouteEnrichmentData => ({
+  routeId: 'test',
+  elevations: [],
+  segmentProfiles: profiles.map((p, i) => ({
+    index: i,
+    startMeters: i * 50,
+    endMeters: (i + 1) * 50,
+    sceneryProfile: p.sceneryProfile,
+    treeDensity: 0.5,
+    vegetationDensity: 0.5,
+    buildingDensity: 0.1,
+    objectScale: 1,
+    waterWidthMeters: 30,
+    dragMultiplier: 1,
+    bearing: 0,
+    bearingDelta: 0,
+  })),
+  waterBodyType: 'river',
+  waterWidthMeters: 30,
+  waterColor: '#000',
+  waveIntensity: 1,
+  fetchedAt: 0,
+  source: 'fallback',
+});
+
+describe('getSegmentSceneryProfile', () => {
+  it('returns fallback for null enrichment', () => {
+    expect(getSegmentSceneryProfile(null, 0.5)).toBe('fallback');
+  });
+
+  it('returns fallback for undefined enrichment', () => {
+    expect(getSegmentSceneryProfile(undefined, 0.5)).toBe('fallback');
+  });
+
+  it('returns fallback when segmentProfiles is empty', () => {
+    const enrichment = makeEnrichment([]);
+    expect(getSegmentSceneryProfile(enrichment, 0.5)).toBe('fallback');
+  });
+
+  it('returns the only segment profile for a single-segment route', () => {
+    const enrichment = makeEnrichment([{ sceneryProfile: 'forest' }]);
+    expect(getSegmentSceneryProfile(enrichment, 0)).toBe('forest');
+    expect(getSegmentSceneryProfile(enrichment, 0.5)).toBe('forest');
+    expect(getSegmentSceneryProfile(enrichment, 1)).toBe('forest');
+  });
+
+  it('selects the first segment at progress 0', () => {
+    const enrichment = makeEnrichment([
+      { sceneryProfile: 'forest' },
+      { sceneryProfile: 'commercial' },
+      { sceneryProfile: 'wetland' },
+    ]);
+    expect(getSegmentSceneryProfile(enrichment, 0)).toBe('forest');
+  });
+
+  it('selects the last segment at progress 1', () => {
+    const enrichment = makeEnrichment([
+      { sceneryProfile: 'forest' },
+      { sceneryProfile: 'commercial' },
+      { sceneryProfile: 'wetland' },
+    ]);
+    expect(getSegmentSceneryProfile(enrichment, 1)).toBe('wetland');
+  });
+
+  it('selects the nearest segment at progress 0.5', () => {
+    const enrichment = makeEnrichment([
+      { sceneryProfile: 'forest' },
+      { sceneryProfile: 'commercial' },
+    ]);
+    expect(getSegmentSceneryProfile(enrichment, 0.5)).toBe('commercial');
+  });
+
+  it('clamps out-of-range progress values', () => {
+    const enrichment = makeEnrichment([
+      { sceneryProfile: 'beach' },
+      { sceneryProfile: 'farmland' },
+    ]);
+    expect(getSegmentSceneryProfile(enrichment, -0.5)).toBe('beach');
+    expect(getSegmentSceneryProfile(enrichment, 2)).toBe('farmland');
+  });
+});
+
+describe('BASE_BUILDING_HEIGHT', () => {
+  it('is a positive number', () => {
+    expect(typeof BASE_BUILDING_HEIGHT).toBe('number');
+    expect(BASE_BUILDING_HEIGHT).toBeGreaterThan(0);
+  });
+
+  it('produces building heights within each profile heightRange', () => {
+    for (const profile of ALL_PROFILES) {
+      const [hMin, hMax] = SCENERY_PROFILES[profile].buildings.heightRange;
+      const minHeight = BASE_BUILDING_HEIGHT * hMin;
+      const maxHeight = BASE_BUILDING_HEIGHT * hMax;
+      expect(minHeight).toBeGreaterThan(0);
+      expect(maxHeight).toBeGreaterThanOrEqual(minHeight);
+    }
   });
 });

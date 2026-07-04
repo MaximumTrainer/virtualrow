@@ -37,7 +37,10 @@ transformed.z += swayAmt * 0.7;`,
 export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?: RouteTheme; enrichment?: RouteEnrichmentData | null }> = ({ side, boatZ, theme = 'willowbrook', enrichment }) => {
   const xBase = side === 'left' ? -25 : 25;
 
-  // Derive the dominant scenery profile from the first enrichment segment.
+  // PineTrees is used on the non-curve (flat) path where all trees span the
+  // full -400..400 range uniformly.  Using the first segment as the dominant
+  // profile gives a stable, route-wide character rather than per-position
+  // switching, which is appropriate for this global component.
   const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
   const profileConfig = SCENERY_PROFILES[sceneryProfile];
 
@@ -57,7 +60,7 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
     const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number; isNear: boolean; species: TreeSpeciesEntry }> = [];
     for (let z = -400; z < 400; z += 8) {
       const treeIdx = Math.round((z + 400) / 8);
-      // Scale instance count by profile density (clamped to 1–3).
+      // rawCount is 1–3; after density scaling the minimum is always 1.
       const rawCount = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
       const count = Math.max(1, Math.round(rawCount * profileConfig.trees.density));
       for (let j = 0; j < count; j++) {
@@ -201,7 +204,9 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
 export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode; enrichment?: RouteEnrichmentData | null }> = ({ boatZ, theme, enrichment }) => {
   const gcConfig = useMemo(() => getThemeConfig(theme).groundCover, [theme]);
 
-  // Derive the dominant scenery profile from the first enrichment segment.
+  // GroundCover is a global component that spans the full scene on the
+  // non-curve path.  Using the first segment's profile gives a consistent,
+  // route-wide character which is appropriate here.
   const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
   const profileConfig = SCENERY_PROFILES[sceneryProfile];
 
@@ -219,6 +224,8 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
   const rockEntry  = useMemo(() => activeTypes.find(t => t.type === 'rock'),  [activeTypes]);
   const grassEntry = useMemo(() => activeTypes.find(t => t.type === 'grass' || t.type === 'flower'), [activeTypes]);
 
+  // densityScale is always 0–1 (clamped by SCENERY_PROFILES), so derived
+  // counts never exceed the MAX constants below — no buffer overflow risk.
   const densityScale = profileConfig.groundCover.density;
 
   const reedMeshRef  = useRef<THREE.InstancedMesh>(null);
@@ -226,7 +233,7 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
   const grassMeshRef = useRef<THREE.InstancedMesh>(null);
 
   // Maximum instance counts (allocated once); actual visible count is scaled
-  // down by densityScale from the active scenery profile.
+  // by densityScale so reedCount <= REED_MAX, rockCount <= ROCK_MAX, etc.
   const REED_MAX  = 120;
   const ROCK_MAX  = 40;
   const GRASS_MAX = 80;
