@@ -860,8 +860,9 @@ describe('AuthService', () => {
 
       // Reconstruct service so it restores cookie session and calls refreshAccessToken.
       service = new AuthService();
-      // Wait for the async restore-session refresh to finish
-      await new Promise(r => setTimeout(r, 0));
+      await vi.waitFor(() => {
+        expect(service.getUser()?.id).toBe('i123');
+      });
 
       const result = await service.refreshAccessToken();
       expect(result).toBe(true);
