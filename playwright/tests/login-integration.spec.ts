@@ -106,9 +106,12 @@ test.describe('login integration: OAuth callback flow', () => {
       await expect(page.locator('.auth-user-trigger')).toBeVisible({ timeout: 15_000 });
       await expect(page.locator('.auth-button--signin')).not.toBeVisible();
 
-      // Verify the athlete ID is persisted in sessionStorage
-      const athleteId = await page.evaluate(() => sessionStorage.getItem('vr_auth_athlete_id'));
-      expect(athleteId).toBe('i12345');
+      // Verify the authenticated user snapshot is persisted in sessionStorage
+      const persistedUser = await page.evaluate(() => {
+        const raw = sessionStorage.getItem('vr_auth_user');
+        return raw ? (JSON.parse(raw) as { id: string }) : null;
+      });
+      expect(persistedUser?.id).toBe('i12345');
     },
   );
 
@@ -139,8 +142,11 @@ test.describe('login integration: OAuth callback flow', () => {
       await expect(page.locator('.auth-user-trigger')).toBeVisible({ timeout: 15_000 });
       await expect(page.locator('.auth-button--signin')).not.toBeVisible();
 
-      const athleteId = await page.evaluate(() => sessionStorage.getItem('vr_auth_athlete_id'));
-      expect(athleteId).toBe('i12345');
+      const persistedUser = await page.evaluate(() => {
+        const raw = sessionStorage.getItem('vr_auth_user');
+        return raw ? (JSON.parse(raw) as { id: string }) : null;
+      });
+      expect(persistedUser?.id).toBe('i12345');
     },
   );
 
@@ -241,10 +247,7 @@ test.describe('login integration: OAuth callback flow', () => {
       expect(observedAthleteRequestUrls.some((u) => u.includes(`/proxy/api/v1/athlete/${TOKEN_ATHLETE_ID}`)))
         .toBe(true);
 
-      // The athlete id and user must be persisted in sessionStorage
-      const persistedAthleteId = await page.evaluate(() => sessionStorage.getItem('vr_auth_athlete_id'));
-      expect(persistedAthleteId).toBe(TOKEN_ATHLETE_ID);
-
+      // The authenticated user must be persisted in sessionStorage
       const persistedUserJson = await page.evaluate(() => sessionStorage.getItem('vr_auth_user'));
       expect(persistedUserJson, 'user must be persisted in sessionStorage').not.toBeNull();
       const persistedUser = JSON.parse(persistedUserJson!) as { id: string; name: string };
