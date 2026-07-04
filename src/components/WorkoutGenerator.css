@@ -304,6 +304,69 @@
   transform: scaleY(1.2);
 }
 
+.planned-workouts-panel {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: rgba(var(--color-primary-rgb), 0.06);
+}
+
+.planned-workouts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.planned-workouts-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.planned-workouts-feedback {
+  margin: 8px 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.planned-workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.planned-workout-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.planned-workout-item.selected {
+  border-color: var(--color-primary);
+}
+
+.planned-workout-item h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.planned-workout-item p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.planned-workout-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .workout-generator {

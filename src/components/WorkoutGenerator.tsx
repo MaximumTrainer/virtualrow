@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { StructuredWorkout } from '../types/index';
+import type { StructuredWorkout, WorkoutPlan } from '../types/index';
 import { workoutGeneratorService } from '../services/workoutGeneratorService';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import { intervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
 import './WorkoutGenerator.css';
 
 interface WorkoutGeneratorProps {
@@ -19,6 +20,9 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
   const [importAthleteId, setImportAthleteId] = useState(() => user?.id ?? '');
   const [importWorkoutId, setImportWorkoutId] = useState('');
   const [importing, setImporting] = useState(false);
+  const [plannedWorkouts, setPlannedWorkouts] = useState<WorkoutPlan[]>([]);
+  const [loadingPlanned, setLoadingPlanned] = useState(false);
+  const [plannedError, setPlannedError] = useState<string | null>(null);
 
   const isAuthenticatedImport = !!user && !!authService.getAccessToken();
 
@@ -84,6 +88,41 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
     return intensity ? colorMap[intensity] || '#CCC' : '#CCC';
   };
 
+  const loadPlannedWorkouts = async () => {
+    const token = authService.getAccessToken();
+    const athleteId = user?.id;
+    if (!token || !athleteId) {
+      setPlannedError('Sign in with intervals.icu to load planned workouts.');
+      return;
+    }
+
+    setLoadingPlanned(true);
+    setPlannedError(null);
+    try {
+      const plans = await intervalsIcuWorkoutService.fetchPlannedRowingWorkouts(token, athleteId, 7);
+      setPlannedWorkouts(plans);
+      if (plans.length === 0) {
+        setPlannedError('No planned rowing workouts found in the next 7 days.');
+      }
+    } catch (error) {
+      setPlannedError(error instanceof Error ? error.message : 'Unable to load planned workouts.');
+    } finally {
+      setLoadingPlanned(false);
+    }
+  };
+
+  const handleSelectPlannedWorkout = (plan: WorkoutPlan | null) => {
+    if (!plan) {
+      onSelectWorkout(null);
+      return;
+    }
+
+    const workout = intervalsIcuWorkoutService.toStructuredWorkout(plan);
+    workoutGeneratorService.addWorkout(workout);
+    setWorkouts(workoutGeneratorService.getAllWorkouts());
+    onSelectWorkout(workout);
+  };
+
   return (
     <div className="workout-generator">
       <div className="workout-generator-header">
@@ -95,6 +134,42 @@ export function WorkoutGenerator({ onSelectWorkout, selectedWorkout }: WorkoutGe
           Import from intervals.icu
         </button>
       </div>
+
+      {isAuthenticatedImport && (
+        <div className="planned-workouts-panel">
+          <div className="planned-workouts-header">
+            <h3>Intervals.icu Planned Rowing Workouts</h3>
+            <button className="import-button" onClick={loadPlannedWorkouts} disabled={loadingPlanned}>
+              {loadingPlanned ? 'Loading...' : 'Load Planned Workouts'}
+            </button>
+          </div>
+          {plannedError && <p className="planned-workouts-feedback">{plannedError}</p>}
+          {plannedWorkouts.length > 0 && (
+            <div className="planned-workout-list">
+              {plannedWorkouts.map((plan) => {
+                const structuredId = `icu-plan-${plan.id}`;
+                const isSelected = selectedWorkout?.id === structuredId;
+                return (
+                  <div key={plan.id} className={`planned-workout-item${isSelected ? ' selected' : ''}`}>
+                    <div>
+                      <h4>{plan.name}</h4>
+                      <p>{plan.summary}</p>
+                    </div>
+                    <div className="planned-workout-actions">
+                      <button onClick={() => handleSelectPlannedWorkout(plan)}>
+                        {isSelected ? 'Selected' : 'Select Workout'}
+                      </button>
+                      <button onClick={() => handleSelectPlannedWorkout(null)} aria-label="Skip this workout">
+                        Skip
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {showImportDialog && (
         <div className="import-dialog-overlay">
