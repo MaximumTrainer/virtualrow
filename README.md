@@ -11,18 +11,13 @@ VirtualRow is a web-based fitness application that lets you row on virtual water
 
 ### Water Routes
 
-Six built-in routes based on real-world GPS coordinates, each with a fantasy theme:
+VirtualRow now ships with one bundled demo route:
 
 | Route | Location | Distance | Difficulty |
 |---|---|---|---|
 | Willowbrook River | Willowbrook Valley | 5.0 km | Easy |
-| Crystal Sanctum of Bled | Lake Bled, Slovenia | 6.0 km | Easy |
-| Canale delle Anime Perdute | Venice Grand Canal, Italy | 3.8 km | Moderate |
-| The Architect's Infinite Equation | Charles River, Boston | 4.8 km | Moderate |
-| The Iron Sovereign's Gauntlet | Henley-on-Thames, England | 2.1 km | Hard |
-| The Leviathan's Wake | Thames Tideway, London | 6.8 km | Hard |
 
-Route filtering by difficulty and distance range. GPX and GeoJSON import supported.
+To row real-world courses, search and import them directly from **rownative.icu** in the route selector.
 
 ### Immersive 3D Visualization
 
@@ -35,15 +30,6 @@ Route filtering by difficulty and distance range. GPX and GeoJSON import support
 - Kelvin wake and blade foam particle effects
 - CubeCamera environment reflections on water surface
 
-### Structured Workout Generator
-
-- Interval-based training workouts designed for rowing
-- Pre-built workout templates (pyramid intervals, steady state, etc.)
-- Import workouts from intervals.icu - integrate with your existing training plans
-- Real-time workout progress tracking with visual segment indicators
-- Target zones for pace, power, and heart rate
-- Automatic pacing feedback - visual indicators show when you're on/off target
-
 ### Concept2 PM5 Bluetooth Integration
 
 - Connect directly to your Concept2 PM5 monitor via Web Bluetooth API (Concept2 CSAFE BLE profile)
@@ -51,17 +37,10 @@ Route filtering by difficulty and distance range. GPX and GeoJSON import support
 - Connection persists across route changes and UI navigation
 - Built-in PM5 Simulator for testing and demo without physical hardware
 
-### Workout History & Export
-
-- All sessions persisted to `localStorage` with per-route personal best tracking
-- Session history view with aggregate stats (total workouts, distance, time)
-- Export sessions as GPX (coordinate track) or FIT (JSON-formatted activity record)
-
 ### Heart Rate Monitoring
 
 - Connect heart rate monitors via Bluetooth (standard HR service)
 - Real-time BPM display with chart visualization
-- Heart rate zone tracking and analysis
 - Average and max HR tracking per workout
 
 ## Getting Started
@@ -93,12 +72,9 @@ src/
     BluetoothDevice.tsx            # PM5 connection UI
     HeartRateMonitor.tsx           # HR monitor connection
     PM5Simulator.tsx               # PM5 hardware simulator
-    WorkoutGenerator.tsx           # Structured workout browser + import
-    WorkoutProgressDisplay.tsx     # Real-time workout segment display
     MiniMetrics.tsx                # Compact metrics overlay
     PerformanceChart.tsx           # Post-session performance graphs
     HeartRateChart.tsx             # Live HR chart
-    HeartRateZonesChart.tsx        # HR zones breakdown
     Canvas3DErrorBoundary.tsx      # WebGL error fallback
     routeLandmarks/
        LandmarkRenderer.tsx        # Route landmark placement in 3D scene
@@ -108,9 +84,8 @@ src/
     bluetoothService.ts            # PM5 BLE communication
     heartRateBluetoothService.ts   # HR monitor BLE service
     pm5SimulatorService.ts         # PM5 simulation
-    routeService.ts                # Route data + GPX/GeoJSON import
+    routeService.ts                # Route data + rownative route import
     workoutService.ts              # Session tracking + localStorage persistence
-    workoutGeneratorService.ts     # Structured workouts + intervals.icu import
  utils/
     geoUtils.ts                    # Geographic calculations
     gpuUtils.ts                    # WebGL/GPU detection

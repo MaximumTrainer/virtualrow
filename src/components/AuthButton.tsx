@@ -95,19 +95,6 @@ export function AuthButton() {
             <button
               type="button"
               role="menuitem"
-              className="auth-dropdown-item"
-              onClick={() => {
-                handleDropdownClose();
-                // Workout History is the 'history' view in the main nav; this
-                // is a convenience shortcut — navigating via the nav is fine too.
-                window.dispatchEvent(new CustomEvent('virtualrow:nav', { detail: 'history' }));
-              }}
-            >
-              📊 Workout History
-            </button>
-            <button
-              type="button"
-              role="menuitem"
               className="auth-dropdown-item auth-dropdown-item--signout"
               onClick={() => {
                 handleDropdownClose();

@@ -3,32 +3,25 @@ import { RouteMap } from './components/RouteMap';
 import { BluetoothDevice } from './components/BluetoothDevice';
 import { PM5Simulator } from './components/PM5Simulator';
 import { HeartRateSimulator } from './components/HeartRateSimulator';
-import { RouteImport } from './components/RouteImport';
 import { RownativeRouteImport } from './components/RownativeRouteImport';
 import { FTMSDevice } from './components/FTMSDevice';
 import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
-import { workoutGeneratorService } from './services/workoutGeneratorService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import { heartRateBluetoothService } from './services/heartRateBluetoothService';
 // Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
-// Code-split it so the routes/workouts/history views don't pay the cost — the chunk only
+// Code-split it so the routes view doesn't pay the cost — the chunk only
 // loads when the user actually starts a workout (currentView === 'workout').
 const Rower3D = lazy(() => import('./components/Rower3D'));
-import { WorkoutGenerator } from './components/WorkoutGenerator';
-import { WorkoutProgressDisplay } from './components/WorkoutProgressDisplay';
-import { HeartRateZonesChart } from './components/HeartRateZonesChart';
 import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { AuthGateModal } from './components/AuthGateModal';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
-import { saveSession, loadSessions } from './services/localStorageWorkoutStore';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
-import { buildSessionGPX, buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
-import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample, StructuredWorkout, WorkoutProgress } from './types/index';
+import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
 
@@ -41,8 +34,8 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
 }
 
 function App() {
-  const { user, isAuthenticated } = useAuth();
-  const [currentView, setCurrentView] = useState<'routes' | 'workouts' | 'workout' | 'history'>('routes');
+  const { isAuthenticated } = useAuth();
+  const [currentView, setCurrentView] = useState<'routes' | 'workout'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -51,12 +44,7 @@ function App() {
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [ftmsConnected, setFtmsConnected] = useState(false);
   const [hrConnected, setHrConnected] = useState(false);
-  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
-  const [preActivityConfig, setPreActivityConfig] = useState<{ activeWorkout: StructuredWorkout | null }>({
-    activeWorkout: null,
-  });
-  const [workoutProgress, setWorkoutProgress] = useState<WorkoutProgress | null>(null);
   const [activeRowerType, setActiveRowerType] = useState<'pm5' | 'ftms'>('pm5');
   // Filter state for routes
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
@@ -84,12 +72,10 @@ function App() {
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
   // Auth gate modal — shown when a guest tries a protected action
   const [authGateOpen, setAuthGateOpen] = useState(false);
-  const [authGateAction, setAuthGateAction] = useState<string | undefined>(undefined);
-  const [kmlImportOpenSignal, setKmlImportOpenSignal] = useState(0);
+  const authGateAction: string | undefined = undefined;
   const pendingExportRef = useRef<(() => void) | null>(null);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
-  const selectedWorkout = preActivityConfig.activeWorkout;
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -149,8 +135,6 @@ function App() {
     if (allRoutes.length > 0) {
       setSelectedRoute(allRoutes[0]);
     }
-    
-    setWorkoutHistory(workoutService.getAllSessions());
   }, []);
 
   useEffect(() => {
@@ -201,41 +185,6 @@ function App() {
     };
   }, [selectedRoute]);
 
-  // Load persisted sessions from localStorage when the user logs in (stub until #37)
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const saved = loadSessions(user.id);
-      // Merge saved sessions into the in-memory service so history view shows them
-      saved.forEach((s) => {
-        const existing = workoutService.getAllSessions().find((e) => e.id === s.id);
-        if (!existing) {
-          // Inject via the service's internal sessions array is not exposed; instead
-          // surface them through the workoutHistory state directly.
-        }
-      });
-      // Surface saved sessions in history (combine with in-memory ones)
-      const inMemory = workoutService.getAllSessions();
-      const merged = [...saved, ...inMemory.filter((s) => !saved.find((p) => p.id === s.id))];
-      setWorkoutHistory(merged.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()));
-    } else if (!isAuthenticated) {
-      // Revert to in-memory sessions (e.g. after sign-out)
-      setWorkoutHistory(workoutService.getAllSessions());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.id]);
-
-  // Listen for nav events dispatched by the AuthButton dropdown
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const onNav = (e: Event) => {
-      if (!(e instanceof CustomEvent)) return;
-      const view = e.detail as 'routes' | 'workouts' | 'workout' | 'history';
-      setCurrentView(view);
-    };
-    window.addEventListener('virtualrow:nav', onNav as EventListener);
-    return () => window.removeEventListener('virtualrow:nav', onNav as EventListener);
-  }, []);
-
   const activeRowerLabel = useMemo(() => (
     activeRowerType === 'pm5' ? 'PM5' : 'FTMS'
   ), [activeRowerType]);
@@ -260,7 +209,6 @@ function App() {
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
-      setWorkoutHistory(workoutService.getAllSessions());
     };
     if (typeof window === 'undefined') return;
     window.addEventListener('virtualrow:sessionStarted', onStartup as EventListener);
@@ -303,7 +251,7 @@ function App() {
       const session = workoutService.startSession(
         selectedRoute.id, 
         selectedRoute.name,
-        selectedWorkout?.id,
+        undefined,
         activeRowerType,
         hrConnected,
         isGuestMode,
@@ -311,13 +259,6 @@ function App() {
       setCurrentSession(session);
       setIsWorkoutActive(true);
       setSessionState('active');
-      
-      // Start structured workout if selected
-      if (selectedWorkout) {
-        const progress = workoutGeneratorService.startWorkout(selectedWorkout.id);
-        setWorkoutProgress(progress);
-      }
-      
       setCurrentView('workout');
     } finally {
       isStartingSessionRef.current = false;
@@ -328,24 +269,15 @@ function App() {
     const completed = workoutService.endSession();
     setIsWorkoutActive(false);
     setCurrentSession(null);
-    setWorkoutProgress(null);
     setSessionState('idle');
-    workoutGeneratorService.endWorkout();
 
     if (isGuestMode && completed) {
       // Show summary modal; do NOT push to workoutHistory (guest sessions are excluded)
       setGuestCompletedSession(completed);
     } else {
-      if (completed) {
-        // Persist to localStorage for authenticated users (stub until #37)
-        if (isAuthenticated && user) {
-          saveSession(user.id, completed);
-        }
-        setWorkoutHistory(workoutService.getAllSessions());
-      }
       setCurrentView('routes');
     }
-  }, [isGuestMode, isAuthenticated, user]);
+  }, [isGuestMode]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -355,7 +287,6 @@ function App() {
   const handleGuestExit = useCallback(() => {
     setGuestCompletedSession(null);
     setIsGuestMode(false);
-    setWorkoutHistory(workoutService.getAllSessions());
     setCurrentView('routes');
     // Remove ?guest param from URL without reload
     if (typeof window !== 'undefined') {
@@ -379,14 +310,6 @@ function App() {
     // Reset metrics but keep session
     setActivityElapsedMs(0);
     // Note: Full reset logic would need to clear workoutService data
-  }, []);
-
-  const handleSelectWorkout = useCallback((workout: StructuredWorkout | null) => {
-    setPreActivityConfig((current) => ({ ...current, activeWorkout: workout }));
-  }, []);
-
-  const handleClearWorkout = useCallback(() => {
-    setPreActivityConfig((current) => ({ ...current, activeWorkout: null }));
   }, []);
 
   // Get filtered routes based on current filter settings
@@ -416,18 +339,6 @@ function App() {
         setPM5Data(latest);
 
         if (isWorkoutActive) {
-          if (selectedWorkout) {
-            const progress = workoutGeneratorService.updateProgress(latest);
-            if (progress) {
-              setWorkoutProgress(progress);
-              workoutService.updateWorkoutProgress(progress);
-              // Auto-end when the structured workout finishes its final segment
-              if (progress.isComplete) {
-                handleEndWorkout();
-                return;
-              }
-            }
-          }
           if (latest.heartRate) {
             const updated = workoutService.getCurrentSession();
             setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
@@ -449,7 +360,7 @@ function App() {
         }
       });
     }
-  }, [isWorkoutActive, selectedWorkout, selectedRoute, handleEndWorkout]);
+  }, [isWorkoutActive, selectedRoute, handleEndWorkout]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
@@ -532,71 +443,6 @@ function App() {
     setRoutes(routeService.getAllRoutes());
     setSelectedRoute(route);
   }, []);
-
-  const handleOpenKmlImport = useCallback(() => {
-    setKmlImportOpenSignal((value) => value + 1);
-  }, []);
-
-  // Export session as GPX format — prompts sign-in for guest users
-  const handleExportGPX = useCallback((session: WorkoutSession) => {
-    const doExport = () => {
-      const route = routeService.getRouteById(session.routeId);
-      if (!route) {
-        alert('Route data not available for this workout');
-        return;
-      }
-      const gpx = buildSessionGPX(session, route);
-      triggerBlobDownload(gpx, 'application/gpx+xml', `virtualrow-${session.id}.gpx`);
-    };
-
-    if (isGuestMode && !isAuthenticated) {
-      pendingExportRef.current = doExport;
-      setAuthGateAction('save and export your workout');
-      setAuthGateOpen(true);
-    } else {
-      doExport();
-    }
-  }, [isGuestMode, isAuthenticated]);
-
-  // Export session as FIT format (simplified JSON structure for now)
-  const handleExportFIT = useCallback((session: WorkoutSession) => {
-    const doExport = () => {
-      const fitData = buildSessionFITPayload(session);
-      triggerBlobDownload(
-        JSON.stringify(fitData, null, 2),
-        'application/json',
-        `virtualrow-${session.id}.fit.json`,
-      );
-    };
-
-    if (isGuestMode && !isAuthenticated) {
-      pendingExportRef.current = doExport;
-      setAuthGateAction('save and export your workout');
-      setAuthGateOpen(true);
-    } else {
-      doExport();
-    }
-  }, [isGuestMode, isAuthenticated]);
-
-  // Calculate personal best for a route (only completed sessions count)
-  const getPersonalBest = useCallback((routeId: string) => {
-    const route = routeService.getRouteById(routeId);
-    if (!route) return null;
-    const routeDistanceMeters = route.distance * 1000; // route.distance is in km
-    // Only sessions that completed the full course are eligible for PB
-    const completedSessions = workoutHistory.filter(
-      s => s.routeId === routeId && s.averagePace > 0 && s.distance >= routeDistanceMeters
-    );
-    if (completedSessions.length === 0) return null;
-    return completedSessions.reduce((best, session) =>
-      session.averagePace < best.averagePace ? session : best
-    , completedSessions[0]);
-  }, [workoutHistory]);
-
-  // Memoise stats — the underlying call iterates the full session list and runs
-  // several reductions, so re-running it on every render (e.g. on every PM5 tick)
-  // is needlessly wasteful. workoutHistory is the only mutating dependency.
-  const stats = useMemo(() => workoutService.getStats(), [workoutHistory]);
   const latestHeartRate = useMemo(() => (
     heartRateSamples.length > 0
       ? heartRateSamples[heartRateSamples.length - 1].bpm
@@ -658,7 +504,7 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
-          <p className="app-subtitle">RowNative-inspired virtual rowing on iconic water routes</p>
+          <p className="app-subtitle">Willowbrook demo plus rownative.icu route import for real-world rowing</p>
           <div className="header-auth">
             <AuthButton />
           </div>
@@ -693,22 +539,6 @@ function App() {
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
-            {!isGuestMode && (
-              <button
-                className={`nav-tab ${currentView === 'workouts' ? 'active' : ''}`}
-                onClick={() => setCurrentView('workouts')}
-              >
-                <span className="tab-icon">💪</span> Workouts
-              </button>
-            )}
-            {!isGuestMode && (
-              <button
-                className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
-                onClick={() => setCurrentView('history')}
-              >
-                <span className="tab-icon">📊</span> History
-              </button>
-            )}
           </nav>
 
           {currentView === 'routes' && (
@@ -760,25 +590,6 @@ function App() {
             </div>
           )}
 
-          {currentView === 'history' && (
-            <div className="history-stats-panel">
-              <h3 className="panel-title">Stats</h3>
-              <div className="stats-compact">
-                <div className="stat-compact">
-                  <span className="label">Workouts</span>
-                  <span className="value">{stats.totalWorkouts}</span>
-                </div>
-                <div className="stat-compact">
-                  <span className="label">Distance</span>
-                  <span className="value">{(stats.totalDistance / 1000).toFixed(1)} km</span>
-                </div>
-                <div className="stat-compact">
-                  <span className="label">Time</span>
-                  <span className="value">{formatDuration(stats.totalTime)}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </aside>
 
         <main className="app-main">
@@ -835,11 +646,6 @@ function App() {
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
-                    {!isGuestMode && (() => { const pb = getPersonalBest(selectedRoute.id); return pb && (
-                      <span className="meta-badge pb-badge">
-                        🏆 PB: {pb.averagePace}s/500m
-                      </span>
-                    ); })()}
                   </div>
 
                   <div className="route-tags">
@@ -852,15 +658,6 @@ function App() {
 
                   {selectedRouteEnrichmentLoading && (
                     <p className="route-enrichment-status">Loading route data…</p>
-                  )}
-
-                  {!isGuestMode && selectedWorkout && (
-                    <div className="selected-workout-info">
-                      <span>🎯 {selectedWorkout.name}</span>
-                      <button className="btn-clear-workout" onClick={handleClearWorkout}>
-                        ✕
-                      </button>
-                    </div>
                   )}
 
                   <button
@@ -882,12 +679,6 @@ function App() {
                       <h3>Routes</h3>
                       <RownativeRouteImport
                         onRouteImported={handleRouteImported}
-                        onOpenKmlImport={handleOpenKmlImport}
-                      />
-                      <RouteImport
-                        key={kmlImportOpenSignal}
-                        onRouteImported={handleRouteImported}
-                        initiallyOpen={kmlImportOpenSignal > 0}
                       />
                       <div className="route-filters">
                         <div className="filter-group">
@@ -953,16 +744,6 @@ function App() {
             </div>
           )}
 
-          {/* New Workouts Tab View */}
-          {currentView === 'workouts' && (
-            <div className="view-container workouts-view">
-              <WorkoutGenerator
-                onSelectWorkout={handleSelectWorkout}
-                selectedWorkout={selectedWorkout}
-              />
-            </div>
-          )}
-
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div className="view-container activity-view">
               <div className="activity-screen">
@@ -993,7 +774,6 @@ function App() {
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
                       performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
-                      intensityFactor={selectedWorkout ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined}
                       debugMode={debugMode}
                     />
                   </Suspense>
@@ -1063,16 +843,6 @@ function App() {
                     </div>
                   </div>
 
-                  {selectedWorkout && workoutProgress && (
-                    <div className="activity-progress-panel">
-                      <WorkoutProgressDisplay
-                        progress={workoutProgress}
-                        allSegments={workoutGeneratorService.getExpandedCurrentSegments()}
-                        currentPower={pm5Data?.power}
-                      />
-                    </div>
-                  )}
-
                   <div className="activity-controls">
                     <button
                       className="btn btn-activity-control"
@@ -1101,81 +871,6 @@ function App() {
             </div>
           )}
 
-          {currentView === 'history' && (
-            <div className="view-container history-view">
-              <h2>Workout History</h2>
-              
-              {workoutHistory.length === 0 ? (
-                <p className="empty-message">No workouts yet. Start a new workout to begin!</p>
-              ) : (
-                <div className="history-list">
-                  {workoutHistory
-                    .slice()
-                    .reverse()
-                    .map((session) => {
-                      const pb = getPersonalBest(session.routeId);
-                      const isPB = pb && pb.id === session.id;
-                      return (
-                        <div key={session.id} className={`history-item ${isPB ? 'pb-item' : ''}`}>
-                          <div className="history-header">
-                            <h3>
-                              {session.routeName}
-                              {isPB && <span className="pb-badge">🏆 PB</span>}
-                            </h3>
-                            <span className="date">
-                              {new Date(session.startTime).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className="history-stats">
-                            <div className="stat">
-                              <span>{(session.distance / 1000).toFixed(2)} km</span>
-                            </div>
-                            <div className="stat">
-                              <span>{formatDuration(session.duration)}</span>
-                            </div>
-                            <div className="stat">
-                              <span>{session.averagePace}s/500m</span>
-                            </div>
-                            <div className="stat">
-                              <span>{session.calories} kcal</span>
-                            </div>
-                          </div>
-                          {session.workoutProgress && (
-                            <div className="compliance-info">
-                              <span className="compliance-label">Compliance:</span>
-                              <span className={`compliance-value ${session.workoutProgress.isOnTarget ? 'on-target' : 'off-target'}`}>
-                                {session.workoutProgress.isOnTarget ? '✓ On Target' : '⚠ Off Target'}
-                              </span>
-                            </div>
-                          )}
-                          <div className="history-actions">
-                            <button
-                              className="btn-export"
-                              onClick={() => handleExportGPX(session)}
-                              title="Export as GPX"
-                            >
-                              📍 GPX
-                            </button>
-                            <button
-                              className="btn-export"
-                              onClick={() => handleExportFIT(session)}
-                              title="Export as FIT"
-                            >
-                              📊 FIT
-                            </button>
-                          </div>
-                          {session.heartRateSamples && session.heartRateSamples.length > 0 && (
-                            <div className="hr-zones-section">
-                              <HeartRateZonesChart samples={session.heartRateSamples} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
         </main>
       </div>
 
@@ -1275,20 +970,6 @@ function formatTime(ms: number): string {
     return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${secs}s`;
-  }
-  return `${secs}s`;
 }
 
 export default App;

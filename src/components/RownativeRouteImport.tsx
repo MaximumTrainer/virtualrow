@@ -6,10 +6,9 @@ import './RownativeRouteImport.css';
 
 interface RownativeRouteImportProps {
   onRouteImported: (route: WaterRoute) => void;
-  onOpenKmlImport: () => void;
 }
 
-export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: RownativeRouteImportProps) {
+export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportProps) {
   const { rownativeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +16,6 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<RownativeCourseSummary[]>([]);
   const [importingId, setImportingId] = useState<string | null>(null);
-  const [showManualFallback, setShowManualFallback] = useState(false);
 
   const loadCourses = async (searchQuery: string) => {
     setIsLoading(true);
@@ -25,10 +23,8 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
     try {
       const matches = await rownativeService.searchCourses(searchQuery);
       setCourses(matches);
-      setShowManualFallback(false);
     } catch {
       setCourses([]);
-      setShowManualFallback(true);
       setError('Unable to load courses from rownative.icu right now.');
     } finally {
       setIsLoading(false);
@@ -86,22 +82,7 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
             </p>
           )}
 
-          {showManualFallback && (
-            <div className="rownative-fallback">
-              <p>
-                To import a rownative.icu course: go to{' '}
-                <a href="https://rownative.icu/" target="_blank" rel="noreferrer">
-                  rownative.icu
-                </a>
-                , find your course, export it as KML, then use the KML Import below.
-              </p>
-              <button type="button" className="filter-btn" onClick={onOpenKmlImport}>
-                Open KML Import
-              </button>
-            </div>
-          )}
-
-          {!showManualFallback && !isLoading && (
+          {!isLoading && (
             <div className="rownative-results" role="list">
               {courses.map((course) => (
                 <div className="rownative-result-item" key={course.id} role="listitem">
