@@ -1,12 +1,5 @@
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
-import {
-  lakebledCoordinates,
-  veniceGrandCanalCoordinates,
-  henleyCoordinates,
-  thamesTidewayCoordinates,
-  charlesRiverCoordinates,
-  willowbrookRiverCoordinates,
-} from '../data/seedRouteCoordinates';
+import { willowbrookRiverCoordinates } from '../data/seedRouteCoordinates';
 
 /** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
 export interface KMLImportCandidate {
@@ -46,9 +39,8 @@ export class RouteService {
   }
 
   private initializeMockRoutes(): void {
-    // Initialize with all routes including fantasy routes based on real-world locations
+    // Initialize with the single bundled demo route.
     this.routes = [
-      // Original fictional route
       {
         id: '1',
         name: 'Willowbrook River',
@@ -61,81 +53,6 @@ export class RouteService {
         estimatedTime: Math.round((5.0 / 3.5) * 60), // ~86 minutes at average pace
         tags: ['river', 'scenic', 'nature', 'varied-terrain', 'beginner-friendly', 'forest', 'meadow', 'village', 'lake'],
         createdAt: new Date('2024-12-07'),
-      },
-      
-      // Fantasy Route 1: Lake Bled - Crystal Sanctum
-      {
-        id: '2',
-        name: 'Crystal Sanctum of Bled',
-        description: 'Circle the mystical alpine waters where ancient elven towers of pure crystal pierce the perpetual mist. The island sanctuary at the lake\'s heart pulses with ethereal light, its bell tower calling spirits from the depths. Bioluminescent creatures illuminate your path as you pass beneath the shadow of the floating citadel that replaced Bled Castle eons ago. The Julian Alps beyond shimmer with arcane barriers protecting this realm from the outside world.',
-        distance: 6.0, // ~6km circumference based on real Lake Bled dimensions
-        difficulty: 'easy',
-        location: 'Lake Bled, Slovenia (Ethereal Realm)',
-        coordinates: lakebledCoordinates,
-        elevationGain: 5, // Flat lake circuit
-        estimatedTime: Math.round((6.0 / 3.5) * 60), // ~103 minutes
-        tags: ['lake', 'circular', 'fantasy', 'alpine', 'mystical', 'elven', 'crystal', 'beginner-friendly', 'scenic'],
-        createdAt: new Date('2024-12-21'),
-      },
-      
-      // Fantasy Route 2: Venice Grand Canal - Lost Souls
-      {
-        id: '3',
-        name: 'Canale delle Anime Perdute',
-        description: 'Navigate the haunted waterways where spectral gondoliers ferry souls between crumbling gothic palaces. The Canal of Lost Souls twists through a Venice that exists between worlds - phantom versions of Ca\' d\'Oro and Rialto Bridge flicker between their Renaissance glory and skeletal ruins. Beneath your hull, the sunken basilicas of drowned civilizations glow with trapped starlight. Approach the Punta della Dogana where the veil between worlds is thinnest.',
-        distance: 3.8, // 3.8km based on real Grand Canal length
-        difficulty: 'moderate',
-        location: 'Venice, Italy (Shadowrealm)',
-        coordinates: veniceGrandCanalCoordinates,
-        elevationGain: 0, // Sea level canal
-        estimatedTime: Math.round((3.8 / 3.0) * 60), // ~76 minutes at slower pace due to navigation
-        tags: ['canal', 'gothic', 'fantasy', 'urban', 'haunted', 'spectral', 'historic', 'winding', 'challenging-navigation'],
-        createdAt: new Date('2024-12-21'),
-      },
-      
-      // Fantasy Route 3: Henley - Steampunk Gauntlet  
-      {
-        id: '4',
-        name: 'The Iron Sovereign\'s Gauntlet',
-        description: 'Race the straight 2.1km course where brass automatons judge your every stroke with clockwork precision. Temple Island\'s starting pavilion has been replaced by a massive steam-powered timing mechanism, its gears visible through glass walls. Pneumatic tubes run alongside the course, transmitting your split times to the calculating engines at Phyllis Court. Victorian spectators in mechanical exoskeletons line the banks, their opera glasses enhanced with analytical displays.',
-        distance: 2.1, // 2,112m based on real Henley Royal Regatta course
-        difficulty: 'hard',
-        location: 'Henley-on-Thames, England (Steamworks Era)',
-        coordinates: henleyCoordinates,
-        elevationGain: 0, // Flat river course
-        estimatedTime: Math.round((2.1 / 4.5) * 60), // ~28 minutes at race pace (it's a race course!)
-        tags: ['river', 'straight', 'racing', 'steampunk', 'victorian', 'competitive', 'historic', 'timed', 'sprint'],
-        createdAt: new Date('2024-12-21'),
-      },
-      
-      // Fantasy Route 4: Thames Tideway - Leviathan's Wake
-      {
-        id: '5',
-        name: 'The Leviathan\'s Wake',
-        description: 'Follow the Championship Course through a neo-noir London where colossal sea creatures slumber beneath the murky waters. From Mortlake\'s fog-shrouded start, pass the bioluminescent tentacles that wrap around Hammersmith Bridge\'s twisted iron. Holographic advertisements flicker from the brutalist towers that replaced the Victorian warehouses. Something massive disturbs the water near Barnes - the Leviathan stirs. Reach Putney before it fully wakes.',
-        distance: 6.8, // 6.8km (4.25 miles) based on real Championship Course
-        difficulty: 'hard',
-        location: 'River Thames, London (Dystopian Future)',
-        coordinates: thamesTidewayCoordinates,
-        elevationGain: 0, // Tidal river
-        estimatedTime: Math.round((6.8 / 4.0) * 60), // ~102 minutes at brisk pace
-        tags: ['river', 'tidal', 'urban', 'dystopian', 'kaiju', 'noir', 'competitive', 'long-distance', 'challenging'],
-        createdAt: new Date('2024-12-21'),
-      },
-      
-      // Fantasy Route 5: Charles River - Infinite Equation
-      {
-        id: '6',
-        name: 'The Architect\'s Infinite Equation',
-        description: 'Row through the impossible architecture where Harvard and MIT\'s greatest minds bent reality itself. The Head of the Charles course now passes through tesseract towers and Penrose staircases. Each bridge you pass under exists in multiple dimensions simultaneously - Weeks Footbridge folds through seven planes of existence. The boathouses are research stations into the nature of spacetime, their experiments causing the river to occasionally flow upstream. Calculate your course through the Infinite Equation.',
-        distance: 4.8, // 4.8km (3 miles) based on real Head of the Charles course
-        difficulty: 'moderate',
-        location: 'Charles River, Boston (Quantum Cambridge)',
-        coordinates: charlesRiverCoordinates,
-        elevationGain: 0, // River basin
-        estimatedTime: Math.round((4.8 / 3.5) * 60), // ~82 minutes
-        tags: ['river', 'academic', 'fantasy', 'sci-fi', 'geometric', 'university', 'bridges', 'technical', 'mind-bending'],
-        createdAt: new Date('2024-12-21'),
       },
     ];
   }

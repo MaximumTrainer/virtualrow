@@ -6,10 +6,9 @@ import './RownativeRouteImport.css';
 
 interface RownativeRouteImportProps {
   onRouteImported: (route: WaterRoute) => void;
-  onOpenKmlImport: () => void;
 }
 
-export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: RownativeRouteImportProps) {
+export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportProps) {
   const { rownativeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -89,15 +88,12 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
           {showManualFallback && (
             <div className="rownative-fallback">
               <p>
-                To import a rownative.icu course: go to{' '}
+                Browse courses directly on{' '}
                 <a href="https://rownative.icu/" target="_blank" rel="noreferrer">
                   rownative.icu
                 </a>
-                , find your course, export it as KML, then use the KML Import below.
+                {' '}and retry the import here once the catalog is reachable again.
               </p>
-              <button type="button" className="filter-btn" onClick={onOpenKmlImport}>
-                Open KML Import
-              </button>
             </div>
           )}
 
