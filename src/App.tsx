@@ -72,7 +72,6 @@ function App() {
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
   // Auth gate modal — shown when a guest tries a protected action
   const [authGateOpen, setAuthGateOpen] = useState(false);
-  const authGateAction: string | undefined = undefined;
   const pendingExportRef = useRef<(() => void) | null>(null);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
@@ -489,7 +488,7 @@ function App() {
 
       <AuthGateModal
         isOpen={authGateOpen}
-        actionDescription={authGateAction}
+        actionDescription={undefined}
         onLogin={() => setAuthGateOpen(false)}
         onDismiss={() => {
           setAuthGateOpen(false);

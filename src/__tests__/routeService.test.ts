@@ -10,6 +10,10 @@ describe('RouteService basic data', () => {
     expect(routes.length).toBe(1);
     expect(routes[0].id).toBe('1');
     expect(routes[0].name).toBe('Willowbrook River');
+    expect(routes[0].distance).toBeCloseTo(5.0, 1);
+    expect(routes[0].difficulty).toBe('easy');
+    expect(routes[0].coordinates.length).toBeGreaterThan(70);
+    expect(routes[0].tags).toContain('river');
   });
   
   it('provides Willowbrook River route with distance and coordinates', () => {
