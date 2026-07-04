@@ -187,7 +187,7 @@ export const getSegmentSceneryProfile = (
 ): SceneryProfile => {
   const segmentProfiles = enrichment?.segmentProfiles;
   if (!segmentProfiles || segmentProfiles.length === 0) return 'fallback';
-  const safeProgress = Number.isNaN(progress) ? 0 : progress;
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
   const clampedProgress = Math.max(0, Math.min(1, safeProgress));
   const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
   return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;

@@ -246,7 +246,7 @@ describe('getSegmentSceneryProfile', () => {
       { sceneryProfile: 'wetland' },
     ]);
     expect(getSegmentSceneryProfile(enrichment, Number.NaN)).toBe('forest');
-    expect(getSegmentSceneryProfile(enrichment, Number.POSITIVE_INFINITY)).toBe('wetland');
+    expect(getSegmentSceneryProfile(enrichment, Number.POSITIVE_INFINITY)).toBe('forest');
     expect(getSegmentSceneryProfile(enrichment, Number.NEGATIVE_INFINITY)).toBe('forest');
   });
 });
