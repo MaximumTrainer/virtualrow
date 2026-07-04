@@ -5,6 +5,7 @@ const POWER_TARGET_TOLERANCE_RATIO = 0.1;
 const POWER_RATIO_CAP = 1.5;
 // Keep marker vertical travel below the full bar height so it remains visible.
 const POWER_MARKER_VERTICAL_SCALE_PERCENT = 70;
+const POWER_MARKER_MIN_POSITION_PERCENT = 5;
 
 interface WorkoutProgressDisplayProps {
   progress: WorkoutProgress | null;
@@ -153,7 +154,12 @@ export function WorkoutProgressDisplay({ progress, allSegments, currentPower }: 
               {index === progress.currentSegmentIndex && powerStatus && currentPowerRatio !== undefined && (
                 <span
                   className={`power-marker power-marker--${powerStatus}`}
-                  style={{ bottom: `${Math.min(100, currentPowerRatio * POWER_MARKER_VERTICAL_SCALE_PERCENT)}%` }}
+                  style={{
+                    bottom: `${Math.max(
+                      POWER_MARKER_MIN_POSITION_PERCENT,
+                      Math.min(100, currentPowerRatio * POWER_MARKER_VERTICAL_SCALE_PERCENT),
+                    )}%`,
+                  }}
                   aria-hidden="true"
                 />
               )}

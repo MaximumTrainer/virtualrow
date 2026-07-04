@@ -105,6 +105,9 @@ function buildBlocks(steps: IntervalsWorkoutStep[]): IntervalBlock[] {
     .map((step, index) => {
       const durationSec = Math.max(0, Math.round(step.duration ?? 0));
       if (durationSec <= 0) return null;
+      const targetPace = typeof step.target_pace === 'number' && step.target_pace > 0
+        ? step.target_pace
+        : undefined;
 
       return {
         id: `icu-step-${index}`,
@@ -112,8 +115,12 @@ function buildBlocks(steps: IntervalsWorkoutStep[]): IntervalBlock[] {
         label: step.description || step.name || step.type || `Step ${index + 1}`,
         durationSec,
         targetPowerWatts: step.target_power,
-        targetPaceMin: step.target_pace ? step.target_pace - PACE_TARGET_TOLERANCE_SECONDS : undefined,
-        targetPaceMax: step.target_pace ? step.target_pace + PACE_TARGET_TOLERANCE_SECONDS : undefined,
+        targetPaceMin: targetPace
+          ? Math.max(0, targetPace - PACE_TARGET_TOLERANCE_SECONDS)
+          : undefined,
+        targetPaceMax: targetPace
+          ? targetPace + PACE_TARGET_TOLERANCE_SECONDS
+          : undefined,
         intensity: mapIntensity(step.intensity),
       } satisfies IntervalBlock;
     });
@@ -194,7 +201,7 @@ export class IntervalsIcuWorkoutService {
     const reps = blocks.length > 1 ? `${blocks.length} steps` : 'single step';
     const target = blocks.find((block) => block.targetPowerWatts !== undefined)?.targetPowerWatts;
     const summary = target ? `${reps} @ ~${Math.round(target)}W` : reps;
-    const id = String(event.workout_id ?? workout?.id ?? event.id ?? `${Date.now()}`);
+    const id = String(event.workout_id ?? workout?.id ?? event.id ?? this.buildFallbackId(event));
 
     return {
       id,
@@ -205,6 +212,13 @@ export class IntervalsIcuWorkoutService {
       blocks,
       totalDurationSec,
     };
+  }
+
+  private buildFallbackId(event: IntervalsPlannedEvent): string {
+    const date = event.start_date_local ?? event.date ?? 'unscheduled';
+    const base = event.name ?? event.description ?? 'workout';
+    const normalized = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return `plan-${date}-${normalized || 'unknown'}`;
   }
 }
 

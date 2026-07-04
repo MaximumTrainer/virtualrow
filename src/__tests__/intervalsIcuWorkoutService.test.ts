@@ -1,11 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
 
 describe('IntervalsIcuWorkoutService', () => {
   const service = new IntervalsIcuWorkoutService();
 
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-04T00:00:00.000Z'));
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('loads and filters planned rowing workouts', async () => {
@@ -84,7 +90,7 @@ describe('IntervalsIcuWorkoutService', () => {
     await service.fetchPlannedRowingWorkouts('token', 'i123', 14);
 
     const endpoint = String(fetchSpy.mock.calls[0]?.[0] ?? '');
-    expect(endpoint).toContain('newest=');
-    expect(endpoint).toContain('oldest=');
+    expect(endpoint).toContain('oldest=2026-07-04');
+    expect(endpoint).toContain('newest=2026-07-18');
   });
 });
