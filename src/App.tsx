@@ -16,7 +16,6 @@ const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
-import { AuthGateModal } from './components/AuthGateModal';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
@@ -70,9 +69,6 @@ function App() {
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
   // Route description panel state (collapsed/expanded)
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
-  // Auth gate modal — shown when a guest tries a protected action
-  const [authGateOpen, setAuthGateOpen] = useState(false);
-  const pendingExportRef = useRef<(() => void) | null>(null);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
 
@@ -485,20 +481,6 @@ function App() {
           onExit={handleGuestExit}
         />
       )}
-
-      <AuthGateModal
-        isOpen={authGateOpen}
-        actionDescription={undefined}
-        onLogin={() => setAuthGateOpen(false)}
-        onDismiss={() => {
-          setAuthGateOpen(false);
-          // Allow the action to proceed in guest mode when dismissed
-          if (pendingExportRef.current) {
-            pendingExportRef.current();
-            pendingExportRef.current = null;
-          }
-        }}
-      />
 
       <header className="app-header">
         <div className="header-content">

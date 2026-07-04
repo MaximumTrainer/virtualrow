@@ -85,7 +85,7 @@ src/
     heartRateBluetoothService.ts   # HR monitor BLE service
     pm5SimulatorService.ts         # PM5 simulation
     routeService.ts                # Route data + rownative route import
-    workoutService.ts              # Session tracking + localStorage persistence
+    workoutService.ts              # Session tracking
  utils/
     geoUtils.ts                    # Geographic calculations
     gpuUtils.ts                    # WebGL/GPU detection

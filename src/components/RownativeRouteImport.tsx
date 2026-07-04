@@ -82,7 +82,7 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
             </p>
           )}
 
-          {!isLoading && (
+          {!isLoading && !error && (
             <div className="rownative-results" role="list">
               {courses.map((course) => (
                 <div className="rownative-result-item" key={course.id} role="listitem">
