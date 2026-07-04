@@ -93,4 +93,22 @@ describe('IntervalsIcuWorkoutService', () => {
     expect(endpoint).toContain('oldest=2026-07-04');
     expect(endpoint).toContain('newest=2026-07-18');
   });
+
+  it('retries with i-prefixed athlete ID when numeric athlete ID returns 404', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      } as Response);
+
+    await service.fetchPlannedRowingWorkouts('token', '123');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(String(fetchSpy.mock.calls[0]?.[0] ?? '')).toContain('/api/v1/athlete/123/events');
+    expect(String(fetchSpy.mock.calls[1]?.[0] ?? '')).toContain('/api/v1/athlete/i123/events');
+  });
 });

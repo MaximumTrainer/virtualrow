@@ -142,14 +142,19 @@ export class IntervalsIcuWorkoutService {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + Math.max(0, daysAhead));
     const end = formatDate(endDate);
-    const endpoint = `${PROXY_BASE}/api/v1/athlete/${encodeURIComponent(athleteId)}/events?oldest=${encodeURIComponent(start)}&newest=${encodeURIComponent(end)}`;
+    const headers = {
+      Authorization: ['Bearer', accessToken].join(' '),
+      'Content-Type': 'application/json',
+    };
+    const fetchEvents = (id: string) => fetch(
+      `${PROXY_BASE}/api/v1/athlete/${encodeURIComponent(id)}/events?oldest=${encodeURIComponent(start)}&newest=${encodeURIComponent(end)}`,
+      { headers },
+    );
 
-    const response = await fetch(endpoint, {
-      headers: {
-        Authorization: ['Bearer', accessToken].join(' '),
-        'Content-Type': 'application/json',
-      },
-    });
+    let response = await fetchEvents(athleteId);
+    if (!response.ok && response.status === 404 && /^\d+$/.test(athleteId)) {
+      response = await fetchEvents(`i${athleteId}`);
+    }
 
     if (!response.ok) {
       throw new Error(`Unable to load planned workouts (${response.status}).`);
