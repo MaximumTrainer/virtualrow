@@ -316,12 +316,6 @@ export class AuthService {
     try {
       const profilePaths = this.getProfilePaths(athleteId);
 
-      if (profilePaths.length === 0) {
-        console.error('[AuthService] Cannot fetch profile: athlete ID not available from token response');
-        this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
-        return null;
-      }
-
       for (const [index, profilePath] of profilePaths.entries()) {
         const res = await fetch(`${PROXY_BASE}${profilePath}`, {
           headers: { Authorization: 'Bearer '.concat(accessToken) },
@@ -583,10 +577,9 @@ export class AuthService {
 
   private getProfilePaths(athleteId?: string): string[] {
     if (!athleteId) {
-      // intervals.icu requires an athlete ID in the path — GET /api/v1/athlete without
-      // an ID returns 405 Method Not Allowed. Return an empty list so the caller fails
-      // gracefully rather than making an invalid request.
-      return [];
+      // When the token response omits athlete_id, intervals.icu supports /athlete/0
+      // as a Bearer-authenticated alias for the current OAuth athlete.
+      return [`${ICU_PROFILE_PATH}/0`];
     }
     const paths = [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`];
     // intervals.icu returns athlete_id as a plain integer in the token response
