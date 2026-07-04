@@ -252,8 +252,10 @@ export class RouteService {
         }
       }
     } else if (geometry.type === 'Polygon' && geometry.coordinates) {
+      const firstRing = (geometry.coordinates as number[][][])[0];
+      if (!Array.isArray(firstRing)) return;
       // polygon: take first ring
-      for (const c of (geometry.coordinates as number[][][])[0]) {
+      for (const c of firstRing) {
         const parsed = parseGeoJSONCoordinate(c);
         if (parsed) coords.push(parsed);
       }
@@ -280,7 +282,7 @@ export class RouteService {
   // Import route from a GeoJSON string
   importRouteFromGeoJSON(geojsonStr: string, meta: { name: string; difficulty: 'easy' | 'moderate' | 'hard'; location?: string; tags?: string[]; imageUrl?: string }): WaterRoute | undefined {
     const coords = this.parseGeoJSON(geojsonStr);
-    if (coords.length === 0) return undefined;
+    if (coords.length < 2) return undefined;
     
     const routeData: RouteFormData = {
       name: meta.name,

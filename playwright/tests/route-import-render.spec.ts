@@ -50,6 +50,7 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
   await page.getByRole('button', { name: 'Connect PM5', exact: true }).click();
   await waitForDeviceConnected(page, 'Concept2 PM5');
 
+  // Use DOM click here to avoid locator retries toggling Connect/Disconnect.
   await page.evaluate(() => {
     const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
     const hrContainer = containers.find((c) =>
@@ -61,6 +62,7 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
 
   const startButton = page.locator('.btn-start-workout');
   await expect(startButton).toBeEnabled({ timeout: 10_000 });
+  // Use DOM click here to avoid canvas pointer interception flaking locator.click().
   await page.evaluate(() => {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });

@@ -319,7 +319,7 @@ describe('RouteService import routines', () => {
     ]);
   });
 
-  it('rejects GeoJSON positions with non-numeric values', () => {
+  it('skips GeoJSON positions with non-numeric values', () => {
     const geojson = JSON.stringify({
       type: 'Feature',
       geometry: {
@@ -344,7 +344,7 @@ describe('RouteService import routines', () => {
       type: 'Feature',
       geometry: {
         type: 'LineString',
-        coordinates: [[13.405], [181, 0]],
+        coordinates: [[13.405, 52.52], [13.405], [181, 0]],
       },
       properties: {},
     });
