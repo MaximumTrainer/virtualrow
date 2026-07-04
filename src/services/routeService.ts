@@ -42,7 +42,8 @@ export class RouteService {
   }
 
   private initializeMockRoutes(): void {
-    // Initialize with the single built-in demo route
+    // Initialize with the single built-in demo route; additional rownative routes
+    // are still added dynamically via importRouteFromRownative().
     this.routes = [
       {
         id: '1',
