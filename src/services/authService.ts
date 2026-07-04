@@ -29,6 +29,7 @@ const SK_CODE_VERIFIER = 'vr_auth_code_verifier';
 const SK_STATE = 'vr_auth_state';
 const SK_REFRESH_TOKEN = 'vr_auth_refresh_token';
 const SK_SESSION_KEY = 'vr_auth_session_key';
+const SK_USER = 'vr_auth_user';
 const CK_SESSION = 'vr_auth_session';
 const AUTH_COOKIE_TTL_SECONDS = 2 * 60 * 60;
 const AUTH_COOKIE_TTL_MS = AUTH_COOKIE_TTL_SECONDS * 1000;
@@ -246,6 +247,7 @@ export class AuthService {
     this.currentUser = null;
     this.lastError = null;
     sessionStorage.removeItem(SK_REFRESH_TOKEN);
+    sessionStorage.removeItem(SK_USER);
     sessionStorage.removeItem(SK_SESSION_KEY);
     this.clearAuthCookie();
   }
@@ -389,6 +391,7 @@ export class AuthService {
     if (tokens.refreshToken) {
       sessionStorage.setItem(SK_REFRESH_TOKEN, tokens.refreshToken);
     }
+    sessionStorage.setItem(SK_USER, JSON.stringify(user));
     await this.persistCookieSession(user);
 
     this.scheduleRefresh(tokens.expiresAt);
@@ -414,21 +417,41 @@ export class AuthService {
     }
   }
 
-  /** On construction, restore session from encrypted cookie if available. */
+  /** On construction, restore session from sessionStorage snapshot (synchronous)
+   *  and use the encrypted cookie as a fallback/TTL refresh mechanism (async). */
   private restoreSession(): void {
+    const userJson = sessionStorage.getItem(SK_USER);
+    if (userJson) {
+      try {
+        this.currentUser = JSON.parse(userJson) as AuthUser;
+      } catch {
+        sessionStorage.removeItem(SK_USER);
+      }
+    }
     this.restoreSessionFromCookie().catch(console.error);
   }
 
   private async restoreSessionFromCookie(): Promise<void> {
     const payload = await this.readCookieSession();
-    if (!payload) return;
+    if (!payload) {
+      // No valid cookie; if a user was restored synchronously from sessionStorage,
+      // attempt a token refresh so the access token is available immediately.
+      if (this.currentUser) {
+        this.refreshAccessToken().catch(console.error);
+      }
+      return;
+    }
 
     if (payload.expiresAt <= Date.now()) {
       this.clearAuthCookie();
+      if (this.currentUser) {
+        this.refreshAccessToken().catch(console.error);
+      }
       return;
     }
 
     this.currentUser = payload.user;
+    sessionStorage.setItem(SK_USER, JSON.stringify(payload.user));
     await this.persistCookieSession(payload.user, payload.athleteId);
     // Access token is not persisted; silently refresh to get a new one.
     this.refreshAccessToken().catch(console.error);

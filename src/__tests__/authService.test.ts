@@ -456,6 +456,20 @@ describe('AuthService', () => {
       expect(sessionStorage.getItem('vr_auth_refresh_token')).toBe('refresh-xyz');
     });
 
+    it('stores user snapshot in sessionStorage for synchronous restore', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTokenResponse) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockUser) }),
+      );
+
+      await service.handleCallback('auth-code', 'valid-state');
+      const stored = sessionStorage.getItem('vr_auth_user');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.id).toBe('i123');
+      expect(parsed.name).toBe(mockUser.name);
+    });
+
     it('returns null when token exchange fails', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 400 }));
       const result = await service.handleCallback('bad-code', 'valid-state');
@@ -804,6 +818,7 @@ describe('AuthService', () => {
     it('clears authentication state and encrypted auth cookie', async () => {
       sessionStorage.setItem('vr_auth_refresh_token', 'refresh-xyz');
       sessionStorage.setItem('vr_auth_session_key', 'test-session-key');
+      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Test User', email: '' }));
       document.cookie = `${AUTH_COOKIE_NAME}=fake.encrypted.payload; Path=/`;
 
       service.logout();
@@ -812,6 +827,7 @@ describe('AuthService', () => {
       expect(service.getUser()).toBeNull();
       expect(service.getAccessToken()).toBeNull();
       expect(sessionStorage.getItem('vr_auth_refresh_token')).toBeNull();
+      expect(sessionStorage.getItem('vr_auth_user')).toBeNull();
       expect(getCookieValue(AUTH_COOKIE_NAME)).toBeNull();
     });
   });
@@ -930,18 +946,59 @@ describe('AuthService', () => {
       )}; Path=/`;
 
       service = new AuthService();
-      let refreshed = await readAuthCookiePayload();
-      for (let i = 0; i < 50 && (refreshed?.expiresAt ?? 0) <= originalExpiresAt; i += 1) {
-        await new Promise(r => setTimeout(r, 10));
-        refreshed = await readAuthCookiePayload();
-      }
-      if ((refreshed?.expiresAt ?? 0) <= originalExpiresAt) {
-        throw new Error('Encrypted auth cookie TTL was not refreshed after restore');
-      }
+      await vi.waitFor(async () => {
+        const refreshed = await readAuthCookiePayload();
+        expect((refreshed?.expiresAt ?? 0)).toBeGreaterThan(originalExpiresAt);
+      }, { timeout: 500 });
+      const refreshed = await readAuthCookiePayload();
       const now = Date.now();
       expect(refreshed?.user.name).toBe('Reload User');
       expect(refreshed?.expiresAt ?? 0).toBeGreaterThanOrEqual(now + AUTH_COOKIE_TTL_MS - 5_000);
       expect(refreshed?.expiresAt ?? 0).toBeLessThanOrEqual(now + AUTH_COOKIE_TTL_MS + 5_000);
+    });
+
+    it('restores user synchronously from sessionStorage snapshot on construction', () => {
+      const snapshot = { id: 'i42', name: 'Sync User', email: 'sync@example.com' };
+      sessionStorage.setItem('vr_auth_user', JSON.stringify(snapshot));
+
+      service = new AuthService();
+
+      // getUser() should return the snapshot synchronously, before any async work.
+      expect(service.getUser()).toEqual(snapshot);
+    });
+
+    it('falls back to cookie restore when no sessionStorage snapshot exists', async () => {
+      const sessionKey = 'fallback-key';
+      const payload = {
+        user: { id: 'i99', name: 'Cookie User', email: 'cookie@example.com' },
+        athleteId: 'i99',
+        expiresAt: Date.now() + 60_000,
+      };
+
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sessionKey));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+
+      sessionStorage.setItem(AUTH_SESSION_KEY, sessionKey);
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      service = new AuthService();
+
+      // No snapshot in sessionStorage; user should be null synchronously.
+      expect(service.getUser()).toBeNull();
+
+      // After async cookie restore, user should be populated.
+      await vi.waitFor(() => {
+        expect(service.getUser()?.name).toBe('Cookie User');
+      }, { timeout: 500 });
     });
   });
 });
