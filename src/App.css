@@ -468,9 +468,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: visible;
+  overflow-y: auto;
   padding-right: 0;
-  max-height: none;
+  min-height: 0;
 }
 
 .route-info-overlay {
@@ -668,7 +668,7 @@ body {
   border: 1px solid var(--color-border);
   max-height: none;
   overflow-y: visible;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   box-shadow: 0 18px 40px rgba(26, 52, 82, 0.12);
 }
 

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 import { formatPace } from '../utils/formatters';
 
@@ -70,6 +70,16 @@ describe('App component', () => {
   it('shows Quick Start button in normal mode', () => {
     render(<App />);
     expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
+  });
+
+  it('keeps the route description collapsed until expanded', () => {
+    render(<App />);
+
+    expect(screen.queryByText(/A scenic 5km journey down the meandering Willowbrook River/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand description/i }));
+
+    expect(screen.getByText(/A scenic 5km journey down the meandering Willowbrook River/i)).toBeInTheDocument();
   });
 
   it('shows route-only navigation in guest mode (?guest=true)', () => {

@@ -69,7 +69,7 @@ function App() {
   // Holds a completed guest session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
   // Route description panel state (collapsed/expanded)
-  const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
+  const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(false);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
   // Completed (non-guest) workout sessions for the History view
