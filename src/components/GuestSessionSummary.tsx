@@ -77,7 +77,7 @@ export function GuestSessionSummary({ session, onRowAgain, onExit }: GuestSessio
             ▶ Row Again
           </button>
           <button className="btn btn-guest-exit" onClick={onExit} type="button">
-            Exit Guest Mode
+            Done
           </button>
         </div>
       </div>

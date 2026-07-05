@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from '../App';
 import { formatPace } from '../utils/formatters';
+import * as AuthContext from '../context/AuthContext';
+import type { AuthContextValue } from '../context/AuthContext';
 
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
@@ -67,27 +69,61 @@ describe('App component', () => {
     expect(formatPace(359)).toBe('5:59/500m');
   });
 
-  it('shows Quick Start button in normal mode', () => {
+  it('does not show Quick Start button', () => {
     render(<App />);
-    expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Quick Start/i })).not.toBeInTheDocument();
   });
 
-  it('shows route-only navigation in guest mode (?guest=true)', () => {
-    // Simulate URL param
-    const url = new URL(window.location.href);
-    url.searchParams.set('guest', 'true');
-    window.history.replaceState({}, '', url.toString());
-
+  it('shows route-only navigation for unauthenticated users (no History tab)', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Guest Mode/i).length).toBeGreaterThan(0);
+  });
 
-    // Clean up URL
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete('guest');
-    window.history.replaceState({}, '', cleanUrl.toString());
+  it('shows Rower Device and Heart Rate panels for unauthenticated users without guest sidebar class', () => {
+    const { container } = render(<App />);
+
+    expect(screen.getByText(/Rower Device/i)).toBeInTheDocument();
+    expect(screen.getByText(/Heart Rate/i)).toBeInTheDocument();
+    // GUEST-2: sidebar must not carry app-sidebar--guest (which previously hid device panels)
+    const sidebar = container.querySelector('.app-sidebar');
+    expect(sidebar?.classList.contains('app-sidebar--guest')).toBe(false);
+  });
+
+  it('does not show Import Route button for unauthenticated users', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /Import Route/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show Open rownative.icu button for unauthenticated users', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /rownative\.icu/i })).not.toBeInTheDocument();
+  });
+
+  describe('authenticated user', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('shows Import Route and Open rownative.icu buttons when logged in', () => {
+      const authedValue: AuthContextValue = {
+        user: { id: 'i12345', name: 'Test User', email: 'test@example.com' },
+        isAuthenticated: true,
+        isLoading: false,
+        authError: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+        clearAuthError: vi.fn(),
+        pendingAction: null,
+        setPendingAction: vi.fn(),
+      };
+      vi.spyOn(AuthContext, 'useAuth').mockReturnValue(authedValue);
+
+      render(<App />);
+
+      expect(screen.getByRole('button', { name: /Import Route/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /rownative\.icu/i })).toBeInTheDocument();
+    });
   });
 });

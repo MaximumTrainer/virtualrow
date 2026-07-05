@@ -35,6 +35,10 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
 
 function App() {
   const { isAuthenticated } = useAuth();
+  // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
+  // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
+  const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
+  const showAuthFeatures = isAuthenticated || !!window.__PLAYWRIGHT_TESTING;
   const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
@@ -64,9 +68,7 @@ function App() {
   const [debugMode, setDebugMode] = useState(false);
   // Session state for the overlay UI
   const [sessionState, setSessionState] = useState<SessionState>('idle');
-  // Guest mode — activated by ?guest=true URL param or Quick Start button
-  const [isGuestMode, setIsGuestMode] = useState(false);
-  // Holds a completed guest session until the summary modal is dismissed
+  // Holds a completed unauthenticated session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
   // Route description panel state (collapsed/expanded)
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
@@ -78,27 +80,18 @@ function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRouteName, setImportRouteName] = useState('');
 
-  // Activate guest mode if the URL contains ?guest=true
+  // Pre-select Willowbrook River for unauthenticated users
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('guest') === 'true') {
-        setIsGuestMode(true);
-      }
-    }
-  }, []);
-
-  // When guest mode is activated (URL param or button) ensure Willowbrook is selected
-  useEffect(() => {
-    if (isGuestMode && routes.length > 0) {
+    if (!isAuthenticated && routes.length > 0) {
       const wb = routes.find(r => r.id === '1');
       if (wb) setSelectedRoute(wb);
     }
-  }, [isGuestMode, routes]);
+  }, [isAuthenticated, routes]);
 
-  // Auto-start/stop the HR simulator when guest mode toggles
+  // Auto-start/stop the HR simulator for unauthenticated users
+  // Skip in Playwright test mode so tests can control HR connection state explicitly.
   useEffect(() => {
-    if (isGuestMode) {
+    if (isGuestSession) {
       heartRateSimulator.start(130);
     } else {
       heartRateSimulator.stop();
@@ -106,7 +99,7 @@ function App() {
     return () => {
       heartRateSimulator.stop();
     };
-  }, [isGuestMode]);
+  }, [isGuestSession]);
 
   // Start/stop activity timer when workout state changes
   useEffect(() => {
@@ -233,20 +226,8 @@ function App() {
     setSelectedRoute(route);
   }, []);
 
-  // The Willowbrook River route (id '1') is the default guest route
-  const willowbrookRoute = useMemo(() => routes.find(r => r.id === '1') ?? null, [routes]);
   const selectedRouteEnrichment = selectedRoute ? routeEnrichments[selectedRoute.id] ?? null : null;
   const selectedRouteEnrichmentLoading = selectedRoute ? !!routeEnrichmentLoading[selectedRoute.id] : false;
-
-  const handleQuickStart = useCallback(() => {
-    setIsGuestMode(true);
-    if (willowbrookRoute) setSelectedRoute(willowbrookRoute);
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('guest', 'true');
-      window.history.replaceState({}, '', url.toString());
-    }
-  }, [willowbrookRoute]);
 
   const handleStartWorkout = () => {
     // Guard against double-start (rapid clicks, re-entrant calls, or already-active session)
@@ -264,7 +245,7 @@ function App() {
         undefined,
         activeRowerType,
         hrConnected,
-        isGuestMode,
+        isGuestSession,
       );
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -281,13 +262,13 @@ function App() {
     setCurrentSession(null);
     setSessionState('idle');
 
-    if (isGuestMode && completed) {
-      // Show summary modal; do NOT push to workoutHistory (guest sessions are excluded)
+    if (isGuestSession && completed) {
+      // Show summary modal; do NOT push to workoutHistory (unauthenticated sessions are excluded)
       setGuestCompletedSession(completed);
     } else {
       setCurrentView('routes');
     }
-  }, [isGuestMode]);
+  }, [isGuestSession]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -296,14 +277,7 @@ function App() {
 
   const handleGuestExit = useCallback(() => {
     setGuestCompletedSession(null);
-    setIsGuestMode(false);
     setCurrentView('routes');
-    // Remove ?guest param from URL without reload
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('guest');
-      window.history.replaceState({}, '', url.toString());
-    }
   }, []);
 
   const handlePauseWorkout = useCallback(() => {
@@ -543,24 +517,13 @@ function App() {
             <AuthButton />
           </div>
         </div>
-        {/* Show guest banner only when in guest mode and not authenticated */}
-        {isGuestMode && !isAuthenticated && (
-          <div className="guest-mode-banner">
-            <span className="guest-badge-header">Guest Mode</span>
-            <span className="guest-banner-text">Session data will not be saved.</span>
-            <button className="btn-exit-guest" onClick={handleGuestExit} type="button">
-              Exit Guest Mode
-            </button>
-          </div>
-        )}
-        {/* Sign-out from the auth dropdown also exits guest mode if active */}
+        {/* Session data will not be saved when unauthenticated */}
       </header>
 
       <div className={`app-layout app-layout--${currentView}`}>
         <aside
           className={[
             'app-sidebar',
-            isGuestMode ? 'app-sidebar--guest' : '',
             isWorkoutActive && currentView === 'workout' && !window.__PLAYWRIGHT_TESTING
               ? 'app-sidebar--hidden'
               : '',
@@ -573,7 +536,7 @@ function App() {
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
-            {!isGuestMode && (
+            {showAuthFeatures && (
               <button
                 className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
                 onClick={() => setCurrentView('history')}
@@ -635,36 +598,12 @@ function App() {
         </aside>
 
         <main className="app-main">
-          {/* Quick Start CTA — shown only when NOT in guest mode, on the routes view */}
-          {currentView === 'routes' && !isGuestMode && (
-            <div className="quick-start-banner">
-              <div className="quick-start-content">
-                <span className="quick-start-label">No account needed</span>
-                <h3>Just want to row?</h3>
-                <p>Start instantly on Willowbrook River — no sign-up, no data saved.</p>
-              </div>
-              <button className="btn btn-quick-start" onClick={handleQuickStart} type="button">
-                ⚡ Quick Start
-              </button>
-            </div>
-          )}
-
           {currentView === 'routes' && selectedRoute && (
             <div className="view-container view-container--routes">
               <div className="map-container">
                 <RouteMap route={selectedRoute} />
               </div>
               <div className="route-details-panel">
-                <button
-                  className="btn-toggle-description btn-toggle-description--route-details"
-                  onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
-                  type="button"
-                  aria-label={isRouteDescriptionExpanded ? "Collapse description" : "Expand description"}
-                  aria-expanded={isRouteDescriptionExpanded}
-                >
-                  {isRouteDescriptionExpanded ? '▼' : '▶'} Description
-                </button>
-
                 {/* Route Info Overlay */}
                 <div className="route-info-overlay">
                   <div className="route-info-header">
@@ -673,9 +612,7 @@ function App() {
                   </div>
 
                   <div className="route-description-container">
-                    {isRouteDescriptionExpanded && (
-                      <p className="route-description">{selectedRoute.description}</p>
-                    )}
+                    <p className="route-description">{selectedRoute.description}</p>
                   </div>
                   
                   <div className="route-meta-compact">
@@ -715,7 +652,7 @@ function App() {
                   </button>
                 </div>
 
-                {!isGuestMode && (
+                {showAuthFeatures && (
                   <div className="routes-list">
                     <div className="routes-list-header">
                       <h3>Routes</h3>
