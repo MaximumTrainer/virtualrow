@@ -6,10 +6,9 @@ import './RownativeRouteImport.css';
 
 interface RownativeRouteImportProps {
   onRouteImported: (route: WaterRoute) => void;
-  onOpenKmlImport: () => void;
 }
 
-export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: RownativeRouteImportProps) {
+export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportProps) {
   const { authService, rownativeService, routeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
@@ -34,6 +33,7 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
       setStatus('Sign in to VirtualRow to link rownative.');
       return;
     }
+
     const linked = rownativeService.getLinkedAccount(currentUserId);
     if (!linked) {
       setIsLinked(false);
@@ -59,7 +59,7 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
   const handleStartLink = async () => {
     setIsLinking(true);
     setError(null);
-    const popup = window.open('', '_blank');
+    const popup = window.open('about:blank', '_blank');
     if (!popup) {
       setStatus('Link failed');
       setError('Your browser blocked the rownative link window. Allow pop-ups and try again.');
@@ -248,15 +248,6 @@ export function RownativeRouteImport({ onRouteImported, onOpenKmlImport }: Rowna
               ))}
             </div>
           )}
-
-          <div className="rownative-fallback">
-            <p>
-              Prefer manual import? Export KML on rownative.icu and import it directly in VirtualRow.
-            </p>
-            <button type="button" className="filter-btn" onClick={onOpenKmlImport}>
-              Open KML Import
-            </button>
-          </div>
         </div>
       )}
     </div>

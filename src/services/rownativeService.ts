@@ -11,6 +11,8 @@ const ROWNATIVE_WORKER_BASE_URL = (import.meta.env.VITE_ROWNATIVE_WORKER_BASE_UR
   ?? 'https://rownative.icu/api/virtualrow';
 const MAX_KML_BYTES = 5 * 1024 * 1024;
 const ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const ALLOWED_ROUTE_URL_HOSTS = new Set(['rownative.icu', 'www.rownative.icu']);
+const ALLOWED_LOCAL_LINK_PORTS = new Set(['8787']);
 
 interface RownativeCourseIndexEntry {
   id: string;
@@ -161,6 +163,9 @@ export class RownativeService {
       if (parsed.protocol !== 'https:') {
         throw new Error('Route URL must start with https://.');
       }
+      if (!ALLOWED_ROUTE_URL_HOSTS.has(parsed.hostname)) {
+        throw new Error('Route URL must use a trusted rownative.icu domain.');
+      }
       return { routeUrl: parsed.toString() };
     } catch {
       throw new Error('Route URL is invalid.');
@@ -196,7 +201,8 @@ export class RownativeService {
       throw new Error('Rownative link setup failed. Please try again.');
     }
     const isLocalHttp = linkUrl.protocol === 'http:'
-      && (linkUrl.hostname === 'localhost' || linkUrl.hostname === '127.0.0.1');
+      && (linkUrl.hostname === 'localhost' || linkUrl.hostname === '127.0.0.1')
+      && ALLOWED_LOCAL_LINK_PORTS.has(linkUrl.port);
     if (linkUrl.protocol !== 'https:' && !isLocalHttp) {
       throw new Error('Rownative link setup failed. Please try again.');
     }

@@ -72,7 +72,7 @@ describe('App component', () => {
     expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
   });
 
-  it('hides History and Workouts tabs in guest mode (?guest=true)', () => {
+  it('shows route-only navigation in guest mode (?guest=true)', () => {
     // Simulate URL param
     const url = new URL(window.location.href);
     url.searchParams.set('guest', 'true');
@@ -80,6 +80,7 @@ describe('App component', () => {
 
     render(<App />);
 
+    expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Guest Mode/i).length).toBeGreaterThan(0);
