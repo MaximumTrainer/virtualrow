@@ -620,6 +620,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  pointer-events: none;
 }
 
 .route-info-overlay .route-tags .tag {
@@ -629,6 +630,7 @@ body {
   font-size: 11px;
   color: var(--color-text-secondary);
   font-weight: 500;
+  pointer-events: none;
 }
 
 .route-info-overlay .selected-workout-info {

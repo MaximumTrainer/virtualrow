@@ -39,7 +39,11 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
 
   await page.goto('./');
 
-  await page.getByRole('button', { name: /import route/i }).click();
+  // Use DOM click here to avoid route-info-overlay backdrop-filter compositing layer
+  // intercepting pointer events on macOS headless Chromium.
+  await page.evaluate(() => {
+    (document.querySelector('button.btn-import-route') as HTMLButtonElement)?.click();
+  });
   await page.getByLabel('Route name').fill('Rownative Fixture Course');
   await page.locator('.route-import input[type="file"]').setInputFiles(sampleGeoJsonPath);
 
