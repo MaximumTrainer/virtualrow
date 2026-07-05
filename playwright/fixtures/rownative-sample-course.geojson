@@ -1,0 +1,18 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Rownative Sample Course",
+    "country": "Netherlands",
+    "status": "provisional"
+  },
+  "geometry": {
+    "type": "LineString",
+    "coordinates": [
+      [4.88456, 52.36777],
+      [4.88808, 52.36936],
+      [4.89142, 52.37102],
+      [4.89541, 52.37268],
+      [4.89922, 52.37401]
+    ]
+  }
+}

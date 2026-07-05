@@ -10,7 +10,9 @@ import { makeSwayFoliageMaterial } from './vegetationComponents';
 import {
   getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
+  type SceneryProfile,
 } from '../../services/routeEnrichmentService';
+import { SCENERY_PROFILES } from './sceneryConfig';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -178,6 +180,22 @@ const getSegmentStyle = (
   };
 };
 
+/** Returns the scenery profile of the nearest segment for the given progress (0–1). */
+export const getSegmentSceneryProfile = (
+  enrichment: RouteEnrichmentData | null | undefined,
+  progress: number,
+): SceneryProfile => {
+  const segmentProfiles = enrichment?.segmentProfiles;
+  if (!segmentProfiles || segmentProfiles.length === 0) return 'fallback';
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
+  const clampedProgress = Math.max(0, Math.min(1, safeProgress));
+  const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
+  return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;
+};
+
+/** Baseline building height in scene units; profile heightRange multiplies this value. */
+export const BASE_BUILDING_HEIGHT = 12.5;
+
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
   theme,
@@ -187,8 +205,8 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   const landscapeElements = useMemo(() => {
     if (!curve) return { leftElements: [], rightElements: [] };
     
-    const leftElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number }> = [];
-    const rightElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number }> = [];
+    const leftElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number; sceneryProfile: SceneryProfile }> = [];
+    const rightElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number; sceneryProfile: SceneryProfile }> = [];
     
     const elementSpacing = 0.02;
     const minOffset = LANDSCAPE_OFFSET;
@@ -200,6 +218,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
       const up = new THREE.Vector3(0, 1, 0);
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
       const segmentStyle = getSegmentStyle(enrichment, t);
+      const sceneryProfile = getSegmentSceneryProfile(enrichment, t);
       
       const leftOffset =
         minOffset +
@@ -228,7 +247,8 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
           position: leftPos,
           type: getElementType(3),
           scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * segmentStyle.objectScale,
-          rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2
+          rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2,
+          sceneryProfile,
         });
       }
       
@@ -239,7 +259,8 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
           position: rightPos,
           type: getElementType(7),
           scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * segmentStyle.objectScale,
-          rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2
+          rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2,
+          sceneryProfile,
         });
       }
       elemIdx++;
@@ -340,30 +361,36 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
             </mesh>
           </group>
         );
-      case 'building':
+      case 'building': {
+        const profileConfig = SCENERY_PROFILES[el.sceneryProfile];
+        const [hMin, hMax] = profileConfig.buildings.heightRange;
+        const buildingHeightMultiplier = hMin + seededRandom(index * 23 + 11) * (hMax - hMin);
+        const buildingHeight = BASE_BUILDING_HEIGHT * buildingHeightMultiplier;
+        const roofY = buildingHeight * 1.04;
+        const halfHeight = buildingHeight / 2;
         return (
           <group key={`${side}-building-${index}`} position={[el.position.x, 0, el.position.z]} rotation={[0, el.rotation, 0]}>
-            <mesh position={[0, 6 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
-              <boxGeometry args={[4.2 * el.scale, 12.5 * el.scale, 4.2 * el.scale]} />
+            <mesh position={[0, halfHeight * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
+              <boxGeometry args={[4.2 * el.scale, buildingHeight * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial color={archConfig.wallMaterial.color} roughness={archConfig.wallMaterial.roughness} metalness={0.08} clearcoat={0.12} clearcoatRoughness={0.75} sheen={0.1} sheenColor={colors.buildingAccent} />
             </mesh>
             {archConfig.roofStyle === 'pointed' ? (
-              <mesh position={[0, 13 * el.scale, 0]} castShadow={castNearShadow}>
+              <mesh position={[0, roofY * el.scale, 0]} castShadow={castNearShadow}>
                 <coneGeometry args={[3 * el.scale, 4 * el.scale, 4]} />
                 <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.65} metalness={0.12} clearcoat={0.1} />
               </mesh>
             ) : archConfig.roofStyle === 'gabled' ? (
-              <mesh position={[0, 13 * el.scale, 0]} castShadow={castNearShadow}>
+              <mesh position={[0, roofY * el.scale, 0]} castShadow={castNearShadow}>
                 <coneGeometry args={[3.5 * el.scale, 3 * el.scale, 3]} />
                 <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.7} metalness={0.1} />
               </mesh>
             ) : (
               <>
-                <mesh position={[0, 12.5 * el.scale, 0]} castShadow={castNearShadow}>
+                <mesh position={[0, buildingHeight * el.scale, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
                   <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.78} metalness={0.12} clearcoat={0.08} />
                 </mesh>
-                <mesh position={[0, 12.8 * el.scale, 0]} castShadow={castNearShadow}>
+                <mesh position={[0, (buildingHeight + 0.3) * el.scale, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
                   <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
                 </mesh>
@@ -371,24 +398,25 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
             )}
             {isNearBuilding && [0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
               <React.Fragment key={j}>
-                <mesh position={[2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow={castNearShadow}>
+                <mesh position={[2.12 * el.scale, buildingHeight * el.scale * yPos, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
                   <meshPhysicalMaterial color="#0a1a2a" roughness={0.04} metalness={0.98} reflectivity={1.0} clearcoat={1.0} clearcoatRoughness={0.01} emissive={colors.windowGlow} emissiveIntensity={seededRandom(index * 17 + j) > 0.5 ? 0.35 : 0.08} ior={1.5} />
                 </mesh>
-                <mesh position={[-2.12 * el.scale, 12 * el.scale * yPos, 0]} castShadow={castNearShadow}>
+                <mesh position={[-2.12 * el.scale, buildingHeight * el.scale * yPos, 0]} castShadow={castNearShadow}>
                   <boxGeometry args={[0.06 * el.scale, 1.3 * el.scale, 2.6 * el.scale]} />
                   <meshPhysicalMaterial color="#0a1a2a" roughness={0.04} metalness={0.98} reflectivity={1.0} clearcoat={1.0} clearcoatRoughness={0.01} emissive={colors.windowGlow} emissiveIntensity={seededRandom(index * 17 + j + 4) > 0.6 ? 0.3 : 0.06} ior={1.5} />
                 </mesh>
               </React.Fragment>
             ))}
             {isNearBuilding && (
-              <mesh position={[2.14 * el.scale, 6 * el.scale, 0]} castShadow={castNearShadow}>
-                <boxGeometry args={[0.02 * el.scale, 10 * el.scale, 2.8 * el.scale]} />
+              <mesh position={[2.14 * el.scale, halfHeight * el.scale, 0]} castShadow={castNearShadow}>
+                <boxGeometry args={[0.02 * el.scale, buildingHeight * el.scale, 2.8 * el.scale]} />
                 <meshPhysicalMaterial color="#1a1a1a" roughness={0.9} metalness={0.15} />
               </mesh>
             )}
           </group>
         );
+      }
     }
   };
   

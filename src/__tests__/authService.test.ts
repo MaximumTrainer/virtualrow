@@ -2,6 +2,50 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
 import { AuthService, PROXY_BASE, ICU_PROFILE_PATH } from '../services/authService';
 
+const AUTH_COOKIE_NAME = 'vr_auth_session';
+const AUTH_SESSION_KEY = 'vr_auth_session_key';
+const AUTH_COOKIE_TTL_MS = 2 * 60 * 60 * 1000;
+
+function getCookieValue(name: string): string | null {
+  const prefix = `${name}=`;
+  const entry = document.cookie.split('; ').find((cookie) => cookie.startsWith(prefix));
+  return entry ? decodeURIComponent(entry.slice(prefix.length)) : null;
+}
+
+async function readAuthCookiePayload() {
+  const encrypted = getCookieValue(AUTH_COOKIE_NAME);
+  const keyMaterial = sessionStorage.getItem(AUTH_SESSION_KEY);
+  if (!encrypted || !keyMaterial) return null;
+
+  const [encodedIv, encodedCiphertext] = encrypted.split('.');
+  if (!encodedIv || !encodedCiphertext) return null;
+
+  const decodeBase64Url = (value: string) => {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  };
+
+  const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyMaterial));
+  const key = await crypto.subtle.importKey('raw', hashed, { name: 'AES-GCM' }, false, ['decrypt']);
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: decodeBase64Url(encodedIv) },
+    key,
+    decodeBase64Url(encodedCiphertext),
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext)) as { athleteId: string; expiresAt: number; user: { id: string; name: string } };
+}
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 // ─── PKCE helpers ────────────────────────────────────────────────────────────
 
 describe('generateCodeVerifier', () => {
@@ -68,6 +112,7 @@ describe('AuthService', () => {
 
     // Use the real jsdom sessionStorage; clear it between tests
     sessionStorage.clear();
+    document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/`;
 
     // Stub location.href setter to prevent actual navigation
     Object.defineProperty(window, 'location', {
@@ -83,6 +128,7 @@ describe('AuthService', () => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     sessionStorage.clear();
+    document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/`;
     consoleSpy.error.mockClear();
     consoleSpy.warn.mockClear();
   });
@@ -224,7 +270,13 @@ describe('AuthService', () => {
       );
     });
 
-    it('returns null when the token response omits athlete id (intervals.icu requires an ID in the profile path)', async () => {
+    it('falls back to the current-athlete profile endpoint when the token response omits athlete id', async () => {
+      const fallbackProfile = {
+        id: 'i123',
+        firstname: 'Current',
+        lastname: 'Athlete',
+        email: 'current@example.com',
+      };
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -233,18 +285,26 @@ describe('AuthService', () => {
             refresh_token: 'refresh-xyz',
             expires_in: 3600,
             token_type: 'Bearer',
-            // No athlete_id field — intervals.icu GET /api/v1/athlete (no ID) returns 405
+            // No athlete_id field — use /api/v1/athlete/0 for the current OAuth athlete.
           }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(fallbackProfile),
         });
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await service.handleCallback('auth-code', 'valid-state');
 
-      // Without an athlete ID we cannot construct a valid profile path
-      expect(result).toBeNull();
-      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
-      // Only the token exchange fetch should have been made (no profile fetch)
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result?.id).toBe('i123');
+      expect(result?.name).toBe('Current Athlete');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        `${PROXY_BASE}${ICU_PROFILE_PATH}/0`,
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.any(String) }) }),
+      );
+      expect(service.getLastError()).toBeNull();
     });
 
     it('falls back to the i-prefixed athlete-specific profile endpoint when the numeric athlete-specific endpoint returns 404', async () => {
@@ -396,6 +456,20 @@ describe('AuthService', () => {
       expect(sessionStorage.getItem('vr_auth_refresh_token')).toBe('refresh-xyz');
     });
 
+    it('stores user snapshot in sessionStorage for synchronous restore', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTokenResponse) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockUser) }),
+      );
+
+      await service.handleCallback('auth-code', 'valid-state');
+      const stored = sessionStorage.getItem('vr_auth_user');
+      expect(stored).not.toBeNull();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.id).toBe('i123');
+      expect(parsed.name).toBe(mockUser.name);
+    });
+
     it('returns null when token exchange fails', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 400 }));
       const result = await service.handleCallback('bad-code', 'valid-state');
@@ -470,25 +544,32 @@ describe('AuthService', () => {
       expect((profileInit as RequestInit).headers as Record<string, string>).not.toHaveProperty('Authorization', '');
     });
 
-    it('returns null without making a profile request when no athlete_id in token (intervals.icu /api/v1/athlete without ID returns 405)', async () => {
+    it('fetches /proxy/api/v1/athlete/0 when no athlete_id is present in the token response', async () => {
       const tokenNoId = {
         access_token: 'tok-generic',
         refresh_token: 'tok-refresh',
         expires_in: 3600,
         token_type: 'Bearer',
-        // No athlete_id — GET /api/v1/athlete (no ID) returns 405 from intervals.icu
+        // No athlete_id — /api/v1/athlete/0 resolves the current OAuth athlete.
+      };
+      const currentAthleteProfile = {
+        id: 'i777',
+        firstname: 'Current',
+        lastname: 'Rower',
+        email: 'current-rower@example.com',
       };
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNoId) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenNoId) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(currentAthleteProfile) });
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await service.handleCallback('auth-code', 'valid-state');
 
-      // Must fail gracefully without attempting the 405-returning no-ID endpoint
-      expect(result).toBeNull();
-      expect(service.getLastError()).toContain('could not load your intervals.icu profile');
-      // Only the token exchange fetch — no profile fetch should be attempted
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result?.id).toBe('i777');
+      expect(result?.name).toBe('Current Rower');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/0`);
+      expect(service.getLastError()).toBeNull();
     });
 
     it('fetches numeric athlete_id path then i-prefixed path on 404 (intervals.icu token returns numeric id)', async () => {
@@ -644,8 +725,10 @@ describe('AuthService', () => {
       // The service must be authenticated with the returned access token
       expect(service.isAuthenticated).toBe(true);
       expect(service.getAccessToken()).toBe(tokenResponse.access_token);
-      // The athlete id must be persisted to sessionStorage
-      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(returnedAthleteId);
+      const cookiePayload = await readAuthCookiePayload();
+      expect(cookiePayload?.athleteId).toBe(returnedAthleteId);
+      expect(cookiePayload?.user.id).toBe(returnedAthleteId);
+      expect(cookiePayload?.expiresAt).toBeGreaterThan(Date.now());
       // The profile request URL must include the athlete_id — verifying the
       // token → profile handoff worked end-to-end
       expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${returnedAthleteId}`);
@@ -687,8 +770,9 @@ describe('AuthService', () => {
       // The resolved user id is the i-prefixed id returned by the successful profile call
       expect(result?.id).toBe(iPrefixedAthleteId);
       expect(service.isAuthenticated).toBe(true);
-      // The persisted athlete ID is the resolved (i-prefixed) id
-      expect(sessionStorage.getItem('vr_auth_athlete_id')).toBe(iPrefixedAthleteId);
+      const cookiePayload = await readAuthCookiePayload();
+      expect(cookiePayload?.athleteId).toBe(iPrefixedAthleteId);
+      expect(cookiePayload?.user.id).toBe(iPrefixedAthleteId);
       // Verify the profile request sequence: first numeric, then i-prefixed
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/${numericAthleteId}`);
@@ -696,41 +780,46 @@ describe('AuthService', () => {
       expect(service.getLastError()).toBeNull();
     });
 
-    it('login fails with the user-visible error when the intervals.icu token response omits athlete_id', async () => {
-      // Regression guard for the exact error reported by the user:
-      // "Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry."
+    it('login persists the canonical athlete id returned by /api/v1/athlete/0 when the token response omits athlete_id', async () => {
       const tokenResponse = {
         access_token: 'access-token-no-athlete',
         refresh_token: 'refresh-token-no-athlete',
         expires_in: 3600,
         token_type: 'Bearer',
-        // No athlete_id / id — reproduces the failure mode where the profile
-        // path cannot be constructed and the app must NOT hit /api/v1/athlete
-        // (which returns 405).
+        // No athlete_id / id — the client must resolve the current athlete via /athlete/0.
+      };
+      const resolvedAthleteId = 'i24680';
+      const profileResponse = {
+        id: resolvedAthleteId,
+        firstname: 'Resolved',
+        lastname: 'Athlete',
+        email: 'resolved@example.com',
       };
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(tokenResponse) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(profileResponse) });
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await service.handleCallback('auth-code', 'valid-state');
 
-      expect(result).toBeNull();
-      expect(service.isAuthenticated).toBe(false);
-      expect(service.getUser()).toBeNull();
-      // Exactly the user-facing error string surfaced by the AuthContext
-      expect(service.getLastError())
-        .toBe('Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.');
-      // No profile request must have been made — protects against the 405 path
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result?.id).toBe(resolvedAthleteId);
+      expect(service.isAuthenticated).toBe(true);
+      expect(service.getUser()?.id).toBe(resolvedAthleteId);
+      const cookiePayload = await readAuthCookiePayload();
+      expect(cookiePayload?.athleteId).toBe(resolvedAthleteId);
+      expect(cookiePayload?.user.id).toBe(resolvedAthleteId);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[1][0]).toBe(`${PROXY_BASE}${ICU_PROFILE_PATH}/0`);
+      expect(service.getLastError()).toBeNull();
     });
   });
 
   describe('logout', () => {
-    it('clears authentication state', async () => {
-      // Set up a logged-in state
+    it('clears authentication state and encrypted auth cookie', async () => {
       sessionStorage.setItem('vr_auth_refresh_token', 'refresh-xyz');
-      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Test' }));
-      sessionStorage.setItem('vr_auth_athlete_id', 'i123');
+      sessionStorage.setItem('vr_auth_session_key', 'test-session-key');
+      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Test User', email: '' }));
+      document.cookie = `${AUTH_COOKIE_NAME}=fake.encrypted.payload; Path=/`;
 
       service.logout();
 
@@ -738,6 +827,8 @@ describe('AuthService', () => {
       expect(service.getUser()).toBeNull();
       expect(service.getAccessToken()).toBeNull();
       expect(sessionStorage.getItem('vr_auth_refresh_token')).toBeNull();
+      expect(sessionStorage.getItem('vr_auth_user')).toBeNull();
+      expect(getCookieValue(AUTH_COOKIE_NAME)).toBeNull();
     });
   });
 
@@ -749,8 +840,6 @@ describe('AuthService', () => {
 
     it('returns true and updates access token on success', async () => {
       sessionStorage.setItem('vr_auth_refresh_token', 'old-refresh');
-      sessionStorage.setItem('vr_auth_athlete_id', 'i123');
-      sessionStorage.setItem('vr_auth_user', JSON.stringify({ id: 'i123', name: 'Tester', email: '' }));
 
       // Stub fetch before constructing so the restore-session refresh is served
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -760,16 +849,40 @@ describe('AuthService', () => {
           refresh_token: 'new-refresh',
           expires_in: 3600,
           token_type: 'Bearer',
+          athlete_id: 'i123',
         }),
       }));
 
-      // Reconstruct service so it restores session and calls refreshAccessToken
+      // Seed encrypted cookie so restore-session can recover the user and refresh.
+      sessionStorage.setItem('vr_auth_session_key', 'session-key-for-test');
+      const now = Date.now();
+      const payload = {
+        user: { id: 'i123', name: 'Tester', email: '' },
+        athleteId: 'i123',
+        expiresAt: now + AUTH_COOKIE_TTL_MS,
+      };
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('session-key-for-test'));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      // Reconstruct service so it restores cookie session and calls refreshAccessToken.
       service = new AuthService();
-      // Wait for the async restore-session refresh to finish
-      await new Promise(r => setTimeout(r, 0));
+      await vi.waitFor(() => {
+        expect(service.getUser()?.id).toBe('i123');
+      });
 
       const result = await service.refreshAccessToken();
       expect(result).toBe(true);
+      expect(sessionStorage.getItem('vr_auth_refresh_token')).toBe('new-refresh');
     });
 
     it('passes client_id to the proxy URL during token refresh', async () => {
@@ -804,6 +917,88 @@ describe('AuthService', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 401 }));
       const result = await service.refreshAccessToken();
       expect(result).toBe(false);
+    });
+  });
+
+  describe('cookie session restore', () => {
+    it('refreshes encrypted cookie TTL when session is restored on reload', async () => {
+      const sessionKey = 'restore-session-key';
+      const originalExpiresAt = Date.now() + 30_000;
+      const payload = {
+        user: { id: 'i123', name: 'Reload User', email: 'reload@example.com' },
+        athleteId: 'i123',
+        expiresAt: originalExpiresAt,
+      };
+
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sessionKey));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+
+      sessionStorage.setItem(AUTH_SESSION_KEY, sessionKey);
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      service = new AuthService();
+      await vi.waitFor(async () => {
+        const refreshed = await readAuthCookiePayload();
+        expect((refreshed?.expiresAt ?? 0)).toBeGreaterThan(originalExpiresAt);
+      }, { timeout: 500 });
+      const refreshed = await readAuthCookiePayload();
+      const now = Date.now();
+      expect(refreshed?.user.name).toBe('Reload User');
+      expect(refreshed?.expiresAt ?? 0).toBeGreaterThanOrEqual(now + AUTH_COOKIE_TTL_MS - 5_000);
+      expect(refreshed?.expiresAt ?? 0).toBeLessThanOrEqual(now + AUTH_COOKIE_TTL_MS + 5_000);
+    });
+
+    it('restores user synchronously from sessionStorage snapshot on construction', () => {
+      const snapshot = { id: 'i42', name: 'Sync User', email: 'sync@example.com' };
+      sessionStorage.setItem('vr_auth_user', JSON.stringify(snapshot));
+
+      service = new AuthService();
+
+      // getUser() should return the snapshot synchronously, before any async work.
+      expect(service.getUser()).toEqual(snapshot);
+    });
+
+    it('falls back to cookie restore when no sessionStorage snapshot exists', async () => {
+      const sessionKey = 'fallback-key';
+      const payload = {
+        user: { id: 'i99', name: 'Cookie User', email: 'cookie@example.com' },
+        athleteId: 'i99',
+        expiresAt: Date.now() + 60_000,
+      };
+
+      const iv = new Uint8Array(12);
+      crypto.getRandomValues(iv);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sessionKey));
+      const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+
+      sessionStorage.setItem(AUTH_SESSION_KEY, sessionKey);
+      document.cookie = `${AUTH_COOKIE_NAME}=${encodeURIComponent(
+        `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`,
+      )}; Path=/`;
+
+      service = new AuthService();
+
+      // No snapshot in sessionStorage; user should be null synchronously.
+      expect(service.getUser()).toBeNull();
+
+      // After async cookie restore, user should be populated.
+      await vi.waitFor(() => {
+        expect(service.getUser()?.name).toBe('Cookie User');
+      }, { timeout: 500 });
     });
   });
 });

@@ -7,6 +7,12 @@ import { routeService, type RownativeRouteImportData } from './routeService';
 const ROWNATIVE_INDEX_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses/index.json';
 const ROWNATIVE_COURSE_BASE_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses';
 const UNORDERED_POLYGON_SORT_KEY = Number.MAX_SAFE_INTEGER;
+const ROWNATIVE_WORKER_BASE_URL = (import.meta.env.VITE_ROWNATIVE_WORKER_BASE_URL as string | undefined)
+  ?? 'https://rownative.icu/api/virtualrow';
+const MAX_KML_BYTES = 5 * 1024 * 1024;
+const ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const ALLOWED_ROUTE_URL_HOSTS = new Set(['rownative.icu', 'www.rownative.icu']);
+const ALLOWED_LOCAL_LINK_PORTS = new Set(['8787']);
 
 interface RownativeCourseIndexEntry {
   id: string;
@@ -43,6 +49,30 @@ export interface RownativeCourseSummary {
   status?: string;
 }
 
+export interface RownativeLinkedAccount {
+  virtualRowUserId: string;
+  rownativeUserId: string;
+  rownativeDisplayName?: string;
+  linkedAt: number;
+}
+
+export interface StartRownativeLinkResult {
+  linkUrl: string;
+  requestId?: string;
+}
+
+export interface PullRownativeKmlRequest {
+  virtualRowUserId: string;
+  routeId?: string;
+  routeUrl?: string;
+}
+
+export interface PullRownativeKmlResult {
+  kml: string;
+  routeName?: string;
+  location?: string;
+}
+
 export class RownativeService {
   private courseIndexCache: RownativeCourseSummary[] | null = null;
   private courseIndexPromise: Promise<RownativeCourseSummary[]> | null = null;
@@ -65,6 +95,200 @@ export class RownativeService {
     return response.json() as Promise<T>;
   }
 
+  private getLinkedAccountStorageKey(virtualRowUserId: string): string {
+    return `vr_rownative_link:${virtualRowUserId}`;
+  }
+
+  private persistLinkedAccount(account: RownativeLinkedAccount): void {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(this.getLinkedAccountStorageKey(account.virtualRowUserId), JSON.stringify(account));
+  }
+
+  private clearLinkedAccount(virtualRowUserId: string): void {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(this.getLinkedAccountStorageKey(virtualRowUserId));
+  }
+
+  getLinkedAccount(virtualRowUserId: string): RownativeLinkedAccount | null {
+    if (!virtualRowUserId || typeof window === 'undefined') return null;
+    const json = sessionStorage.getItem(this.getLinkedAccountStorageKey(virtualRowUserId));
+    if (!json) return null;
+    try {
+      const parsed = JSON.parse(json) as Partial<RownativeLinkedAccount>;
+      if (
+        parsed.virtualRowUserId !== virtualRowUserId
+        || typeof parsed.rownativeUserId !== 'string'
+        || parsed.rownativeUserId.length === 0
+        || typeof parsed.linkedAt !== 'number'
+        || !Number.isFinite(parsed.linkedAt)
+      ) {
+        return null;
+      }
+
+      return {
+        virtualRowUserId,
+        rownativeUserId: parsed.rownativeUserId,
+        rownativeDisplayName: typeof parsed.rownativeDisplayName === 'string' && parsed.rownativeDisplayName.trim().length > 0
+          ? parsed.rownativeDisplayName
+          : undefined,
+        linkedAt: parsed.linkedAt,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private validateVirtualRowUserId(virtualRowUserId: string): string {
+    const normalized = virtualRowUserId.trim();
+    if (!normalized) {
+      throw new Error('You need to sign in before linking a rownative account.');
+    }
+    return normalized;
+  }
+
+  private validateRouteSelection(input: { routeId?: string; routeUrl?: string }): { routeId?: string; routeUrl?: string } {
+    const routeId = input.routeId?.trim();
+    const routeUrl = input.routeUrl?.trim();
+    if (!routeId && !routeUrl) return {};
+
+    if (routeId) {
+      if (!ROUTE_ID_PATTERN.test(routeId)) {
+        throw new Error('Route ID is invalid. Use letters, numbers, dash, or underscore only.');
+      }
+      return { routeId };
+    }
+
+    try {
+      const parsed = new URL(routeUrl ?? '');
+      if (parsed.protocol !== 'https:') {
+        throw new Error('Route URL must start with https://.');
+      }
+      if (!ALLOWED_ROUTE_URL_HOSTS.has(parsed.hostname)) {
+        throw new Error('Route URL must use a trusted rownative.icu domain.');
+      }
+      return { routeUrl: parsed.toString() };
+    } catch {
+      throw new Error('Route URL is invalid.');
+    }
+  }
+
+  private async fetchWorkerJson<T>(path: string, init: RequestInit): Promise<T> {
+    const response = await this.fetchImpl(`${ROWNATIVE_WORKER_BASE_URL}${path}`, init);
+    if (!response.ok) {
+      throw new Error(`Rownative API request failed (HTTP ${response.status}).`);
+    }
+    return response.json() as Promise<T>;
+  }
+
+  async startLinkFlow(virtualRowUserId: string): Promise<StartRownativeLinkResult> {
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    const result = await this.fetchWorkerJson<{ linkUrl?: string; requestId?: string }>(
+      '/link/start',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId }),
+      },
+    );
+
+    if (typeof result.linkUrl !== 'string' || result.linkUrl.trim().length === 0) {
+      throw new Error('Rownative link setup failed. Please try again.');
+    }
+    let linkUrl: URL;
+    try {
+      linkUrl = new URL(result.linkUrl);
+    } catch {
+      throw new Error('Rownative link setup failed. Please try again.');
+    }
+    const isLocalHttp = linkUrl.protocol === 'http:'
+      && (linkUrl.hostname === 'localhost' || linkUrl.hostname === '127.0.0.1')
+      && ALLOWED_LOCAL_LINK_PORTS.has(linkUrl.port);
+    if (linkUrl.protocol !== 'https:' && !isLocalHttp) {
+      throw new Error('Rownative link setup failed. Please try again.');
+    }
+
+    return {
+      linkUrl: linkUrl.toString(),
+      requestId: typeof result.requestId === 'string' && result.requestId.trim().length > 0 ? result.requestId.trim() : undefined,
+    };
+  }
+
+  async completeLinkFlow(virtualRowUserId: string, requestId?: string): Promise<RownativeLinkedAccount> {
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    const body: { virtualRowUserId: string; requestId?: string } = { virtualRowUserId: userId };
+    if (requestId?.trim()) {
+      body.requestId = requestId.trim();
+    }
+
+    const result = await this.fetchWorkerJson<{
+      rownativeUserId?: string;
+      rownativeDisplayName?: string;
+      linkedAt?: number;
+    }>(
+      '/link/complete',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (typeof result.rownativeUserId !== 'string' || result.rownativeUserId.trim().length === 0) {
+      throw new Error('Linking could not be confirmed yet. Please finish linking on rownative.icu and retry.');
+    }
+
+    const account: RownativeLinkedAccount = {
+      virtualRowUserId: userId,
+      rownativeUserId: result.rownativeUserId.trim(),
+      rownativeDisplayName: typeof result.rownativeDisplayName === 'string' && result.rownativeDisplayName.trim().length > 0
+        ? result.rownativeDisplayName.trim()
+        : undefined,
+      linkedAt: typeof result.linkedAt === 'number' && Number.isFinite(result.linkedAt)
+        ? result.linkedAt
+        : Date.now(),
+    };
+    this.persistLinkedAccount(account);
+    return account;
+  }
+
+  async unlinkAccount(virtualRowUserId: string): Promise<void> {
+    const userId = this.validateVirtualRowUserId(virtualRowUserId);
+    await this.fetchWorkerJson<{ ok?: boolean }>(
+      '/link/unlink',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId }),
+      },
+    );
+    this.clearLinkedAccount(userId);
+  }
+
+  async pullLinkedRouteKml(input: PullRownativeKmlRequest): Promise<PullRownativeKmlResult> {
+    const userId = this.validateVirtualRowUserId(input.virtualRowUserId);
+    const selection = this.validateRouteSelection(input);
+    const result = await this.fetchWorkerJson<{ kml?: string; routeName?: string; location?: string }>(
+      '/routes/pull-kml',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ virtualRowUserId: userId, ...selection }),
+      },
+    );
+
+    if (typeof result.kml !== 'string' || result.kml.trim().length === 0) {
+      throw new Error('Rownative did not return KML data for that route.');
+    }
+    if (new TextEncoder().encode(result.kml).length > MAX_KML_BYTES) {
+      throw new Error('The KML response is too large to import.');
+    }
+
+    return {
+      kml: result.kml,
+      routeName: typeof result.routeName === 'string' && result.routeName.trim().length > 0 ? result.routeName.trim() : undefined,
+      location: typeof result.location === 'string' && result.location.trim().length > 0 ? result.location.trim() : undefined,
+    };
+  }
   async getCourseIndex(): Promise<RownativeCourseSummary[]> {
     if (this.courseIndexCache) {
       return this.courseIndexCache;

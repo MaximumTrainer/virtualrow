@@ -141,6 +141,56 @@ describe('RouteService import routines', () => {
     expect(imported).toBeDefined();
     expect(imported!.coordinates.length).toBe(2);
   });
+
+  it('skips out-of-range GeoJSON positions and keeps valid [lng,lat] points', () => {
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [[181, 0], [13.405, 52.52], [13.406, 52.521]],
+      },
+      properties: {},
+    });
+    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Filtered', difficulty: 'easy' });
+    expect(imported).toBeDefined();
+    expect(imported!.coordinates).toEqual([
+      { lat: 52.52, lng: 13.405 },
+      { lat: 52.521, lng: 13.406 },
+    ]);
+  });
+
+  it('skips GeoJSON positions with non-numeric values', () => {
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [[13.405, 52.52], [null, 52.521], [13.406, 52.522]],
+      },
+      properties: {},
+    });
+    const imported = routeService.importRouteFromGeoJSON(geojson, {
+      name: 'GeoJSON NonFinite',
+      difficulty: 'easy',
+    });
+    expect(imported).toBeDefined();
+    expect(imported!.coordinates).toEqual([
+      { lat: 52.52, lng: 13.405 },
+      { lat: 52.522, lng: 13.406 },
+    ]);
+  });
+
+  it('returns undefined when GeoJSON positions never yield two valid points', () => {
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [[13.405, 52.52], [13.405], [181, 0]],
+      },
+      properties: {},
+    });
+    const imported = routeService.importRouteFromGeoJSON(geojson, { name: 'GeoJSON Invalid', difficulty: 'easy' });
+    expect(imported).toBeUndefined();
+  });
 });
 
 describe('RouteService KML import', () => {

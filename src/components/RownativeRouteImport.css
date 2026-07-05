@@ -16,43 +16,15 @@
   font-size: 0.8rem;
 }
 
-.rownative-results {
+.rownative-controls {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 260px;
-  overflow-y: auto;
 }
 
-.rownative-result-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.rownative-result-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.rownative-result-text strong {
-  font-size: 0.8rem;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rownative-result-text span {
-  font-size: 0.74rem;
-  color: var(--color-text-muted);
+.rownative-open-link {
+  text-align: center;
+  text-decoration: none;
 }
 
 .rownative-fallback {

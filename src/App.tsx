@@ -10,7 +10,7 @@ import { workoutService } from './services/workoutService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import { heartRateBluetoothService } from './services/heartRateBluetoothService';
 // Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
-// Code-split it so the route selection and activity views don't pay the cost — the chunk only
+// Code-split it so the routes view doesn't pay the cost — the chunk only
 // loads when the user actually starts a workout (currentView === 'workout').
 const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
@@ -18,7 +18,6 @@ import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
-import { saveSession, loadSessions } from './services/localStorageWorkoutStore';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
@@ -44,7 +43,6 @@ function App() {
   const [pm5Data, setPM5Data] = useState<PM5Data | null>(null);
   const [ftmsConnected, setFtmsConnected] = useState(false);
   const [hrConnected, setHrConnected] = useState(false);
-  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [activeRowerType, setActiveRowerType] = useState<'pm5' | 'ftms'>('pm5');
   // Local activity timer (ms elapsed since workout started)
@@ -69,6 +67,11 @@ function App() {
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
+  // Completed (non-guest) workout sessions for the History view
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
+  // Route import panel state
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importRouteName, setImportRouteName] = useState('');
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -128,8 +131,6 @@ function App() {
     if (allRoutes.length > 0) {
       setSelectedRoute(allRoutes[0]);
     }
-    
-    setWorkoutHistory(workoutService.getAllSessions());
   }, []);
 
   useEffect(() => {
@@ -224,11 +225,19 @@ function App() {
         if (r) setSelectedRoute(r);
       }
     };
-    const onEnd = () => {
+    const onEnd = (e: Event) => {
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
-      setWorkoutHistory(workoutService.getAllSessions());
+      if (e instanceof CustomEvent && e.detail) {
+        const completed = e.detail as WorkoutSession;
+        if (!completed.isGuest) {
+          setWorkoutHistory((prev) => {
+            if (prev.some((s) => s.id === completed.id)) return prev;
+            return [...prev, completed];
+          });
+        }
+      }
     };
     if (typeof window === 'undefined') return;
     window.addEventListener('virtualrow:sessionStarted', onStartup as EventListener);
@@ -295,16 +304,9 @@ function App() {
       // Show summary modal; do NOT push to workoutHistory (guest sessions are excluded)
       setGuestCompletedSession(completed);
     } else {
-      if (completed) {
-        // Persist to localStorage for authenticated users (stub until #37)
-        if (isAuthenticated && user) {
-          saveSession(user.id, completed);
-        }
-        setWorkoutHistory(workoutService.getAllSessions());
-      }
       setCurrentView('routes');
     }
-  }, [isGuestMode, isAuthenticated, user]);
+  }, [isGuestMode]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -314,7 +316,6 @@ function App() {
   const handleGuestExit = useCallback(() => {
     setGuestCompletedSession(null);
     setIsGuestMode(false);
-    setWorkoutHistory(workoutService.getAllSessions());
     setCurrentView('routes');
     // Remove ?guest param from URL without reload
     if (typeof window !== 'undefined') {
@@ -656,11 +657,6 @@ function App() {
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
-                    {!isGuestMode && (() => { const pb = getPersonalBest(selectedRoute.id); return pb && (
-                      <span className="meta-badge pb-badge">
-                        🏆 PB: {pb.averagePace}s/500m
-                      </span>
-                    ); })()}
                   </div>
 
                   <div className="route-tags">

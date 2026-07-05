@@ -4,6 +4,8 @@
  * Security model:
  *  - Access token is stored in memory only (never persisted).
  *  - Refresh token is stored in sessionStorage (cleared on tab close).
+ *  - User/athlete profile is stored in an encrypted cookie (2h TTL, refreshed
+ *    on reload) so the app can recover login state without persisting tokens.
  *  - State parameter provides CSRF protection.
  *  - PKCE S256 challenge replaces client secret for this public SPA client.
  *
@@ -26,8 +28,17 @@ export const ICU_PROFILE_PATH = '/api/v1/athlete';
 const SK_CODE_VERIFIER = 'vr_auth_code_verifier';
 const SK_STATE = 'vr_auth_state';
 const SK_REFRESH_TOKEN = 'vr_auth_refresh_token';
-const SK_ATHLETE_ID = 'vr_auth_athlete_id';
+const SK_SESSION_KEY = 'vr_auth_session_key';
 const SK_USER = 'vr_auth_user';
+const CK_SESSION = 'vr_auth_session';
+const AUTH_COOKIE_TTL_SECONDS = 2 * 60 * 60;
+const AUTH_COOKIE_TTL_MS = AUTH_COOKIE_TTL_SECONDS * 1000;
+
+interface AuthCookiePayload {
+  user: AuthUser;
+  athleteId: string;
+  expiresAt: number;
+}
 
 function getClientId(): string {
   const id = import.meta.env.VITE_INTERVALS_CLIENT_ID as string | undefined;
@@ -178,7 +189,7 @@ export class AuthService {
     const user = await this.fetchProfile(tokens.accessToken, tokens.athleteId);
     if (!user) return null;
 
-    this.applyTokens(tokens, user);
+    await this.applyTokens(tokens, user);
     return user;
   }
 
@@ -211,14 +222,17 @@ export class AuthService {
       }
 
       const raw = await res.json() as RawTokenResponse;
-      const athleteId = sessionStorage.getItem(SK_ATHLETE_ID) ?? String(raw.athlete_id ?? raw.id ?? '');
+      const athleteId = this.currentUser?.id ?? String(raw.athlete_id ?? raw.id ?? '');
       const tokens = this.parseTokenResponse(raw, athleteId);
       if (!tokens) return false;
 
-      // Keep current user; only update the access token and schedule next refresh
-      if (this.currentUser) {
-        this.applyTokens(tokens, this.currentUser);
+      // Keep current user; only update the access token and schedule next refresh.
+      if (!this.currentUser) {
+        console.warn('[AuthService] Token refreshed but no user session is available');
+        return false;
       }
+
+      await this.applyTokens(tokens, this.currentUser);
       return true;
     } catch (err) {
       console.warn('[AuthService] Token refresh error:', err);
@@ -233,8 +247,9 @@ export class AuthService {
     this.currentUser = null;
     this.lastError = null;
     sessionStorage.removeItem(SK_REFRESH_TOKEN);
-    sessionStorage.removeItem(SK_ATHLETE_ID);
     sessionStorage.removeItem(SK_USER);
+    sessionStorage.removeItem(SK_SESSION_KEY);
+    this.clearAuthCookie();
   }
 
   /** Returns the in-memory access token, or null if not authenticated. */
@@ -303,12 +318,6 @@ export class AuthService {
     try {
       const profilePaths = this.getProfilePaths(athleteId);
 
-      if (profilePaths.length === 0) {
-        console.error('[AuthService] Cannot fetch profile: athlete ID not available from token response');
-        this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
-        return null;
-      }
-
       for (const [index, profilePath] of profilePaths.entries()) {
         const res = await fetch(`${PROXY_BASE}${profilePath}`, {
           headers: { Authorization: 'Bearer '.concat(accessToken) },
@@ -375,15 +384,15 @@ export class AuthService {
   /**
    * Store tokens and user, schedule silent refresh 60 seconds before expiry.
    */
-  private applyTokens(tokens: OAuthTokens, user: AuthUser): void {
+  private async applyTokens(tokens: OAuthTokens, user: AuthUser): Promise<void> {
     this.accessToken = tokens.accessToken;
     this.currentUser = user;
 
     if (tokens.refreshToken) {
       sessionStorage.setItem(SK_REFRESH_TOKEN, tokens.refreshToken);
     }
-    sessionStorage.setItem(SK_ATHLETE_ID, user.id);
     sessionStorage.setItem(SK_USER, JSON.stringify(user));
+    await this.persistCookieSession(user);
 
     this.scheduleRefresh(tokens.expiresAt);
   }
@@ -408,17 +417,180 @@ export class AuthService {
     }
   }
 
-  /** On construction, restore session from sessionStorage if available. */
+  /** On construction, restore session from sessionStorage snapshot (synchronous)
+   *  and use the encrypted cookie as a fallback/TTL refresh mechanism (async). */
   private restoreSession(): void {
     const userJson = sessionStorage.getItem(SK_USER);
-    if (!userJson) return;
-    try {
-      this.currentUser = JSON.parse(userJson) as AuthUser;
-      // Access token is not persisted; silently refresh to get a new one
-      this.refreshAccessToken().catch(console.error);
-    } catch {
-      sessionStorage.removeItem(SK_USER);
+    if (userJson) {
+      try {
+        this.currentUser = JSON.parse(userJson) as AuthUser;
+      } catch {
+        sessionStorage.removeItem(SK_USER);
+      }
     }
+    this.restoreSessionFromCookie().catch(console.error);
+  }
+
+  private async restoreSessionFromCookie(): Promise<void> {
+    const payload = await this.readCookieSession();
+    if (!payload) {
+      // No valid cookie; if a user was restored synchronously from sessionStorage,
+      // attempt a token refresh so the access token is available immediately.
+      if (this.currentUser) {
+        this.refreshAccessToken().catch(console.error);
+      }
+      return;
+    }
+
+    if (payload.expiresAt <= Date.now()) {
+      this.clearAuthCookie();
+      if (this.currentUser) {
+        this.refreshAccessToken().catch(console.error);
+      }
+      return;
+    }
+
+    this.currentUser = payload.user;
+    sessionStorage.setItem(SK_USER, JSON.stringify(payload.user));
+    await this.persistCookieSession(payload.user, payload.athleteId);
+    // Access token is not persisted; silently refresh to get a new one.
+    this.refreshAccessToken().catch(console.error);
+  }
+
+  private async persistCookieSession(user: AuthUser, athleteId = user.id): Promise<void> {
+    const sessionKey = this.getOrCreateSessionKey();
+    if (!sessionKey) return;
+
+    const payload: AuthCookiePayload = {
+      user,
+      athleteId,
+      expiresAt: Date.now() + AUTH_COOKIE_TTL_MS,
+    };
+
+    const encrypted = await this.encryptCookiePayload(payload, sessionKey);
+    if (!encrypted) return;
+
+    this.setAuthCookie(encrypted, AUTH_COOKIE_TTL_SECONDS);
+  }
+
+  private async readCookieSession(): Promise<AuthCookiePayload | null> {
+    const encrypted = this.getCookieValue(CK_SESSION);
+    if (!encrypted) return null;
+
+    const sessionKey = this.getOrCreateSessionKey();
+    if (!sessionKey) return null;
+
+    return this.decryptCookiePayload(encrypted, sessionKey);
+  }
+
+  private getOrCreateSessionKey(): string | null {
+    const existing = sessionStorage.getItem(SK_SESSION_KEY);
+    if (existing) return existing;
+
+    if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+      console.error('[AuthService] Web Crypto unavailable: encrypted auth cookie session cannot be persisted');
+      return null;
+    }
+
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const key = this.bytesToBase64Url(bytes);
+    sessionStorage.setItem(SK_SESSION_KEY, key);
+    return key;
+  }
+
+  private async encryptCookiePayload(payload: AuthCookiePayload, keyMaterial: string): Promise<string | null> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+
+    try {
+      const key = await this.deriveEncryptionKey(keyMaterial);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ivBytes = new Uint8Array(iv);
+      const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: ivBytes },
+        key,
+        plaintext,
+      );
+      const encryptedBytes = new Uint8Array(ciphertext);
+      return `${this.bytesToBase64Url(iv)}.${this.bytesToBase64Url(encryptedBytes)}`;
+    } catch {
+      return null;
+    }
+  }
+
+  private async decryptCookiePayload(encrypted: string, keyMaterial: string): Promise<AuthCookiePayload | null> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+
+    const [encodedIv, encodedCiphertext] = encrypted.split('.');
+    if (!encodedIv || !encodedCiphertext) return null;
+
+    try {
+      const iv = this.base64UrlToBytes(encodedIv);
+      const ciphertext = this.base64UrlToBytes(encodedCiphertext);
+      const ivBytes = new Uint8Array(iv);
+      const ciphertextBytes = new Uint8Array(ciphertext);
+      const key = await this.deriveEncryptionKey(keyMaterial);
+      const plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: ivBytes },
+        key,
+        ciphertextBytes,
+      );
+      const decoded = JSON.parse(new TextDecoder().decode(plaintext)) as AuthCookiePayload;
+      if (!decoded?.user?.id || !decoded?.athleteId || typeof decoded.expiresAt !== 'number') {
+        return null;
+      }
+      return decoded;
+    } catch {
+      return null;
+    }
+  }
+
+  private async deriveEncryptionKey(keyMaterial: string): Promise<CryptoKey> {
+    const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(keyMaterial));
+    return crypto.subtle.importKey(
+      'raw',
+      hashed,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt'],
+    );
+  }
+
+  private setAuthCookie(value: string, maxAgeSeconds: number): void {
+    // HttpOnly cannot be set here because this SPA must read/decrypt the cookie
+    // in-browser to restore auth state after reload.
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${CK_SESSION}=${encodeURIComponent(value)}; Max-Age=${maxAgeSeconds}; Path=/; SameSite=Lax${secure}`;
+  }
+
+  private clearAuthCookie(): void {
+    document.cookie = `${CK_SESSION}=; Max-Age=0; Path=/; SameSite=Lax`;
+  }
+
+  private getCookieValue(name: string): string | null {
+    const prefix = `${name}=`;
+    const entry = document.cookie.split('; ').find((cookie) => cookie.startsWith(prefix));
+    if (!entry) return null;
+    return decodeURIComponent(entry.slice(prefix.length));
+  }
+
+  private bytesToBase64Url(bytes: Uint8Array): string {
+    const chars: string[] = [];
+    for (let i = 0; i < bytes.length; i += 1) {
+      chars.push(String.fromCharCode(bytes[i]));
+    }
+    return btoa(chars.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  private base64UrlToBytes(value: string): Uint8Array {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
   }
 
   private clearCallbackStorage(): void {
@@ -428,10 +600,9 @@ export class AuthService {
 
   private getProfilePaths(athleteId?: string): string[] {
     if (!athleteId) {
-      // intervals.icu requires an athlete ID in the path — GET /api/v1/athlete without
-      // an ID returns 405 Method Not Allowed. Return an empty list so the caller fails
-      // gracefully rather than making an invalid request.
-      return [];
+      // When the token response omits athlete_id, intervals.icu supports /athlete/0
+      // as a Bearer-authenticated alias for the current OAuth athlete.
+      return [`${ICU_PROFILE_PATH}/0`];
     }
     const paths = [`${ICU_PROFILE_PATH}/${encodeURIComponent(athleteId)}`];
     // intervals.icu returns athlete_id as a plain integer in the token response

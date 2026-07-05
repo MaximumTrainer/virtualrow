@@ -83,6 +83,7 @@ describe('App component', () => {
 
     render(<App />);
 
+    expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Search rownative\.icu/i })).not.toBeInTheDocument();

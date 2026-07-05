@@ -11,8 +11,8 @@
 
 import type { Coordinate } from '../types/index';
 
-/** Strict numeric regex: optional sign, digits, optional decimal, optional exponent. */
-const NUMERIC_RE = /^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+/** Strict numeric regex: optional sign, integer or decimal, optional exponent. */
+const NUMERIC_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 /**
  * Parse a single KML coordinate tuple into a `Coordinate`.

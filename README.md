@@ -41,7 +41,6 @@ Use Willowbrook as the demo/example route, then search and import additional cou
 
 - Connect heart rate monitors via Bluetooth (standard HR service)
 - Real-time BPM display with chart visualization
-- Heart rate zone tracking and analysis
 - Average and max HR tracking per workout
 
 ## Getting Started

@@ -157,15 +157,24 @@ export class RouteService {
     if (!geometry || !geometry.type) return;
     if (geometry.type === 'LineString' && geometry.coordinates) {
       for (const c of geometry.coordinates as number[][]) {
-        coords.push({ lat: c[1], lng: c[0] });
+        const parsed = parseGeoJSONCoordinate(c);
+        if (parsed) coords.push(parsed);
       }
     } else if (geometry.type === 'MultiLineString' && geometry.coordinates) {
       for (const ln of geometry.coordinates as number[][][]) {
-        for (const c of ln) coords.push({ lat: c[1], lng: c[0] });
+        for (const c of ln) {
+          const parsed = parseGeoJSONCoordinate(c);
+          if (parsed) coords.push(parsed);
+        }
       }
     } else if (geometry.type === 'Polygon' && geometry.coordinates) {
+      const firstRing = (geometry.coordinates as number[][][])[0];
+      if (!Array.isArray(firstRing)) return;
       // polygon: take first ring
-      for (const c of (geometry.coordinates as number[][][])[0]) coords.push({ lat: c[1], lng: c[0] });
+      for (const c of firstRing) {
+        const parsed = parseGeoJSONCoordinate(c);
+        if (parsed) coords.push(parsed);
+      }
     }
   }
 
@@ -189,7 +198,7 @@ export class RouteService {
   // Import route from a GeoJSON string
   importRouteFromGeoJSON(geojsonStr: string, meta: { name: string; difficulty: 'easy' | 'moderate' | 'hard'; location?: string; tags?: string[]; imageUrl?: string }): WaterRoute | undefined {
     const coords = this.parseGeoJSON(geojsonStr);
-    if (coords.length === 0) return undefined;
+    if (coords.length < 2) return undefined;
     
     const routeData: RouteFormData = {
       name: meta.name,
@@ -237,26 +246,7 @@ export class RouteService {
    * Tuples that are not finite numbers or are out of valid lat/lng range are skipped.
    */
   private parseKMLCoordinates(text: string): Coordinate[] {
-    const tuples = text.trim().split(/\s+/).filter((s) => s.length > 0);
-    const coords: Coordinate[] = [];
-    for (const tuple of tuples) {
-      const parts = tuple.split(',');
-      if (parts.length < 2) continue;
-      const lngStr = parts[0].trim();
-      const latStr = parts[1].trim();
-      if (!this.isValidNumericString(lngStr) || !this.isValidNumericString(latStr)) continue;
-      const lng = parseFloat(lngStr);
-      const lat = parseFloat(latStr);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
-      coords.push({ lat, lng });
-    }
-    return coords;
-  }
-
-  /** Strict check: string represents a valid decimal or scientific-notation number. */
-  private isValidNumericString(s: string): boolean {
-    return /^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/.test(s.trim());
+    return parseKMLCoordinateList(text);
   }
 
   /**

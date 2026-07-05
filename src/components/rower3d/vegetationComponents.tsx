@@ -6,6 +6,8 @@ import type { RouteTheme, TreeSpeciesEntry } from './themeConfig';
 import { RENDER_CONFIG } from './constants';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
+import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import { SCENERY_PROFILES } from './sceneryConfig';
 
 // ============================================================================
 // FOLIAGE SWAY — shared wind-sway vertex shader helper (#107)
@@ -32,23 +34,43 @@ transformed.z += swayAmt * 0.7;`,
 // ============================================================================
 // PINE TREES - Scattered along the banks
 // ============================================================================
-export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?: RouteTheme }> = ({ side, boatZ, theme = 'willowbrook' }) => {
+export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?: RouteTheme; enrichment?: RouteEnrichmentData | null }> = ({ side, boatZ, theme = 'willowbrook', enrichment }) => {
   const xBase = side === 'left' ? -25 : 25;
 
-  const speciesList = useMemo(() => getThemeConfig(theme).trees.species, [theme]);
+  // PineTrees is used on the non-curve (flat) path where all trees span the
+  // full -400..400 range uniformly.  Using the first segment as the dominant
+  // profile gives a stable, route-wide character rather than per-position
+  // switching, which is appropriate for this global component.
+  const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
+  const profileConfig = SCENERY_PROFILES[sceneryProfile];
+
+  const allSpeciesList = useMemo(() => getThemeConfig(theme).trees.species, [theme]);
+
+  // Filter to only those species types allowed by the profile; fall back to
+  // the full theme list when the profile's species aren't represented.
+  const speciesList = useMemo<TreeSpeciesEntry[]>(() => {
+    const allowed = new Set(profileConfig.trees.species);
+    const filtered = allSpeciesList.filter(s => allowed.has(s.type));
+    return filtered.length > 0 ? filtered : allSpeciesList;
+  }, [allSpeciesList, profileConfig.trees.species]);
+
+  const [scaleMin, scaleMax] = profileConfig.trees.scaleRange;
 
   const trees = useMemo(() => {
     const result: Array<{ x: number; z: number; scale: number; variant: number; rotation: number; isNear: boolean; species: TreeSpeciesEntry }> = [];
     for (let z = -400; z < 400; z += 8) {
       const treeIdx = Math.round((z + 400) / 8);
-      const count = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
+      // rawCount is 1–3; after density scaling the minimum is always 1.
+      const rawCount = 1 + Math.floor(seededRandom(treeIdx * 9 + 1) * 2);
+      const count = Math.max(1, Math.round(rawCount * profileConfig.trees.density));
       for (let j = 0; j < count; j++) {
         const speciesIdx = Math.floor(seededRandom(treeIdx * 9 + j * 4 + 7) * speciesList.length);
         const sp = speciesList[speciesIdx];
+        const scaleFraction = seededRandom(treeIdx * 9 + j * 4 + 4);
         result.push({
           x: xBase + (seededRandom(treeIdx * 9 + j * 4 + 2) - 0.5) * 15 + (side === 'left' ? -5 : 5),
           z: z + (seededRandom(treeIdx * 9 + j * 4 + 3) - 0.5) * 6,
-          scale: 0.8 + seededRandom(treeIdx * 9 + j * 4 + 4) * 0.6,
+          scale: scaleMin + scaleFraction * (scaleMax - scaleMin),
           variant: Math.floor(seededRandom(treeIdx * 9 + j * 4 + 5) * 3),
           rotation: seededRandom(treeIdx * 9 + j * 4 + 6) * Math.PI * 2,
           isNear: Math.abs(z) <= 40,
@@ -57,7 +79,7 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
       }
     }
     return result;
-  }, [xBase, side, speciesList]);
+  }, [xBase, side, speciesList, profileConfig.trees.density, scaleMin, scaleMax]);
 
   const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
 
@@ -67,7 +89,6 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
     makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.80, metalness: 0.0, transmission: 0.08, thickness: 0.4, sheen: 0.4, sheenColor: new THREE.Color(primaryColor) }, swayTime),
     makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.75, metalness: 0.0, transmission: 0.10, thickness: 0.3, sheen: 0.5, sheenColor: new THREE.Color(primaryColor) }, swayTime),
     makeSwayFoliageMaterial({ color: primaryColor, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.2, sheen: 0.6, sheenColor: new THREE.Color(primaryColor) }, swayTime),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [swayTime, primaryColor]);
 
   useEffect(() => () => { foliageMats.forEach(m => m.dispose()); }, [foliageMats]);
@@ -180,20 +201,46 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
 // ============================================================================
 // GROUND COVER — instanced reeds, rocks, and grass along the banks (#130)
 // ============================================================================
-export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode }> = ({ boatZ, theme }) => {
+export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode; enrichment?: RouteEnrichmentData | null }> = ({ boatZ, theme, enrichment }) => {
   const gcConfig = useMemo(() => getThemeConfig(theme).groundCover, [theme]);
 
-  const reedEntry  = useMemo(() => gcConfig.types.find(t => t.type === 'reed'),  [gcConfig]);
-  const rockEntry  = useMemo(() => gcConfig.types.find(t => t.type === 'rock'),  [gcConfig]);
-  const grassEntry = useMemo(() => gcConfig.types.find(t => t.type === 'grass' || t.type === 'flower'), [gcConfig]);
+  // GroundCover is a global component that spans the full scene on the
+  // non-curve path.  Using the first segment's profile gives a consistent,
+  // route-wide character which is appropriate here.
+  const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
+  const profileConfig = SCENERY_PROFILES[sceneryProfile];
+
+  // Filter the theme's ground cover types to those permitted by the profile.
+  const filteredTypes = useMemo(
+    () => {
+      const allowedTypes = new Set(profileConfig.groundCover.types);
+      return gcConfig.types.filter(t => allowedTypes.has(t.type));
+    },
+    [gcConfig.types, profileConfig.groundCover.types],
+  );
+  const activeTypes = filteredTypes.length > 0 ? filteredTypes : gcConfig.types;
+
+  const reedEntry  = useMemo(() => activeTypes.find(t => t.type === 'reed'),  [activeTypes]);
+  const rockEntry  = useMemo(() => activeTypes.find(t => t.type === 'rock'),  [activeTypes]);
+  const grassEntry = useMemo(() => activeTypes.find(t => t.type === 'grass' || t.type === 'flower'), [activeTypes]);
+
+  // densityScale is always 0–1 (clamped by SCENERY_PROFILES), so derived
+  // counts never exceed the MAX constants below — no buffer overflow risk.
+  const densityScale = profileConfig.groundCover.density;
 
   const reedMeshRef  = useRef<THREE.InstancedMesh>(null);
   const rockMeshRef  = useRef<THREE.InstancedMesh>(null);
   const grassMeshRef = useRef<THREE.InstancedMesh>(null);
 
-  const REED_COUNT  = 120;
-  const ROCK_COUNT  = 40;
-  const GRASS_COUNT = 80;
+  // Maximum instance counts (allocated once); actual visible count is scaled
+  // by densityScale so reedCount <= REED_MAX, rockCount <= ROCK_MAX, etc.
+  const REED_MAX  = 120;
+  const ROCK_MAX  = 40;
+  const GRASS_MAX = 80;
+
+  const reedCount  = Math.max(1, Math.round(REED_MAX  * densityScale));
+  const rockCount  = Math.max(1, Math.round(ROCK_MAX  * densityScale));
+  const grassCount = Math.max(1, Math.round(GRASS_MAX * densityScale));
 
   const reedMat = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: reedEntry?.color ?? '#8a7a50',
@@ -224,7 +271,7 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
     const dummy = new THREE.Object3D();
 
     if (reedMeshRef.current && reedEntry) {
-      for (let i = 0; i < REED_COUNT; i++) {
+      for (let i = 0; i < reedCount; i++) {
         const side = seededRandom(i * 7 + 0) > 0.5 ? 1 : -1;
         const x = side * (8 + seededRandom(i * 7 + 1) * 8);
         const z = (seededRandom(i * 7 + 2) - 0.5) * 400;
@@ -235,11 +282,12 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
         dummy.updateMatrix();
         reedMeshRef.current.setMatrixAt(i, dummy.matrix);
       }
+      reedMeshRef.current.count = reedCount;
       reedMeshRef.current.instanceMatrix.needsUpdate = true;
     }
 
     if (rockMeshRef.current && rockEntry) {
-      for (let i = 0; i < ROCK_COUNT; i++) {
+      for (let i = 0; i < rockCount; i++) {
         const side = seededRandom(i * 11 + 0) > 0.5 ? 1 : -1;
         const x = side * (7 + seededRandom(i * 11 + 1) * 10);
         const z = (seededRandom(i * 11 + 2) - 0.5) * 400;
@@ -250,11 +298,12 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
         dummy.updateMatrix();
         rockMeshRef.current.setMatrixAt(i, dummy.matrix);
       }
+      rockMeshRef.current.count = rockCount;
       rockMeshRef.current.instanceMatrix.needsUpdate = true;
     }
 
     if (grassMeshRef.current && grassEntry) {
-      for (let i = 0; i < GRASS_COUNT; i++) {
+      for (let i = 0; i < grassCount; i++) {
         const side = seededRandom(i * 5 + 0) > 0.5 ? 1 : -1;
         const x = side * (7 + seededRandom(i * 5 + 1) * 10);
         const z = (seededRandom(i * 5 + 2) - 0.5) * 400;
@@ -265,26 +314,27 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
         dummy.updateMatrix();
         grassMeshRef.current.setMatrixAt(i, dummy.matrix);
       }
+      grassMeshRef.current.count = grassCount;
       grassMeshRef.current.instanceMatrix.needsUpdate = true;
     }
-  }, [theme, reedEntry, rockEntry, grassEntry]);
+  }, [theme, reedEntry, rockEntry, grassEntry, reedCount, rockCount, grassCount]);
 
   return (
     <group position={[0, 0, boatZ]}>
       {reedEntry && (
-        <instancedMesh ref={reedMeshRef} args={[undefined, undefined, REED_COUNT]} frustumCulled={false}>
+        <instancedMesh ref={reedMeshRef} args={[undefined, undefined, REED_MAX]} frustumCulled={false}>
           <cylinderGeometry args={[0.05, 0.05, 1.5, 4]} />
           <primitive object={reedMat} attach="material" />
         </instancedMesh>
       )}
       {rockEntry && (
-        <instancedMesh ref={rockMeshRef} args={[undefined, undefined, ROCK_COUNT]} frustumCulled={false}>
+        <instancedMesh ref={rockMeshRef} args={[undefined, undefined, ROCK_MAX]} frustumCulled={false}>
           <sphereGeometry args={[1, 5, 4]} />
           <primitive object={rockMat} attach="material" />
         </instancedMesh>
       )}
       {grassEntry && (
-        <instancedMesh ref={grassMeshRef} args={[undefined, undefined, GRASS_COUNT]} frustumCulled={false}>
+        <instancedMesh ref={grassMeshRef} args={[undefined, undefined, GRASS_MAX]} frustumCulled={false}>
           <planeGeometry args={[0.6, 0.6]} />
           <primitive object={grassMat} attach="material" />
         </instancedMesh>

@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_try_2.outputs.page_url || steps.deployment_try_1.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -64,6 +64,18 @@ jobs:
         with:
           path: docs
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (attempt 1)
+        id: deployment_try_1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Deploy to GitHub Pages (attempt 2)
+        id: deployment_try_2
+        if: steps.deployment_try_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Deploy to GitHub Pages (attempt 3)
         id: deployment
+        if: steps.deployment_try_1.outcome == 'failure' && steps.deployment_try_2.outcome == 'failure'
         uses: actions/deploy-pages@v4
