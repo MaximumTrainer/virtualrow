@@ -1,23 +1,23 @@
-# VirtualRow — Willowbrook Demo + rownative.icu Routes
+# VirtualRow — Row Anywhere on Real Water Routes
 
 [![Deploy Landing Page](https://github.com/MaximumTrainer/virtualrow/actions/workflows/pages.yml/badge.svg)](https://github.com/MaximumTrainer/virtualrow/actions/workflows/pages.yml)
 [![Playwright E2E Tests](https://github.com/MaximumTrainer/virtualrow/actions/workflows/playwright-e2e-clean.yml/badge.svg)](https://github.com/MaximumTrainer/virtualrow/actions/workflows/playwright-e2e-clean.yml)
 
 **[🌐 Website](https://maximumtrainer.github.io/virtualrow/) · [📦 GitHub](https://github.com/MaximumTrainer/virtualrow)**
 
-VirtualRow is a web-based fitness application that lets you row on a bundled Willowbrook River demo route or imported rownative.icu courses while connected to your Concept2 PM5 indoor rower via Bluetooth. Experience immersive 3D rowing visualization from your home.
+VirtualRow is a web-based fitness application that lets you row on virtual water routes while connected to your Concept2 PM5 indoor rower via Bluetooth. Experience immersive 3D rowing visualization from your home.
 
 ## Features
 
 ### Water Routes
 
-One built-in demo route ships with the app, and additional routes are imported from rownative.icu:
+VirtualRow now ships with one bundled demo route:
 
 | Route | Location | Distance | Difficulty |
 |---|---|---|---|
 | Willowbrook River | Willowbrook Valley | 5.0 km | Easy |
 
-Use Willowbrook as the demo/example route, then search and import additional courses from rownative.icu directly in the app.
+To row real-world courses, search and import them directly from **rownative.icu** in the route selector.
 
 ### Immersive 3D Visualization
 
@@ -34,7 +34,7 @@ Use Willowbrook as the demo/example route, then search and import additional cou
 
 - Connect directly to your Concept2 PM5 monitor via Web Bluetooth API (Concept2 CSAFE BLE profile)
 - Real-time performance metrics: pace, distance, time, power, stroke rate, calories
-- Connection persists across route selection and activity views
+- Connection persists across route changes and UI navigation
 - Built-in PM5 Simulator for testing and demo without physical hardware
 
 ### Heart Rate Monitoring
@@ -72,7 +72,6 @@ src/
     BluetoothDevice.tsx            # PM5 connection UI
     HeartRateMonitor.tsx           # HR monitor connection
     PM5Simulator.tsx               # PM5 hardware simulator
-    RownativeRouteImport.tsx       # rownative.icu route search + import UI
     MiniMetrics.tsx                # Compact metrics overlay
     PerformanceChart.tsx           # Post-session performance graphs
     HeartRateChart.tsx             # Live HR chart
@@ -85,9 +84,8 @@ src/
     bluetoothService.ts            # PM5 BLE communication
     heartRateBluetoothService.ts   # HR monitor BLE service
     pm5SimulatorService.ts         # PM5 simulation
-    routeService.ts                # Demo route data + rownative route import
-    workoutService.ts              # Session tracking + localStorage persistence
-    rownativeService.ts            # rownative.icu catalogue + import
+    routeService.ts                # Route data + rownative route import
+    workoutService.ts              # Session tracking
  utils/
     geoUtils.ts                    # Geographic calculations
     gpuUtils.ts                    # WebGL/GPU detection
@@ -112,7 +110,7 @@ docs/
 
 ```bash
 # Run unit tests (Vitest)
-npm run test -- --run
+npm test
 
 # Run unit tests in watch mode
 npm test -- --watch
