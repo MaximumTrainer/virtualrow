@@ -67,27 +67,25 @@ describe('App component', () => {
     expect(formatPace(359)).toBe('5:59/500m');
   });
 
-  it('shows Quick Start button in normal mode', () => {
+  it('does not show Quick Start button', () => {
     render(<App />);
-    expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Quick Start/i })).not.toBeInTheDocument();
   });
 
-  it('shows route-only navigation in guest mode (?guest=true)', () => {
-    // Simulate URL param
-    const url = new URL(window.location.href);
-    url.searchParams.set('guest', 'true');
-    window.history.replaceState({}, '', url.toString());
-
+  it('shows route-only navigation for unauthenticated users (no History tab)', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Guest Mode/i).length).toBeGreaterThan(0);
+  });
 
-    // Clean up URL
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete('guest');
-    window.history.replaceState({}, '', cleanUrl.toString());
+  it('shows Rower Device and Heart Rate panels for unauthenticated users without guest sidebar class', () => {
+    const { container } = render(<App />);
+
+    expect(screen.getByText(/Rower Device/i)).toBeInTheDocument();
+    expect(screen.getByText(/Heart Rate/i)).toBeInTheDocument();
+    // GUEST-2: sidebar must not carry app-sidebar--guest (which previously hid device panels)
+    const sidebar = container.querySelector('.app-sidebar');
+    expect(sidebar?.classList.contains('app-sidebar--guest')).toBe(false);
   });
 });
