@@ -50,17 +50,14 @@ afterAll(() => {
 });
 
 describe('App component', () => {
-  it('renders title, demo route, rownative import, and heart rate panel', () => {
+  it('renders title, routes list, and heart rate panel', () => {
     render(<App />);
     expect(screen.getByRole('heading', { name: /VirtualRow/i })).toBeInTheDocument();
-    // Check Willowbrook River route appears (the only bundled route now)
+    // Check Willowbrook River route appears (the only route now)
     const matches = screen.getAllByText(/Willowbrook River/i);
     expect(matches.length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Search rownative\.icu/i })).toBeInTheDocument();
     // Heart Rate panel title
     expect(screen.getByText(/Heart Rate/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
   });
 
   it('formats pace values for the activity screen', () => {
@@ -75,7 +72,7 @@ describe('App component', () => {
     expect(screen.getByRole('button', { name: /Quick Start/i })).toBeInTheDocument();
   });
 
-  it('shows guest mode without workout or history navigation (?guest=true)', () => {
+  it('shows route-only navigation in guest mode (?guest=true)', () => {
     // Simulate URL param
     const url = new URL(window.location.href);
     url.searchParams.set('guest', 'true');
@@ -86,7 +83,6 @@ describe('App component', () => {
     expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Workouts/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Search rownative\.icu/i })).not.toBeInTheDocument();
     expect(screen.getAllByText(/Guest Mode/i).length).toBeGreaterThan(0);
 
     // Clean up URL

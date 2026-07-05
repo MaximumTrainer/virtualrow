@@ -20,6 +20,7 @@ import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
+import { buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -33,8 +34,8 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
 }
 
 function App() {
-  const { user, isAuthenticated } = useAuth();
-  const [currentView, setCurrentView] = useState<'routes' | 'workout'>('routes');
+  const { isAuthenticated } = useAuth();
+  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -45,6 +46,10 @@ function App() {
   const [hrConnected, setHrConnected] = useState(false);
   const [heartRateSamples, setHeartRateSamples] = useState<HeartRateSample[]>([]);
   const [activeRowerType, setActiveRowerType] = useState<'pm5' | 'ftms'>('pm5');
+  // Filter state for routes
+  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
+  const distanceMin = 0;
+  const distanceMax = 100;
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
   const activityTimerRef = useRef<number | null>(null);
@@ -180,30 +185,6 @@ function App() {
       cancelled = true;
     };
   }, [selectedRoute]);
-
-  // Load persisted sessions from localStorage when the user logs in (stub until #37)
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const saved = loadSessions(user.id);
-      // Merge saved sessions into the in-memory service so personal-best calculations
-      // include previously completed authenticated sessions.
-      saved.forEach((s) => {
-        const existing = workoutService.getAllSessions().find((e) => e.id === s.id);
-        if (!existing) {
-          // Inject via the service's internal sessions array is not exposed; instead
-          // surface them through the workoutHistory state directly.
-        }
-      });
-      // Surface saved sessions locally (combine with in-memory ones)
-      const inMemory = workoutService.getAllSessions();
-      const merged = [...saved, ...inMemory.filter((s) => !saved.find((p) => p.id === s.id))];
-      setWorkoutHistory(merged.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()));
-    } else if (!isAuthenticated) {
-      // Revert to in-memory sessions (e.g. after sign-out)
-      setWorkoutHistory(workoutService.getAllSessions());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.id]);
 
   const activeRowerLabel = useMemo(() => (
     activeRowerType === 'pm5' ? 'PM5' : 'FTMS'
@@ -341,6 +322,21 @@ function App() {
     // Note: Full reset logic would need to clear workoutService data
   }, []);
 
+  const handleExportFIT = useCallback((session: WorkoutSession) => {
+    const payload = buildSessionFITPayload(session);
+    const filename = `virtualrow-${session.id}.fit.json`;
+    triggerBlobDownload(JSON.stringify(payload, null, 2), 'application/json', filename);
+  }, []);
+
+  // Get filtered routes based on current filter settings
+  const filteredRoutes = useMemo(() => {
+    let filtered = routes;
+    if (difficultyFilter !== 'all') {
+      filtered = filtered.filter(r => r.difficulty === difficultyFilter);
+    }
+    return filtered.filter(r => r.distance >= distanceMin && r.distance <= distanceMax);
+  }, [routes, difficultyFilter, distanceMin, distanceMax]);
+
   const handlePM5Data = useCallback((data: PM5Data) => {
     // Always update the service synchronously — no React render triggered here.
     workoutService.updateSessionWithPM5Data(data);
@@ -464,20 +460,37 @@ function App() {
     setSelectedRoute(route);
   }, []);
 
-  // Calculate personal best for a route (only completed sessions count)
-  const getPersonalBest = useCallback((routeId: string) => {
-    const route = routeService.getRouteById(routeId);
-    if (!route) return null;
-    const routeDistanceMeters = route.distance * 1000; // route.distance is in km
-    // Only sessions that completed the full course are eligible for PB
-    const completedSessions = workoutHistory.filter(
-      s => s.routeId === routeId && s.averagePace > 0 && s.distance >= routeDistanceMeters
-    );
-    if (completedSessions.length === 0) return null;
-    return completedSessions.reduce((best, session) =>
-      session.averagePace < best.averagePace ? session : best
-    , completedSessions[0]);
-  }, [workoutHistory]);
+  const handleGeoJSONFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      try {
+        const parsed = JSON.parse(text);
+        const nameFromFile =
+          importRouteName.trim() ||
+          (parsed?.properties?.name as string | undefined) ||
+          file.name.replace(/\.[^.]+$/, '');
+        const imported = routeService.importRouteFromGeoJSON(text, {
+          name: nameFromFile,
+          difficulty: 'moderate',
+          location: (parsed?.properties?.country as string | undefined) ?? 'Imported',
+          tags: ['imported', 'geojson'],
+        });
+        if (imported) {
+          handleRouteImported(imported);
+          setIsImportOpen(false);
+          setImportRouteName('');
+          // Reset the file input
+          e.target.value = '';
+        }
+      } catch {
+        // Ignore parse errors — user will see no route appear
+      }
+    };
+    reader.readAsText(file);
+  }, [importRouteName, handleRouteImported]);
   const latestHeartRate = useMemo(() => (
     heartRateSamples.length > 0
       ? heartRateSamples[heartRateSamples.length - 1].bpm
@@ -525,7 +538,7 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
-          <p className="app-subtitle">Row the Willowbrook demo or import rownative.icu routes</p>
+          <p className="app-subtitle">Willowbrook demo plus rownative.icu route import for real-world rowing</p>
           <div className="header-auth">
             <AuthButton />
           </div>
@@ -553,6 +566,23 @@ function App() {
               : '',
           ].filter(Boolean).join(' ')}
         >
+          <nav className="nav-tabs">
+            <button
+              className={`nav-tab ${currentView === 'routes' ? 'active' : ''}`}
+              onClick={() => setCurrentView('routes')}
+            >
+              <span className="tab-icon">🗺️</span> Routes
+            </button>
+            {!isGuestMode && (
+              <button
+                className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
+                onClick={() => setCurrentView('history')}
+              >
+                <span className="tab-icon">📋</span> History
+              </button>
+            )}
+          </nav>
+
           {currentView === 'routes' && (
             <div className="routes-devices-row">
               <div className="device-panel device-panel--selection">
@@ -601,6 +631,7 @@ function App() {
               </div>
             </div>
           )}
+
         </aside>
 
         <main className="app-main">
@@ -687,10 +718,51 @@ function App() {
                 {!isGuestMode && (
                   <div className="routes-list">
                     <div className="routes-list-header">
-                      <h3>Route Library</h3>
-                      <RownativeRouteImport onRouteImported={handleRouteImported} />
+                      <h3>Routes</h3>
+                      <button
+                        type="button"
+                        className="btn-import-route"
+                        onClick={() => setIsImportOpen((o) => !o)}
+                        aria-expanded={isImportOpen}
+                      >
+                        Import Route
+                      </button>
+                      <RownativeRouteImport
+                        onRouteImported={handleRouteImported}
+                      />
+                      {isImportOpen && (
+                        <div className="route-import">
+                          <label htmlFor="import-route-name">Route name</label>
+                          <input
+                            id="import-route-name"
+                            type="text"
+                            className="import-name-input"
+                            placeholder="Route name"
+                            value={importRouteName}
+                            onChange={(e) => setImportRouteName(e.target.value)}
+                          />
+                          <input
+                            type="file"
+                            accept=".geojson,.json,.gpx,.kml"
+                            onChange={handleGeoJSONFileImport}
+                          />
+                        </div>
+                      )}
+                      <div className="route-filters">
+                        <div className="filter-group">
+                          {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
+                            <button
+                              key={d}
+                              className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
+                              onClick={() => setDifficultyFilter(d)}
+                            >
+                              {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    {routes.map((route) => {
+                    {filteredRoutes.map((route) => {
                        const rownativeStatus = extractRouteStatus(route.tags);
                        return (
                          <div
@@ -737,6 +809,48 @@ function App() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {currentView === 'history' && (
+            <div className="view-container history-view">
+              <h2>Workout History</h2>
+              {workoutHistory.length === 0 ? (
+                <p className="empty-message">No workouts recorded yet.</p>
+              ) : (
+                <div className="history-list">
+                  {[...workoutHistory].reverse().map((session) => (
+                    <div key={session.id} className="history-item">
+                      <div className="history-header">
+                        <h3>{session.routeName}</h3>
+                        <span className="date">
+                          {new Date(session.startTime).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="history-stats">
+                        <span>{(session.distance / 1000).toFixed(2)} km</span>
+                        <span>•</span>
+                        <span>{Math.floor(session.duration / 60)}:{String(session.duration % 60).padStart(2, '0')}</span>
+                        {session.averagePace > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{formatPace(session.averagePace)}/500m</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="history-actions">
+                        <button
+                          type="button"
+                          className="btn-export"
+                          onClick={() => handleExportFIT(session)}
+                        >
+                          FIT
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -866,6 +980,7 @@ function App() {
               </div>
             </div>
           )}
+
         </main>
       </div>
 

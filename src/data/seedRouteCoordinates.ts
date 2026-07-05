@@ -1,12 +1,6 @@
-/**
- * Coordinate polyline for the bundled demo route.
- *
- * Extracted from routeService.ts so the service file stays focused on logic.
- */
 import type { Coordinate } from '../types/index';
 
-// Willowbrook River - a fictional 5km meandering river demo route
-// Starts in forested highlands, passes through open meadows, winds through a small village, and ends at a tranquil lake delta
+// Willowbrook River - a fictional 5km meandering river route
 export const willowbrookRiverCoordinates: Coordinate[] = [
   // Section 1: Forest headwaters (0-1km) - gentle curves through dense woodland
   {"lat":48.1200,"lng":11.5800},{"lat":48.1202,"lng":11.5806},{"lat":48.1205,"lng":11.5811},{"lat":48.1209,"lng":11.5814},
