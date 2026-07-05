@@ -20,6 +20,7 @@ import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
+import { buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -34,7 +35,7 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
 
 function App() {
   const { isAuthenticated } = useAuth();
-  const [currentView, setCurrentView] = useState<'routes' | 'workout'>('routes');
+  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -71,6 +72,11 @@ function App() {
   const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
+  // Completed (non-guest) workout sessions for the History view
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
+  // Route import panel state
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importRouteName, setImportRouteName] = useState('');
 
   // Activate guest mode if the URL contains ?guest=true
   useEffect(() => {
@@ -200,10 +206,19 @@ function App() {
         if (r) setSelectedRoute(r);
       }
     };
-    const onEnd = () => {
+    const onEnd = (e: Event) => {
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
+      if (e instanceof CustomEvent && e.detail) {
+        const completed = e.detail as WorkoutSession;
+        if (!completed.isGuest) {
+          setWorkoutHistory((prev) => {
+            if (prev.some((s) => s.id === completed.id)) return prev;
+            return [...prev, completed];
+          });
+        }
+      }
     };
     if (typeof window === 'undefined') return;
     window.addEventListener('virtualrow:sessionStarted', onStartup as EventListener);
@@ -305,6 +320,12 @@ function App() {
     // Reset metrics but keep session
     setActivityElapsedMs(0);
     // Note: Full reset logic would need to clear workoutService data
+  }, []);
+
+  const handleExportFIT = useCallback((session: WorkoutSession) => {
+    const payload = buildSessionFITPayload(session);
+    const filename = `virtualrow-${session.id}.fit.json`;
+    triggerBlobDownload(JSON.stringify(payload, null, 2), 'application/json', filename);
   }, []);
 
   // Get filtered routes based on current filter settings
@@ -438,6 +459,38 @@ function App() {
     setRoutes(routeService.getAllRoutes());
     setSelectedRoute(route);
   }, []);
+
+  const handleGeoJSONFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      try {
+        const parsed = JSON.parse(text);
+        const nameFromFile =
+          importRouteName.trim() ||
+          (parsed?.properties?.name as string | undefined) ||
+          file.name.replace(/\.[^.]+$/, '');
+        const imported = routeService.importRouteFromGeoJSON(text, {
+          name: nameFromFile,
+          difficulty: 'moderate',
+          location: (parsed?.properties?.country as string | undefined) ?? 'Imported',
+          tags: ['imported', 'geojson'],
+        });
+        if (imported) {
+          handleRouteImported(imported);
+          setIsImportOpen(false);
+          setImportRouteName('');
+          // Reset the file input
+          e.target.value = '';
+        }
+      } catch {
+        // Ignore parse errors — user will see no route appear
+      }
+    };
+    reader.readAsText(file);
+  }, [importRouteName, handleRouteImported]);
   const latestHeartRate = useMemo(() => (
     heartRateSamples.length > 0
       ? heartRateSamples[heartRateSamples.length - 1].bpm
@@ -520,6 +573,14 @@ function App() {
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
+            {!isGuestMode && (
+              <button
+                className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
+                onClick={() => setCurrentView('history')}
+              >
+                <span className="tab-icon">📋</span> History
+              </button>
+            )}
           </nav>
 
           {currentView === 'routes' && (
@@ -658,9 +719,35 @@ function App() {
                   <div className="routes-list">
                     <div className="routes-list-header">
                       <h3>Routes</h3>
+                      <button
+                        type="button"
+                        className="btn-import-route"
+                        onClick={() => setIsImportOpen((o) => !o)}
+                        aria-expanded={isImportOpen}
+                      >
+                        Import Route
+                      </button>
                       <RownativeRouteImport
                         onRouteImported={handleRouteImported}
                       />
+                      {isImportOpen && (
+                        <div className="route-import">
+                          <label htmlFor="import-route-name">Route name</label>
+                          <input
+                            id="import-route-name"
+                            type="text"
+                            className="import-name-input"
+                            placeholder="Route name"
+                            value={importRouteName}
+                            onChange={(e) => setImportRouteName(e.target.value)}
+                          />
+                          <input
+                            type="file"
+                            accept=".geojson,.json,.gpx,.kml"
+                            onChange={handleGeoJSONFileImport}
+                          />
+                        </div>
+                      )}
                       <div className="route-filters">
                         <div className="filter-group">
                           {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
@@ -722,6 +809,48 @@ function App() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {currentView === 'history' && (
+            <div className="view-container history-view">
+              <h2>Workout History</h2>
+              {workoutHistory.length === 0 ? (
+                <p className="empty-message">No workouts recorded yet.</p>
+              ) : (
+                <div className="history-list">
+                  {[...workoutHistory].reverse().map((session) => (
+                    <div key={session.id} className="history-item">
+                      <div className="history-header">
+                        <h3>{session.routeName}</h3>
+                        <span className="date">
+                          {new Date(session.startTime).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="history-stats">
+                        <span>{(session.distance / 1000).toFixed(2)} km</span>
+                        <span>•</span>
+                        <span>{Math.floor(session.duration / 60)}:{String(session.duration % 60).padStart(2, '0')}</span>
+                        {session.averagePace > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{formatPace(session.averagePace)}/500m</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="history-actions">
+                        <button
+                          type="button"
+                          className="btn-export"
+                          onClick={() => handleExportFIT(session)}
+                        >
+                          FIT
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
