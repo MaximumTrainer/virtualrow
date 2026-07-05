@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from '../App';
 import { formatPace } from '../utils/formatters';
+import * as AuthContext from '../context/AuthContext';
+import type { AuthContextValue } from '../context/AuthContext';
 
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
@@ -87,5 +89,41 @@ describe('App component', () => {
     // GUEST-2: sidebar must not carry app-sidebar--guest (which previously hid device panels)
     const sidebar = container.querySelector('.app-sidebar');
     expect(sidebar?.classList.contains('app-sidebar--guest')).toBe(false);
+  });
+
+  it('does not show Import Route button for unauthenticated users', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /Import Route/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show Open rownative.icu button for unauthenticated users', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /rownative\.icu/i })).not.toBeInTheDocument();
+  });
+
+  describe('authenticated user', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('shows Import Route and Open rownative.icu buttons when logged in', () => {
+      const authedValue: AuthContextValue = {
+        user: { id: 'i12345', name: 'Test User', email: 'test@example.com' },
+        isAuthenticated: true,
+        isLoading: false,
+        authError: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+        clearAuthError: vi.fn(),
+        pendingAction: null,
+        setPendingAction: vi.fn(),
+      };
+      vi.spyOn(AuthContext, 'useAuth').mockReturnValue(authedValue);
+
+      render(<App />);
+
+      expect(screen.getByRole('button', { name: /Import Route/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /rownative\.icu/i })).toBeInTheDocument();
+    });
   });
 });
