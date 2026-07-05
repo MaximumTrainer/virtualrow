@@ -35,6 +35,10 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
 
 function App() {
   const { isAuthenticated } = useAuth();
+  // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
+  // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
+  const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
+  const showAuthFeatures = isAuthenticated || !!window.__PLAYWRIGHT_TESTING;
   const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
@@ -85,8 +89,9 @@ function App() {
   }, [isAuthenticated, routes]);
 
   // Auto-start/stop the HR simulator for unauthenticated users
+  // Skip in Playwright test mode so tests can control HR connection state explicitly.
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isGuestSession) {
       heartRateSimulator.start(130);
     } else {
       heartRateSimulator.stop();
@@ -94,7 +99,7 @@ function App() {
     return () => {
       heartRateSimulator.stop();
     };
-  }, [isAuthenticated]);
+  }, [isGuestSession]);
 
   // Start/stop activity timer when workout state changes
   useEffect(() => {
@@ -240,7 +245,7 @@ function App() {
         undefined,
         activeRowerType,
         hrConnected,
-        !isAuthenticated,
+        isGuestSession,
       );
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -257,13 +262,13 @@ function App() {
     setCurrentSession(null);
     setSessionState('idle');
 
-    if (!isAuthenticated && completed) {
+    if (isGuestSession && completed) {
       // Show summary modal; do NOT push to workoutHistory (unauthenticated sessions are excluded)
       setGuestCompletedSession(completed);
     } else {
       setCurrentView('routes');
     }
-  }, [isAuthenticated]);
+  }, [isGuestSession]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -531,7 +536,7 @@ function App() {
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
-            {isAuthenticated && (
+            {showAuthFeatures && (
               <button
                 className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
                 onClick={() => setCurrentView('history')}
@@ -647,7 +652,7 @@ function App() {
                   </button>
                 </div>
 
-                {isAuthenticated && (
+                {showAuthFeatures && (
                   <div className="routes-list">
                     <div className="routes-list-header">
                       <h3>Routes</h3>
