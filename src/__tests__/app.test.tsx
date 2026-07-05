@@ -77,9 +77,15 @@ describe('App component', () => {
 
     expect(screen.queryByText(/A scenic 5km journey down the meandering Willowbrook River/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /expand description/i }));
+    const toggleButton = screen.getByRole('button', { name: /expand description/i });
+
+    fireEvent.click(toggleButton);
 
     expect(screen.getByText(/A scenic 5km journey down the meandering Willowbrook River/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse description/i }));
+
+    expect(screen.queryByText(/A scenic 5km journey down the meandering Willowbrook River/i)).not.toBeInTheDocument();
   });
 
   it('shows route-only navigation in guest mode (?guest=true)', () => {
