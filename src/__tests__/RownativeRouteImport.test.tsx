@@ -76,7 +76,7 @@ describe('RownativeRouteImport', () => {
     await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
     await user.click(screen.getByRole('button', { name: /link rownative account/i }));
     expect(startLinkFlow).toHaveBeenCalledWith('vr-1');
-    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank');
     expect(mockPopup.location.href).toBe('https://rownative.icu/link');
     expect(screen.getByText('Linking')).toBeTruthy();
 
@@ -115,6 +115,7 @@ describe('RownativeRouteImport', () => {
     expect(pullLinkedRouteKml).toHaveBeenCalledWith({ virtualRowUserId: 'vr-1' });
     expect(importRouteFromKML).toHaveBeenCalled();
     expect(onRouteImported).toHaveBeenCalledWith(onImportedRoute);
+    expect(screen.queryByRole('region', { name: /rownative route import/i })).toBeNull();
   });
 
   it('shows a pull failure message when imported KML is invalid', async () => {

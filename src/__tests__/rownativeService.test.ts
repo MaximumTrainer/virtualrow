@@ -169,6 +169,16 @@ describe('RownativeService', () => {
     expect(result.linkUrl).toBe('http://localhost:8787/link');
   });
 
+  it('rejects a localhost http link URL on an unexpected port', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ linkUrl: 'http://localhost:3000/link', requestId: 'req-local' }),
+    } as Response);
+
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+    await expect(service.startLinkFlow('vr-user')).rejects.toThrow('Rownative link setup failed. Please try again.');
+  });
+
   it('rejects a KML response that exceeds MAX_KML_BYTES in encoded byte length', async () => {
     const largeKml = 'x'.repeat(5 * 1024 * 1024 + 1);
     const fetchMock = vi.fn().mockResolvedValue({
@@ -201,5 +211,18 @@ describe('RownativeService', () => {
     expect((request as RequestInit).method).toBe('POST');
     expect(result.kml).toContain('<kml>');
     expect(result.routeName).toBe('Pulled Route');
+  });
+
+  it('rejects a route URL outside the trusted rownative domain allowlist', async () => {
+    const fetchMock = vi.fn();
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(
+      service.pullLinkedRouteKml({
+        virtualRowUserId: 'vr-user',
+        routeUrl: 'https://evil.example.com/routes/123',
+      }),
+    ).rejects.toThrow('Route URL is invalid.');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

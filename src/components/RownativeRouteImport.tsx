@@ -59,7 +59,7 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
   const handleStartLink = async () => {
     setIsLinking(true);
     setError(null);
-    const popup = window.open('', '_blank');
+    const popup = window.open('about:blank', '_blank');
     if (!popup) {
       setStatus('Link failed');
       setError('Your browser blocked the rownative link window. Allow pop-ups and try again.');
