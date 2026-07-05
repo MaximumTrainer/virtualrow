@@ -1,8 +1,5 @@
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
-import {
-  willowbrookRiverCoordinates,
-} from '../data/seedRouteCoordinates';
-import { parseGeoJSONCoordinate, parseKMLCoordinateList } from '../utils/coordinateUtils';
+import { willowbrookRiverCoordinates } from '../data/seedRouteCoordinates';
 
 /** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
 export interface KMLImportCandidate {
@@ -42,8 +39,7 @@ export class RouteService {
   }
 
   private initializeMockRoutes(): void {
-    // Initialize with the single built-in demo route; additional rownative routes
-    // are still added dynamically via importRouteFromRownative().
+    // Initialize with the single bundled demo route.
     this.routes = [
       {
         id: '1',

@@ -18,7 +18,7 @@ Service Layer (Business Logic)
  heartRateBluetoothService (HR Monitor)
  routeService (Route Management)
  workoutService (Workout Tracking)
- workoutGeneratorService (Structured Workouts)
+ rownativeService (Route Discovery / Import)
     
 External APIs & Hardware
  Web Bluetooth API (PM5/HR Devices)
@@ -47,10 +47,8 @@ src/
     BluetoothDevice.tsx      # PM5 connection UI
     HeartRateMonitor.tsx     # HR monitor connection
     HeartRateChart.tsx       # HR visualization
-    HeartRateZonesChart.tsx  # HR zones display
     PM5Simulator.tsx         # PM5 hardware simulator
-    WorkoutGenerator.tsx     # Structured workout UI
-    WorkoutProgressDisplay.tsx
+    RownativeRouteImport.tsx # rownative.icu search/import UI
     MiniMetrics.tsx          # Compact metrics overlay
     PerformanceChart.tsx     # Performance graphs
     Canvas3DErrorBoundary.tsx
@@ -62,9 +60,9 @@ src/
     bluetoothService.ts      # PM5 Bluetooth communication
     heartRateBluetoothService.ts # HR monitor service
     pm5SimulatorService.ts   # PM5 simulation
-    routeService.ts          # Route data management
+    routeService.ts          # Demo route data + imported routes
+    rownativeService.ts      # rownative.icu course catalogue
     workoutService.ts        # Workout session tracking
-    workoutGeneratorService.ts # Structured workouts
  utils/
     geoUtils.ts              # Geographic calculations
     gpuUtils.ts              # WebGL/GPU detection
@@ -88,11 +86,11 @@ playwright/
 
 `App.tsx` owns all application state. There is no global state library; all data flows via props and callbacks:
 
-- `currentView`: `'routes' | 'workouts' | 'workout' | 'history'`
+- `currentView`: `'routes' | 'workout'`
 - `sessionState`: `'idle' | 'active' | 'paused'`
-- `selectedRoute`, `selectedWorkout`, `currentSession` — active session data
+- `selectedRoute`, `currentSession` — active session data
 - `pm5Data`, `heartRateSamples` — live device streams
-- `workoutHistory`, `workoutProgress` — persistence + workout tracking
+- `workoutHistory` — persisted sessions used for local personal-best tracking
 
 A session auto-ends when `pm5Data.distance ≥ 99.5% of route.distance`. This auto-end is suppressed under the `window.__PLAYWRIGHT_TESTING` flag used by E2E tests.
 
@@ -114,7 +112,6 @@ The main 3D visualization component (~2000 lines) using React Three Fiber:
 Fullscreen HUD rendered on top of the 3D canvas during an active workout:
 
 - Live metrics: pace (s/500m), power (W), distance (m), elapsed time, cadence (SPM), heart rate
-- Workout progress when a structured workout is active (segment type, time remaining, compliance)
 - Pause/Resume control
 
 ### Services

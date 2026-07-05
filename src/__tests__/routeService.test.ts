@@ -5,15 +5,10 @@ import { routeService } from '../services/routeService';
 const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };
 
 describe('RouteService basic data', () => {
-  it('provides only the Willowbrook demo route', () => {
+  it('provides only the Willowbrook River demo route by default', () => {
     const routes = routeService.getAllRoutes();
-    expect(routes.length).toBe(1);
-    expect(routes[0].id).toBe('1');
-    expect(routes[0].name).toBe('Willowbrook River');
-    expect(routes[0].distance).toBeCloseTo(5.0, 1);
-    expect(routes[0].difficulty).toBe('easy');
-    expect(routes[0].coordinates.length).toBeGreaterThan(70);
-    expect(routes[0].tags).toContain('river');
+    expect(routes).toHaveLength(1);
+    expect(routes[0]?.id).toBe('1');
   });
   
   it('provides Willowbrook River route with distance and coordinates', () => {

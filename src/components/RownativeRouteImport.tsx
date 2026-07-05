@@ -9,7 +9,7 @@ interface RownativeRouteImportProps {
 }
 
 export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportProps) {
-  const { authService, rownativeService, routeService } = useServices();
+  const { rownativeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
@@ -201,37 +201,18 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
             </p>
           )}
 
-          <div className="rownative-controls">
-            {!isLinked && (
-              <>
-                <button type="button" className="filter-btn filter-btn--active" onClick={() => void handleStartLink()} disabled={isLinking || !currentUserId}>
-                  {isLinking ? 'Starting link…' : 'Link rownative account'}
-                </button>
-                <button type="button" className="filter-btn" onClick={() => void handleCompleteLink()} disabled={isLinking || !currentUserId}>
-                  {isLinking ? 'Checking…' : 'Complete linking'}
-                </button>
-              </>
-            )}
-
-            {isLinked && (
-              <>
-                <input
-                  type="text"
-                  className="import-name-input"
-                  placeholder="Optional route id or URL"
-                  value={routeSelector}
-                  onChange={(e) => setRouteSelector(e.target.value)}
-                  aria-label="Rownative route id or URL"
-                />
-                <button type="button" className="filter-btn filter-btn--active" onClick={() => void handlePullRoute()} disabled={isPulling}>
-                  {isPulling ? 'Pulling…' : 'Pull route KML'}
-                </button>
-                <button type="button" className="filter-btn" onClick={() => void handleUnlink()} disabled={isUnlinking}>
-                  {isUnlinking ? 'Unlinking…' : 'Unlink rownative account'}
-                </button>
-              </>
-            )}
-          </div>
+          {showManualFallback && (
+            <div className="rownative-fallback">
+              <p>
+                Browse courses directly on
+                {' '}
+                <a href="https://rownative.icu/" target="_blank" rel="noreferrer">
+                  rownative.icu
+                </a>
+                {' '}and retry the import here once the catalog is reachable again.
+              </p>
+            </div>
+          )}
 
           {kmlCandidates && (
             <div className="rownative-controls">
