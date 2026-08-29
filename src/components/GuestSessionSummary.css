@@ -139,3 +139,14 @@
   color: var(--text-primary, #e8eaf6);
   border-color: var(--text-secondary, #8892b0);
 }
+
+.btn-guest-sign-in {
+  background: linear-gradient(135deg, rgba(36, 116, 217, 0.9), rgba(26, 91, 176, 0.9));
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+}
+
+.btn-guest-sign-in:hover {
+  filter: brightness(1.08);
+}

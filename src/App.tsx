@@ -17,6 +17,7 @@ import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
+import { pm5Simulator } from './services/pm5SimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
@@ -40,7 +41,7 @@ function isOutlineOnly(tags: string[] | undefined): boolean {
 }
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, login } = useAuth();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -72,10 +73,14 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // Demo mode: a visitor with no hardware is rowing on simulated device data.
+  const [isDemoMode, setIsDemoMode] = useState(false);
   // Session state for the overlay UI
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   // Holds a completed unauthenticated session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
+  // Demo mode is cleared when the session ends, so remember it for the summary.
+  const [completedSessionWasDemo, setCompletedSessionWasDemo] = useState(false);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
   // Route import panel state
@@ -257,11 +262,56 @@ function App() {
     }
   };
 
+  /**
+   * Start a demo row on simulated devices.
+   *
+   * Aimed at a visitor with no rowing machine: one control connects nothing by
+   * hand, starts the rower and heart-rate simulators, and drops straight into
+   * the session so the engine can be judged without buying hardware.
+   */
+  const handleStartDemo = useCallback(() => {
+    if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
+    if (!selectedRoute) return;
+    isStartingSessionRef.current = true;
+    try {
+      setIsDemoMode(true);
+      pm5Simulator.updateSettings({ pace: 120, cadence: 24, heartRate: 130, power: 150, isRowing: true });
+      pm5Simulator.start();
+      if (!heartRateSimulator.isRunning()) heartRateSimulator.start(130);
+      setPM5Connected(true);
+      setActiveRowerType('pm5');
+
+      const session = workoutService.startSession(
+        selectedRoute.id,
+        selectedRoute.name,
+        undefined,
+        'pm5',
+        true,
+        isGuestSession,
+      );
+      setCurrentSession(session);
+      setIsWorkoutActive(true);
+      setSessionState('active');
+      setCurrentView('workout');
+    } finally {
+      isStartingSessionRef.current = false;
+    }
+  }, [isGuestSession, isWorkoutActive, selectedRoute]);
+
+  const stopDemoDevices = useCallback(() => {
+    pm5Simulator.stop();
+    setIsDemoMode(false);
+    setPM5Connected(false);
+    setPM5Data(null);
+  }, []);
+
   const handleEndWorkout = useCallback(() => {
     const completed = workoutService.endSession();
     setIsWorkoutActive(false);
     setCurrentSession(null);
     setSessionState('idle');
+    setCompletedSessionWasDemo(isDemoMode);
+    if (isDemoMode) stopDemoDevices();
 
     if (isGuestSession && completed) {
       // Show summary modal for unauthenticated sessions
@@ -269,7 +319,7 @@ function App() {
     } else {
       setCurrentView('routes');
     }
-  }, [isGuestSession]);
+  }, [isGuestSession, isDemoMode, stopDemoDevices]);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -346,6 +396,14 @@ function App() {
       });
     }
   }, [isWorkoutActive, selectedRoute, handleEndWorkout]);
+
+  // While the demo is running, simulated rower data flows through exactly the
+  // same pipeline as a real PM5, so nothing downstream needs to know it is fake.
+  useEffect(() => {
+    if (!isDemoMode) return;
+    pm5Simulator.addListener(handlePM5Data);
+    return () => pm5Simulator.removeListener(handlePM5Data);
+  }, [isDemoMode, handlePM5Data]);
 
   // Expose PM5 data on window for E2E tests to inspect cadence / pace
   useEffect(() => {
@@ -510,6 +568,8 @@ function App() {
           session={guestCompletedSession}
           onRowAgain={handleGuestRowAgain}
           onExit={handleGuestExit}
+          onSignIn={login}
+          isDemo={completedSessionWasDemo}
         />
       )}
 
@@ -520,7 +580,11 @@ function App() {
             <AuthButton />
           </div>
         </div>
-        {/* Session data will not be saved when unauthenticated */}
+        {!isAuthenticated && (
+          <p className="signed-out-notice">
+            You are rowing as a guest — sessions are not saved. Sign in with intervals.icu to keep them.
+          </p>
+        )}
       </header>
 
       <div className={`app-layout app-layout--${currentView}`}>
@@ -662,6 +726,22 @@ function App() {
                         ? `⚠ Connect ${activeRowerLabel} First`
                         : '⚠ Connect HR Monitor First'}
                   </button>
+
+                  {!selectedRowerConnected && (
+                    <div className="demo-row-cta">
+                      <button
+                        className="btn btn-try-demo"
+                        onClick={handleStartDemo}
+                        type="button"
+                      >
+                        ▶ Try a demo row — no rowing machine needed
+                      </button>
+                      <p className="demo-row-note">
+                        Rows this route on simulated rower and heart-rate data, so you can see how it
+                        feels before connecting anything.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {showAuthFeatures && (
@@ -801,6 +881,11 @@ function App() {
                   <div className="activity-route-summary">
                     <h2>{selectedRoute?.name}</h2>
                     <p>{selectedRoute?.location}</p>
+                    {isDemoMode && (
+                      <p className="activity-demo-badge" role="status">
+                        Demo row — simulated data, not a recorded workout
+                      </p>
+                    )}
                   </div>
 
                   <div className="activity-map-overlay">

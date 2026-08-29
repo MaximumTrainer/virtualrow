@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { formatPace } from '../utils/formatters';
 import * as AuthContext from '../context/AuthContext';
@@ -88,6 +89,53 @@ describe('App component', () => {
     expect(
       screen.queryByRole('button', { name: /(Collapse|Expand) route info/i }),
     ).not.toBeInTheDocument();
+  });
+
+  // ── Signed-out test drive (issue #187) ─────────────────────────────────
+
+  it('pre-selects Willowbrook River for a signed-out visitor (TD-1)', () => {
+    render(<App />);
+    // The route panel heading carries the pre-selected route.
+    expect(screen.getAllByText(/Willowbrook River/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Willowbrook Valley/i)).toBeInTheDocument();
+  });
+
+  it('disables the start control and names the missing device (TD-1)', () => {
+    render(<App />);
+    const start = screen.getByRole('button', { name: /Connect PM5 First/i });
+    expect(start).toBeDisabled();
+  });
+
+  it('names FTMS instead when FTMS is the selected rower type (TD-1)', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /^FTMS$/ }));
+    expect(screen.getByRole('button', { name: /Connect FTMS First/i })).toBeDisabled();
+  });
+
+  it('offers a plain-language demo row, not hidden behind Debug (TD-2)', () => {
+    render(<App />);
+
+    const demo = screen.getByRole('button', { name: /try a demo row/i });
+    expect(demo).toBeInTheDocument();
+    expect(demo).toBeEnabled();
+    // It must be reachable without opening the developer debug panel.
+    expect(demo.closest('.debug-info-panel')).toBeNull();
+    expect(screen.getByText(/simulated rower and heart-rate data/i)).toBeInTheDocument();
+  });
+
+  it('states in visible copy that guest sessions are not saved (TD-3)', () => {
+    const { container } = render(<App />);
+
+    const notice = container.querySelector('.signed-out-notice');
+    expect(notice).toBeInTheDocument();
+    expect(notice).toHaveTextContent(/sessions are not saved/i);
+  });
+
+  it('offers a sign-in control on the routes view (TD-3)', () => {
+    render(<App />);
+    expect(screen.getByRole('button', { name: /sign in with intervals\.icu/i })).toBeInTheDocument();
   });
 
   it('shows Rower Device and Heart Rate panels for unauthenticated users without guest sidebar class', () => {
