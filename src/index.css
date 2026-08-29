@@ -4,6 +4,9 @@
 
 /* CSS Custom Properties - Dark Theme */
 :root {
+  /* Respect the browser's font-size setting rather than pinning to 16px. */
+  font-size: 100%;
+
   /* Primary Colors */
   --color-primary: #2474d9;
   --color-primary-dark: #1758ab;
@@ -110,10 +113,14 @@ button {
   color: var(--color-text-primary);
 }
 
-button:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-border-hover);
-  box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
+/* Hover-only, so a tap on a touch device doesn't leave the lifted state stuck
+   until the next tap elsewhere (issue #195). */
+@media (hover: hover) {
+  button:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-border-hover);
+    box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
+  }
 }
 
 button:active {

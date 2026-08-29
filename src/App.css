@@ -18,6 +18,9 @@ html,
 body {
   width: 100%;
   height: 100%;
+  /* The shell itself never scrolls; .app-main is the one scroll container so
+     content that does not fit becomes reachable instead of being clipped
+     (issue #195). */
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #0a0f1a;
@@ -29,7 +32,10 @@ body {
 .app-container {
   display: flex;
   flex-direction: column;
+  /* dvh excludes mobile browser chrome, which otherwise overlays the bottom of
+     the app — exactly where the workout controls live. */
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   min-height: 0;
   background:
@@ -53,7 +59,7 @@ body {
 }
 
 .header-content {
-  max-width: 1480px;
+  max-width: clamp(1480px, 78vw, 2400px);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -91,11 +97,19 @@ body {
   flex-direction: column;
   gap: 20px;
   padding: 20px;
-  max-width: 1480px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  /* Above 1920 the app used to sit as a centred strip; scale with the viewport
+     instead while keeping the tuned width on ordinary screens (issue #195). */
+  max-width: clamp(1480px, 78vw, 2400px);
   margin: 0 auto;
   width: 100%;
   min-height: 0;
-  overflow: hidden;
+  /* The single scroll container. It was overflow:hidden, which clipped
+     everything the viewport could not fit; scrolling here (rather than inside
+     .app-main alone) means a tall sidebar no longer squeezes the main panel to
+     nothing on phones (issue #195). */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ============================================================================
@@ -103,6 +117,11 @@ body {
    ============================================================================ */
 .app-sidebar {
   width: 100%;
+  /* Keep the sidebar at its content height. As a shrinkable flex child it was
+     compressed well below that, and because it is overflow:visible the device
+     panels spilled out and painted over .app-main — which is why Start Workout
+     was rendered but not tappable on phones (issue #195, B1). */
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: minmax(220px, 260px) repeat(4, minmax(0, 1fr));
   gap: 16px;
@@ -112,6 +131,12 @@ body {
   z-index: 10;
   min-height: 0;
   transition: transform 0.35s ease, opacity 0.35s ease, max-height 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar {
+    transition: none;
+  }
 }
 
 .app-sidebar--hidden {
@@ -161,6 +186,7 @@ body {
 .nav-tab {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 44px;
   padding: 10px 14px;
   border: none;
   border-radius: 999px;
@@ -303,6 +329,7 @@ body {
 .device-selector-tab {
   border: none;
   border-radius: 999px;
+  min-height: 44px;
   padding: 9px 14px;
   background: transparent;
   color: var(--color-text-secondary);
@@ -337,7 +364,7 @@ body {
 }
 
 .stat-label {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: var(--color-text-secondary);
   text-transform: uppercase;
   font-weight: 600;
@@ -353,7 +380,7 @@ body {
 }
 
 .stat-unit {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: rgba(255, 255, 255, 0.4);
   margin-top: 2px;
 }
@@ -396,7 +423,13 @@ body {
   background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
   backdrop-filter: blur(8px);
   border-radius: 28px;
-  overflow: hidden;
+  /* Content flows at its natural height; .app-layout above does the scrolling.
+     Radius clipping is preserved by the children that need it
+     (.activity-route-stage, .map-container). */
+  overflow: visible;
+  /* Without a floor the sidebar squeezes this to a couple of pixels on short
+     viewports and the whole routes view disappears (issue #195). */
+  min-height: min(320px, 60dvh);
   border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -405,10 +438,15 @@ body {
 
 .view-container {
   display: flex;
-  height: 100%;
+  /* Grow with content; .app-layout scrolls when the total exceeds the viewport,
+     instead of the old fixed height that clipped. */
+  min-height: 0;
+  height: auto;
+  flex: 1;
   gap: 20px;
   padding: 20px;
-  overflow: hidden;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  min-width: 0;
 }
 
 .view-container--routes {
@@ -712,7 +750,7 @@ body {
 .route-item .badge {
   padding: 5px 10px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -869,7 +907,9 @@ body {
 .activity-route-stage {
   position: relative;
   flex: 1;
-  min-height: 460px;
+  /* Was a flat 460px, which pushed the controls below the fold on any short
+     viewport — a width query never caught landscape phones (issue #195). */
+  min-height: clamp(220px, 45dvh, 520px);
   border-radius: 28px;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(10, 18, 29, 0.9), rgba(10, 18, 29, 0.6));
@@ -939,7 +979,9 @@ body {
 .activity-stats-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* auto-fit reproduces 8-across on desktop, 4-across on tablet and 2-3 on
+     phones with no extra breakpoints (issue #195), mirroring .metrics-grid. */
+  grid-template-columns: repeat(auto-fit, minmax(clamp(96px, 11vw, 150px), 1fr));
   gap: 10px;
 }
 
@@ -955,7 +997,7 @@ body {
 .activity-stat-label {
   display: block;
   margin-bottom: 6px;
-  font-size: 9px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -982,7 +1024,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   margin-top: auto;
@@ -990,8 +1032,10 @@ body {
 }
 
 .btn-activity-control {
-  flex: 1 1 0;
+  /* Wraps rather than crushing to unreadable widths on narrow viewports. */
+  flex: 1 1 140px;
   min-width: 0;
+  min-height: 44px;
   border-radius: 12px;
   padding: 8px 10px;
   font-size: 12px;
@@ -1064,7 +1108,7 @@ body {
 }
 
 .overlay-label-small {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: rgba(255, 255, 255, 0.4);
   font-weight: 600;
   text-transform: uppercase;
@@ -1189,6 +1233,7 @@ body {
 }
 
 .btn-debug-toggle {
+  min-height: 44px;
   padding: 8px 14px;
   background: rgba(255, 68, 68, 0.2);
   border: 1px solid rgba(255, 68, 68, 0.4);
@@ -1549,7 +1594,7 @@ body {
 
   .nav-tab {
     padding: 10px;
-    font-size: 10px;
+    font-size: 11px; /* 11px legibility floor (issue #195) */
   }
   
   .tab-icon {
@@ -1692,23 +1737,31 @@ body {
   flex-wrap: wrap;
 }
 
-/* Place the rower and HR device panels side by side (both guest and non-guest routes view) */
+/* Place the rower and HR device panels side by side, wrapping when narrow. */
 .routes-devices-row {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: stretch;
   grid-column: 1 / -1;
+  min-width: 0;
 }
 
-/* On wide non-guest layouts the nav-tabs occupy column 1; keep the devices
-   row in columns 2–end so they don't force tabs to wrap below. */
-.app-layout--routes .app-sidebar:not(.app-sidebar--guest) .routes-devices-row {
-  grid-column: 2 / -1;
+/* On wide layouts the nav-tabs occupy column 1; keep the devices row in
+   columns 2-end so they don't force the tabs to wrap below. Restricted to the
+   multi-column tier: below it the sidebar is a single column, where `2 / -1`
+   resolved to an implicit second column and pushed the panels off the right
+   edge of the screen (issue #195, B3). */
+@media (min-width: 901px) {
+  .app-layout--routes .app-sidebar .routes-devices-row {
+    grid-column: 2 / -1;
+  }
 }
 
 .routes-devices-row > .device-panel {
-  flex: 1;
+  /* Wraps to its own row below ~640px instead of being squeezed off-screen. */
+  flex: 1 1 260px;
   min-width: 0;
   padding: 10px 12px;
 }
@@ -1730,7 +1783,7 @@ body {
 }
 
 .routes-devices-row .device-status {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   margin: 0;
 }
 
@@ -1747,7 +1800,7 @@ body {
 }
 
 .routes-devices-row .device-note {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   margin: 0;
 }
 
@@ -1767,7 +1820,7 @@ body {
 }
 
 .routes-devices-row .device-panel-status {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   padding: 3px 8px;
 }
 
@@ -1788,155 +1841,8 @@ body {
    running the full page width. Each panel becomes an inline flex row
    (icon + label + status + button) so the bar stays as short as possible.
    ============================================================================ */
-.app-sidebar--guest {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0;
-  padding: 0;
-  grid-template-columns: none; /* cancel the grid */
-  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  overflow: hidden;
-}
+/* Removed: .app-sidebar--guest styles had no consumer in TSX (issue #195). */
 
-/* Hide the nav-tabs strip in guest mode — only the Routes tab exists and it's
-   implicit; the guest bar IS the navigation interface */
-.app-sidebar--guest .nav-tabs {
-  display: none;
-}
-
-/* The wrapper div that holds both panels spans all remaining width */
-.app-sidebar--guest .routes-devices-row {
-  display: flex;
-  flex: 1;
-  flex-direction: row;
-  align-items: stretch;
-  gap: 0;
-}
-
-/* Each device panel becomes a thin inline row */
-.app-sidebar--guest .device-panel,
-.app-sidebar--guest .device-panel--selection {
-  flex: 1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  min-width: 0;
-}
-
-/* Divider between the two panels */
-.app-sidebar--guest .device-panel + .device-panel {
-  border-left: 1px solid var(--color-border);
-}
-
-/* The bluetooth-device-container itself becomes an inline flex row */
-.app-sidebar--guest .bluetooth-device-container {
-  display: contents; /* let its children participate in the parent flex row */
-}
-
-/* Rower panel: heading + tabs + actions all in a row */
-.app-sidebar--guest .device-panel--selection {
-  flex-wrap: nowrap;
-  gap: 10px;
-}
-
-.app-sidebar--guest .device-panel-heading {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.app-sidebar--guest .device-panel-heading .panel-title {
-  font-size: 11px;
-  font-weight: 700;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.app-sidebar--guest .device-panel-status {
-  font-size: 10px;
-  padding: 2px 7px;
-}
-
-.app-sidebar--guest .device-selector-tabs {
-  padding: 3px;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.app-sidebar--guest .device-selector-tab {
-  padding: 3px 10px;
-  font-size: 11px;
-}
-
-/* Device header (icon + name + status) — sits inline */
-.app-sidebar--guest .device-header {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.app-sidebar--guest .device-icon-container {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
-.app-sidebar--guest .device-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.app-sidebar--guest .device-info {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
-.app-sidebar--guest .device-name {
-  font-size: 12px;
-  font-weight: 600;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.app-sidebar--guest .device-status {
-  font-size: 10px;
-  margin: 0;
-  white-space: nowrap;
-}
-
-/* Actions button sits at the end */
-.app-sidebar--guest .device-actions {
-  margin-top: 0;
-  flex-shrink: 0;
-}
-
-.app-sidebar--guest .btn-connect,
-.app-sidebar--guest .btn-disconnect {
-  padding: 5px 12px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-/* Metrics grid and device note are not needed in the narrow bar */
-.app-sidebar--guest .metrics-grid,
-.app-sidebar--guest .device-note,
-.app-sidebar--guest .error-message {
-  display: none;
-}
 
 .guest-badge-header {
   background: rgba(74, 155, 255, 0.15);
@@ -1994,7 +1900,7 @@ body {
 }
 
 .quick-start-label {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -2133,4 +2039,73 @@ body {
   color: #ffe08a;
   font-size: 12px;
   font-weight: 600;
+}
+
+
+/* ============================================================================
+   SHORT LANDSCAPE (issue #195, Phase 3)
+   Height-based, so landscape phones actually match — the previous rules were
+   width queries, which they never hit.
+   ============================================================================ */
+@media (max-height: 560px) and (orientation: landscape) {
+  .activity-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 30%);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .activity-route-stage {
+    min-height: 0;
+  }
+
+  .activity-stats-panel {
+    padding: 0;
+    gap: 10px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .activity-stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+    gap: 6px;
+  }
+
+  .activity-controls {
+    flex-direction: column;
+  }
+
+  .btn-activity-control {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+/* Very short viewports of any orientation: let the stage give up space first. */
+@media (max-height: 480px) {
+  .activity-route-stage {
+    min-height: 160px;
+  }
+
+  .view-container {
+    padding: 12px;
+  }
+}
+
+
+/* Debug panel sizing (issue #195): never wider than the screen, never taller
+   than the viewport, and a bottom sheet on phones. */
+.debug-info-panel {
+  width: min(320px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+  .debug-info-panel {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 70dvh;
+    border-radius: 20px 20px 0 0;
+  }
 }
