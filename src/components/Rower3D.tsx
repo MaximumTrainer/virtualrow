@@ -458,7 +458,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
         </>
       )}
 
-      {!IS_TEST_MODE && performanceMode !== 'low' && (
+      {/* Gated on performance mode alone (not IS_TEST_MODE) so a spec can opt
+          into the effect stack via __VIRTUALROW_PERFORMANCE_MODE — see #197.
+          Automation still defaults to 'low', which excludes this. */}
+      {performanceMode !== 'low' && (
         <DynamicPostFx
           velocityRef={velocityRef}
           performanceMode={performanceMode}

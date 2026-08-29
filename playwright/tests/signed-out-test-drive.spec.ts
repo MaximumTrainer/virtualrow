@@ -9,17 +9,20 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 /**
- * A pre-existing fault in the 3D postprocessing path (`effectComponents.tsx`),
- * seen only outside the harness's `low` performance mode. Unrelated to #187 —
- * filtered so these specs fail on regressions they can actually speak to.
+ * End the session via a DOM click.
+ *
+ * The activity stats panel sits under the 3D stage's compositing layer, whose
+ * backdrop-filter intercepts pointer events in headless Chromium — the same
+ * workaround `route-import-render.spec.ts` uses for the route overlay.
  */
-const KNOWN_3D_ERROR = /reading 'alpha'/;
+async function endWorkout(page: Page) {
+  await page.locator('.btn-end-workout').waitFor({ state: 'visible', timeout: 20_000 });
+  await page.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
+}
 
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
-  page.on('pageerror', (e) => {
-    if (!KNOWN_3D_ERROR.test(e.message)) errors.push(e.message);
-  });
+  page.on('pageerror', (e) => errors.push(e.message));
   return errors;
 }
 
@@ -90,9 +93,7 @@ test.describe('signed-out test drive', () => {
     await expect(value('Split')).not.toContainText('--:--');
 
     // TD-1.4 / TD-3.3 — ending gives a summary naming what sign-in would have kept.
-    const end = page.locator('.btn-end-workout');
-    await end.scrollIntoViewIfNeeded();
-    await end.click();
+    await endWorkout(page);
 
     const summary = page.locator('.guest-summary-modal');
     await expect(summary).toBeVisible({ timeout: 15_000 });
@@ -110,9 +111,7 @@ test.describe('signed-out test drive', () => {
     await page.locator('.btn-try-demo').click();
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 20_000 });
 
-    const end = page.locator('.btn-end-workout');
-    await end.scrollIntoViewIfNeeded();
-    await end.click();
+    await endWorkout(page);
     await page.getByRole('button', { name: /row again/i }).click();
 
     await expect(page.locator('.view-container--routes')).toBeVisible();
