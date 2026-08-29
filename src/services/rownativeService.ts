@@ -7,12 +7,31 @@ import { routeService, type RownativeRouteImportData } from './routeService';
 const ROWNATIVE_INDEX_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses/index.json';
 const ROWNATIVE_COURSE_BASE_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses';
 const UNORDERED_POLYGON_SORT_KEY = Number.MAX_SAFE_INTEGER;
-const ROWNATIVE_WORKER_BASE_URL = (import.meta.env.VITE_ROWNATIVE_WORKER_BASE_URL as string | undefined)
-  ?? 'https://rownative.icu/api/virtualrow';
-const MAX_KML_BYTES = 5 * 1024 * 1024;
-const ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+/** Course JSON is a few kB in practice; cap well above that but below anything abusive. */
+const MAX_COURSE_BYTES = 2 * 1024 * 1024;
+/** Shape of a rownative course identifier. Exported so callers validate identically. */
+export const ROWNATIVE_ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const ROUTE_ID_PATTERN = ROWNATIVE_ROUTE_ID_PATTERN;
 const ALLOWED_ROUTE_URL_HOSTS = new Set(['rownative.icu', 'www.rownative.icu']);
-const ALLOWED_LOCAL_LINK_PORTS = new Set(['8787']);
+/** Query keys a rownative course link might carry the id in. */
+const COURSE_URL_ID_PARAM_KEYS = ['rownativeCourseId', 'courseId', 'id'];
+/** Path segments that precede a course id in a rownative course link. */
+const COURSE_URL_PATH_SEGMENTS = new Set(['course', 'courses', 'route', 'routes']);
+
+/**
+ * The requested course is not in the public GitHub mirror.
+ *
+ * The live site lists more courses than the mirror carries, so a perfectly real
+ * id can 404 here. Carries the id so the UI can offer a search-by-name retry.
+ */
+export class RownativeCourseNotFoundError extends Error {
+  readonly courseId: string;
+  constructor(message: string, courseId: string) {
+    super(message);
+    this.name = 'RownativeCourseNotFoundError';
+    this.courseId = courseId;
+  }
+}
 
 interface RownativeCourseIndexEntry {
   id: string;
@@ -49,30 +68,6 @@ export interface RownativeCourseSummary {
   status?: string;
 }
 
-export interface RownativeLinkedAccount {
-  virtualRowUserId: string;
-  rownativeUserId: string;
-  rownativeDisplayName?: string;
-  linkedAt: number;
-}
-
-export interface StartRownativeLinkResult {
-  linkUrl: string;
-  requestId?: string;
-}
-
-export interface PullRownativeKmlRequest {
-  virtualRowUserId: string;
-  routeId?: string;
-  routeUrl?: string;
-}
-
-export interface PullRownativeKmlResult {
-  kml: string;
-  routeName?: string;
-  location?: string;
-}
-
 export class RownativeService {
   private courseIndexCache: RownativeCourseSummary[] | null = null;
   private courseIndexPromise: Promise<RownativeCourseSummary[]> | null = null;
@@ -80,7 +75,11 @@ export class RownativeService {
   private readonly importRoute: (data: RownativeRouteImportData) => WaterRoute;
 
   constructor(
-    fetchImpl: typeof fetch = fetch,
+    // Forwarded through an arrow rather than passing `fetch` directly: stored on
+    // an instance field and called as `this.fetchImpl(...)`, a bare `fetch`
+    // reference is invoked with the service as its receiver, which browsers
+    // reject with "Illegal invocation". Injected test doubles are unaffected.
+    fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
     importRoute: (data: RownativeRouteImportData) => WaterRoute = (data) => routeService.importRouteFromRownative(data),
   ) {
     this.fetchImpl = fetchImpl;
@@ -95,200 +94,6 @@ export class RownativeService {
     return response.json() as Promise<T>;
   }
 
-  private getLinkedAccountStorageKey(virtualRowUserId: string): string {
-    return `vr_rownative_link:${virtualRowUserId}`;
-  }
-
-  private persistLinkedAccount(account: RownativeLinkedAccount): void {
-    if (typeof window === 'undefined') return;
-    sessionStorage.setItem(this.getLinkedAccountStorageKey(account.virtualRowUserId), JSON.stringify(account));
-  }
-
-  private clearLinkedAccount(virtualRowUserId: string): void {
-    if (typeof window === 'undefined') return;
-    sessionStorage.removeItem(this.getLinkedAccountStorageKey(virtualRowUserId));
-  }
-
-  getLinkedAccount(virtualRowUserId: string): RownativeLinkedAccount | null {
-    if (!virtualRowUserId || typeof window === 'undefined') return null;
-    const json = sessionStorage.getItem(this.getLinkedAccountStorageKey(virtualRowUserId));
-    if (!json) return null;
-    try {
-      const parsed = JSON.parse(json) as Partial<RownativeLinkedAccount>;
-      if (
-        parsed.virtualRowUserId !== virtualRowUserId
-        || typeof parsed.rownativeUserId !== 'string'
-        || parsed.rownativeUserId.length === 0
-        || typeof parsed.linkedAt !== 'number'
-        || !Number.isFinite(parsed.linkedAt)
-      ) {
-        return null;
-      }
-
-      return {
-        virtualRowUserId,
-        rownativeUserId: parsed.rownativeUserId,
-        rownativeDisplayName: typeof parsed.rownativeDisplayName === 'string' && parsed.rownativeDisplayName.trim().length > 0
-          ? parsed.rownativeDisplayName
-          : undefined,
-        linkedAt: parsed.linkedAt,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private validateVirtualRowUserId(virtualRowUserId: string): string {
-    const normalized = virtualRowUserId.trim();
-    if (!normalized) {
-      throw new Error('You need to sign in before linking a rownative account.');
-    }
-    return normalized;
-  }
-
-  private validateRouteSelection(input: { routeId?: string; routeUrl?: string }): { routeId?: string; routeUrl?: string } {
-    const routeId = input.routeId?.trim();
-    const routeUrl = input.routeUrl?.trim();
-    if (!routeId && !routeUrl) return {};
-
-    if (routeId) {
-      if (!ROUTE_ID_PATTERN.test(routeId)) {
-        throw new Error('Route ID is invalid. Use letters, numbers, dash, or underscore only.');
-      }
-      return { routeId };
-    }
-
-    try {
-      const parsed = new URL(routeUrl ?? '');
-      if (parsed.protocol !== 'https:') {
-        throw new Error('Route URL must start with https://.');
-      }
-      if (!ALLOWED_ROUTE_URL_HOSTS.has(parsed.hostname)) {
-        throw new Error('Route URL must use a trusted rownative.icu domain.');
-      }
-      return { routeUrl: parsed.toString() };
-    } catch {
-      throw new Error('Route URL is invalid.');
-    }
-  }
-
-  private async fetchWorkerJson<T>(path: string, init: RequestInit): Promise<T> {
-    const response = await this.fetchImpl(`${ROWNATIVE_WORKER_BASE_URL}${path}`, init);
-    if (!response.ok) {
-      throw new Error(`Rownative API request failed (HTTP ${response.status}).`);
-    }
-    return response.json() as Promise<T>;
-  }
-
-  async startLinkFlow(virtualRowUserId: string): Promise<StartRownativeLinkResult> {
-    const userId = this.validateVirtualRowUserId(virtualRowUserId);
-    const result = await this.fetchWorkerJson<{ linkUrl?: string; requestId?: string }>(
-      '/link/start',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ virtualRowUserId: userId }),
-      },
-    );
-
-    if (typeof result.linkUrl !== 'string' || result.linkUrl.trim().length === 0) {
-      throw new Error('Rownative link setup failed. Please try again.');
-    }
-    let linkUrl: URL;
-    try {
-      linkUrl = new URL(result.linkUrl);
-    } catch {
-      throw new Error('Rownative link setup failed. Please try again.');
-    }
-    const isLocalHttp = linkUrl.protocol === 'http:'
-      && (linkUrl.hostname === 'localhost' || linkUrl.hostname === '127.0.0.1')
-      && ALLOWED_LOCAL_LINK_PORTS.has(linkUrl.port);
-    if (linkUrl.protocol !== 'https:' && !isLocalHttp) {
-      throw new Error('Rownative link setup failed. Please try again.');
-    }
-
-    return {
-      linkUrl: linkUrl.toString(),
-      requestId: typeof result.requestId === 'string' && result.requestId.trim().length > 0 ? result.requestId.trim() : undefined,
-    };
-  }
-
-  async completeLinkFlow(virtualRowUserId: string, requestId?: string): Promise<RownativeLinkedAccount> {
-    const userId = this.validateVirtualRowUserId(virtualRowUserId);
-    const body: { virtualRowUserId: string; requestId?: string } = { virtualRowUserId: userId };
-    if (requestId?.trim()) {
-      body.requestId = requestId.trim();
-    }
-
-    const result = await this.fetchWorkerJson<{
-      rownativeUserId?: string;
-      rownativeDisplayName?: string;
-      linkedAt?: number;
-    }>(
-      '/link/complete',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-
-    if (typeof result.rownativeUserId !== 'string' || result.rownativeUserId.trim().length === 0) {
-      throw new Error('Linking could not be confirmed yet. Please finish linking on rownative.icu and retry.');
-    }
-
-    const account: RownativeLinkedAccount = {
-      virtualRowUserId: userId,
-      rownativeUserId: result.rownativeUserId.trim(),
-      rownativeDisplayName: typeof result.rownativeDisplayName === 'string' && result.rownativeDisplayName.trim().length > 0
-        ? result.rownativeDisplayName.trim()
-        : undefined,
-      linkedAt: typeof result.linkedAt === 'number' && Number.isFinite(result.linkedAt)
-        ? result.linkedAt
-        : Date.now(),
-    };
-    this.persistLinkedAccount(account);
-    return account;
-  }
-
-  async unlinkAccount(virtualRowUserId: string): Promise<void> {
-    const userId = this.validateVirtualRowUserId(virtualRowUserId);
-    await this.fetchWorkerJson<{ ok?: boolean }>(
-      '/link/unlink',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ virtualRowUserId: userId }),
-      },
-    );
-    this.clearLinkedAccount(userId);
-  }
-
-  async pullLinkedRouteKml(input: PullRownativeKmlRequest): Promise<PullRownativeKmlResult> {
-    const userId = this.validateVirtualRowUserId(input.virtualRowUserId);
-    const selection = this.validateRouteSelection(input);
-    const result = await this.fetchWorkerJson<{ kml?: string; routeName?: string; location?: string }>(
-      '/routes/pull-kml',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ virtualRowUserId: userId, ...selection }),
-      },
-    );
-
-    if (typeof result.kml !== 'string' || result.kml.trim().length === 0) {
-      throw new Error('Rownative did not return KML data for that route.');
-    }
-    if (new TextEncoder().encode(result.kml).length > MAX_KML_BYTES) {
-      throw new Error('The KML response is too large to import.');
-    }
-
-    return {
-      kml: result.kml,
-      routeName: typeof result.routeName === 'string' && result.routeName.trim().length > 0 ? result.routeName.trim() : undefined,
-      location: typeof result.location === 'string' && result.location.trim().length > 0 ? result.location.trim() : undefined,
-    };
-  }
   async getCourseIndex(): Promise<RownativeCourseSummary[]> {
     if (this.courseIndexCache) {
       return this.courseIndexCache;
@@ -362,20 +167,146 @@ export class RownativeService {
   }
 
   async importCourse(course: RownativeCourseSummary): Promise<WaterRoute> {
-    const url = `${ROWNATIVE_COURSE_BASE_URL}/${encodeURIComponent(course.id)}.json`;
-    const detail = await this.fetchJson<RownativeCourseFile>(url);
+    const detail = await this.fetchCourseDetail(course.id);
+    // Summary fields stay as fallbacks for anything the course file omits.
+    return this.importCourseDetail(detail, course);
+  }
+
+  /**
+   * Import a course knowing only its identifier.
+   *
+   * This is the path the rownative.icu handoff uses: the return leg carries a
+   * course id, and the course JSON on the public mirror already contains the
+   * name, country, distance and status, so no index lookup is needed.
+   */
+  /**
+   * Turn user input into a course id.
+   *
+   * Accepts a bare id, or a rownative.icu course link the user copied from the
+   * address bar. Pure and synchronous: input is fully validated before anything
+   * touches the network.
+   *
+   * rownative.icu is a client-rendered app whose exact course-path shape can't
+   * be confirmed by static fetch, so several plausible shapes are accepted —
+   * `/course/<id>`, `/courses/<id>`, `?id=`, `?courseId=` and hash-router
+   * equivalents. The bare-id path is shape-independent and always works.
+   *
+   * @throws Error with a message suitable for display when no id can be found.
+   */
+  resolveCourseId(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      throw new Error('Enter a rownative course ID or a rownative.icu course link.');
+    }
+
+    // Bare id fast path — the pattern excludes '.', '/' and ':', so this can
+    // never swallow a URL.
+    if (ROUTE_ID_PATTERN.test(trimmed)) return trimmed;
+
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      throw new Error('Enter a rownative course ID or a rownative.icu course link.');
+    }
+
+    if (url.protocol !== 'https:') {
+      throw new Error('Course links must be https:// links on rownative.icu.');
+    }
+    if (!ALLOWED_ROUTE_URL_HOSTS.has(url.hostname)) {
+      throw new Error('Course links must be https:// links on rownative.icu.');
+    }
+
+    const fromUrl = this.extractCourseId(url.pathname, url.searchParams);
+    if (fromUrl) return fromUrl;
+
+    // Hash-router links: '#/course/5?x=1' — re-parse the fragment as path+query.
+    const hash = url.hash.replace(/^#/, '');
+    if (hash) {
+      const [hashPath, hashQuery] = hash.split('?');
+      const fromHash = this.extractCourseId(hashPath, new URLSearchParams(hashQuery ?? ''));
+      if (fromHash) return fromHash;
+    }
+
+    throw new Error('Could not find a course ID in that link. Paste the course ID instead.');
+  }
+
+  private extractCourseId(pathname: string, params: URLSearchParams): string | null {
+    const segments = pathname.split('/').filter(Boolean);
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (COURSE_URL_PATH_SEGMENTS.has(segments[i].toLowerCase()) && ROUTE_ID_PATTERN.test(segments[i + 1])) {
+        return segments[i + 1];
+      }
+    }
+    for (const key of COURSE_URL_ID_PARAM_KEYS) {
+      const value = params.get(key);
+      if (value && ROUTE_ID_PATTERN.test(value)) return value;
+    }
+    return null;
+  }
+
+  /**
+   * Load a course from the public mirror given an id or a course link.
+   *
+   * The fetch target is a hard-coded constant; user input contributes only a
+   * pattern-validated, encoded path segment, so no user-controlled hostname can
+   * ever reach `fetch`.
+   */
+  async importCourseById(rawId: string): Promise<WaterRoute> {
+    const id = this.resolveCourseId(rawId);
+    const detail = await this.fetchCourseDetail(id);
+    return this.importCourseDetail(detail, { id });
+  }
+
+  private async fetchCourseDetail(courseId: string): Promise<RownativeCourseFile> {
+    const url = `${ROWNATIVE_COURSE_BASE_URL}/${encodeURIComponent(courseId)}.json`;
+    const response = await this.fetchImpl(url);
+
+    if (response.status === 404) {
+      throw new RownativeCourseNotFoundError(
+        `Course ${courseId} isn't in the public course data yet. The mirror syncs from `
+        + 'rownative.icu periodically — try again later, or search for it by name.',
+        courseId,
+      );
+    }
+    if (!response.ok) {
+      throw new Error(`Unable to load rownative course data (HTTP ${response.status}). Please try again.`);
+    }
+
+    const body = await response.text();
+    if (new TextEncoder().encode(body).length > MAX_COURSE_BYTES) {
+      throw new Error(`Course ${courseId} data is too large to import.`);
+    }
+
+    let detail: RownativeCourseFile;
+    try {
+      detail = JSON.parse(body) as RownativeCourseFile;
+    } catch {
+      throw new Error(`Course ${courseId} data is malformed.`);
+    }
+    if (typeof detail?.id !== 'string' || typeof detail?.name !== 'string') {
+      throw new Error(`Course ${courseId} data is malformed.`);
+    }
+    return detail;
+  }
+
+  private importCourseDetail(
+    detail: RownativeCourseFile,
+    fallback: { id: string; name?: string; country?: string; distanceMeters?: number; status?: string },
+  ): WaterRoute {
     const coordinates = this.deriveRouteCoordinates(detail);
+    const name = detail.name || fallback.name || `Course ${fallback.id}`;
     if (coordinates.length < 2) {
-      throw new Error(`Course ${course.name} (${course.id}) has insufficient coordinate data. At least 2 coordinate points are required.`);
+      throw new Error(`Course ${name} (${fallback.id}) has insufficient coordinate data. At least 2 coordinate points are required.`);
     }
 
     return this.importRoute({
-      id: detail.id || course.id,
-      name: detail.name || course.name,
-      country: detail.country || course.country,
-      distanceMeters: detail.distance_m ?? course.distanceMeters,
+      id: detail.id || fallback.id,
+      name,
+      country: detail.country || fallback.country || 'Unknown',
+      distanceMeters: detail.distance_m ?? fallback.distanceMeters ?? 0,
       coordinates,
-      status: detail.status ?? course.status,
+      status: detail.status ?? fallback.status,
     });
   }
 }

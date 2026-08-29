@@ -2,7 +2,31 @@ import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
 import {
   willowbrookRiverCoordinates,
 } from '../data/seedRouteCoordinates';
-import { parseGeoJSONCoordinate, parseKMLCoordinateList } from '../utils/coordinateUtils';
+import {
+  parseGeoJSONCoordinate,
+  parseKMLCoordinateList,
+  resampleCoordinates,
+} from '../utils/coordinateUtils';
+
+/**
+ * Maximum spacing between consecutive points on an imported route.
+ *
+ * Matches the bundled Willowbrook demo route (~50 m between points), which is
+ * the density the 3D camera and progress tracking were tuned against.
+ * rownative courses arrive as start/finish gate centroids — sometimes only two
+ * points for a 5 km course — so they are densified to this before reaching the
+ * engine. See issue #189.
+ */
+export const IMPORT_RESAMPLE_MAX_GAP_M = 50;
+
+/**
+ * Below this many source points, a rownative course is a coarse outline rather
+ * than a surveyed path, and is tagged so the UI can say so.
+ */
+export const OUTLINE_ONLY_POINT_THRESHOLD = 10;
+
+/** Tag marking a route whose geometry is a coarse outline. */
+export const OUTLINE_ONLY_TAG = 'outline-only';
 
 /** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
 export interface KMLImportCandidate {
@@ -105,6 +129,7 @@ export class RouteService {
       tags: data.tags,
       createdAt: new Date(),
       source: data.source,
+      externalId: data.externalId,
     };
 
     this.routes.push(newRoute);
@@ -378,22 +403,39 @@ export class RouteService {
     });
   }
 
+  /** Find a previously imported route by its originating rownative course id. */
+  findRouteByRownativeId(courseId: string): WaterRoute | undefined {
+    return this.routes.find((route) => route.source === 'rownative' && route.externalId === courseId);
+  }
+
   importRouteFromRownative(data: RownativeRouteImportData): WaterRoute {
+    // The course's own distance_m stays authoritative: it is surveyed, whereas a
+    // distance derived from gate centroids would under-report a curved course.
     const distanceKm = Math.round(data.distanceMeters / 10) / 100;
     const difficulty = distanceKm < 4 ? 'easy' : distanceKm < 7 ? 'moderate' : 'hard';
     const normalizedStatus = data.status?.trim().toLowerCase();
     const sourceTag = normalizedStatus ? `status:${normalizedStatus}` : undefined;
+
+    const sourcePointCount = data.coordinates.length;
+    const isOutlineOnly = sourcePointCount < OUTLINE_ONLY_POINT_THRESHOLD;
+    const coordinates = resampleCoordinates(data.coordinates, IMPORT_RESAMPLE_MAX_GAP_M);
 
     return this.createRoute({
       name: data.name,
       description: `Imported from rownative.icu course ${data.id}.`,
       location: data.country,
       difficulty,
-      coordinates: data.coordinates,
+      coordinates,
       distanceKm,
       estimatedTimeMin: Math.round((distanceKm / 3.5) * 60),
-      tags: ['rownative', 'imported', sourceTag].filter((tag): tag is string => Boolean(tag)),
+      tags: [
+        'rownative',
+        'imported',
+        sourceTag,
+        isOutlineOnly ? OUTLINE_ONLY_TAG : undefined,
+      ].filter((tag): tag is string => Boolean(tag)),
       source: 'rownative',
+      externalId: data.id,
     });
   }
 

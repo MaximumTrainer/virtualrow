@@ -19,6 +19,8 @@ import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
+import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
+import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -32,8 +34,13 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
   return tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
 }
 
+/** rownative courses built from gate centroids are a coarse outline, not a surveyed path. */
+function isOutlineOnly(tags: string[] | undefined): boolean {
+  return !!tags?.includes(OUTLINE_ONLY_TAG);
+}
+
 function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -75,11 +82,19 @@ function App() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRouteName, setImportRouteName] = useState('');
 
-  // Pre-select Willowbrook River for unauthenticated users
+  // Pre-select Willowbrook River for unauthenticated users.
+  // Guarded to fire only once: this effect depends on `routes`, so without the
+  // guard every route import re-ran it and snapped the selection back to
+  // Willowbrook, discarding the route the user had just loaded.
+  const hasPreselectedRef = useRef(false);
   useEffect(() => {
+    if (hasPreselectedRef.current) return;
     if (!isAuthenticated && routes.length > 0) {
       const wb = routes.find(r => r.id === '1');
-      if (wb) setSelectedRoute(wb);
+      if (wb) {
+        setSelectedRoute(wb);
+        hasPreselectedRef.current = true;
+      }
     }
   }, [isAuthenticated, routes]);
 
@@ -412,7 +427,16 @@ function App() {
   const handleRouteImported = useCallback((route: WaterRoute) => {
     setRoutes(routeService.getAllRoutes());
     setSelectedRoute(route);
+    setCurrentView('routes');
   }, []);
+
+  // Deep link: if the app was opened with ?rownativeCourseId=<id>, load that
+  // course and select it. Held until auth resolves so a shared link survives a
+  // sign-in round trip.
+  const { status: handoffStatus, dismiss: dismissHandoff } = useRownativeDeepLink({
+    onRouteLoaded: handleRouteImported,
+    isReady: !isLoading,
+  });
 
   const handleGeoJSONFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -575,6 +599,22 @@ function App() {
                 <RouteMap route={selectedRoute} />
               </div>
               <div className="route-details-panel">
+                {handoffStatus.kind !== 'idle' && handoffStatus.kind !== 'loaded' && (
+                  <div
+                    className={`rownative-handoff-banner rownative-handoff-banner--${handoffStatus.kind}`}
+                    role={handoffStatus.kind === 'error' ? 'alert' : 'status'}
+                  >
+                    {handoffStatus.kind === 'loading'
+                      ? `Loading rownative course ${handoffStatus.courseId}…`
+                      : handoffStatus.message}
+                    {handoffStatus.kind === 'error' && (
+                      <button type="button" className="rownative-handoff-dismiss" onClick={dismissHandoff}>
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Route Info Overlay */}
                 <div className="route-info-overlay">
                   <div className="route-info-header">
@@ -592,6 +632,11 @@ function App() {
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
+                    {isOutlineOnly(selectedRoute.tags) && (
+                      <span className="meta-badge meta-badge--outline" title="This course is defined by start/finish gates only, so the path between them is approximate.">
+                        outline only
+                      </span>
+                    )}
                   </div>
 
                   <div className="route-tags">
@@ -687,6 +732,9 @@ function App() {
                                  <span className={`badge badge-status badge-status--${rownativeStatus}`}>
                                    {rownativeStatus.charAt(0).toUpperCase() + rownativeStatus.slice(1)}
                                  </span>
+                               )}
+                               {isOutlineOnly(route.tags) && (
+                                 <span className="badge badge-outline">Outline</span>
                                )}
                              </div>
                            </div>

@@ -35,6 +35,8 @@ export interface WaterRoute {
   createdAt: Date;
   userRating?: number;
   source?: 'manual' | 'imported' | 'rownative';
+  /** Identifier of this route in its source system (e.g. a rownative course id). */
+  externalId?: string;
   enrichment?: RouteEnrichmentMetadata; // Optional enrichment metadata
 }
 
@@ -171,6 +173,7 @@ export interface RouteFormData {
   distanceKm?: number;
   estimatedTimeMin?: number;
   source?: WaterRoute['source'];
+  externalId?: WaterRoute['externalId'];
 }
 
 // Structured workout with intervals (like intervals.icu)

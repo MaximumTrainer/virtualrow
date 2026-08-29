@@ -3,30 +3,29 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ServicesProvider, defaultServices } from '../context/ServicesContext';
 import { RownativeRouteImport } from '../components/RownativeRouteImport';
+import { RownativeCourseNotFoundError } from '../services/rownativeService';
 import type { Services } from '../ports';
 import type { WaterRoute } from '../types/index';
 
-function createImportedRoute(name = 'Imported Route'): WaterRoute {
+function createRoute(name = 'Quinsig S to N', externalId = '5'): WaterRoute {
   return {
-    id: 'new-route',
-    name,
-    description: 'desc',
-    distance: 4.2,
-    difficulty: 'moderate',
-    location: 'Amsterdam',
-    coordinates: [{ lat: 1, lng: 2 }, { lat: 2, lng: 3 }],
-    elevationGain: 0,
-    estimatedTime: 72,
-    tags: ['rownative'],
-    createdAt: new Date(),
-    source: 'imported',
+    id: 'new-route', name, description: 'desc', distance: 5.35, difficulty: 'moderate',
+    location: 'United States', coordinates: [{ lat: 1, lng: 2 }, { lat: 2, lng: 3 }],
+    elevationGain: 0, estimatedTime: 92, tags: ['rownative'], createdAt: new Date(),
+    source: 'rownative', externalId,
   };
 }
 
+const COURSES = [
+  { id: '5', name: 'Quinsig S to N', country: 'United States', distanceMeters: 5349, status: 'established' },
+  { id: '106', name: 'HOTS Stake Race', country: 'United States', distanceMeters: 4804, status: 'provisional' },
+];
+
+/** Real resolveCourseId — input validation is part of what these tests exercise. */
+const realResolve = defaultServices.rownativeService.resolveCourseId.bind(defaultServices.rownativeService);
+
 describe('RownativeRouteImport', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
+  beforeEach(() => { vi.restoreAllMocks(); });
 
   function renderWithServices(overrides?: Partial<Services>) {
     const onRouteImported = vi.fn();
@@ -38,316 +37,206 @@ describe('RownativeRouteImport', () => {
     return { onRouteImported };
   }
 
-  it('replaces in-app rownative search input with open/link actions', async () => {
-    const user = userEvent.setup();
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: { ...defaultServices.rownativeService, getLinkedAccount: () => null } as unknown as Services['rownativeService'],
-    });
+  function rownative(overrides: Record<string, unknown>) {
+    return {
+      ...defaultServices.rownativeService,
+      resolveCourseId: realResolve,
+      ...overrides,
+    } as unknown as Services['rownativeService'];
+  }
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    expect(screen.queryByPlaceholderText(/search course name/i)).toBeNull();
-    expect(screen.getByRole('link', { name: /open rownative\.icu/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /link rownative account/i })).toBeTruthy();
+  const noExisting = { ...defaultServices.routeService, findRouteByRownativeId: () => undefined } as unknown as Services['routeService'];
+
+  async function open(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /add a rownative\.icu course/i }));
+  }
+
+  it('offers no account-linking controls at all', async () => {
+    const user = userEvent.setup();
+    renderWithServices();
+    await open(user);
+
+    expect(screen.queryByRole('button', { name: /link rownative account/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /complete linking/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /unlink/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /pull route kml/i })).toBeNull();
   });
 
-  it('handles link state transitions from not linked to linked', async () => {
+  it('links out to rownative.icu for browsing', async () => {
     const user = userEvent.setup();
-    const startLinkFlow = vi.fn().mockResolvedValue({ linkUrl: 'https://rownative.icu/link', requestId: 'req-1' });
-    const completeLinkFlow = vi.fn().mockResolvedValue({
-      virtualRowUserId: 'vr-1',
-      rownativeUserId: 'rn-1',
-      rownativeDisplayName: 'Rownative User',
-      linkedAt: Date.now(),
-    });
-    const mockPopup = { location: { href: '' }, close: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
+    renderWithServices();
+    await open(user);
 
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => null,
-        startLinkFlow,
-        completeLinkFlow,
-      } as unknown as Services['rownativeService']),
-    });
-
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
-    expect(startLinkFlow).toHaveBeenCalledWith('vr-1');
-    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank');
-    expect(mockPopup.location.href).toBe('https://rownative.icu/link');
-    expect(screen.getByText('Linking')).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: /complete linking/i }));
-    expect(completeLinkFlow).toHaveBeenCalledWith('vr-1', 'req-1');
-    expect(screen.getByText('Linked')).toBeTruthy();
-    expect(screen.getByText('Rownative User')).toBeTruthy();
+    const link = screen.getByRole('link', { name: /browse rownative\.icu/i });
+    expect(link).toHaveAttribute('href', 'https://rownative.icu/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
-  it('pulls KML and imports route through routeService', async () => {
+  it('imports a pasted course id (AC-1)', async () => {
     const user = userEvent.setup();
-    const onImportedRoute = createImportedRoute('Pulled Route');
-    const pullLinkedRouteKml = vi.fn().mockResolvedValue({
-      kml: '<kml><Document><Placemark><LineString><coordinates>1,1,0 2,2,0</coordinates></LineString></Placemark></Document></kml>',
-      routeName: 'Pulled Route',
-      location: 'Canal',
-    });
-    const importRouteFromKML = vi.fn().mockReturnValue({ status: 'success', route: onImportedRoute });
-
+    const route = createRoute();
+    const importCourseById = vi.fn().mockResolvedValue(route);
     const { onRouteImported } = renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        pullLinkedRouteKml,
-      } as unknown as Services['rownativeService']),
-      routeService: ({
-        ...defaultServices.routeService,
-        importRouteFromKML,
-      } as unknown as Services['routeService']),
+      rownativeService: rownative({ importCourseById }),
+      routeService: noExisting,
     });
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
 
-    expect(pullLinkedRouteKml).toHaveBeenCalledWith({ virtualRowUserId: 'vr-1' });
-    expect(importRouteFromKML).toHaveBeenCalled();
-    expect(onRouteImported).toHaveBeenCalledWith(onImportedRoute);
-    expect(screen.queryByRole('region', { name: /rownative route import/i })).toBeNull();
+    expect(importCourseById).toHaveBeenCalledWith('5');
+    expect(onRouteImported).toHaveBeenCalledWith(route);
   });
 
-  it('shows a pull failure message when imported KML is invalid', async () => {
+  it('imports a pasted rownative.icu course link (AC-1)', async () => {
     const user = userEvent.setup();
-    const pullLinkedRouteKml = vi.fn().mockResolvedValue({
-      kml: '<kml></kml>',
-    });
-    const importRouteFromKML = vi.fn().mockReturnValue({ status: 'error', error: 'No valid route found in KML.' });
+    const importCourseById = vi.fn().mockResolvedValue(createRoute());
+    renderWithServices({ rownativeService: rownative({ importCourseById }), routeService: noExisting });
 
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        pullLinkedRouteKml,
-      } as unknown as Services['rownativeService']),
-      routeService: ({
-        ...defaultServices.routeService,
-        importRouteFromKML,
-      } as unknown as Services['routeService']),
-    });
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), 'https://rownative.icu/course/5');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
-
-    expect(screen.getByRole('alert').textContent).toContain('No valid route found in KML.');
-    expect(screen.getByText('Pull failed')).toBeTruthy();
+    expect(importCourseById).toHaveBeenCalledWith('5');
   });
 
-  it('shows a candidate selection UI when KML contains multiple routes', async () => {
+  it('rejects a foreign host client-side, making no request (AC-4)', async () => {
     const user = userEvent.setup();
-    const pulledRoute = createImportedRoute('Candidate Route');
-    const pullLinkedRouteKml = vi.fn().mockResolvedValue({
-      kml: '<kml></kml>',
-      routeName: 'Candidate Route',
-      location: 'Harbor',
-    });
-    const importRouteFromKML = vi.fn().mockReturnValue({
-      status: 'selectionRequired',
-      candidates: [{ name: 'Candidate A', description: '', coordinates: [{ lat: 1, lng: 2 }, { lat: 2, lng: 3 }] }],
-    });
-    const finalizeKMLImport = vi.fn().mockReturnValue(pulledRoute);
+    const importCourseById = vi.fn();
+    renderWithServices({ rownativeService: rownative({ importCourseById }) });
 
-    const { onRouteImported } = renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        pullLinkedRouteKml,
-      } as unknown as Services['rownativeService']),
-      routeService: ({
-        ...defaultServices.routeService,
-        importRouteFromKML,
-        finalizeKMLImport,
-      } as unknown as Services['routeService']),
-    });
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), 'https://evil.example/course/5');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
-
-    expect(screen.getByText(/multiple routes found/i)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /candidate a/i })).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: /candidate a/i }));
-    expect(finalizeKMLImport).toHaveBeenCalledOnce();
-    expect(onRouteImported).toHaveBeenCalledWith(pulledRoute);
+    expect(importCourseById).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/https:\/\/ links on rownative\.icu/i);
   });
 
-  it('falls back to rownative.icu when pulled KML omits a location', async () => {
+  it('rejects an http link client-side, making no request (AC-4)', async () => {
     const user = userEvent.setup();
-    const onImportedRoute = createImportedRoute('Pulled Route');
-    const pullLinkedRouteKml = vi.fn().mockResolvedValue({
-      kml: '<kml><Document><Placemark><LineString><coordinates>1,1,0 2,2,0</coordinates></LineString></Placemark></Document></kml>',
-      routeName: 'Pulled Route',
-    });
-    const importRouteFromKML = vi.fn().mockReturnValue({ status: 'success', route: onImportedRoute });
+    const importCourseById = vi.fn();
+    renderWithServices({ rownativeService: rownative({ importCourseById }) });
 
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        pullLinkedRouteKml,
-      } as unknown as Services['rownativeService']),
-      routeService: ({
-        ...defaultServices.routeService,
-        importRouteFromKML,
-      } as unknown as Services['routeService']),
-    });
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), 'http://rownative.icu/course/5');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
+    expect(importCourseById).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
 
-    expect(importRouteFromKML).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ location: 'rownative.icu' }),
+  it('offers a search-by-name shortcut when the id is missing from the mirror (AC-3)', async () => {
+    const user = userEvent.setup();
+    const importCourseById = vi.fn().mockRejectedValue(
+      new RownativeCourseNotFoundError("Course 2 isn't in the public course data yet.", '2'),
     );
+    const searchCourses = vi.fn().mockResolvedValue(COURSES);
+    const { onRouteImported } = renderWithServices({
+      rownativeService: rownative({
+        importCourseById,
+        searchCourses,
+        getCourseIndex: vi.fn().mockResolvedValue(COURSES),
+      }),
+      routeService: noExisting,
+    });
+
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), '2');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/isn't in the public course data yet/i);
+    expect(onRouteImported).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /search by name/i }));
+    expect(await screen.findByText(/showing 2 of 2 courses/i)).toBeInTheDocument();
   });
 
-  it('shows an error when browser blocks the rownative link popup', async () => {
+  it('searches the catalogue by name and imports a result', async () => {
     const user = userEvent.setup();
-    const startLinkFlow = vi.fn().mockResolvedValue({ linkUrl: 'https://rownative.icu/link' });
-    vi.spyOn(window, 'open').mockImplementation(() => null);
-
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => null,
-        startLinkFlow,
-      } as unknown as Services['rownativeService']),
+    const route = createRoute('HOTS Stake Race', '106');
+    const searchCourses = vi.fn().mockResolvedValue([COURSES[1]]);
+    const importCourseById = vi.fn().mockResolvedValue(route);
+    const { onRouteImported } = renderWithServices({
+      rownativeService: rownative({
+        searchCourses,
+        importCourseById,
+        getCourseIndex: vi.fn().mockResolvedValue(COURSES),
+      }),
+      routeService: noExisting,
     });
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
+    await open(user);
+    await user.type(screen.getByLabelText(/search rownative courses by name/i), 'hots');
+    await user.click(screen.getByRole('button', { name: /^search$/i }));
 
-    expect(screen.getByRole('alert').textContent).toContain('blocked the rownative link window');
-    expect(screen.getByText('Link failed')).toBeTruthy();
+    expect(await screen.findByText('HOTS Stake Race')).toBeInTheDocument();
+    expect(screen.getByText(/showing 1 of 2 courses/i)).toBeInTheDocument();
+    expect(screen.getByText('4.80 km')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /HOTS Stake Race/i }));
+    expect(importCourseById).toHaveBeenCalledWith('106');
+    expect(onRouteImported).toHaveBeenCalledWith(route);
   });
 
-  it('closes the popup and shows an error when startLinkFlow throws', async () => {
+  it('reports an empty search rather than showing a blank panel', async () => {
     const user = userEvent.setup();
-    const startLinkFlow = vi.fn().mockRejectedValue(new Error('Worker unavailable'));
-    const mockPopup = { location: { href: '' }, close: vi.fn() };
-    vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
-
     renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => null,
-        startLinkFlow,
-      } as unknown as Services['rownativeService']),
+      rownativeService: rownative({
+        searchCourses: vi.fn().mockResolvedValue([]),
+        getCourseIndex: vi.fn().mockResolvedValue(COURSES),
+      }),
     });
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
+    await open(user);
+    await user.type(screen.getByLabelText(/search rownative courses by name/i), 'zzzz');
+    await user.click(screen.getByRole('button', { name: /^search$/i }));
 
-    expect(mockPopup.close).toHaveBeenCalledOnce();
-    expect(screen.getByRole('alert').textContent).toContain('Worker unavailable');
-    expect(screen.getByText('Link failed')).toBeTruthy();
+    expect(await screen.findByText(/no courses match "zzzz"/i)).toBeInTheDocument();
   });
 
-  it('shows a pull failure when selectionRequired returns no candidates', async () => {
+  it('surfaces a search failure', async () => {
     const user = userEvent.setup();
-    const pullLinkedRouteKml = vi.fn().mockResolvedValue({ kml: '<kml></kml>' });
-    const importRouteFromKML = vi.fn().mockReturnValue({ status: 'selectionRequired', candidates: [] });
-    const finalizeKMLImport = vi.fn();
-
     renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        pullLinkedRouteKml,
-      } as unknown as Services['rownativeService']),
-      routeService: ({
-        ...defaultServices.routeService,
-        importRouteFromKML,
-        finalizeKMLImport,
-      } as unknown as Services['routeService']),
+      rownativeService: rownative({
+        searchCourses: vi.fn().mockRejectedValue(new Error('Unable to load rownative course data (HTTP 500). Please try again.')),
+        getCourseIndex: vi.fn().mockRejectedValue(new Error('Unable to load rownative course data (HTTP 500). Please try again.')),
+      }),
     });
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /pull route kml/i }));
+    await open(user);
+    await user.click(screen.getByRole('button', { name: /^search$/i }));
 
-    expect(screen.getByRole('alert').textContent).toContain('No selectable routes were found in the pulled KML.');
-    expect(screen.getByText('Pull failed')).toBeTruthy();
-    expect(finalizeKMLImport).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/HTTP 500/);
   });
 
-  it('unlinks an existing linked account and resets status', async () => {
+  it('selects an already imported course rather than importing twice (AC-5)', async () => {
     const user = userEvent.setup();
-    const unlinkAccount = vi.fn().mockResolvedValue(undefined);
-
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => ({ virtualRowUserId: 'vr-1', rownativeUserId: 'rn-1', linkedAt: Date.now() }),
-        unlinkAccount,
-      } as unknown as Services['rownativeService']),
+    const existing = createRoute('Already Here');
+    const importCourseById = vi.fn();
+    const { onRouteImported } = renderWithServices({
+      rownativeService: rownative({ importCourseById }),
+      routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } as unknown as Services['routeService'],
     });
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /unlink rownative account/i }));
+    await open(user);
+    await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
+    await user.click(screen.getByRole('button', { name: /^import$/i }));
 
-    expect(unlinkAccount).toHaveBeenCalledWith('vr-1');
-    expect(screen.getByText('Not linked')).toBeTruthy();
+    expect(importCourseById).not.toHaveBeenCalled();
+    expect(onRouteImported).toHaveBeenCalledWith(existing);
+    expect(await screen.findByRole('status')).toHaveTextContent(/already in your routes/i);
   });
 
-  it('disables the Link rownative account button when the user is not signed in', async () => {
+  it('disables Import until something is entered', async () => {
     const user = userEvent.setup();
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => null } as Services['authService'],
-      rownativeService: ({ ...defaultServices.rownativeService, getLinkedAccount: () => null } as unknown as Services['rownativeService']),
-    });
+    renderWithServices();
+    await open(user);
 
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    expect(screen.getByRole('button', { name: /link rownative account/i })).toBeDisabled();
-  });
-
-  it('clears linkRequestId after successful completeLinkFlow to prevent stale reuse', async () => {
-    const user = userEvent.setup();
-    const startLinkFlow = vi.fn().mockResolvedValue({ linkUrl: 'https://rownative.icu/link', requestId: 'req-stale' });
-    const completeLinkFlow = vi.fn().mockResolvedValue({
-      virtualRowUserId: 'vr-1',
-      rownativeUserId: 'rn-1',
-      linkedAt: Date.now(),
-    });
-    const unlinkAccount = vi.fn().mockResolvedValue(undefined);
-    const mockPopup = { location: { href: '' }, close: vi.fn() };
-    vi.spyOn(window, 'open').mockImplementation(() => mockPopup as unknown as Window);
-
-    renderWithServices({
-      authService: { ...defaultServices.authService, getUser: () => ({ id: 'vr-1', name: 'User', email: 'u@test.com' }) } as Services['authService'],
-      rownativeService: ({
-        ...defaultServices.rownativeService,
-        getLinkedAccount: () => null,
-        startLinkFlow,
-        completeLinkFlow,
-        unlinkAccount,
-      } as unknown as Services['rownativeService']),
-    });
-
-    await user.click(screen.getByRole('button', { name: /open rownative\.icu/i }));
-    await user.click(screen.getByRole('button', { name: /link rownative account/i }));
-    await user.click(screen.getByRole('button', { name: /complete linking/i }));
-    expect(completeLinkFlow).toHaveBeenLastCalledWith('vr-1', 'req-stale');
-
-    await user.click(screen.getByRole('button', { name: /unlink rownative account/i }));
-    await user.click(screen.getByRole('button', { name: /complete linking/i }));
-    expect(completeLinkFlow).toHaveBeenLastCalledWith('vr-1', undefined);
+    expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
+    expect(screen.getByRole('button', { name: /^import$/i })).toBeEnabled();
   });
 });

@@ -1,10 +1,39 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RownativeService } from '../services/rownativeService';
+import { RownativeCourseNotFoundError, RownativeService } from '../services/rownativeService';
 import { RouteService } from '../services/routeService';
+
+/** Response double exposing both json() and text(), as the service uses each. */
+function jsonResponse(body: unknown, status = 200) {
+  const text = JSON.stringify(body);
+  return { ok: status >= 200 && status < 300, status, json: async () => body, text: async () => text } as unknown as Response;
+}
 
 describe('RownativeService', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('calls the global fetch with the correct receiver when none is injected', async () => {
+    // Regression: the constructor default used to store a bare `fetch` on an
+    // instance field, so `this.fetchImpl(...)` invoked it with the service as
+    // its receiver and browsers threw "Illegal invocation". Every unit test
+    // injects a double, so only a real browser ever hit it.
+    const globalFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      id: '1',
+      name: 'Course One',
+      country: 'United States',
+      distance_m: 5306,
+      polygons: [
+        { order: 0, points: [{ lat: 42.24, lon: -71.81 }] },
+        { order: 1, points: [{ lat: 42.28, lon: -71.81 }] },
+      ],
+    }));
+
+    const service = new RownativeService();
+    await expect(service.importCourseById('1')).resolves.toBeDefined();
+    expect(globalFetch).toHaveBeenCalledTimes(1);
+    // Invoked as a plain call, not as a method of the service instance.
+    expect(globalFetch.mock.instances[0]).not.toBeInstanceOf(RownativeService);
   });
 
   it('searches courses by name from the index', async () => {
@@ -33,20 +62,17 @@ describe('RownativeService', () => {
         ok: true,
         json: async () => [{ id: '77', name: 'River Course', country: 'Germany', distance_m: 6200 }],
       } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: '77',
-          name: 'River Course',
-          country: 'Germany',
-          distance_m: 6200,
-          status: 'provisional',
-          polygons: [
-            { order: 0, points: [{ lat: 52.5, lon: 13.4 }, { lat: 52.51, lon: 13.41 }, { lat: 52.5, lon: 13.42 }] },
-            { order: 1, points: [{ lat: 52.52, lon: 13.43 }, { lat: 52.53, lon: 13.44 }, { lat: 52.52, lon: 13.45 }] },
-          ],
-        }),
-      } as Response);
+      .mockResolvedValueOnce(jsonResponse({
+        id: '77',
+        name: 'River Course',
+        country: 'Germany',
+        distance_m: 6200,
+        status: 'provisional',
+        polygons: [
+          { order: 0, points: [{ lat: 52.5, lon: 13.4 }, { lat: 52.51, lon: 13.41 }, { lat: 52.5, lon: 13.42 }] },
+          { order: 1, points: [{ lat: 52.52, lon: 13.43 }, { lat: 52.53, lon: 13.44 }, { lat: 52.52, lon: 13.45 }] },
+        ],
+      }));
 
     const service = new RownativeService(
       fetchMock as unknown as typeof fetch,
@@ -57,8 +83,143 @@ describe('RownativeService', () => {
 
     expect(imported.source).toBe('rownative');
     expect(imported.distance).toBe(6.2);
-    expect(imported.coordinates).toHaveLength(2);
+    // The two polygon centroids are the route's endpoints, but the centreline is
+    // densified in between so the engine gets demo-route resolution (issue #189).
+    expect(imported.coordinates.length).toBeGreaterThan(2);
+    // Endpoints are the polygon centroids: mean of each gate's three vertices.
+    expect(imported.coordinates[0].lat).toBeCloseTo(52.50333, 4);
+    expect(imported.coordinates[0].lng).toBeCloseTo(13.41, 4);
+    const last = imported.coordinates[imported.coordinates.length - 1];
+    expect(last.lat).toBeCloseTo(52.52333, 4);
+    expect(last.lng).toBeCloseTo(13.44, 4);
     expect(isolatedRouteService.getAllRoutes().length).toBe(initialCount + 1);
+  });
+
+  it('imports a course by id alone, without an index lookup', async () => {
+    const isolatedRouteService = new RouteService();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      id: '106',
+      name: 'HOTS Stake Race',
+      country: 'United States',
+      distance_m: 4804,
+      status: 'established',
+      polygons: [
+        { order: 0, points: [{ lat: 42.24, lon: -71.81 }] },
+        { order: 1, points: [{ lat: 42.28, lon: -71.79 }] },
+      ],
+    }));
+
+    const service = new RownativeService(
+      fetchMock as unknown as typeof fetch,
+      (data) => isolatedRouteService.importRouteFromRownative(data),
+    );
+    const route = await service.importCourseById('106');
+
+    // One request only: the course JSON already carries name/country/distance.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain('/106.json');
+    expect(route.name).toBe('HOTS Stake Race');
+    expect(route.distance).toBe(4.8);
+    expect(route.source).toBe('rownative');
+  });
+
+  it('rejects malformed input before making any request', async () => {
+    const fetchMock = vi.fn();
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('../../secrets')).rejects.toThrow(/course ID or a rownative\.icu course link/i);
+    await expect(service.importCourseById('')).rejects.toThrow(/course ID or a rownative\.icu course link/i);
+    await expect(service.importCourseById('https://evil.example/course/5')).rejects.toThrow(/https:\/\/ links on rownative\.icu/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reports a course missing from the mirror as recoverable, carrying the id', async () => {
+    // The live site lists more courses than the mirror carries, so a real id can 404.
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('2')).rejects.toBeInstanceOf(RownativeCourseNotFoundError);
+    await expect(service.importCourseById('2')).rejects.toThrow(/isn't in the public course data yet/i);
+    await service.importCourseById('2').catch((e: unknown) => {
+      expect((e as RownativeCourseNotFoundError).courseId).toBe('2');
+    });
+  });
+
+  it('reports a non-404 failure as a plain retryable error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('5')).rejects.toThrow(
+      'Unable to load rownative course data (HTTP 500). Please try again.',
+    );
+    await expect(service.importCourseById('5')).rejects.not.toBeInstanceOf(RownativeCourseNotFoundError);
+  });
+
+  it('rejects malformed JSON and payloads missing required fields', async () => {
+    const badJson = new RownativeService(
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'not json at all' } as unknown as Response) as unknown as typeof fetch,
+    );
+    await expect(badJson.importCourseById('5')).rejects.toThrow('Course 5 data is malformed.');
+
+    const missingFields = new RownativeService(
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ polygons: [] }) }) as unknown as typeof fetch,
+    );
+    await expect(missingFields.importCourseById('5')).rejects.toThrow('Course 5 data is malformed.');
+  });
+
+  it('rejects a course payload larger than the size cap', async () => {
+    const huge = JSON.stringify({ id: '5', name: 'Huge', padding: 'x'.repeat(3 * 1024 * 1024) });
+    const service = new RownativeService(
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => huge }) as unknown as typeof fetch,
+    );
+    await expect(service.importCourseById('5')).rejects.toThrow('Course 5 data is too large to import.');
+  });
+
+  it('rejects a course with no usable polygons', async () => {
+    const service = new RownativeService(
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ id: '5', name: 'Empty Course', polygons: [] }),
+      }) as unknown as typeof fetch,
+    );
+    await expect(service.importCourseById('5')).rejects.toThrow(/insufficient coordinate data/i);
+  });
+
+  it('resolves a pasted course link end to end', async () => {
+    const isolatedRouteService = new RouteService();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        id: '5', name: 'Quinsig S to N', country: 'United States', distance_m: 5349, status: 'established',
+        polygons: [
+          { order: 0, points: [{ lat: 42.246, lon: -71.746 }] },
+          { order: 1, points: [{ lat: 42.28, lon: -71.75 }] },
+        ],
+      }),
+    });
+    const service = new RownativeService(
+      fetchMock as unknown as typeof fetch,
+      (data) => isolatedRouteService.importRouteFromRownative(data),
+    );
+
+    const route = await service.importCourseById('https://rownative.icu/course/5');
+    expect(route.name).toBe('Quinsig S to N');
+    expect(route.externalId).toBe('5');
+    expect(fetchMock.mock.calls[0][0]).toContain('/5.json');
+    // AC-6: course data comes only from the GitHub mirror.
+    expect(fetchMock.mock.calls[0][0]).toContain('raw.githubusercontent.com/rownative/courses');
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('rownative.icu/api');
+  });
+
+  it('names the course when importCourseById geometry is insufficient', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ id: '9', name: 'Broken Course', polygons: [{ order: 0, points: [{ lat: 1, lon: 2 }] }] }),
+    );
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('9')).rejects.toThrow('Broken Course (9) has insufficient coordinate data');
   });
 
   it('throws a helpful error when course geometry has insufficient points', async () => {
@@ -67,14 +228,11 @@ describe('RownativeService', () => {
         ok: true,
         json: async () => [{ id: '9', name: 'Broken Course', country: 'Unknown', distance_m: 1000 }],
       } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: '9',
-          name: 'Broken Course',
-          polygons: [{ order: 0, points: [{ lat: 1, lon: 2 }] }],
-        }),
-      } as Response);
+      .mockResolvedValueOnce(jsonResponse({
+        id: '9',
+        name: 'Broken Course',
+        polygons: [{ order: 0, points: [{ lat: 1, lon: 2 }] }],
+      }));
 
     const service = new RownativeService(fetchMock as unknown as typeof fetch);
     const [course] = await service.searchCourses('broken');
@@ -116,113 +274,4 @@ describe('RownativeService', () => {
     );
   });
 
-  it('stores linked account metadata per VirtualRow user after completeLinkFlow', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        rownativeUserId: 'rn-55',
-        rownativeDisplayName: 'Rownative User',
-        linkedAt: 123,
-      }),
-    } as Response);
-
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    const linked = await service.completeLinkFlow('vr-user-1', 'request-1');
-
-    expect(linked.virtualRowUserId).toBe('vr-user-1');
-    expect(linked.rownativeUserId).toBe('rn-55');
-    expect(service.getLinkedAccount('vr-user-1')?.rownativeDisplayName).toBe('Rownative User');
-    expect(service.getLinkedAccount('vr-user-2')).toBeNull();
-  });
-
-  it('rejects invalid route ID input before calling pull endpoint', async () => {
-    const fetchMock = vi.fn();
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-
-    await expect(
-      service.pullLinkedRouteKml({
-        virtualRowUserId: 'vr-user',
-        routeId: '../invalid',
-      }),
-    ).rejects.toThrow('Route ID is invalid. Use letters, numbers, dash, or underscore only.');
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('rejects a non-localhost http link URL returned by the worker', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ linkUrl: 'http://evil.example.com/link', requestId: 'req-1' }),
-    } as Response);
-
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    await expect(service.startLinkFlow('vr-user')).rejects.toThrow('Rownative link setup failed. Please try again.');
-  });
-
-  it('accepts a localhost http link URL for local development', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ linkUrl: 'http://localhost:8787/link', requestId: 'req-local' }),
-    } as Response);
-
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    const result = await service.startLinkFlow('vr-user');
-    expect(result.linkUrl).toBe('http://localhost:8787/link');
-  });
-
-  it('rejects a localhost http link URL on an unexpected port', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ linkUrl: 'http://localhost:3000/link', requestId: 'req-local' }),
-    } as Response);
-
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    await expect(service.startLinkFlow('vr-user')).rejects.toThrow('Rownative link setup failed. Please try again.');
-  });
-
-  it('rejects a KML response that exceeds MAX_KML_BYTES in encoded byte length', async () => {
-    const largeKml = 'x'.repeat(5 * 1024 * 1024 + 1);
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ kml: largeKml }),
-    } as Response);
-
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    await expect(
-      service.pullLinkedRouteKml({ virtualRowUserId: 'vr-user' }),
-    ).rejects.toThrow('The KML response is too large to import.');
-  });
-
-  it('pulls linked KML for a valid route URL', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        kml: '<kml><Document></Document></kml>',
-        routeName: 'Pulled Route',
-      }),
-    } as Response);
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-    const result = await service.pullLinkedRouteKml({
-      virtualRowUserId: 'vr-user',
-      routeUrl: 'https://rownative.icu/routes/123',
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, request] = fetchMock.mock.calls[0];
-    expect((request as RequestInit).method).toBe('POST');
-    expect(result.kml).toContain('<kml>');
-    expect(result.routeName).toBe('Pulled Route');
-  });
-
-  it('rejects a route URL outside the trusted rownative domain allowlist', async () => {
-    const fetchMock = vi.fn();
-    const service = new RownativeService(fetchMock as unknown as typeof fetch);
-
-    await expect(
-      service.pullLinkedRouteKml({
-        virtualRowUserId: 'vr-user',
-        routeUrl: 'https://evil.example.com/routes/123',
-      }),
-    ).rejects.toThrow('Route URL is invalid.');
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
 });
