@@ -120,6 +120,10 @@ describe('buildSessionFITPayload', () => {
     expect(payload.session.sub_sport).toBe('indoor_rowing');
   });
 
+  it('never labels the activity as cycling', () => {
+    expect(JSON.stringify(buildSessionFITPayload(makeSession()))).not.toMatch(/cycling/i);
+  });
+
   it('preserves session totals exactly', () => {
     const payload = buildSessionFITPayload(makeSession());
     expect(payload.session.total_distance).toBe(1500);

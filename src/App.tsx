@@ -20,7 +20,6 @@ import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
 import { formatPace } from './utils/formatters';
-import { buildSessionFITPayload, triggerBlobDownload } from './utils/exporters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -39,7 +38,7 @@ function App() {
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
   const showAuthFeatures = isAuthenticated || !!window.__PLAYWRIGHT_TESTING;
-  const [currentView, setCurrentView] = useState<'routes' | 'workout' | 'history'>('routes');
+  const [currentView, setCurrentView] = useState<'routes' | 'workout'>('routes');
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -70,12 +69,8 @@ function App() {
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   // Holds a completed unauthenticated session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
-  // Route description panel state (collapsed/expanded)
-  const [isRouteDescriptionExpanded, setIsRouteDescriptionExpanded] = useState(true);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
   const [routeEnrichmentLoading, setRouteEnrichmentLoading] = useState<Record<string, boolean>>({});
-  // Completed (non-guest) workout sessions for the History view
-  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   // Route import panel state
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRouteName, setImportRouteName] = useState('');
@@ -199,19 +194,10 @@ function App() {
         if (r) setSelectedRoute(r);
       }
     };
-    const onEnd = (e: Event) => {
+    const onEnd = () => {
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
-      if (e instanceof CustomEvent && e.detail) {
-        const completed = e.detail as WorkoutSession;
-        if (!completed.isGuest) {
-          setWorkoutHistory((prev) => {
-            if (prev.some((s) => s.id === completed.id)) return prev;
-            return [...prev, completed];
-          });
-        }
-      }
     };
     if (typeof window === 'undefined') return;
     window.addEventListener('virtualrow:sessionStarted', onStartup as EventListener);
@@ -263,7 +249,7 @@ function App() {
     setSessionState('idle');
 
     if (isGuestSession && completed) {
-      // Show summary modal; do NOT push to workoutHistory (unauthenticated sessions are excluded)
+      // Show summary modal for unauthenticated sessions
       setGuestCompletedSession(completed);
     } else {
       setCurrentView('routes');
@@ -294,12 +280,6 @@ function App() {
     // Reset metrics but keep session
     setActivityElapsedMs(0);
     // Note: Full reset logic would need to clear workoutService data
-  }, []);
-
-  const handleExportFIT = useCallback((session: WorkoutSession) => {
-    const payload = buildSessionFITPayload(session);
-    const filename = `virtualrow-${session.id}.fit.json`;
-    triggerBlobDownload(JSON.stringify(payload, null, 2), 'application/json', filename);
   }, []);
 
   // Get filtered routes based on current filter settings
@@ -512,7 +492,6 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
-          <p className="app-subtitle">Willowbrook demo plus rownative.icu route import for real-world rowing</p>
           <div className="header-auth">
             <AuthButton />
           </div>
@@ -536,14 +515,6 @@ function App() {
             >
               <span className="tab-icon">🗺️</span> Routes
             </button>
-            {showAuthFeatures && (
-              <button
-                className={`nav-tab ${currentView === 'history' ? 'active' : ''}`}
-                onClick={() => setCurrentView('history')}
-              >
-                <span className="tab-icon">📋</span> History
-              </button>
-            )}
           </nav>
 
           {currentView === 'routes' && (
@@ -611,10 +582,6 @@ function App() {
                     <p className="route-location">📍 {selectedRoute.location}</p>
                   </div>
 
-                  <div className="route-description-container">
-                    <p className="route-description">{selectedRoute.description}</p>
-                  </div>
-                  
                   <div className="route-meta-compact">
                     <span className="meta-badge">
                       📏 {selectedRoute.distance} km
@@ -749,48 +716,6 @@ function App() {
             </div>
           )}
 
-          {currentView === 'history' && (
-            <div className="view-container history-view">
-              <h2>Workout History</h2>
-              {workoutHistory.length === 0 ? (
-                <p className="empty-message">No workouts recorded yet.</p>
-              ) : (
-                <div className="history-list">
-                  {[...workoutHistory].reverse().map((session) => (
-                    <div key={session.id} className="history-item">
-                      <div className="history-header">
-                        <h3>{session.routeName}</h3>
-                        <span className="date">
-                          {new Date(session.startTime).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="history-stats">
-                        <span>{(session.distance / 1000).toFixed(2)} km</span>
-                        <span>•</span>
-                        <span>{Math.floor(session.duration / 60)}:{String(session.duration % 60).padStart(2, '0')}</span>
-                        {session.averagePace > 0 && (
-                          <>
-                            <span>•</span>
-                            <span>{formatPace(session.averagePace)}/500m</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="history-actions">
-                        <button
-                          type="button"
-                          className="btn-export"
-                          onClick={() => handleExportFIT(session)}
-                        >
-                          FIT
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div className="view-container activity-view">
               <div className="activity-screen">
@@ -825,25 +750,10 @@ function App() {
                     />
                   </Suspense>
 
-                  <button
-                    className="btn-toggle-description btn-toggle-description--activity"
-                    onClick={() => setIsRouteDescriptionExpanded(!isRouteDescriptionExpanded)}
-                    type="button"
-                    aria-label={isRouteDescriptionExpanded ? "Collapse route info" : "Expand route info"}
-                    aria-expanded={isRouteDescriptionExpanded}
-                  >
-                    {isRouteDescriptionExpanded ? '▼' : '▶'}
-                  </button>
-
-                  {isRouteDescriptionExpanded && (
-                    <div className="activity-route-summary">
-                      <h2>{selectedRoute?.name}</h2>
-                      <p>{selectedRoute?.location}</p>
-                      {selectedRoute && (
-                        <p className="route-description route-description--activity">{selectedRoute.description}</p>
-                      )}
-                    </div>
-                  )}
+                  <div className="activity-route-summary">
+                    <h2>{selectedRoute?.name}</h2>
+                    <p>{selectedRoute?.location}</p>
+                  </div>
 
                   <div className="activity-map-overlay">
                     <RouteMap 

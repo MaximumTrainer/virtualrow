@@ -74,11 +74,20 @@ describe('App component', () => {
     expect(screen.queryByRole('button', { name: /Quick Start/i })).not.toBeInTheDocument();
   });
 
-  it('shows route-only navigation for unauthenticated users (no History tab)', () => {
+  it('shows route-only navigation (no History tab)', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
+  });
+
+  it('does not render the route description in the route details panel', () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector('.route-description')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /(Collapse|Expand) route info/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows Rower Device and Heart Rate panels for unauthenticated users without guest sidebar class', () => {
@@ -124,6 +133,25 @@ describe('App component', () => {
 
       expect(screen.getByRole('button', { name: /Import Route/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /rownative\.icu/i })).toBeInTheDocument();
+    });
+
+    it('does not show a History tab when logged in', () => {
+      const authedValue: AuthContextValue = {
+        user: { id: 'i12345', name: 'Test User', email: 'test@example.com' },
+        isAuthenticated: true,
+        isLoading: false,
+        authError: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+        clearAuthError: vi.fn(),
+        pendingAction: null,
+        setPendingAction: vi.fn(),
+      };
+      vi.spyOn(AuthContext, 'useAuth').mockReturnValue(authedValue);
+
+      render(<App />);
+
+      expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
     });
   });
 });

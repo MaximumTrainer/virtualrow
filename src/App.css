@@ -208,7 +208,6 @@ body {
    ============================================================================ */
 .device-panel,
 .workout-stats-panel,
-.history-stats-panel,
 .import-panel {
   background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
   backdrop-filter: blur(12px);
@@ -235,7 +234,6 @@ body {
 }
 
 .app-sidebar .device-panel,
-.app-sidebar .history-stats-panel,
 .app-sidebar .workout-stats-panel {
   min-width: 0;
 }
@@ -509,67 +507,6 @@ body {
   font-size: 13px;
   color: var(--color-primary);
   font-weight: 600;
-}
-
-.route-info-overlay .route-description {
-  margin: 0;
-  font-size: 15px;
-  color: var(--color-text-secondary);
-  line-height: 1.75;
-}
-
-.route-description-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.btn-toggle-description {
-  align-self: flex-start;
-  background: rgba(var(--color-primary-rgb), 0.08);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.18);
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary-dark);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn-toggle-description:hover {
-  background: rgba(var(--color-primary-rgb), 0.14);
-  border-color: rgba(var(--color-primary-rgb), 0.28);
-}
-
-.btn-toggle-description--route-details {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 2;
-}
-
-.btn-toggle-description--activity {
-  background: rgba(9, 21, 34, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #f4f8fc;
-}
-
-.btn-toggle-description--activity:hover {
-  background: rgba(9, 21, 34, 0.88);
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-.activity-route-summary .route-description--activity {
-  color: rgba(244, 248, 252, 0.88);
-  font-size: 14px;
-  margin: 0;
-  padding: 8px 0 0 0;
-  line-height: 1.6;
-  max-width: 600px;
 }
 
 .route-info-overlay .route-meta-compact {
@@ -868,24 +805,6 @@ body {
   box-shadow: none;
 }
 
-.btn-export {
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-export:hover {
-  background: rgba(0, 245, 212, 0.2);
-  color: #00f5d4;
-  border-color: rgba(0, 245, 212, 0.3);
-}
-
 /* ============================================================================
    WORKOUTS VIEW
    ============================================================================ */
@@ -929,144 +848,6 @@ body {
 }
 
 /* ============================================================================
-   HISTORY VIEW
-   ============================================================================ */
-.history-view {
-  flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.history-view h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 8px;
-}
-
-.empty-message {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 14px;
-  text-align: center;
-  padding: 40px;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.history-item {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s;
-}
-
-.history-item:hover {
-  border-color: rgba(0, 245, 212, 0.3);
-}
-
-.history-item.pb-item {
-  border-color: rgba(255, 214, 10, 0.4);
-  background: rgba(255, 214, 10, 0.05);
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.history-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.history-header .pb-badge {
-  padding: 3px 8px;
-  background: rgba(255, 214, 10, 0.2);
-  color: #ffd60a;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.history-header .date {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.history-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.history-stats .stat {
-  text-align: center;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-}
-
-.history-stats .stat span {
-  font-size: 14px;
-  font-weight: 600;
-  color: #00f5d4;
-}
-
-.compliance-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-
-.compliance-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.compliance-value {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.compliance-value.on-target {
-  color: #00f5d4;
-}
-
-.compliance-value.off-target {
-  color: #ff006e;
-}
-
-.history-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.hr-zones-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* ============================================================================
    ACTIVITY VIEW
    ============================================================================ */
 .activity-view {
@@ -1100,16 +881,9 @@ body {
   display: block;
 }
 
-.activity-route-stage .btn-toggle-description--activity {
-  position: absolute;
-  top: 22px;
-  left: 22px;
-  z-index: 21;
-}
-
 .activity-route-summary {
   position: absolute;
-  top: 60px;
+  top: 22px;
   left: 22px;
   z-index: 20;
   padding: 14px 16px;
@@ -1712,17 +1486,16 @@ body {
   .app-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  
+
   .nav-tabs {
     width: fit-content;
   }
-  
+
   .device-panel,
-  .workout-stats-panel,
-  .history-stats-panel {
+  .workout-stats-panel {
     min-width: 0;
   }
-  
+
   .view-container {
     padding: 16px;
   }
@@ -1742,10 +1515,6 @@ body {
   .activity-map-overlay {
     width: 200px;
     height: 140px;
-  }
-  
-  .history-stats {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1795,19 +1564,6 @@ body {
     font-size: 20px;
   }
 
-  .route-info-overlay .route-info-header {
-    padding-right: 104px;
-  }
-
-  .btn-toggle-description--route-details {
-    top: 12px;
-    right: 12px;
-  }
-  
-  .history-stats {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .device-panel-heading {
     flex-direction: column;
     align-items: flex-start;
@@ -1825,13 +1581,8 @@ body {
     min-height: 300px;
   }
 
-  .activity-route-stage .btn-toggle-description--activity {
-    top: 14px;
-    left: 14px;
-  }
-
   .activity-route-summary {
-    top: 52px;
+    top: 14px;
     left: 14px;
     padding: 12px 14px;
   }
@@ -1911,21 +1662,6 @@ body {
 
 .routes-list::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--color-primary-rgb), 0.42);
-}
-
-/* History view scrollbar */
-.history-view::-webkit-scrollbar {
-  width: 6px;
-}
-
-.history-view::-webkit-scrollbar-track {
-  background: rgba(91, 126, 160, 0.08);
-  border-radius: 3px;
-}
-
-.history-view::-webkit-scrollbar-thumb {
-  background: rgba(var(--color-primary-rgb), 0.28);
-  border-radius: 3px;
 }
 
 /* Route details scrollbar */
