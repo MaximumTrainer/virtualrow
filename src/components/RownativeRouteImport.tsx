@@ -1,253 +1,109 @@
 import { useState } from 'react';
 import { useServices } from '../context/ServicesContext';
-import type { KMLImportCandidate } from '../services/routeService';
 import type { WaterRoute } from '../types/index';
+import { parseCourseSelector, startHandoff } from '../utils/rownativeHandoff';
 import './RownativeRouteImport.css';
 
 interface RownativeRouteImportProps {
   onRouteImported: (route: WaterRoute) => void;
 }
 
+/**
+ * Entry point to rownative.icu's course catalogue.
+ *
+ * The user browses and filters on rownative.icu — which already does that far
+ * better than we would — and returns here with the course they picked; the
+ * return leg is handled by `useRownativeHandoff`. No account linking is
+ * involved: both products already identify the same person through
+ * intervals.icu, so the handoff carries only a course id.
+ *
+ * Until rownative.icu ships the send-back affordance, the fallback field below
+ * accepts a pasted course id or link and loads it through the same path.
+ */
 export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportProps) {
-  const { authService, rownativeService, routeService } = useServices();
+  const { rownativeService, routeService } = useServices();
   const [isOpen, setIsOpen] = useState(false);
-  const [isLinking, setIsLinking] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [isUnlinking, setIsUnlinking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState('Not linked');
-  const [linkedAccountName, setLinkedAccountName] = useState<string | null>(null);
-  const [isLinked, setIsLinked] = useState(false);
-  const [linkRequestId, setLinkRequestId] = useState<string | undefined>(undefined);
-  const [routeSelector, setRouteSelector] = useState('');
-  const [kmlCandidates, setKmlCandidates] = useState<KMLImportCandidate[] | null>(null);
-  const [pendingKmlMeta, setPendingKmlMeta] = useState<{ name?: string; location?: string; tags?: string[] } | null>(null);
-  const currentUser = authService.getUser();
-  const currentUserId = currentUser?.id ?? '';
+  const [selector, setSelector] = useState('');
 
-  const loadLinkStatus = () => {
+  const handleBrowse = () => {
     setError(null);
-    if (!currentUserId) {
-      setIsLinked(false);
-      setLinkedAccountName(null);
-      setStatus('Sign in to VirtualRow to link rownative.');
+    // Navigate in this tab: the return leg must land in the window the user is
+    // actually using, so a pop-up would strand the result somewhere they can't see.
+    window.location.assign(startHandoff());
+  };
+
+  const handleLoadSelector = async () => {
+    const courseId = parseCourseSelector(selector);
+    if (!courseId) {
+      setError('Enter a rownative.icu course id, or a link such as https://rownative.icu/?course=106.');
       return;
     }
 
-    const linked = rownativeService.getLinkedAccount(currentUserId);
-    if (!linked) {
-      setIsLinked(false);
-      setLinkedAccountName(null);
-      setStatus('Not linked');
-      return;
-    }
-
-    setIsLinked(true);
-    setLinkedAccountName(linked.rownativeDisplayName ?? linked.rownativeUserId);
-    setStatus('Linked');
-  };
-
-  const handleToggle = () => {
-    const nextOpen = !isOpen;
-    setIsOpen(nextOpen);
-    if (nextOpen) {
-      loadLinkStatus();
-      setError(null);
-    }
-  };
-
-  const handleStartLink = async () => {
-    setIsLinking(true);
-    setError(null);
-    const popup = window.open('about:blank', '_blank');
-    if (!popup) {
-      setStatus('Link failed');
-      setError('Your browser blocked the rownative link window. Allow pop-ups and try again.');
-      setIsLinking(false);
-      return;
-    }
-    try {
-      const result = await rownativeService.startLinkFlow(currentUserId);
-      popup.location.href = result.linkUrl;
-      setLinkRequestId(result.requestId);
-      setStatus('Linking');
-    } catch (e) {
-      popup.close();
-      setStatus('Link failed');
-      setError(e instanceof Error ? e.message : 'Unable to start rownative linking.');
-    } finally {
-      setIsLinking(false);
-    }
-  };
-
-  const handleCompleteLink = async () => {
-    setIsLinking(true);
+    setIsLoading(true);
     setError(null);
     try {
-      const linked = await rownativeService.completeLinkFlow(currentUserId, linkRequestId);
-      setIsLinked(true);
-      setLinkedAccountName(linked.rownativeDisplayName ?? linked.rownativeUserId);
-      setLinkRequestId(undefined);
-      setStatus('Linked');
-    } catch (e) {
-      setStatus('Link failed');
-      setError(e instanceof Error ? e.message : 'Unable to confirm rownative linking yet.');
-    } finally {
-      setIsLinking(false);
-    }
-  };
-
-  const handleUnlink = async () => {
-    setIsUnlinking(true);
-    setError(null);
-    try {
-      await rownativeService.unlinkAccount(currentUserId);
-      setIsLinked(false);
-      setLinkedAccountName(null);
-      setLinkRequestId(undefined);
-      setStatus('Not linked');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to unlink rownative account.');
-    } finally {
-      setIsUnlinking(false);
-    }
-  };
-
-  const handlePullRoute = async () => {
-    setIsPulling(true);
-    setError(null);
-    try {
-      const trimmedSelector = routeSelector.trim();
-      const selection = trimmedSelector.includes('://')
-        ? { routeUrl: trimmedSelector }
-        : { routeId: trimmedSelector };
-      const kmlResult = await rownativeService.pullLinkedRouteKml({
-        virtualRowUserId: currentUserId,
-        ...(trimmedSelector ? selection : {}),
-      });
-      const kmlMeta = {
-        name: kmlResult.routeName,
-        location: kmlResult.location ?? 'rownative.icu',
-        tags: ['rownative', 'imported', 'kml'],
-      };
-      const importResult = routeService.importRouteFromKML(kmlResult.kml, kmlMeta);
-
-      if (importResult.status === 'error') {
-        throw new Error(importResult.error);
-      }
-
-      if (importResult.status === 'selectionRequired') {
-        if (importResult.candidates.length === 0) {
-          throw new Error('No selectable routes were found in the pulled KML.');
-        }
-        setKmlCandidates(importResult.candidates);
-        setPendingKmlMeta(kmlMeta);
-        setStatus('Select route');
-        return;
-      }
-
-      onRouteImported(importResult.route);
-      setStatus('Pull success');
+      const existing = routeService.findRouteByRownativeId(courseId);
+      const route = existing ?? (await rownativeService.importCourseById(courseId));
+      onRouteImported(route);
+      setSelector('');
       setIsOpen(false);
     } catch (e) {
-      setStatus('Pull failed');
-      setError(e instanceof Error ? e.message : 'Unable to pull a route from rownative.');
+      setError(e instanceof Error ? e.message : `Could not load rownative course ${courseId}.`);
     } finally {
-      setIsPulling(false);
-    }
-  };
-
-  const handleSelectCandidate = (candidate: KMLImportCandidate) => {
-    try {
-      const imported = routeService.finalizeKMLImport(candidate, pendingKmlMeta ?? {});
-      onRouteImported(imported);
-      setKmlCandidates(null);
-      setPendingKmlMeta(null);
-      setStatus('Pull success');
-      setIsOpen(false);
-    } catch (e) {
-      setStatus('Pull failed');
-      setError(e instanceof Error ? e.message : 'Unable to import the selected route.');
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="rownative-import">
-      <button className="btn-import-route btn-import-route--rownative" onClick={handleToggle} aria-expanded={isOpen}>
-        🌊 Open rownative.icu
+      <button
+        type="button"
+        className="btn-import-route btn-import-route--rownative"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+      >
+        🌊 Find a course on rownative.icu
       </button>
 
       {isOpen && (
-        <div className="route-import-panel rownative-import-panel" role="region" aria-label="Rownative route import">
+        <div className="route-import-panel rownative-import-panel" role="region" aria-label="Rownative course import">
           <p className="rownative-status">
-            Status: <strong>{status}</strong>
+            Browse rownative.icu, pick a course, and it opens here ready to row.
           </p>
-          {linkedAccountName && (
-            <p className="rownative-status">
-              Linked account: <strong>{linkedAccountName}</strong>
-            </p>
-          )}
-          <a
-            className="filter-btn filter-btn--active rownative-open-link"
-            href="https://rownative.icu/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open rownative.icu
-          </a>
+
+          <button type="button" className="filter-btn filter-btn--active" onClick={handleBrowse}>
+            Browse courses on rownative.icu
+          </button>
+
           {error && (
             <p className="import-error" role="alert">
               ⚠ {error}
             </p>
           )}
 
-          <div className="rownative-controls">
-            {!isLinked && (
-              <>
-                <button type="button" className="filter-btn filter-btn--active" onClick={() => void handleStartLink()} disabled={isLinking || !currentUserId}>
-                  {isLinking ? 'Starting link…' : 'Link rownative account'}
-                </button>
-                <button type="button" className="filter-btn" onClick={() => void handleCompleteLink()} disabled={isLinking || !currentUserId}>
-                  {isLinking ? 'Checking…' : 'Complete linking'}
-                </button>
-              </>
-            )}
-
-            {isLinked && (
-              <>
-                <input
-                  type="text"
-                  className="import-name-input"
-                  placeholder="Optional route id or URL"
-                  value={routeSelector}
-                  onChange={(e) => setRouteSelector(e.target.value)}
-                  aria-label="Rownative route id or URL"
-                />
-                <button type="button" className="filter-btn filter-btn--active" onClick={() => void handlePullRoute()} disabled={isPulling}>
-                  {isPulling ? 'Pulling…' : 'Pull route KML'}
-                </button>
-                <button type="button" className="filter-btn" onClick={() => void handleUnlink()} disabled={isUnlinking}>
-                  {isUnlinking ? 'Unlinking…' : 'Unlink rownative account'}
-                </button>
-              </>
-            )}
-          </div>
-
-          {kmlCandidates && (
+          <div className="rownative-fallback">
+            <p>Already have a course id or link? Paste it here.</p>
             <div className="rownative-controls">
-              <p className="rownative-status">Multiple routes found. Select one to import:</p>
-              {kmlCandidates.map((candidate, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  className="filter-btn"
-                  onClick={() => handleSelectCandidate(candidate)}
-                >
-                  {candidate.name || `Route ${i + 1}`}
-                </button>
-              ))}
+              <input
+                type="text"
+                className="import-name-input"
+                placeholder="Course id or rownative.icu link"
+                value={selector}
+                onChange={(e) => setSelector(e.target.value)}
+                aria-label="Rownative course id or link"
+              />
+              <button
+                type="button"
+                className="filter-btn"
+                onClick={() => void handleLoadSelector()}
+                disabled={isLoading || selector.trim().length === 0}
+              >
+                {isLoading ? 'Loading…' : 'Load course'}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

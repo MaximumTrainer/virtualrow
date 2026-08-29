@@ -97,6 +97,76 @@ describe('RouteService creation & search', () => {
     expect(route.tags).toContain('status:established');
   });
 
+  it('tags the originating course id so repeat imports can be de-duplicated', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '4242',
+      name: 'Dedupe Course',
+      country: 'Netherlands',
+      distanceMeters: 5000,
+      coordinates: [{ lat: 52.37, lng: 4.89 }, { lat: 52.38, lng: 4.9 }],
+    });
+
+    expect(route.tags).toContain('rownative-id:4242');
+    expect(routeService.findRouteByRownativeId('4242')?.id).toBe(route.id);
+    expect(routeService.findRouteByRownativeId('not-imported')).toBeUndefined();
+  });
+
+  it('marks a gate-only course as an outline and densifies its centreline (RF-1)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '1',
+      name: 'Quinsig South to North',
+      country: 'United States',
+      distanceMeters: 5306,
+      // Two gate centroids, as rownative course 1 actually supplies.
+      coordinates: [{ lat: 42.24, lng: -71.81 }, { lat: 42.28766, lng: -71.81 }],
+      status: 'established',
+    });
+
+    expect(route.tags).toContain('outline-only');
+    // Surveyed distance_m stays authoritative over anything derived from centroids.
+    expect(route.distance).toBe(5.31);
+    expect(route.coordinates.length).toBeGreaterThanOrEqual(100);
+    expect(route.coordinates[0]).toEqual({ lat: 42.24, lng: -71.81 });
+  });
+
+  it('does not mark a densely surveyed course as an outline', () => {
+    const coordinates = Array.from({ length: 12 }, (_, i) => ({
+      lat: 52.37 + i * 0.001,
+      lng: 4.89,
+    }));
+    const route = routeService.importRouteFromRownative({
+      id: '555',
+      name: 'Detailed Course',
+      country: 'Netherlands',
+      distanceMeters: 1300,
+      coordinates,
+    });
+
+    expect(route.tags).not.toContain('outline-only');
+  });
+
+  it('keeps imported coordinates inside valid WGS-84 bounds (KV-2)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '778',
+      name: 'Bounds Course',
+      country: 'New Zealand',
+      distanceMeters: 4000,
+      coordinates: [{ lat: -41.29, lng: 174.78 }, { lat: -41.32, lng: 174.81 }],
+    });
+
+    for (const point of route.coordinates) {
+      expect(point.lat).toBeGreaterThanOrEqual(-90);
+      expect(point.lat).toBeLessThanOrEqual(90);
+      expect(point.lng).toBeGreaterThanOrEqual(-180);
+      expect(point.lng).toBeLessThanOrEqual(180);
+      expect(Number.isNaN(point.lat)).toBe(false);
+      expect(Number.isNaN(point.lng)).toBe(false);
+    }
+    // Southern/eastern hemisphere signs must survive the round trip.
+    expect(route.coordinates[0].lat).toBeLessThan(0);
+    expect(route.coordinates[0].lng).toBeGreaterThan(0);
+  });
+
   it('does not add a status tag when rownative status is missing', () => {
     const route = routeService.importRouteFromRownative({
       id: '100',

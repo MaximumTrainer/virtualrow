@@ -2029,3 +2029,49 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(74, 155, 255, 0.35);
 }
+
+/* ============================================================================
+   ROWNATIVE HANDOFF
+   ============================================================================ */
+.rownative-handoff-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid var(--color-border);
+  background: rgba(var(--color-primary-rgb), 0.08);
+  color: var(--color-text-primary);
+}
+
+.rownative-handoff-banner--error {
+  background: rgba(179, 64, 47, 0.10);
+  border-color: rgba(179, 64, 47, 0.32);
+}
+
+.rownative-handoff-dismiss {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.rownative-handoff-dismiss:hover {
+  color: var(--color-text-primary);
+  border-color: rgba(var(--color-primary-rgb), 0.35);
+}
+
+.meta-badge--outline,
+.badge-outline {
+  background: rgba(168, 106, 8, 0.12);
+  color: #8a5606;
+  border: 1px solid rgba(168, 106, 8, 0.28);
+}

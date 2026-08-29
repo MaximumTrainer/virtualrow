@@ -82,3 +82,75 @@ export function parseKMLCoordinateList(text: string): Coordinate[] {
   }
   return coords;
 }
+
+/**
+ * Great-circle distance between two coordinates, in metres.
+ *
+ * Uses the haversine formula against a spherical Earth (R = 6,371,008.8 m,
+ * the IUGG mean radius). Accurate to well under a metre at the segment
+ * lengths we deal with, which is far below the resolution that matters for
+ * route geometry.
+ */
+export function distanceBetweenMeters(a: Coordinate, b: Coordinate): number {
+  const R = 6_371_008.8;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Total length of a coordinate sequence, in metres. */
+export function polylineLengthMeters(coordinates: Coordinate[]): number {
+  let total = 0;
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    total += distanceBetweenMeters(coordinates[i], coordinates[i + 1]);
+  }
+  return total;
+}
+
+/**
+ * Densify a coordinate sequence so no two consecutive points are further
+ * apart than `maxGapMeters`.
+ *
+ * Points are interpolated **along the existing segments only** — this adds
+ * resolution for the 3D camera and progress tracking, it never invents bends
+ * the source data did not contain. A two-point course stays a straight line;
+ * it just becomes a straight line made of many points.
+ *
+ * Every input point is preserved, in order. Sequences shorter than two points
+ * are returned unchanged.
+ *
+ * @param maxGapMeters Maximum spacing between consecutive points. Must be > 0.
+ */
+export function resampleCoordinates(
+  coordinates: Coordinate[],
+  maxGapMeters: number,
+): Coordinate[] {
+  if (coordinates.length < 2 || !Number.isFinite(maxGapMeters) || maxGapMeters <= 0) {
+    return coordinates;
+  }
+
+  const result: Coordinate[] = [coordinates[0]];
+
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const start = coordinates[i];
+    const end = coordinates[i + 1];
+    const gap = distanceBetweenMeters(start, end);
+
+    // segments = 1 leaves the pair untouched; > 1 inserts evenly spaced points.
+    const segments = Math.ceil(gap / maxGapMeters);
+    for (let step = 1; step < segments; step++) {
+      const t = step / segments;
+      result.push({
+        lat: start.lat + (end.lat - start.lat) * t,
+        lng: start.lng + (end.lng - start.lng) * t,
+      });
+    }
+    result.push(end);
+  }
+
+  return result;
+}

@@ -7,6 +7,32 @@ describe('RownativeService', () => {
     vi.restoreAllMocks();
   });
 
+  it('calls the global fetch with the correct receiver when none is injected', async () => {
+    // Regression: the constructor default used to store a bare `fetch` on an
+    // instance field, so `this.fetchImpl(...)` invoked it with the service as
+    // its receiver and browsers threw "Illegal invocation". Every unit test
+    // injects a double, so only a real browser ever hit it.
+    const globalFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '1',
+        name: 'Course One',
+        country: 'United States',
+        distance_m: 5306,
+        polygons: [
+          { order: 0, points: [{ lat: 42.24, lon: -71.81 }] },
+          { order: 1, points: [{ lat: 42.28, lon: -71.81 }] },
+        ],
+      }),
+    } as Response);
+
+    const service = new RownativeService();
+    await expect(service.importCourseById('1')).resolves.toBeDefined();
+    expect(globalFetch).toHaveBeenCalledTimes(1);
+    // Invoked as a plain call, not as a method of the service instance.
+    expect(globalFetch.mock.instances[0]).not.toBeInstanceOf(RownativeService);
+  });
+
   it('searches courses by name from the index', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -57,8 +83,75 @@ describe('RownativeService', () => {
 
     expect(imported.source).toBe('rownative');
     expect(imported.distance).toBe(6.2);
-    expect(imported.coordinates).toHaveLength(2);
+    // The two polygon centroids are the route's endpoints, but the centreline is
+    // densified in between so the engine gets demo-route resolution (issue #189).
+    expect(imported.coordinates.length).toBeGreaterThan(2);
+    // Endpoints are the polygon centroids: mean of each gate's three vertices.
+    expect(imported.coordinates[0].lat).toBeCloseTo(52.50333, 4);
+    expect(imported.coordinates[0].lng).toBeCloseTo(13.41, 4);
+    const last = imported.coordinates[imported.coordinates.length - 1];
+    expect(last.lat).toBeCloseTo(52.52333, 4);
+    expect(last.lng).toBeCloseTo(13.44, 4);
     expect(isolatedRouteService.getAllRoutes().length).toBe(initialCount + 1);
+  });
+
+  it('imports a course by id alone, without an index lookup', async () => {
+    const isolatedRouteService = new RouteService();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: '106',
+        name: 'HOTS Stake Race',
+        country: 'United States',
+        distance_m: 4804,
+        status: 'established',
+        polygons: [
+          { order: 0, points: [{ lat: 42.24, lon: -71.81 }] },
+          { order: 1, points: [{ lat: 42.28, lon: -71.79 }] },
+        ],
+      }),
+    } as Response);
+
+    const service = new RownativeService(
+      fetchMock as unknown as typeof fetch,
+      (data) => isolatedRouteService.importRouteFromRownative(data),
+    );
+    const route = await service.importCourseById('106');
+
+    // One request only: the course JSON already carries name/country/distance.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain('/106.json');
+    expect(route.name).toBe('HOTS Stake Race');
+    expect(route.distance).toBe(4.8);
+    expect(route.source).toBe('rownative');
+  });
+
+  it('rejects a malformed course id before making any request', async () => {
+    const fetchMock = vi.fn();
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('../../secrets')).rejects.toThrow('Course ID is invalid');
+    await expect(service.importCourseById('')).rejects.toThrow('Course ID is invalid');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a readable error when a course id does not exist', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('999999')).rejects.toThrow(
+      'Unable to load rownative course data (HTTP 404). Please try again.',
+    );
+  });
+
+  it('names the course when importCourseById geometry is insufficient', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: '9', name: 'Broken Course', polygons: [{ order: 0, points: [{ lat: 1, lon: 2 }] }] }),
+    } as Response);
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await expect(service.importCourseById('9')).rejects.toThrow('Broken Course (9) has insufficient coordinate data');
   });
 
   it('throws a helpful error when course geometry has insufficient points', async () => {

@@ -10,7 +10,9 @@ const UNORDERED_POLYGON_SORT_KEY = Number.MAX_SAFE_INTEGER;
 const ROWNATIVE_WORKER_BASE_URL = (import.meta.env.VITE_ROWNATIVE_WORKER_BASE_URL as string | undefined)
   ?? 'https://rownative.icu/api/virtualrow';
 const MAX_KML_BYTES = 5 * 1024 * 1024;
-const ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+/** Shape of a rownative course identifier. Exported so the handoff layer validates identically. */
+export const ROWNATIVE_ROUTE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+const ROUTE_ID_PATTERN = ROWNATIVE_ROUTE_ID_PATTERN;
 const ALLOWED_ROUTE_URL_HOSTS = new Set(['rownative.icu', 'www.rownative.icu']);
 const ALLOWED_LOCAL_LINK_PORTS = new Set(['8787']);
 
@@ -80,7 +82,11 @@ export class RownativeService {
   private readonly importRoute: (data: RownativeRouteImportData) => WaterRoute;
 
   constructor(
-    fetchImpl: typeof fetch = fetch,
+    // Forwarded through an arrow rather than passing `fetch` directly: stored on
+    // an instance field and called as `this.fetchImpl(...)`, a bare `fetch`
+    // reference is invoked with the service as its receiver, which browsers
+    // reject with "Illegal invocation". Injected test doubles are unaffected.
+    fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
     importRoute: (data: RownativeRouteImportData) => WaterRoute = (data) => routeService.importRouteFromRownative(data),
   ) {
     this.fetchImpl = fetchImpl;
@@ -362,20 +368,48 @@ export class RownativeService {
   }
 
   async importCourse(course: RownativeCourseSummary): Promise<WaterRoute> {
-    const url = `${ROWNATIVE_COURSE_BASE_URL}/${encodeURIComponent(course.id)}.json`;
-    const detail = await this.fetchJson<RownativeCourseFile>(url);
+    const detail = await this.fetchCourseDetail(course.id);
+    return this.importCourseDetail(detail, course);
+  }
+
+  /**
+   * Import a course knowing only its identifier.
+   *
+   * This is the path the rownative.icu handoff uses: the return leg carries a
+   * course id, and the course JSON on the public mirror already contains the
+   * name, country, distance and status, so no index lookup is needed.
+   */
+  async importCourseById(courseId: string): Promise<WaterRoute> {
+    const id = courseId.trim();
+    if (!ROUTE_ID_PATTERN.test(id)) {
+      throw new Error('Course ID is invalid. Use letters, numbers, dash, or underscore only.');
+    }
+    const detail = await this.fetchCourseDetail(id);
+    return this.importCourseDetail(detail, { id });
+  }
+
+  private async fetchCourseDetail(courseId: string): Promise<RownativeCourseFile> {
+    const url = `${ROWNATIVE_COURSE_BASE_URL}/${encodeURIComponent(courseId)}.json`;
+    return this.fetchJson<RownativeCourseFile>(url);
+  }
+
+  private importCourseDetail(
+    detail: RownativeCourseFile,
+    fallback: { id: string; name?: string; country?: string; distanceMeters?: number; status?: string },
+  ): WaterRoute {
     const coordinates = this.deriveRouteCoordinates(detail);
+    const name = detail.name || fallback.name || `Course ${fallback.id}`;
     if (coordinates.length < 2) {
-      throw new Error(`Course ${course.name} (${course.id}) has insufficient coordinate data. At least 2 coordinate points are required.`);
+      throw new Error(`Course ${name} (${fallback.id}) has insufficient coordinate data. At least 2 coordinate points are required.`);
     }
 
     return this.importRoute({
-      id: detail.id || course.id,
-      name: detail.name || course.name,
-      country: detail.country || course.country,
-      distanceMeters: detail.distance_m ?? course.distanceMeters,
+      id: detail.id || fallback.id,
+      name,
+      country: detail.country || fallback.country || 'Unknown',
+      distanceMeters: detail.distance_m ?? fallback.distanceMeters ?? 0,
       coordinates,
-      status: detail.status ?? course.status,
+      status: detail.status ?? fallback.status,
     });
   }
 }
