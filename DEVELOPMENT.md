@@ -88,11 +88,13 @@ playwright/
 
 `App.tsx` owns all application state. There is no global state library; all data flows via props and callbacks:
 
-- `currentView`: `'routes' | 'workouts' | 'workout' | 'history'`
+- `currentView`: `'routes' | 'workout'`
 - `sessionState`: `'idle' | 'active' | 'paused'`
-- `selectedRoute`, `selectedWorkout`, `currentSession` — active session data
+- `selectedRoute`, `currentSession` — active session data
 - `pm5Data`, `heartRateSamples` — live device streams
-- `workoutHistory`, `workoutProgress` — persistence + workout tracking
+
+Completed sessions are not displayed in-app. `workoutService` retains them in memory for
+the lifetime of the page; export happens externally.
 
 A session auto-ends when `pm5Data.distance ≥ 99.5% of route.distance`. This auto-end is suppressed under the `window.__PLAYWRIGHT_TESTING` flag used by E2E tests.
 
@@ -260,14 +262,24 @@ Create a `.env.local` file in the project root (not committed) with:
 
 ```
 # OAuth client ID registered with intervals.icu for VirtualRow
-VITE_INTERVALS_CLIENT_ID=your_client_id_here
+VITE_INTERVALS_CLIENT_ID=463
 ```
 
-> **Note**: Without `VITE_INTERVALS_CLIENT_ID`, the app starts normally but the "Sign in with intervals.icu" button will display an error when clicked. Guest mode and all rowing features remain fully functional.
+`463` is VirtualRow's shared OAuth client ID — the same value held in the
+`INTERVALS_OAUTH_CLIENT_ID` GitHub Actions secret used for production builds. Use it for
+local dev rather than registering your own application; its redirect URIs already cover
+`http://localhost:5173/auth/callback/`. OAuth client IDs are public identifiers (they
+travel in the browser's authorize URL), so this is not a secret — the client *secret*
+lives only in the Cloudflare proxy.
+
+> **Note**: Without `VITE_INTERVALS_CLIENT_ID`, the app starts normally but the "Sign in with intervals.icu" button will display `⚠️ OAuth client ID not configured — check DEVELOPMENT.md` when clicked. A commented-out line in `.env.local` counts as unset. All rowing features remain fully functional unauthenticated.
+
+Vite reads `.env.local` only at startup — restart the dev server after changing it.
 
 ### Registering an intervals.icu OAuth Application
 
-To enable "Sign in with intervals.icu":
+Not needed for normal development — use the shared client ID `463` above. Follow this only
+when standing up a *new* application (a fork, or a separate environment):
 
 1. Log in to [intervals.icu](https://intervals.icu) and go to **Settings → API** (or [intervals.icu/settings/api](https://intervals.icu/settings/api))
 2. Create a new OAuth application with:

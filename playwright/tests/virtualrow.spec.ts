@@ -317,44 +317,9 @@ test.describe('FTMS rower device support', () => {
     await expect(page.locator('.bluetooth-device-container:has(.device-name:has-text("FTMS Rower")) .device-status')).toContainText('Connected');
   });
 
-  test('export validation: FIT export contains rowing activity type', async ({ page }) => {
-    await connectFtms(page);
-
-    await page.evaluate(() => {
-      const svc = (window as unknown as SimWindow).__workoutService;
-      if (svc?.startSession) {
-        svc.startSession('ftms-sim-route', 'FTMS Sim Route');
-      }
-    });
-    await expect(page.locator('.activity-view')).toBeVisible();
-
-    await page.evaluate(async () => {
-      (window as unknown as SimWindow).__simulator?.emitFTMS({
-        flags: 0x1ffe,
-        bytes: [
-          48, 0x01, 0x00, 48, 0xf4, 0x01, 0x00, 0xe0, 0x2e, 0xe0, 0x2e, 0xb4, 0x00, 0xb4, 0x00, 0x00, 0x00,
-          0x10, 0x00, 0x00, 0x00, 0x00, 120, 8, 0x3c, 0x00, 0x00, 0x00,
-        ],
-      });
-    });
-
-    // Wait explicitly for the End Workout button to be clickable before clicking
-    // (reduces flakiness on slower Windows CI runners where React state may not
-    // have fully settled even after the activity view becomes visible).
-    await page.locator('.btn-end-workout').waitFor({ state: 'visible', timeout: 15_000 });
-    await page.locator('.btn-end-workout').click();
-    await page.click('button:has-text("History")');
-
-    const downloadPromise = page.waitForEvent('download');
-    await page.click('button:has-text("FIT")');
-    const download = await downloadPromise;
-    const downloadPath = await download.path();
-    const fitData = JSON.parse(fs.readFileSync(downloadPath!, 'utf8'));
-
-    expect(fitData?.session?.sport).toBe('rowing');
-    expect(String(fitData?.session?.sub_sport ?? '').toLowerCase()).toContain('rowing');
-    expect(JSON.stringify(fitData)).not.toContain('Cycling');
-  });
+  // NOTE: the in-app FIT export button was removed with the History view (AUTH-1).
+  // FIT payload validation (sport === 'rowing', no cycling terms) now lives in the
+  // unit suite: src/__tests__/exporters.test.ts.
 });
 
 // ===========================================================================
@@ -415,7 +380,8 @@ test.describe('Simulated e2e route playback', () => {
           svc.startSession('sim-manual', 'Simulated Route');
         }
       });
-      await page.click('button:has-text("History")');
+      // Return to the routes view — the HR monitor panel only renders there.
+      await page.click('button:has-text("Routes")');
     }
 
     // Connect HR Monitor.
@@ -1156,64 +1122,13 @@ test.describe('docs screenshots', () => {
       document.getElementById('docs-hero-screenshot-style')?.remove();
     });
 
-    // 5. End the live session, inject past sessions for a populated history view
+    // 5. End the live session and return to the routes view.
+    // (The History screenshot was dropped along with the History view — AUTH-1.)
     await page.evaluate(() => {
       const svc = (window as any).__workoutService;
       if (svc?.endSession) svc.endSession();
-
-      const base = Date.now();
-      const pastSessions = [
-        {
-          id: 'mock-hist-1',
-          routeId: 'willowbrook',
-          routeName: 'Willowbrook River',
-          startTime: new Date(base - 14 * 86_400_000),
-          endTime:   new Date(base - 14 * 86_400_000 + 2_400_000),
-          duration: 2400, distance: 5120, averagePace: 118, calories: 295,
-          splits: [], isActive: false, heartRateAvg: 151, heartRateMax: 168,
-          rowerType: 'pm5', hrConnectedAtStart: true,
-        },
-        {
-          id: 'mock-hist-2',
-          routeId: 'thames-path',
-          routeName: 'Thames Path',
-          startTime: new Date(base - 7 * 86_400_000),
-          endTime:   new Date(base - 7 * 86_400_000 + 1_800_000),
-          duration: 1800, distance: 4000, averagePace: 112, calories: 248,
-          splits: [], isActive: false, heartRateAvg: 158, heartRateMax: 176,
-          rowerType: 'pm5', hrConnectedAtStart: true,
-        },
-        {
-          id: 'mock-hist-3',
-          routeId: 'lake-tahoe',
-          routeName: 'Lake Tahoe Circuit',
-          startTime: new Date(base - 3 * 86_400_000),
-          endTime:   new Date(base - 3 * 86_400_000 + 3_000_000),
-          duration: 3000, distance: 6500, averagePace: 116, calories: 380,
-          splits: [], isActive: false, heartRateAvg: 162, heartRateMax: 182,
-          rowerType: 'pm5', hrConnectedAtStart: true,
-        },
-      ];
-
-      // Push into in-memory store (private at TypeScript level; accessible at runtime)
-      pastSessions.forEach((s) => (svc as any).sessions.push(s));
-      // Trigger React re-render via the session-ended event the app already listens to
-      pastSessions.forEach((s) =>
-        window.dispatchEvent(new CustomEvent('virtualrow:sessionEnded', { detail: s })),
-      );
     });
-
-    // Navigate to History tab
-    await page.evaluate(() => {
-      const tabs = Array.from(document.querySelectorAll('.nav-tab'));
-      const historyTab = tabs.find((t) => t.textContent?.includes('History'));
-      (historyTab as HTMLElement)?.click();
-    });
-
-    await page.waitForSelector('.history-item', { timeout: 5000 });
-
-    // 6. History screen — viewport only
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-history.png'), fullPage: false });
+    await page.waitForSelector('.view-container--routes', { timeout: 5000 });
   });
 });
 
