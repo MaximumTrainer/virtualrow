@@ -91,3 +91,4 @@ vite.config.ts.timestamp-*
 crates/*/target
 src/wasm-pkg/*.wasm
 
+.copilot-specs-cache/
