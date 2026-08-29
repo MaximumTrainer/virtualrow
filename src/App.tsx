@@ -19,7 +19,7 @@ import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
-import { useRownativeHandoff } from './hooks/useRownativeHandoff';
+import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
@@ -40,7 +40,7 @@ function isOutlineOnly(tags: string[] | undefined): boolean {
 }
 
 function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -430,10 +430,12 @@ function App() {
     setCurrentView('routes');
   }, []);
 
-  // Return leg of the rownative.icu handoff: if the app was opened with a
-  // course id in the URL, load that course and select it.
-  const { status: handoffStatus, dismiss: dismissHandoff } = useRownativeHandoff({
+  // Deep link: if the app was opened with ?rownativeCourseId=<id>, load that
+  // course and select it. Held until auth resolves so a shared link survives a
+  // sign-in round trip.
+  const { status: handoffStatus, dismiss: dismissHandoff } = useRownativeDeepLink({
     onRouteLoaded: handleRouteImported,
+    isReady: !isLoading,
   });
 
   const handleGeoJSONFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

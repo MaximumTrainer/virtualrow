@@ -25,9 +25,6 @@ export const IMPORT_RESAMPLE_MAX_GAP_M = 50;
  */
 export const OUTLINE_ONLY_POINT_THRESHOLD = 10;
 
-/** Tag prefix carrying the originating rownative course id, used to de-duplicate imports. */
-export const ROWNATIVE_ID_TAG_PREFIX = 'rownative-id:';
-
 /** Tag marking a route whose geometry is a coarse outline. */
 export const OUTLINE_ONLY_TAG = 'outline-only';
 
@@ -132,6 +129,7 @@ export class RouteService {
       tags: data.tags,
       createdAt: new Date(),
       source: data.source,
+      externalId: data.externalId,
     };
 
     this.routes.push(newRoute);
@@ -407,8 +405,7 @@ export class RouteService {
 
   /** Find a previously imported route by its originating rownative course id. */
   findRouteByRownativeId(courseId: string): WaterRoute | undefined {
-    const tag = `${ROWNATIVE_ID_TAG_PREFIX}${courseId}`;
-    return this.routes.find((route) => route.tags.includes(tag));
+    return this.routes.find((route) => route.source === 'rownative' && route.externalId === courseId);
   }
 
   importRouteFromRownative(data: RownativeRouteImportData): WaterRoute {
@@ -434,11 +431,11 @@ export class RouteService {
       tags: [
         'rownative',
         'imported',
-        `${ROWNATIVE_ID_TAG_PREFIX}${data.id}`,
         sourceTag,
         isOutlineOnly ? OUTLINE_ONLY_TAG : undefined,
       ].filter((tag): tag is string => Boolean(tag)),
       source: 'rownative',
+      externalId: data.id,
     });
   }
 

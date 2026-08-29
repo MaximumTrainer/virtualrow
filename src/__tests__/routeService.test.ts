@@ -97,7 +97,7 @@ describe('RouteService creation & search', () => {
     expect(route.tags).toContain('status:established');
   });
 
-  it('tags the originating course id so repeat imports can be de-duplicated', () => {
+  it('records the originating course id so repeat imports can be de-duplicated', () => {
     const route = routeService.importRouteFromRownative({
       id: '4242',
       name: 'Dedupe Course',
@@ -106,7 +106,7 @@ describe('RouteService creation & search', () => {
       coordinates: [{ lat: 52.37, lng: 4.89 }, { lat: 52.38, lng: 4.9 }],
     });
 
-    expect(route.tags).toContain('rownative-id:4242');
+    expect(route.externalId).toBe('4242');
     expect(routeService.findRouteByRownativeId('4242')?.id).toBe(route.id);
     expect(routeService.findRouteByRownativeId('not-imported')).toBeUndefined();
   });
