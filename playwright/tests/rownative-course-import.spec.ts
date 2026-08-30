@@ -137,7 +137,7 @@ test.describe('rownative.icu course import', () => {
     await page.getByLabel('Rownative course ID or link').fill('2');
     await page.getByRole('button', { name: /^Import$/ }).click();
 
-    await expect(page.locator('.import-error')).toContainText(/isn't in the public course data yet/i, { timeout: 15_000 });
+    await expect(page.locator('.import-error')).toContainText(/isn't in the public mirror yet/i, { timeout: 15_000 });
     await page.getByRole('button', { name: /search by name/i }).click();
     await expect(page.locator('.rownative-result-name').first()).toBeVisible({ timeout: 15_000 });
   });
