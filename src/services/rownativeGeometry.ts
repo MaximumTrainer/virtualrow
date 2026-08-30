@@ -185,6 +185,9 @@ export function isPathShaped(vertices: Coordinate[]): boolean {
 /** A path-shaped polygon, or an attached track, awaiting validation. */
 export interface PathCandidate {
   name: string;
+  /** The polygon's own `order`, kept so a rejected candidate can revert to a
+   *  gate in its original place in the chain. */
+  order: number;
   vertices: Coordinate[];
 }
 
@@ -208,12 +211,15 @@ export function classifyPolygons(course: RownativeCourseGeometryInput): Classifi
   const candidates: PathCandidate[] = [];
 
   ordered.forEach((polygon, index) => {
-    const vertices = dropClosingVertex(toCoordinates(polygon.points));
+    const vertices = toCoordinates(polygon.points);
     if (vertices.length === 0) return;
     const name = polygon.name?.trim() || `Polygon ${index + 1}`;
 
-    if (polygon.kind === 'path' || isPathShaped(vertices)) {
-      candidates.push({ name, vertices });
+    // Shape is judged on distinct vertices, but the centroid is still the mean
+    // of every point as filed — including a ring's repeated closing vertex —
+    // so gate-chain courses resolve exactly as they did before this change.
+    if (polygon.kind === 'path' || isPathShaped(dropClosingVertex(vertices))) {
+      candidates.push({ name, order: polygon.order ?? index, vertices: dropClosingVertex(vertices) });
       return;
     }
     const center = centroid(vertices);
@@ -395,17 +401,25 @@ export async function resolveCourseGeometry(
   //    own; the best passing one wins and the rest are discarded, never folded
   //    back in as bogus gates.
   if (candidates.length > 0) {
-    const passing = candidates
-      .map((candidate) => ({ candidate, fit: fitCandidateToGates(candidate.vertices, gates) }))
+    const evaluated = candidates.map((candidate) => ({
+      candidate,
+      fit: fitCandidateToGates(candidate.vertices, gates),
+    }));
+    const passing = evaluated
       .filter(
         (entry): entry is { candidate: PathCandidate; fit: Extract<CandidateFit, { ok: true }> } => entry.fit.ok,
       )
       .sort((a, b) => a.fit.meanOffsetMeters - b.fit.meanOffsetMeters);
 
     if (passing.length > 0) {
-      const [best, ...rejected] = passing;
-      for (const other of rejected) {
-        warnings.push(`Ignored alternative traced path "${other.candidate.name}".`);
+      const [best] = passing;
+      for (const other of evaluated) {
+        if (other.candidate === best.candidate) continue;
+        warnings.push(
+          other.fit.ok
+            ? `Ignored alternative traced path "${other.candidate.name}".`
+            : `Discarded traced path "${other.candidate.name}": ${other.fit.error.message}`,
+        );
       }
       return {
         coordinates: best.fit.coordinates,
@@ -424,7 +438,7 @@ export async function resolveCourseGeometry(
     for (const candidate of candidates) {
       const center = centroid(candidate.vertices);
       if (center) {
-        gates.push({ name: candidate.name, order: Number.POSITIVE_INFINITY, center });
+        gates.push({ name: candidate.name, order: candidate.order, center });
         gateCenters.push(center);
       }
     }
