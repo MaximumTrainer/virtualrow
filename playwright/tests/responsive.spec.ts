@@ -311,7 +311,24 @@ async function capturePins(page: Page, selectors: readonly string[], properties:
         }
         const computed = window.getComputedStyle(el);
         const props: Record<string, string> = {};
-        for (const p of properties) props[p] = computed[p as keyof CSSStyleDeclaration] as string;
+        for (const p of properties) {
+          const value = computed[p as keyof CSSStyleDeclaration] as string;
+          // macOS Chromium reports `BlinkMacSystemFont` as `system-ui`, and
+          // quoting of multi-word families varies, so the raw string is not
+          // comparable across the three E2E runners. Canonicalise it: which
+          // families a rule asks for is the thing under test, not how the
+          // engine spells them back.
+          props[p] =
+            p === 'fontFamily'
+              ? value
+                  .toLowerCase()
+                  .replace(/["']/g, '')
+                  .replace(/\bblinkmacsystemfont\b/g, 'system-ui')
+                  .split(',')
+                  .map((f) => f.trim())
+                  .join(', ')
+              : value;
+        }
         out[sel] = props;
       }
       return out;
