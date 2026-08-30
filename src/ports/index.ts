@@ -43,7 +43,15 @@ export type WorkoutPort = WorkoutService;
 export type AuthPort = AuthService;
 
 /** Port for rownative course discovery/import. */
-export type RownativePort = RownativeService;
+export type RownativePort = Pick<
+  RownativeService,
+  | 'getCourseIndex'
+  | 'searchCourses'
+  | 'importCourse'
+  | 'importCourseById'
+  | 'resolveCourseId'
+  | 'fetchCourseGeometry'
+>;
 
 /**
  * Port for route geospatial data enrichment.

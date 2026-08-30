@@ -46,7 +46,7 @@ describe('useRownativeDeepLink', () => {
   it('does nothing when the URL carries no course id', () => {
     const importCourseById = vi.fn();
     const { onRouteLoaded } = renderHook('', {
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
     });
 
     expect(screen.getByTestId('status').textContent).toBe('idle');
@@ -58,7 +58,7 @@ describe('useRownativeDeepLink', () => {
     const route = makeRoute();
     const importCourseById = vi.fn().mockResolvedValue(route);
     const { onRouteLoaded } = renderHook('?rownativeCourseId=5', {
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
       routeService: noExistingRoute,
     });
 
@@ -69,7 +69,7 @@ describe('useRownativeDeepLink', () => {
   it('strips the param exactly once so a refresh does not re-import (AC-2)', async () => {
     const importCourseById = vi.fn().mockResolvedValue(makeRoute());
     const { unmount } = renderHook('?rownativeCourseId=5', {
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
       routeService: noExistingRoute,
     });
 
@@ -81,7 +81,7 @@ describe('useRownativeDeepLink', () => {
     render(
       <ServicesProvider services={{
         ...defaultServices,
-        rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+        rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
         routeService: noExistingRoute,
       }}>
         <Harness onRouteLoaded={vi.fn()} />
@@ -95,7 +95,7 @@ describe('useRownativeDeepLink', () => {
     render(
       <ServicesProvider services={{
         ...defaultServices,
-        rownativeService: { ...defaultServices.rownativeService, importCourseById: vi.fn().mockResolvedValue(makeRoute()) } as unknown as Services['rownativeService'],
+        rownativeService: { ...defaultServices.rownativeService, importCourseById: vi.fn().mockResolvedValue(makeRoute()) } satisfies Services['rownativeService'],
         routeService: noExistingRoute,
       }}>
         <Harness onRouteLoaded={vi.fn()} />
@@ -117,7 +117,7 @@ describe('useRownativeDeepLink', () => {
     const importCourseById = vi.fn().mockResolvedValue(route);
     const services = {
       ...defaultServices,
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
       routeService: noExistingRoute,
     };
     window.history.replaceState({}, '', '/?rownativeCourseId=5');
@@ -142,7 +142,7 @@ describe('useRownativeDeepLink', () => {
     const existing = makeRoute('Already Imported');
     const importCourseById = vi.fn();
     const { onRouteLoaded } = renderHook('?rownativeCourseId=5', {
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
       routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } as unknown as Services['routeService'],
     });
 
@@ -155,7 +155,7 @@ describe('useRownativeDeepLink', () => {
       rownativeService: {
         ...defaultServices.rownativeService,
         importCourseById: vi.fn().mockRejectedValue(new Error("Course 2 isn't in the public course data yet.")),
-      } as unknown as Services['rownativeService'],
+      } satisfies Services['rownativeService'],
       routeService: noExistingRoute,
     });
 
@@ -166,7 +166,7 @@ describe('useRownativeDeepLink', () => {
   it('rejects a malformed id via the service, making no route', async () => {
     const importCourseById = vi.fn().mockRejectedValue(new Error('Enter a rownative course ID or a rownative.icu course link.'));
     const { onRouteLoaded } = renderHook(`?rownativeCourseId=${encodeURIComponent('../../etc/passwd')}`, {
-      rownativeService: { ...defaultServices.rownativeService, importCourseById } as unknown as Services['rownativeService'],
+      rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
       routeService: noExistingRoute,
     });
 

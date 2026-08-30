@@ -43,7 +43,7 @@ describe('RownativeRouteImport', () => {
       ...defaultServices.rownativeService,
       resolveCourseId: realResolve,
       ...overrides,
-    } as unknown as Services['rownativeService'];
+    } satisfies Services['rownativeService'];
   }
 
   const noExisting = { ...defaultServices.routeService, findRouteByRownativeId: () => undefined } as unknown as Services['routeService'];
