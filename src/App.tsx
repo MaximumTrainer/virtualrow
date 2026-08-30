@@ -22,6 +22,8 @@ import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
+import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
+import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -35,9 +37,15 @@ function extractRouteStatus(tags: string[] | undefined): string | undefined {
   return tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
 }
 
-/** rownative courses built from gate centroids are a coarse outline, not a surveyed path. */
-function isOutlineOnly(tags: string[] | undefined): boolean {
-  return !!tags?.includes(OUTLINE_ONLY_TAG);
+/**
+ * Provenance of a route's geometry, for the badge.
+ *
+ * Routes imported before this field existed carry the `outline-only` tag and
+ * nothing else, so fall back to reading that.
+ */
+function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {
+  if (route.geometrySource) return route.geometrySource;
+  return route.tags?.includes(OUTLINE_ONLY_TAG) ? 'gate-chain' : undefined;
 }
 
 function App() {
@@ -86,6 +94,7 @@ function App() {
   // Route import panel state
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importRouteName, setImportRouteName] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Pre-select Willowbrook River for unauthenticated users.
   // Guarded to fire only once: this effect depends on `routes`, so without the
@@ -496,33 +505,76 @@ function App() {
     isReady: !isLoading,
   });
 
-  const handleGeoJSONFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * Import a route file, dispatching on its type.
+   *
+   * This used to parse whatever was chosen as JSON, so a .gpx or .kml drop —
+   * both offered by the file picker — silently did nothing (issue #194 F7).
+   */
+  const handleRouteFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setImportError(null);
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
+      const fallbackName = importRouteName.trim() || file.name.replace(/\.[^.]+$/, '');
+      const format = detectTrackFormat(file.name);
+
       try {
-        const parsed = JSON.parse(text);
-        const nameFromFile =
-          importRouteName.trim() ||
-          (parsed?.properties?.name as string | undefined) ||
-          file.name.replace(/\.[^.]+$/, '');
-        const imported = routeService.importRouteFromGeoJSON(text, {
-          name: nameFromFile,
-          difficulty: 'moderate',
-          location: (parsed?.properties?.country as string | undefined) ?? 'Imported',
-          tags: ['imported', 'geojson'],
-        });
-        if (imported) {
-          handleRouteImported(imported);
-          setIsImportOpen(false);
-          setImportRouteName('');
-          // Reset the file input
-          e.target.value = '';
+        if (!format) {
+          throw new TrackParseError(
+            `${file.name} is not a route file VirtualRow can read. Use a .gpx, .kml or .geojson file.`,
+          );
         }
-      } catch {
-        // Ignore parse errors — user will see no route appear
+
+        let imported: WaterRoute | undefined;
+        if (format === 'gpx') {
+          imported = routeService.importRouteFromGPX(text, {
+            name: fallbackName,
+            difficulty: 'moderate',
+            location: 'Imported',
+            tags: ['imported', 'gpx'],
+          });
+        } else if (format === 'kml') {
+          const result = routeService.importRouteFromKML(text, {
+            name: importRouteName.trim() || undefined,
+            difficulty: 'moderate',
+            tags: ['imported', 'kml'],
+          });
+          if (result.status === 'error') throw new TrackParseError(result.error);
+          if (result.status === 'selectionRequired') {
+            imported = routeService.finalizeKMLImport(result.candidates[0], {
+              name: importRouteName.trim() || undefined,
+              difficulty: 'moderate',
+              tags: ['imported', 'kml'],
+            });
+          } else {
+            imported = result.route;
+          }
+        } else {
+          const parsed = JSON.parse(text) as { properties?: { name?: string; country?: string } };
+          imported = routeService.importRouteFromGeoJSON(text, {
+            name: importRouteName.trim() || parsed?.properties?.name || fallbackName,
+            difficulty: 'moderate',
+            location: parsed?.properties?.country ?? 'Imported',
+            tags: ['imported', 'geojson'],
+          });
+        }
+
+        if (!imported) {
+          throw new TrackParseError(`${file.name} has no route line with at least 2 points.`);
+        }
+
+        handleRouteImported(imported);
+        setIsImportOpen(false);
+        setImportRouteName('');
+        e.target.value = '';
+      } catch (error) {
+        setImportError(
+          error instanceof Error ? error.message : `${file.name} could not be imported.`,
+        );
       }
     };
     reader.readAsText(file);
@@ -688,19 +740,30 @@ function App() {
 
                   <div className="route-meta-compact">
                     <span className="meta-badge">
-                      📏 {selectedRoute.distance} km
+                      📏 {formatRouteDistanceKm(selectedRoute.distance)}
                     </span>
+                    {externalDistanceNote(selectedRoute) && (
+                      <span
+                        className="meta-badge meta-badge--external-distance"
+                        title="rownative measures a course as straight lines between its gates, so it reads short on a course that bends."
+                      >
+                        {externalDistanceNote(selectedRoute)}
+                      </span>
+                    )}
                     <span className="meta-badge">
                       ⏱️ {selectedRoute.estimatedTime} min
                     </span>
                     <span className={`meta-badge badge-${selectedRoute.difficulty}`}>
                       {selectedRoute.difficulty}
                     </span>
-                    {isOutlineOnly(selectedRoute.tags) && (
-                      <span className="meta-badge meta-badge--outline" title="This course is defined by start/finish gates only, so the path between them is approximate.">
-                        outline only
-                      </span>
-                    )}
+                    {(() => {
+                      const badge = geometryProvenanceBadge(routeGeometrySource(selectedRoute));
+                      return badge && (
+                        <span className={`meta-badge meta-badge--${badge.modifier}`} title={badge.title}>
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <div className="route-tags">
@@ -773,8 +836,12 @@ function App() {
                           <input
                             type="file"
                             accept=".geojson,.json,.gpx,.kml"
-                            onChange={handleGeoJSONFileImport}
+                            aria-label="Route file"
+                            onChange={handleRouteFileImport}
                           />
+                          {importError && (
+                            <p className="import-error" role="alert">⚠ {importError}</p>
+                          )}
                         </div>
                       )}
                       <div className="route-filters">
@@ -813,16 +880,27 @@ function App() {
                                    {rownativeStatus.charAt(0).toUpperCase() + rownativeStatus.slice(1)}
                                  </span>
                                )}
-                               {isOutlineOnly(route.tags) && (
-                                 <span className="badge badge-outline">Outline</span>
-                               )}
+                               {(() => {
+                                 const badge = geometryProvenanceBadge(routeGeometrySource(route));
+                                 return badge && (
+                                   <span className={`badge badge-${badge.modifier}`} title={badge.title}>
+                                     {badge.label}
+                                   </span>
+                                 );
+                               })()}
                              </div>
                            </div>
                            <p className="route-item-location">{route.location}</p>
                            <div className="route-item-meta">
-                             <span>{route.distance} km</span>
+                             <span>{formatRouteDistanceKm(route.distance)}</span>
                              <span>•</span>
                              <span>{route.estimatedTime} min</span>
+                             {externalDistanceNote(route) && (
+                               <>
+                                 <span>•</span>
+                                 <span className="route-item-external-distance">{externalDistanceNote(route)}</span>
+                               </>
+                             )}
                            </div>
                            {route.coordinates && route.coordinates.length >= 2 && (
                              <RouteThumbnail

@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useServices } from '../context/ServicesContext';
 import { RownativeCourseNotFoundError, type RownativeCourseSummary } from '../services/rownativeService';
+import { trackAttachmentStore, type AttachedTrack } from '../services/trackAttachmentStore';
+import { classifyPolygons, fitCandidateToGates } from '../services/rownativeGeometry';
+import { parseTrackFile } from '../utils/trackParsers';
 import type { WaterRoute } from '../types/index';
 import './RownativeRouteImport.css';
 
@@ -27,16 +30,27 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
   const [notFoundId, setNotFoundId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [attachCourseId, setAttachCourseId] = useState('');
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AttachedTrack[]>([]);
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RownativeCourseSummary[] | null>(null);
   const [totalCourses, setTotalCourses] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
 
-  const importCourseId = useCallback(async (courseId: string) => {
-    // Already imported — select it rather than creating a duplicate.
+  useEffect(() => {
+    setAttachments(trackAttachmentStore.list());
+  }, []);
+
+  const importCourseId = useCallback(async (courseId: string, options: { replaceExisting?: boolean } = {}) => {
+    // Already imported — select it rather than creating a duplicate, unless the
+    // geometry has just changed underneath it.
     const existing = routeService.findRouteByRownativeId(courseId);
-    if (existing) {
+    if (existing && options.replaceExisting) {
+      routeService.deleteRoute(existing.id);
+    } else if (existing) {
       setNotice(`${existing.name} is already in your routes.`);
       onRouteImported(existing);
       return;
@@ -45,6 +59,49 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
     setNotice(null);
     onRouteImported(route);
   }, [onRouteImported, routeService, rownativeService]);
+
+  /**
+   * Attach a track file to a course.
+   *
+   * The track is validated against that course's own gates before it is
+   * stored, so a file for the wrong river is refused while the user can still
+   * do something about it, rather than silently ignored at import time.
+   */
+  const handleAttachTrack = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    setAttachError(null);
+
+    let courseId: string;
+    try {
+      courseId = rownativeService.resolveCourseId(attachCourseId);
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : 'Enter the course this track belongs to.');
+      input.value = '';
+      return;
+    }
+
+    try {
+      const coordinates = parseTrackFile(file.name, await file.text());
+      const course = await rownativeService.fetchCourseGeometry(courseId);
+      const fit = fitCandidateToGates(coordinates, classifyPolygons(course).gates);
+      if (!fit.ok) throw fit.error;
+
+      trackAttachmentStore.set(courseId, file.name, coordinates);
+      setAttachments(trackAttachmentStore.list());
+      await importCourseId(courseId, { replaceExisting: true });
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : `${file.name} could not be attached.`);
+    } finally {
+      input.value = '';
+    }
+  }, [attachCourseId, importCourseId, rownativeService]);
+
+  const handleRemoveTrack = useCallback((courseId: string) => {
+    trackAttachmentStore.remove(courseId);
+    setAttachments(trackAttachmentStore.list());
+  }, []);
 
   const handleImportPasted = async () => {
     setError(null);
@@ -171,6 +228,49 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
           )}
 
           {notice && <p className="rownative-status" role="status">{notice}</p>}
+
+          <div className="rownative-fallback rownative-attach">
+            <p>
+              Rowed one of these courses? Attach your GPX, KML or GeoJSON track and VirtualRow
+              rows its real shape instead of straight lines between the gates.
+            </p>
+            <div className="rownative-controls">
+              <input
+                type="text"
+                className="import-name-input"
+                placeholder="Course ID for this track"
+                value={attachCourseId}
+                onChange={(e) => setAttachCourseId(e.target.value)}
+                aria-label="Course ID to attach a track to"
+              />
+              <input
+                type="file"
+                accept=".gpx,.kml,.geojson,.json"
+                aria-label="Track file"
+                disabled={attachCourseId.trim().length === 0}
+                onChange={(e) => void handleAttachTrack(e)}
+              />
+            </div>
+            {attachError && <p className="import-error" role="alert">⚠ {attachError}</p>}
+            {attachments.length > 0 && (
+              <ul className="rownative-attachment-list">
+                {attachments.map((track) => (
+                  <li key={track.courseId}>
+                    <span>
+                      Course {track.courseId}: {track.fileName} ({track.coordinates.length} points)
+                    </span>
+                    <button
+                      type="button"
+                      className="filter-btn"
+                      onClick={() => handleRemoveTrack(track.courseId)}
+                    >
+                      Remove attached track
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="rownative-fallback">
             <p>Or search the rownative.icu catalogue by name.</p>

@@ -235,6 +235,16 @@ export class RownativeService {
     return this.importCourseDetail(detail, { id });
   }
 
+  /**
+   * Load a course's raw geometry without importing it.
+   *
+   * The track-attach flow uses this to check a file against that course's own
+   * gates before storing it, so a track for the wrong water is refused up front.
+   */
+  async fetchCourseGeometry(rawId: string): Promise<RownativeCourseGeometryInput> {
+    return this.fetchCourseDetail(this.resolveCourseId(rawId));
+  }
+
   private async fetchCourseDetail(courseId: string): Promise<RownativeCourseFile> {
     const url = `${ROWNATIVE_COURSE_BASE_URL}/${encodeURIComponent(courseId)}.json`;
     const response = await this.fetchImpl(url);
