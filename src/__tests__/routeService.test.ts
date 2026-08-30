@@ -1,9 +1,38 @@
-import { describe, it, expect } from 'vitest';
-import { routeService } from '../services/routeService';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { RouteService } from '../services/routeService';
 import { polylineLengthMeters } from '../utils/coordinateUtils';
 
 // Willowbrook River bounding box
 const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };
+
+// Every test gets its own catalogue. These suites import routes, and the
+// exported `routeService` singleton keeps them, so sharing it made
+// "provides only the Willowbrook demo route" an assertion about which tests
+// happened to run first rather than about the service.
+let routeService: RouteService;
+
+beforeEach(() => {
+  routeService = new RouteService();
+});
+
+describe('RouteService isolation', () => {
+  it('gives each instance its own catalogue', () => {
+    const first = new RouteService();
+    const second = new RouteService();
+
+    first.importRouteFromRownative({
+      courseId: 'isolation-check',
+      name: 'Isolation Check',
+      coordinates: [
+        { lat: 48.1, lng: 11.5 },
+        { lat: 48.2, lng: 11.6 },
+      ],
+    });
+
+    expect(first.getAllRoutes().length).toBe(2);
+    expect(second.getAllRoutes().length).toBe(1);
+  });
+});
 
 describe('RouteService basic data', () => {
   it('provides only the Willowbrook demo route', () => {
