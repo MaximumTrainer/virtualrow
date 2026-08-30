@@ -3,10 +3,12 @@ import {
   willowbrookRiverCoordinates,
 } from '../data/seedRouteCoordinates';
 import {
-  parseGeoJSONCoordinate,
   parseKMLCoordinateList,
+  polylineLengthMeters,
   resampleCoordinates,
 } from '../utils/coordinateUtils';
+import { parseGeoJsonTrack, parseGpxTrack } from '../utils/trackParsers';
+import type { GeometrySource } from '../types/index';
 
 /**
  * Maximum spacing between consecutive points on an imported route.
@@ -20,13 +22,29 @@ import {
 export const IMPORT_RESAMPLE_MAX_GAP_M = 50;
 
 /**
- * Below this many source points, a rownative course is a coarse outline rather
- * than a surveyed path, and is tagged so the UI can say so.
+ * Tag marking a route whose geometry is nothing but gate centroids.
+ *
+ * Kept as an alias for `geometrySource === 'gate-chain'` so anything filtering
+ * on it before issue #194 still works. Point count no longer decides it: a
+ * 35-gate course is still gates-only, and a 9-point attached track is not.
  */
-export const OUTLINE_ONLY_POINT_THRESHOLD = 10;
-
-/** Tag marking a route whose geometry is a coarse outline. */
 export const OUTLINE_ONLY_TAG = 'outline-only';
+
+/** Prefix of the tag that records where a route's geometry came from. */
+export const GEOMETRY_SOURCE_TAG_PREFIX = 'geometry:';
+
+/**
+ * Show rownative's own distance alongside ours once the two differ by more
+ * than this fraction. Their figure is a straight-line gate chain by
+ * definition, so a meandering river routinely lands well outside it.
+ *
+ * R-11 proposes 15 %, but issue #194's own open question asks whether that is
+ * too high — and it is: Castle to Crane, the case AC-10 names, is 12 % out
+ * (21.95 km of river against a 19.6 km straight line) and would be hidden.
+ * 10 % still leaves every gate-chain course quiet, where the two figures
+ * agree to within a percent by construction.
+ */
+export const DISTANCE_DISCREPANCY_THRESHOLD = 0.10;
 
 /** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
 export interface KMLImportCandidate {
@@ -39,8 +57,12 @@ export interface RownativeRouteImportData {
   id: string;
   name: string;
   country: string;
-  distanceMeters: number;
+  /** The resolved polyline. Its length is the route's distance. */
   coordinates: Coordinate[];
+  /** Where `coordinates` came from. Drives the badge and the outline-only tag. */
+  geometrySource: GeometrySource;
+  /** rownative's own `distance_m`, kept for display only. */
+  externalDistanceMeters?: number;
   status?: string;
 }
 
@@ -130,6 +152,8 @@ export class RouteService {
       createdAt: new Date(),
       source: data.source,
       externalId: data.externalId,
+      geometrySource: data.geometrySource,
+      externalDistanceMeters: data.externalDistanceMeters,
     };
 
     this.routes.push(newRoute);
@@ -138,72 +162,20 @@ export class RouteService {
 
   // Parse GPX XML into coordinates (trkpt or rtept)
   private parseGPX(gpxXml: string): Coordinate[] {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(gpxXml, 'application/xml');
-    const points: Coordinate[] = [];
-    const trkpts = doc.getElementsByTagName('trkpt');
-    if (trkpts.length > 0) {
-      for (let i = 0; i < trkpts.length; i++) {
-        const node = trkpts[i];
-        const lat = parseFloat(node.getAttribute('lat') || '0');
-        const lng = parseFloat(node.getAttribute('lon') || '0');
-        if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng });
-      }
-      return points;
-    }
-    const rtepts = doc.getElementsByTagName('rtept');
-    for (let i = 0; i < rtepts.length; i++) {
-      const node = rtepts[i];
-      const lat = parseFloat(node.getAttribute('lat') || '0');
-      const lng = parseFloat(node.getAttribute('lon') || '0');
-      if (!isNaN(lat) && !isNaN(lng)) points.push({ lat, lng });
-    }
-    return points;
-  }
-
-  // Parse GeoJSON string into coordinates (LineString / MultiLineString)
-  private parseGeoJSON(geojsonStr: string): Coordinate[] {
+    // Shared with the rownative track-attach flow so both read a file the same way.
     try {
-      const obj = JSON.parse(geojsonStr);
-      const coords: Coordinate[] = [];
-      if (obj.type === 'FeatureCollection' && Array.isArray(obj.features)) {
-        for (const f of obj.features) {
-          if (!f.geometry) continue;
-          this.extractCoordsFromGeometry(f.geometry, coords);
-        }
-      } else if (obj.type === 'Feature' && obj.geometry) {
-        this.extractCoordsFromGeometry(obj.geometry, coords);
-      } else if (obj.type) {
-        this.extractCoordsFromGeometry(obj, coords);
-      }
-      return coords;
+      return parseGpxTrack(gpxXml);
     } catch {
       return [];
     }
   }
 
-  private extractCoordsFromGeometry(geometry: { type?: string; coordinates?: number[][] | number[][][] }, coords: Coordinate[]) {
-    if (!geometry || !geometry.type) return;
-    if (geometry.type === 'LineString' && geometry.coordinates) {
-      for (const c of geometry.coordinates as number[][]) {
-        const parsed = parseGeoJSONCoordinate(c);
-        if (parsed) coords.push(parsed);
-      }
-    } else if (geometry.type === 'MultiLineString' && geometry.coordinates) {
-      for (const ln of geometry.coordinates as number[][][]) {
-        for (const c of ln) {
-          const parsed = parseGeoJSONCoordinate(c);
-          if (parsed) coords.push(parsed);
-        }
-      }
-    } else if (geometry.type === 'Polygon' && geometry.coordinates) {
-      const firstRing = (geometry.coordinates as number[][][])[0];
-      if (!Array.isArray(firstRing)) return;
-      // polygon: take first ring
-      for (const c of firstRing) {
-        const parsed = parseGeoJSONCoordinate(c);
-        if (parsed) coords.push(parsed);
-      }
+  // Parse GeoJSON string into coordinates (LineString / MultiLineString)
+  private parseGeoJSON(geojsonStr: string): Coordinate[] {
+    try {
+      return parseGeoJsonTrack(geojsonStr);
+    } catch {
+      return [];
     }
   }
 
@@ -242,29 +214,8 @@ export class RouteService {
   }
 
   private calculateRouteDistance(coordinates: Coordinate[]): number {
-    // Haversine formula for distance calculation
-    let totalDistance = 0;
-    for (let i = 0; i < coordinates.length - 1; i++) {
-      totalDistance += this.getDistanceBetweenPoints(
-        coordinates[i],
-        coordinates[i + 1]
-      );
-    }
-    return parseFloat(totalDistance.toFixed(1));
-  }
-
-  private getDistanceBetweenPoints(coord1: Coordinate, coord2: Coordinate): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = ((coord2.lat - coord1.lat) * Math.PI) / 180;
-    const dLng = ((coord2.lng - coord1.lng) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((coord1.lat * Math.PI) / 180) *
-        Math.cos((coord2.lat * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    // One geodesic for the whole app (issue #194 R-9) — see distanceBetweenMeters.
+    return parseFloat((polylineLengthMeters(coordinates) / 1000).toFixed(1));
   }
 
   // ── KML import ──────────────────────────────────────────────────────────
@@ -409,15 +360,20 @@ export class RouteService {
   }
 
   importRouteFromRownative(data: RownativeRouteImportData): WaterRoute {
-    // The course's own distance_m stays authoritative: it is surveyed, whereas a
-    // distance derived from gate centroids would under-report a curved course.
-    const distanceKm = Math.round(data.distanceMeters / 10) / 100;
+    // Distance is a property of the geometry, measured once, here (issue #194
+    // R-5). rownative's distance_m is a straight-line gate chain by its own
+    // schema, so it cannot describe a course that bends; it is display only.
+    //
+    // Kept to metre precision rather than R-5's two decimal places: AC-6 and
+    // AC-7 require the stored distance to be within 1 m of both the polyline
+    // and the engine's own total, and rounding to 10 m cannot do that. Cards
+    // format it for display.
+    const distanceKm = Math.round(polylineLengthMeters(data.coordinates)) / 1000;
     const difficulty = distanceKm < 4 ? 'easy' : distanceKm < 7 ? 'moderate' : 'hard';
     const normalizedStatus = data.status?.trim().toLowerCase();
     const sourceTag = normalizedStatus ? `status:${normalizedStatus}` : undefined;
 
-    const sourcePointCount = data.coordinates.length;
-    const isOutlineOnly = sourcePointCount < OUTLINE_ONLY_POINT_THRESHOLD;
+    const isGateChain = data.geometrySource === 'gate-chain';
     const coordinates = resampleCoordinates(data.coordinates, IMPORT_RESAMPLE_MAX_GAP_M);
 
     return this.createRoute({
@@ -432,10 +388,13 @@ export class RouteService {
         'rownative',
         'imported',
         sourceTag,
-        isOutlineOnly ? OUTLINE_ONLY_TAG : undefined,
+        `${GEOMETRY_SOURCE_TAG_PREFIX}${data.geometrySource}`,
+        isGateChain ? OUTLINE_ONLY_TAG : undefined,
       ].filter((tag): tag is string => Boolean(tag)),
       source: 'rownative',
       externalId: data.id,
+      geometrySource: data.geometrySource,
+      externalDistanceMeters: data.externalDistanceMeters,
     });
   }
 

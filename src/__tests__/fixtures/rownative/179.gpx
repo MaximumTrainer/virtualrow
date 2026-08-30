@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="VirtualRow test fixture" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Castle to Crane (rownative course 179)</name>
+    <desc>Synthetic track down the River Clyde, traced from OpenStreetMap waterway centrelines (ODbL) between the course Start and Finish gate centroids. Used as the R-8 attached-track fixture.</desc>
+  </metadata>
+  <trk>
+    <name>Castle to Crane</name>
+    <trkseg>
+      <trkpt lat="55.938444" lon="-4.565349" />
+      <trkpt lat="55.938368" lon="-4.564590" />
+      <trkpt lat="55.937686" lon="-4.566027" />
+      <trkpt lat="55.932282" lon="-4.571928" />
+      <trkpt lat="55.932135" lon="-4.560700" />
+      <trkpt lat="55.929346" lon="-4.524307" />
+      <trkpt lat="55.928241" lon="-4.508772" />
+      <trkpt lat="55.928505" lon="-4.500833" />
+      <trkpt lat="55.929070" lon="-4.490597" />
+      <trkpt lat="55.928697" lon="-4.485383" />
+      <trkpt lat="55.927675" lon="-4.480233" />
+      <trkpt lat="55.925728" lon="-4.473817" />
+      <trkpt lat="55.923576" lon="-4.467123" />
+      <trkpt lat="55.920699" lon="-4.462608" />
+      <trkpt lat="55.917170" lon="-4.458210" />
+      <trkpt lat="55.911662" lon="-4.451590" />
+      <trkpt lat="55.908101" lon="-4.446709" />
+      <trkpt lat="55.907646" lon="-4.445266" />
+      <trkpt lat="55.905927" lon="-4.439822" />
+      <trkpt lat="55.905028" lon="-4.432400" />
+      <trkpt lat="55.903679" lon="-4.423797" />
+      <trkpt lat="55.902787" lon="-4.420404" />
+      <trkpt lat="55.902213" lon="-4.418928" />
+      <trkpt lat="55.901341" lon="-4.417232" />
+      <trkpt lat="55.899335" lon="-4.414121" />
+      <trkpt lat="55.896862" lon="-4.410649" />
+      <trkpt lat="55.893655" lon="-4.406153" />
+      <trkpt lat="55.892721" lon="-4.404626" />
+      <trkpt lat="55.890289" lon="-4.397510" />
+      <trkpt lat="55.889037" lon="-4.392220" />
+      <trkpt lat="55.888006" lon="-4.387866" />
+      <trkpt lat="55.886919" lon="-4.383787" />
+      <trkpt lat="55.878405" lon="-4.365265" />
+      <trkpt lat="55.871708" lon="-4.347278" />
+      <trkpt lat="55.869904" lon="-4.342361" />
+      <trkpt lat="55.868949" lon="-4.337349" />
+      <trkpt lat="55.868383" lon="-4.326032" />
+      <trkpt lat="55.868109" lon="-4.320561" />
+      <trkpt lat="55.864846" lon="-4.309172" />
+      <trkpt lat="55.862880" lon="-4.301361" />
+      <trkpt lat="55.860076" lon="-4.295616" />
+      <trkpt lat="55.856974" lon="-4.281898" />
+      <trkpt lat="55.857852" lon="-4.284972" />
+    </trkseg>
+  </trk>
+</gpx>

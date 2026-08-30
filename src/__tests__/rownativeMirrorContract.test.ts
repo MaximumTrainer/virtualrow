@@ -36,6 +36,35 @@ describe.skipIf(!enabled)('rownative mirror contract (live network)', () => {
     expect(route.coordinates.length).toBeGreaterThanOrEqual(2);
   }, 30_000);
 
+  it('still carries course 257 as traced polygons, not just gates', async () => {
+    // Issue #194 AC-16: the live counterpart of the offline polygon-path
+    // fixtures. If the mirror ever normalises these traces into gates, the
+    // straight-line bug comes back for this course and we want to know.
+    const routes = new RouteService();
+    const service = new RownativeService(undefined, (d) => routes.importRouteFromRownative(d));
+    const route = await service.importCourseById('257');
+
+    expect(route.geometrySource).toBe('polygon-path');
+    expect(route.distance).toBeGreaterThan(20);
+    expect(route.tags).not.toContain('outline-only');
+  }, 30_000);
+
+  it('accepts an optional top-level path field, if upstream ever adds one', async () => {
+    // Issue #194 R-13/R-14: the field is not in the schema yet. Assert its
+    // shape only when present, so the day it lands we read it rather than
+    // break on it.
+    const service = new RownativeService();
+    const course = await service.fetchCourseGeometry('1') as { path?: unknown };
+
+    if (course.path !== undefined) {
+      expect(Array.isArray(course.path)).toBe(true);
+      for (const point of course.path as { lat: unknown; lon: unknown }[]) {
+        expect(typeof point.lat).toBe('number');
+        expect(typeof point.lon).toBe('number');
+      }
+    }
+  }, 30_000);
+
   it('reports a known-absent id as not found rather than crashing', async () => {
     const service = new RownativeService();
     // id 2 is absent from the mirror while present on the live site.

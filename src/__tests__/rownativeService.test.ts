@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RownativeCourseNotFoundError, RownativeService } from '../services/rownativeService';
 import { RouteService } from '../services/routeService';
+import { polylineLengthMeters } from '../utils/coordinateUtils';
 
 /** Response double exposing both json() and text(), as the service uses each. */
 function jsonResponse(body: unknown, status = 200) {
@@ -82,7 +83,10 @@ describe('RownativeService', () => {
     const imported = await service.importCourse(course);
 
     expect(imported.source).toBe('rownative');
-    expect(imported.distance).toBe(6.2);
+    // Distance is measured from the geometry, never taken from distance_m (#194 R-5).
+    expect(imported.geometrySource).toBe('gate-chain');
+    expect(imported.externalDistanceMeters).toBe(6200);
+    expect(Math.abs(imported.distance * 1000 - polylineLengthMeters(imported.coordinates))).toBeLessThan(1);
     // The two polygon centroids are the route's endpoints, but the centreline is
     // densified in between so the engine gets demo-route resolution (issue #189).
     expect(imported.coordinates.length).toBeGreaterThan(2);
@@ -119,7 +123,8 @@ describe('RownativeService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toContain('/106.json');
     expect(route.name).toBe('HOTS Stake Race');
-    expect(route.distance).toBe(4.8);
+    expect(route.externalDistanceMeters).toBe(4804);
+    expect(Math.abs(route.distance * 1000 - polylineLengthMeters(route.coordinates))).toBeLessThan(1);
     expect(route.source).toBe('rownative');
   });
 

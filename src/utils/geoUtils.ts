@@ -1,3 +1,12 @@
+import { distanceBetweenMeters } from './coordinateUtils';
+
+/**
+ * WGS-84 equatorial radius, used only by the scene projection below.
+ *
+ * Distances go through `distanceBetweenMeters` instead — see issue #194 R-9:
+ * two radii meant an imported route's reported length and the length the
+ * engine rowed disagreed by ~0.1 %, which is 23 m on a 21 km course.
+ */
 const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
@@ -23,11 +32,7 @@ export function routeTotalDistanceMeters(coords: Array<{lat:number, lng:number}>
 }
 
 export function distanceBetweenLatLng(lat1:number, lng1:number, lat2:number, lng2:number) {
-  const dLat = (lat2 - lat1) * DEG_TO_RAD;
-  const dLng = (lng2 - lng1) * DEG_TO_RAD;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) * Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return EARTH_RADIUS_M * c;
+  return distanceBetweenMeters({ lat: lat1, lng: lng1 }, { lat: lat2, lng: lng2 });
 }
 
 export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number) {
