@@ -39,6 +39,12 @@
   font-size: 1rem;
   cursor: pointer;
   line-height: 1;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 6px;
   border-radius: 4px;
   transition: color 0.15s;

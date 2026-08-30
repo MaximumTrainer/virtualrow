@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 
 /**
@@ -152,30 +154,50 @@ test.describe('responsive layout', () => {
   });
 
   test('interactive controls meet the 44px touch target floor', async ({ page }) => {
-    await page.goto('./');
-
-    const undersized = await page.evaluate(() => {
-      const selectors = [
-        '.nav-tab',
-        '.device-selector-tab',
-        '.auth-button',
-        '.btn-start-workout',
-        '.btn-try-demo',
-        '.btn-debug-toggle',
-      ];
-      const bad: { selector: string; w: number; h: number }[] = [];
-      for (const sel of selectors) {
-        for (const el of Array.from(document.querySelectorAll(sel))) {
+    // Every rendered control, not a hand-maintained list: the acceptance
+    // criterion is "every interactive control", and a list only ever covers
+    // the controls someone remembered (issue #195, Phase 4).
+    const measure = () =>
+      page.evaluate(() => {
+        const bad: { tag: string; cls: string; text: string; w: number; h: number }[] = [];
+        const controls = document.querySelectorAll(
+          'button, [role="button"], input[type="range"], input[type="checkbox"], select',
+        );
+        for (const el of Array.from(controls)) {
           const r = el.getBoundingClientRect();
           // Skip anything deliberately hidden.
           if (r.width === 0 && r.height === 0) continue;
-          if (r.height < 44 - 0.5) bad.push({ selector: sel, w: Math.round(r.width), h: Math.round(r.height) });
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') continue;
+          if (r.height < 44 - 0.5 || r.width < 44 - 0.5) {
+            bad.push({
+              tag: el.tagName,
+              cls: (el as HTMLElement).className,
+              text: (el.textContent ?? '').trim().slice(0, 20),
+              w: Math.round(r.width),
+              h: Math.round(r.height),
+            });
+          }
         }
-      }
-      return bad;
-    });
+        return bad;
+      });
 
-    expect(undersized, `controls under 44px tall: ${JSON.stringify(undersized)}`).toEqual([]);
+    await page.goto('./');
+    expect(await measure(), 'routes view controls under 44px').toEqual([]);
+
+    // The debug panel and the PM5 simulator inside it only exist once opened.
+    await page.evaluate(() => (document.querySelector('.btn-debug-toggle') as HTMLButtonElement | null)?.click());
+    await expect(page.locator('.debug-info-panel')).toBeVisible();
+    expect(await measure(), 'debug panel controls under 44px').toEqual([]);
+    await page.evaluate(() => (document.querySelector('.debug-close-btn') as HTMLButtonElement | null)?.click());
+
+    await startDemo(page);
+    await expect(page.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
+    expect(await measure(), 'workout view controls under 44px').toEqual([]);
+
+    await page.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
+    await expect(page.locator('.guest-summary-modal')).toBeVisible({ timeout: 20_000 });
+    expect(await measure(), 'summary modal controls under 44px').toEqual([]);
   });
 
   test('no text renders below 11px', async ({ page }) => {
@@ -196,5 +218,153 @@ test.describe('responsive layout', () => {
     });
 
     expect(tiny, `text below 11px: ${JSON.stringify(tiny)}`).toEqual([]);
+  });
+});
+
+/* ============================================================================
+   STYLE PINNING (issue #195, Phase 0)
+
+   The plan asks for per-viewport screenshots so "the style stays pinned while
+   layout changes". Pixel snapshots are not portable here: the E2E job runs on
+   ubuntu, windows and macos, Playwright keys image snapshots by platform, and
+   the stage renders WebGL through SwiftShader — three sets of baselines, none
+   of them stable.
+
+   These pins assert the same acceptance criterion ("same colours, radii,
+   shadows, fonts") directly and deterministically: the computed style of the
+   elements that carry the design, recorded in a committed fixture. A layout
+   change leaves them untouched; a restyle shows up in review as a fixture diff.
+
+   Regenerate after an intended restyle:
+     UPDATE_STYLE_PINS=1 npx playwright test --config=playwright/playwright.config.ts \
+       responsive.spec.ts --project=laptop --project=desktop
+   ============================================================================ */
+
+const PINNED_PROPERTIES = [
+  'backgroundColor',
+  'backgroundImage',
+  'color',
+  'borderRadius',
+  'borderColor',
+  'borderWidth',
+  'boxShadow',
+  'fontFamily',
+  'fontSize',
+  'fontWeight',
+  'letterSpacing',
+  'textTransform',
+] as const;
+
+const PINNED_SELECTORS = {
+  routes: [
+    '.app-header',
+    '.app-title',
+    '.nav-tab',
+    '.nav-tab.active',
+    '.app-main',
+    '.device-panel',
+    '.panel-title',
+    '.device-selector-tab',
+    '.route-details-panel .route-info-overlay',
+    '.route-details-panel .route-info-overlay .route-info-header h2',
+    '.route-info-overlay .meta-badge',
+    '.routes-list',
+    '.route-item',
+    '.route-item .badge',
+    '.filter-btn',
+    '.btn-start-workout',
+    '.btn-try-demo',
+  ],
+  workout: [
+    '.activity-route-stage',
+    '.activity-route-summary',
+    '.activity-route-summary h2',
+    '.activity-stat-card',
+    '.activity-stat-label',
+    '.activity-stat-value',
+    '.btn-activity-control',
+    '.btn-activity-control--danger',
+    '.activity-map-overlay',
+  ],
+  summary: [
+    '.guest-summary-modal',
+    '.guest-summary-route',
+    '.guest-stat',
+    '.guest-stat-label',
+    '.guest-stat-value',
+    '.btn-guest-row-again',
+    '.btn-guest-exit',
+  ],
+} as const;
+
+type Pins = Record<string, Record<string, Record<string, string> | null>>;
+
+async function capturePins(page: Page, selectors: readonly string[], properties: readonly string[]) {
+  return page.evaluate(
+    ({ selectors, properties }) => {
+      const out: Record<string, Record<string, string> | null> = {};
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (!el) {
+          out[sel] = null;
+          continue;
+        }
+        const computed = window.getComputedStyle(el);
+        const props: Record<string, string> = {};
+        for (const p of properties) props[p] = computed[p as keyof CSSStyleDeclaration] as string;
+        out[sel] = props;
+      }
+      return out;
+    },
+    { selectors: [...selectors], properties: [...properties] },
+  );
+}
+
+test.describe('visual style pins', () => {
+  // Two viewports is what the acceptance criteria name, and the pins are about
+  // colour/radius/shadow/font rather than layout, so the rest add no signal.
+  test('colours, radii, shadows and fonts are unchanged', async ({ page }, testInfo) => {
+    test.skip(
+      !['laptop', 'desktop'].includes(testInfo.project.name),
+      'pinned at 1366x768 and 1920x1080 only',
+    );
+    // The routes list is behind the auth-feature surface, as in "the routes list
+    // is reachable" above; without it half the pinned selectors are absent.
+    await page.addInitScript(() => {
+      (window as unknown as { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING = true;
+    });
+    await page.goto('./');
+    await expect(page.locator('.btn-try-demo')).toBeVisible();
+    await expect(page.locator('.route-item').first()).toBeVisible();
+
+    const actual: Pins = {
+      routes: await capturePins(page, PINNED_SELECTORS.routes, PINNED_PROPERTIES),
+    };
+
+    // The summary modal is for a guest session, which `__PLAYWRIGHT_TESTING`
+    // suppresses — so the workout and summary pins come from a second page
+    // without it, i.e. a real signed-out visitor.
+    const visitor = await page.context().newPage();
+    await visitor.setViewportSize(page.viewportSize()!);
+    await visitor.goto('./');
+    await visitor.locator('.btn-try-demo').click();
+    await expect(visitor.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
+    await expect(visitor.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
+    actual.workout = await capturePins(visitor, PINNED_SELECTORS.workout, PINNED_PROPERTIES);
+
+    await visitor.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
+    await expect(visitor.locator('.guest-summary-modal')).toBeVisible({ timeout: 20_000 });
+    actual.summary = await capturePins(visitor, PINNED_SELECTORS.summary, PINNED_PROPERTIES);
+    await visitor.close();
+
+    const fixture = path.join(testInfo.project.testDir, '..', 'fixtures', `style-pins.${testInfo.project.name}.json`);
+    if (process.env.UPDATE_STYLE_PINS) {
+      fs.writeFileSync(fixture, `${JSON.stringify(actual, null, 2)}\n`, 'utf-8');
+      test.info().annotations.push({ type: 'style-pins', description: `rewrote ${fixture}` });
+      return;
+    }
+
+    const expected = JSON.parse(fs.readFileSync(fixture, 'utf-8')) as Pins;
+    expect(actual, `style drifted from ${fixture} — rerun with UPDATE_STYLE_PINS=1 if intended`).toEqual(expected);
   });
 });

@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { responsiveProjects } from './viewports';
 
 /**
  * CI-specific Playwright configuration
@@ -20,6 +21,9 @@ export default defineConfig({
   // In CI, force single worker to avoid parallel servers and port conflicts
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  // Same responsive matrix as the local config (issue #195). Rendering one
+  // viewport in CI is what let the phone and short-landscape clipping through.
+  projects: responsiveProjects(),
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5173',
     headless: true,

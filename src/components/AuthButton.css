@@ -25,9 +25,13 @@
   color: #fff;
 }
 
-.auth-button--signin:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+/* Hover-only: on a touch device a tap would otherwise leave the lifted state
+   stuck until the next tap elsewhere (issue #195, Phase 4). */
+@media (hover: hover) {
+  .auth-button--signin:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
 }
 
 .auth-button--loading {
