@@ -45,8 +45,17 @@ export type AuthPort = AuthService;
 /** Port for rownative course discovery/import. */
 export type RownativePort = RownativeService;
 
-/** Port for route geospatial data enrichment. */
-export type RouteEnrichmentPort = RouteEnrichmentService;
+/**
+ * Port for route geospatial data enrichment.
+ *
+ * Unlike the aliases above this is a *method surface*, not the concrete class,
+ * so a test or story can satisfy it with a plain object of stubs rather than
+ * an instance of `RouteEnrichmentService`.
+ */
+export type RouteEnrichmentPort = Pick<
+  RouteEnrichmentService,
+  'enrichRoute' | 'readCached' | 'clearCache' | 'clearAllCache'
+>;
 
 /**
  * Aggregate of every port the app composition root needs. Consumed by the

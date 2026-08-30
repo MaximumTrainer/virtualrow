@@ -18,8 +18,8 @@ import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
-import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
+import { useServices } from './context/ServicesContext';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { formatPace } from './utils/formatters';
@@ -42,6 +42,7 @@ function isOutlineOnly(tags: string[] | undefined): boolean {
 
 function App() {
   const { isAuthenticated, isLoading, login } = useAuth();
+  const { routeEnrichmentService } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -192,7 +193,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRoute]);
+  }, [selectedRoute, routeEnrichmentService]);
 
   const activeRowerLabel = useMemo(() => (
     activeRowerType === 'pm5' ? 'PM5' : 'FTMS'

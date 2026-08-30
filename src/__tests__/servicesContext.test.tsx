@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { ServicesProvider, useServices, defaultServices } from '../context/ServicesContext';
 import type { Services } from '../ports';
@@ -45,6 +45,26 @@ describe('ServicesProvider / useServices', () => {
     expect(resolved!.heartRateBluetoothService).toBe(defaultServices.heartRateBluetoothService);
   });
 
+  it('accepts a plain-object stub for the route enrichment port', () => {
+    // The port is a method surface, not a class alias, so this literal must
+    // type-check without a cast — that is what lets app tests stub enrichment
+    // without module mocking.
+    const routeEnrichmentService: Services['routeEnrichmentService'] = {
+      enrichRoute: vi.fn(),
+      readCached: vi.fn(() => ({ data: null, stale: false })),
+      clearCache: vi.fn(),
+      clearAllCache: vi.fn(),
+    };
+    let resolved: Services | null = null;
+    render(
+      <ServicesProvider services={{ routeEnrichmentService }}>
+        <Probe onResolve={(s) => { resolved = s; }} />
+      </ServicesProvider>,
+    );
+    expect(resolved!.routeEnrichmentService).toBe(routeEnrichmentService);
+    expect(resolved!.routeService).toBe(defaultServices.routeService);
+  });
+
   it('exposes all expected ports on the Services bundle', () => {
     const expected: Array<keyof Services> = [
       'workoutService',
@@ -55,6 +75,7 @@ describe('ServicesProvider / useServices', () => {
       'heartRateBluetoothService',
       'authService',
       'rownativeService',
+      'routeEnrichmentService',
     ];
     for (const key of expected) {
       expect(defaultServices[key]).toBeDefined();
