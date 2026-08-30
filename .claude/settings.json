@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(gh issue view 183 --repo MaximumTrainer/virtualrow)",
+      "PowerShell(gh issue list --repo MaximumTrainer/virtualrow --state open --limit 30 --json number,title --jq '.[]|\"\\\\\\(.number\\)  \\\\\\(.title\\)\"')"
+    ]
+  }
+}
