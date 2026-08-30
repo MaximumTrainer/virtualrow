@@ -265,18 +265,18 @@ test.describe('device and connectivity guards', () => {
 
     // Confirm session is active
     await page.waitForFunction(
-      () => !!(window as any).__workoutService?.getCurrentSession?.(),
+      () => !!window.__workoutService?.getCurrentSession?.(),
       { timeout: 5000 },
     );
 
     // End session programmatically to keep the test fast
     await page.evaluate(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       if (svc?.endSession) svc.endSession();
     });
 
     // Assert persisted connectivity metadata
-    const sessions = await page.evaluate(() => (window as any).__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
     expect(sessions.length).toBeGreaterThan(0);
     const last = sessions[sessions.length - 1];
     expect(last.rowerType).toBe('pm5');
@@ -401,12 +401,12 @@ test.describe('Simulated e2e route playback', () => {
       await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
       await captureTestEvidence(page, testInfo, '03-pm5-connected');
       await clearAnnotations(page);
-    } catch (e) {
+    } catch {
       pm5Connected = false;
       console.warn('PM5 did not connect within timeout; proceeding with fallback start');
       await captureErrorEvidence(page, testInfo, 'PM5 connection timeout - using fallback', '.device-status');
       await page.evaluate(() => {
-        const svc = (window as any).__workoutService;
+        const svc = window.__workoutService;
         if (svc && svc.startSession) {
           svc.startSession('sim-manual', 'Simulated Route');
         }
@@ -445,7 +445,6 @@ test.describe('Simulated e2e route playback', () => {
     }
 
     if (pm5Connected) {
-      const startBtn = page.locator('.btn-start-workout');
       // Use waitForFunction with extended timeout: the button requires both PM5 and HR to be
       // connected (React state). CI machines can be slow to propagate RAF-based state updates.
       await page.waitForFunction(
@@ -465,7 +464,7 @@ test.describe('Simulated e2e route playback', () => {
     }
 
     await page.waitForFunction(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
     }, { timeout: 5000 }).catch(() => {
       console.warn('No active session found before startRoute; proceeding anyway');
@@ -473,15 +472,12 @@ test.describe('Simulated e2e route playback', () => {
 
     const started = await page.evaluate(async () => {
       try {
-        // @ts-ignore
         const res = await window.__simulator.startRoute('run1', { distance: 3000, step: 250, startHr: 80, endHr: 95, msPerStep: 100 });
         return !!res;
-      } catch (e) {
+      } catch {
         const steps = 12;
         for (let i = 0; i < steps; i++) {
-          // @ts-ignore
-          try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (_) { /* ignore */ }
-          // eslint-disable-next-line no-await-in-loop
+          try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch { /* ignore */ }
           await new Promise((r) => setTimeout(r, 50));
         }
         return true;
@@ -490,13 +486,13 @@ test.describe('Simulated e2e route playback', () => {
     void started;
 
     await page.waitForFunction(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       if (!svc) return false;
       const active = svc.getCurrentSession?.() ?? null;
       if (active) {
         return (
           (active.heartRateSamples?.length ?? 0) > 0 ||
-          (active.splits?.some((split: any) => (split.heartRate ?? 0) > 0) ?? false) ||
+          (active.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false) ||
           (active.currentHeartRate ?? 0) > 0
         );
       }
@@ -506,7 +502,7 @@ test.describe('Simulated e2e route playback', () => {
       const last = sessions[sessions.length - 1];
       return (
         (last.heartRateSamples?.length ?? 0) > 0 ||
-        (last.splits?.some((split: any) => (split.heartRate ?? 0) > 0) ?? false)
+        (last.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false)
       );
     }, { timeout: 15000 });
 
@@ -526,8 +522,8 @@ test.describe('Simulated e2e route playback', () => {
       await annotateElement(page, '.rower3d-canvas-container canvas', '3D View Canvas', 'top');
       await captureTestEvidence(page, testInfo, '10-3d-canvas-visible');
       await clearAnnotations(page);
-    } catch (e) {
-      const hasPos = await page.evaluate(() => !!(window as any).__ROWER3D_POS);
+    } catch {
+      const hasPos = await page.evaluate(() => !!window.__ROWER3D_POS);
       const hasMarker = !!(await page.$('.rower3d-fallback-marker'));
       if (!hasPos && !hasMarker) {
         await captureErrorEvidence(page, testInfo, '3D canvas not found', '.rower3d-canvas-container');
@@ -537,30 +533,30 @@ test.describe('Simulated e2e route playback', () => {
     void canvasHandle;
     try {
       await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' });
-    } catch (e) {
+    } catch {
       console.warn('Overlay map not present; continuing with 3D checks');
     }
     try {
       await page.waitForSelector('.mini-metrics', { timeout: 3000, state: 'attached' });
-    } catch (e) {
+    } catch {
       console.warn('Mini metrics not present; continuing with position checks');
     }
 
-    const initialProgress = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
+    const initialProgress = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     await page.waitForTimeout(500);
-    const laterProgress = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
+    const laterProgress = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     expect(laterProgress).toBeGreaterThanOrEqual(initialProgress);
 
-    const initialOar = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
+    const initialOar = await page.evaluate(() => window.__ROWER3D_OAR_ANGLE ?? 0);
 
     try {
       await expect.poll(
         async () => {
           const state = await page.evaluate(() => ({
-            angle: (window as any).__ROWER3D_OAR_ANGLE,
-            strokeRate: (window as any).__ROWER3D_STROKE_RATE,
-            phase: (window as any).__ROWER3D_STROKE_PHASE,
-            progress: (window as any).__ROWER3D_POS?.progress ?? 0,
+            angle: window.__ROWER3D_OAR_ANGLE,
+            strokeRate: window.__ROWER3D_STROKE_RATE,
+            phase: window.__ROWER3D_STROKE_PHASE,
+            progress: window.__ROWER3D_POS?.progress ?? 0,
           }));
 
           if (typeof state.angle !== 'number') return 0;
@@ -569,7 +565,7 @@ test.describe('Simulated e2e route playback', () => {
         { timeout: 6000, intervals: [200, 300, 500] }
       ).toBeGreaterThanOrEqual(0.005);
 
-      const laterOar = await page.evaluate(() => (window as any).__ROWER3D_OAR_ANGLE ?? 0);
+      const laterOar = await page.evaluate(() => window.__ROWER3D_OAR_ANGLE ?? 0);
       expect(Math.abs(laterOar)).toBeLessThanOrEqual(0.8);
     } catch (e) {
       console.warn(
@@ -578,8 +574,8 @@ test.describe('Simulated e2e route playback', () => {
       );
     }
 
-    const pos = await page.evaluate(() => (window as any).__ROWER3D_POS);
-    const camera = await page.evaluate(() => (window as any).__ROWER3D_CAMERA);
+    const pos = await page.evaluate(() => window.__ROWER3D_POS);
+    const camera = await page.evaluate(() => window.__ROWER3D_CAMERA);
     if (pos && camera) {
       expect(camera.position[1]).toBeGreaterThan(pos.y);
       expect(camera.position[2]).toBeGreaterThan(pos.z);
@@ -593,8 +589,7 @@ test.describe('Simulated e2e route playback', () => {
       const samples = await page.evaluate(async () => {
         const s: { t: number; angle: number }[] = [];
         for (let i = 0; i < 16; i++) {
-          s.push({ t: performance.now(), angle: (window as any).__ROWER3D_OAR_ANGLE ?? 0 });
-          // eslint-disable-next-line no-await-in-loop
+          s.push({ t: performance.now(), angle: window.__ROWER3D_OAR_ANGLE ?? 0 });
           await new Promise((r) => setTimeout(r, 100));
         }
         return s;
@@ -606,7 +601,7 @@ test.describe('Simulated e2e route playback', () => {
       const durationSec = (samples[samples.length - 1].t - samples[0].t) / 1000;
       const cycles = crossings / 2;
       const freqHz = cycles / (durationSec || 1);
-      const actualStrokeRate = await page.evaluate(() => (window as any).__ROWER3D_STROKE_RATE ?? 30);
+      const actualStrokeRate = await page.evaluate(() => window.__ROWER3D_STROKE_RATE ?? 30);
       const expectedHz = actualStrokeRate / 60;
       expect(freqHz).toBeGreaterThanOrEqual(expectedHz * 0.5);
       expect(freqHz).toBeLessThanOrEqual(expectedHz * 1.5);
@@ -631,7 +626,7 @@ test.describe('Simulated e2e route playback', () => {
       if (canvas) canvas.dispatchEvent(new Event('webglcontextlost'));
     });
     await page.waitForTimeout(200);
-    const gpuContextLost = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === true);
+    const gpuContextLost = await page.evaluate(() => window.__ROWER3D_WEBGL_LOST === true);
     try {
       expect(gpuContextLost).toBeTruthy();
       const markerVisible = await page.evaluate(() => {
@@ -651,7 +646,7 @@ test.describe('Simulated e2e route playback', () => {
       if (canvas) canvas.dispatchEvent(new Event('webglcontextrestored'));
     });
     await page.waitForTimeout(200);
-    const gpuContextRestored = await page.evaluate(() => (window as any).__ROWER3D_WEBGL_LOST === false);
+    const gpuContextRestored = await page.evaluate(() => window.__ROWER3D_WEBGL_LOST === false);
     expect(gpuContextRestored).toBeTruthy();
 
     // End workout
@@ -662,19 +657,17 @@ test.describe('Simulated e2e route playback', () => {
         await endBtn.click();
       } else {
         await page.evaluate(() => {
-          // @ts-ignore
           if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
         });
       }
-    } catch (e) {
+    } catch {
       console.warn('End workout button not found or not clickable; continuing to session assertions');
       await page.evaluate(() => {
-        // @ts-ignore
         if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
       });
     }
 
-    const sessions = await page.evaluate(() => (window as any).__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
     expect(sessions.length).toBeGreaterThan(0);
     const last = sessions[sessions.length - 1];
     expect(last.heartRateAvg).toBeGreaterThan(0);
@@ -701,11 +694,11 @@ test.describe('Simulated e2e route playback', () => {
     try {
       await waitForPM5Connected(page);
       pm5Connected = true;
-    } catch (e) {
+    } catch {
       pm5Connected = false;
       console.warn('PM5 did not connect within timeout in multi-route test; proceeding with fallback');
       await page.evaluate(() => {
-        const svc = (window as any).__workoutService;
+        const svc = window.__workoutService;
         if (svc && svc.startSession) {
           svc.startSession('sim-manual-multi', 'Simulated Multi-Route');
         }
@@ -721,7 +714,7 @@ test.describe('Simulated e2e route playback', () => {
     });
     try {
       await waitForHRConnected(page, 10_000);
-    } catch (e) {
+    } catch {
       console.warn('HR Monitor did not connect within timeout in multi-route test');
     }
     await captureTestEvidence(page, testInfo, '02-multi-route-devices-connecting');
@@ -748,9 +741,9 @@ test.describe('Simulated e2e route playback', () => {
         await page.evaluate(() => {
           (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
         });
-      } catch (e) {
+      } catch {
         await page.evaluate(() => {
-          const svc = (window as any).__workoutService;
+          const svc = window.__workoutService;
           if (svc && svc.startSession) svc.startSession('sim-manual-2', 'Simulated Route 2');
         });
       }
@@ -758,27 +751,22 @@ test.describe('Simulated e2e route playback', () => {
 
     // Wait for session to become active before streaming data
     await page.waitForFunction(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
     }, { timeout: 5000 }).catch(() => console.warn('No active session before route1 data; proceeding anyway'));
 
     const started1 = await page.evaluate(async () => {
       try {
-        // @ts-ignore
         return await window.__simulator.startRoute('multi1', { distance: 2800, step: 250, startHr: 110, endHr: 125, msPerStep: 100 });
-      } catch (e) {
+      } catch {
         const steps = 12;
         for (let i = 0; i < steps; i++) {
-          // @ts-ignore
           await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 110 + i });
           try {
-            // @ts-ignore
             await window.__simulator.emitHR({ bpm: 110 + i });
-          } catch (e) {
-            // @ts-ignore
+          } catch {
             try { window.__workoutService?.updateSessionHeartRate?.(110 + i); } catch (e) { console.warn('HR fallback update failed', e); }
           }
-          // eslint-disable-next-line no-await-in-loop
           await new Promise((r) => setTimeout(r, 50));
         }
         return true;
@@ -789,19 +777,21 @@ test.describe('Simulated e2e route playback', () => {
     // Validate 3D view presence while session is still active
     try {
       await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 5000, state: 'attached' });
-    } catch (e) {
-      const hasPos = await page.evaluate(() => !!(window as any).__ROWER3D_POS);
+    } catch {
+      const hasPos = await page.evaluate(() => !!window.__ROWER3D_POS);
       const hasMarker = !!(await page.$('.rower3d-fallback-marker'));
       expect(hasPos || hasMarker).toBeTruthy();
     }
-    try { await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' }); } catch {}
-    try { await page.waitForSelector('.mini-metrics', { timeout: 3000, state: 'attached' }); } catch {}
+    // The overlays are optional here: the assertions below cover the case where
+    // they never attach, so a timeout is not a failure.
+    try { await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' }); } catch { /* overlay is optional */ }
+    try { await page.waitForSelector('.mini-metrics', { timeout: 3000, state: 'attached' }); } catch { /* overlay is optional */ }
     if (pm5Connected) {
       await expectSessionDistanceAdvances(page);
     }
-    const initialProgress1 = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
+    const initialProgress1 = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     await page.waitForTimeout(300);
-    const laterProgress1 = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
+    const laterProgress1 = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     expect(laterProgress1).toBeGreaterThanOrEqual(initialProgress1);
     await captureTestEvidence(page, testInfo, '05-first-route-in-progress');
 
@@ -823,13 +813,11 @@ test.describe('Simulated e2e route playback', () => {
       if (await endBtnSingle.isVisible() && await endBtnSingle.isEnabled()) await endBtnSingle.click();
       else {
         await page.evaluate(() => {
-          // @ts-ignore
           if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
         });
       }
-    } catch (e) {
+    } catch {
       await page.evaluate(() => {
-        // @ts-ignore
         if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
       });
     }
@@ -850,42 +838,37 @@ test.describe('Simulated e2e route playback', () => {
         await page.evaluate(() => {
           (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
         });
-      } catch (e) {
+      } catch {
         await page.evaluate(() => {
-          const svc = (window as any).__workoutService;
+          const svc = window.__workoutService;
           if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3');
         });
       }
     } else {
       await page.evaluate(() => {
-        const svc = (window as any).__workoutService;
+        const svc = window.__workoutService;
         if (svc && svc.startSession) svc.startSession('sim-manual-3', 'Simulated Route 3');
       });
     }
 
     // Wait for second session to become active
     await page.waitForFunction(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
     }, { timeout: 5000 }).catch(() => console.warn('No active session before route2 data; proceeding anyway'));
 
     const started2 = await page.evaluate(async () => {
       try {
-        // @ts-ignore
         return await window.__simulator.startRoute('multi2', { distance: 3500, step: 250, startHr: 80, endHr: 100, msPerStep: 100 });
-      } catch (e) {
+      } catch {
         const steps = 14;
         for (let i = 0; i < steps; i++) {
-          // @ts-ignore
           await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
           try {
-            // @ts-ignore
             await window.__simulator.emitHR({ bpm: 80 + i });
-          } catch (e) {
-            // @ts-ignore
+          } catch {
             try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { console.warn('HR fallback update failed', e); }
           }
-          // eslint-disable-next-line no-await-in-loop
           await new Promise((r) => setTimeout(r, 50));
         }
         return true;
@@ -901,18 +884,16 @@ test.describe('Simulated e2e route playback', () => {
         await endBtnMulti.click();
       } else {
         await page.evaluate(() => {
-          // @ts-ignore
           if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
         });
       }
-    } catch (e) {
+    } catch {
       await page.evaluate(() => {
-        // @ts-ignore
         if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
       });
     }
 
-    const sessions = await page.evaluate(() => (window as any).__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
     expect(sessions.length).toBeGreaterThanOrEqual(2);
     if (pm5Connected) {
       // Both legs were driven by the simulator, so both must have recorded metres.
@@ -920,7 +901,7 @@ test.describe('Simulated e2e route playback', () => {
         expect(session.distance).toBeGreaterThan(0);
       }
     }
-    const csv = await page.evaluate(() => (window as any).__workoutService.exportSessionsAsCSV());
+    const csv = await page.evaluate(() => window.__workoutService.exportSessionsAsCSV());
     expect(csv).toContain('Avg HR');
     expect(csv).toContain('Max HR');
     await captureTestEvidence(page, testInfo, '08-multi-route-test-completed');
@@ -966,7 +947,7 @@ test.describe('Simulated e2e route playback', () => {
           },
           { timeout: 8_000 },
         );
-      } catch (e) {
+      } catch {
         console.warn('Start button not enabled in time; attempting click anyway');
       }
       // Use evaluate click to avoid 3D canvas pointer-event interception
@@ -978,13 +959,10 @@ test.describe('Simulated e2e route playback', () => {
     // Drive simulation
     await page.evaluate(async () => {
       try {
-        // @ts-ignore
         await window.__simulator.startRoute('visual1', { distance: 3000, step: 250, startHr: 138, endHr: 155, msPerStep: 100 });
       } catch {
         for (let i = 0; i < 10; i++) {
-          // @ts-ignore
           await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 118, power: 200, cadence: 26, heartRate: 140 + i });
-          // @ts-ignore
           await window.__simulator.emitHR({ bpm: 140 + i });
           await new Promise((r) => setTimeout(r, 100));
         }
@@ -992,7 +970,7 @@ test.describe('Simulated e2e route playback', () => {
     });
 
     await page.waitForFunction(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       const sessions = svc?.getAllSessions?.() ?? [];
       return sessions.length > 0 && sessions[sessions.length - 1].heartRateSamples?.length > 0;
     }, { timeout: 5000 }).catch(() => console.warn('HR samples not received in time'));
@@ -1009,23 +987,23 @@ test.describe('Simulated e2e route playback', () => {
     await captureGameplayCanvas(page, testInfo, 2, '3D canvas visible - water and boat');
 
     await page.waitForFunction(
-      () => ((window as any).__ROWER3D_POS?.progress ?? 0) > 0.001,
+      () => (window.__ROWER3D_POS?.progress ?? 0) > 0.001,
       { timeout: 3000 },
     ).catch(() => console.warn('Boat progress not detected; frames still captured'));
 
     for (let frame = 3; frame <= 5; frame++) {
       await page.waitForTimeout(500);
       const [phase, oarAngle, progress, speed] = await Promise.all([
-        page.evaluate(() => String((window as any).__ROWER3D_STROKE_PHASE ?? 'unknown')),
-        page.evaluate(() => Number((window as any).__ROWER3D_OAR_ANGLE ?? 0)),
-        page.evaluate(() => Number((window as any).__ROWER3D_POS?.progress ?? 0)),
-        page.evaluate(() => Number((window as any).__ROWER3D_SPEED_MPS ?? 0)),
+        page.evaluate(() => String(window.__ROWER3D_STROKE_PHASE ?? 'unknown')),
+        page.evaluate(() => Number(window.__ROWER3D_OAR_ANGLE ?? 0)),
+        page.evaluate(() => Number(window.__ROWER3D_POS?.progress ?? 0)),
+        page.evaluate(() => Number(window.__ROWER3D_SPEED_MPS ?? 0)),
       ]);
       const label = `${phase.toUpperCase()} | ${speed.toFixed(2)} m/s | oar ${oarAngle.toFixed(2)} rad | ${(progress * 100).toFixed(1)}%`;
       await captureGameplayCanvas(page, testInfo, frame, label);
     }
 
-    const finalProgress = await page.evaluate(() => (window as any).__ROWER3D_POS?.progress ?? 0);
+    const finalProgress = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     const canvasInDom = await page.evaluate(() => !!document.querySelector('.rower3d-canvas-container canvas'));
     expect(finalProgress > 0 || canvasInDom).toBeTruthy();
     console.log(`[visual-capture] 5 gameplay frames captured. Final progress: ${(finalProgress * 100).toFixed(1)}%`);
@@ -1086,7 +1064,7 @@ test.describe('docs screenshots', () => {
     });
 
     await page.waitForFunction(
-      () => !!(window as any).__workoutService?.getCurrentSession?.(),
+      () => !!window.__workoutService?.getCurrentSession?.(),
       { timeout: 5000 },
     );
 
@@ -1095,7 +1073,7 @@ test.describe('docs screenshots', () => {
 
     // Wait for Three.js WebGL renderer to initialise (fires in Canvas onCreated callback)
     await page.waitForFunction(
-      () => !!(window as any).__ROWER3D_GPU_BACKEND,
+      () => !!window.__ROWER3D_GPU_BACKEND,
       { timeout: 15_000 },
     );
 
@@ -1111,22 +1089,21 @@ test.describe('docs screenshots', () => {
         dv.setUint16(10, 195, true);                   // power W
         dv.setUint8(13, 26);                           // cadence spm
         dv.setUint8(14, 148);                          // heart rate bpm
-        const w = window as any;
-        if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
-        if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
+        if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
+        if (window.__pm5CharMux)     window.__pm5CharMux._dispatch(dv);
 
         const hrBuf = new ArrayBuffer(2);
         const hrDv = new DataView(hrBuf);
         hrDv.setUint8(0, 0x00);
         hrDv.setUint8(1, 148);
-        if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+        if (window.__hrChar) window.__hrChar._dispatch(hrDv);
       }, i);
       await page.waitForTimeout(600);
     }
 
     // Wait for the Rower3D animation loop to place the boat on the route
     await page.waitForFunction(
-      () => (window as any).__ROWER3D_DISTANCE_M > 0,
+      () => window.__ROWER3D_DISTANCE_M > 0,
       { timeout: 5000 },
     ).catch(() => { /* non-critical — screenshot taken regardless */ });
 
@@ -1179,7 +1156,7 @@ test.describe('docs screenshots', () => {
     // 5. End the live session and return to the routes view.
     // (The History screenshot was dropped along with the History view — AUTH-1.)
     await page.evaluate(() => {
-      const svc = (window as any).__workoutService;
+      const svc = window.__workoutService;
       if (svc?.endSession) svc.endSession();
     });
     await page.waitForSelector('.view-container--routes', { timeout: 5000 });
@@ -1268,12 +1245,12 @@ test.describe('docs screenshots — other route heroes', () => {
       });
 
       await page.waitForFunction(
-        () => !!(window as any).__workoutService?.getCurrentSession?.(),
+        () => !!window.__workoutService?.getCurrentSession?.(),
         { timeout: 5000 },
       );
       await page.waitForSelector('.activity-view', { timeout: 10_000 });
       await page.waitForFunction(
-        () => !!(window as any).__ROWER3D_GPU_BACKEND,
+        () => !!window.__ROWER3D_GPU_BACKEND,
         { timeout: 15_000 },
       );
 
@@ -1288,20 +1265,19 @@ test.describe('docs screenshots — other route heroes', () => {
           dv.setUint16(10, 195, true);
           dv.setUint8(13, 26);
           dv.setUint8(14, 148);
-          const w = window as any;
-          if (w.__pm5CharGeneral) w.__pm5CharGeneral._dispatch(dv);
-          if (w.__pm5CharMux)     w.__pm5CharMux._dispatch(dv);
+          if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
+          if (window.__pm5CharMux)     window.__pm5CharMux._dispatch(dv);
           const hrBuf = new ArrayBuffer(2);
           const hrDv = new DataView(hrBuf);
           hrDv.setUint8(0, 0x00);
           hrDv.setUint8(1, 148);
-          if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+          if (window.__hrChar) window.__hrChar._dispatch(hrDv);
         }, i);
         await page.waitForTimeout(600);
       }
 
       await page.waitForFunction(
-        () => (window as any).__ROWER3D_DISTANCE_M > 0,
+        () => window.__ROWER3D_DISTANCE_M > 0,
         { timeout: 5000 },
       ).catch(() => { /* non-critical — capture regardless */ });
       await page.waitForTimeout(1500);

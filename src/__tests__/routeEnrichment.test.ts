@@ -4,13 +4,17 @@ import {
   OPEN_TOPO_DATA_URL,
   OVERPASS_API_URL,
   ROUTE_ENRICHMENT_CACHE_TTL_MS,
+  MAX_TERRAIN_RELIEF_SCENE_UNITS,
   RouteEnrichmentService,
+  TERRAIN_RELIEF_SCALE,
   buildOverpassQuery,
+  buildTerrainProfile,
   calculateBearingDeltaForSegments,
   createFallbackRouteEnrichment,
   getRouteEnrichmentCacheKey,
   loadCachedRouteEnrichment,
   mapOsmTagsToSceneryProfile,
+  getTerrainReliefForProgress,
   normalizeElevations,
   saveCachedRouteEnrichment,
   splitCoordinatesIntoElevationBatches,
@@ -265,6 +269,71 @@ describe('route enrichment helpers', () => {
     expect(query).toContain('way["waterway"]');
     expect(query).toContain('relation["building"]');
     expect(query).toContain('node["natural"]');
+  });
+});
+
+describe('terrain relief (#202)', () => {
+  it('returns a flat profile when there is no elevation data', () => {
+    expect(buildTerrainProfile(undefined).relief).toEqual([]);
+    expect(buildTerrainProfile([]).relief).toEqual([]);
+    expect(buildTerrainProfile([Number.NaN, Number.POSITIVE_INFINITY]).relief).toEqual([]);
+  });
+
+  it('returns a flat profile for genuinely flat water, so the scene is unchanged', () => {
+    // createFallbackRouteEnrichment fills elevations with zeros. That has to
+    // render exactly as it did before elevations were consumed.
+    const profile = buildTerrainProfile([0, 0, 0, 0]);
+
+    expect(profile.relief).toEqual([]);
+    expect(profile.rangeMeters).toBe(0);
+    expect(getTerrainReliefForProgress(profile, 0.5)).toBe(0);
+  });
+
+  it('anchors relief to the route minimum rather than sea level', () => {
+    // A course at 1,500 m is not 1,500 units up in the air; only its own
+    // 40 m of internal relief is drawn.
+    const profile = buildTerrainProfile([1500, 1520, 1540]);
+
+    expect(profile.rangeMeters).toBe(40);
+    expect(profile.relief[0]).toBe(0);
+    expect(profile.relief[2]).toBeCloseTo(40 * TERRAIN_RELIEF_SCALE, 6);
+  });
+
+  it('clamps relief so an alpine course stays rowable', () => {
+    const profile = buildTerrainProfile([0, 100000]);
+
+    expect(profile.relief[1]).toBe(MAX_TERRAIN_RELIEF_SCENE_UNITS);
+  });
+
+  it('treats a non-finite sample as ground level instead of poisoning the mesh', () => {
+    const profile = buildTerrainProfile([0, Number.NaN, 100]);
+
+    expect(profile.relief.every((value) => Number.isFinite(value))).toBe(true);
+    expect(profile.relief[1]).toBe(0);
+  });
+
+  it('interpolates between samples along the route', () => {
+    const profile = buildTerrainProfile([0, 100]);
+
+    expect(getTerrainReliefForProgress(profile, 0)).toBeCloseTo(0, 6);
+    expect(getTerrainReliefForProgress(profile, 1)).toBeCloseTo(100 * TERRAIN_RELIEF_SCALE, 6);
+    expect(getTerrainReliefForProgress(profile, 0.5)).toBeCloseTo(50 * TERRAIN_RELIEF_SCALE, 6);
+  });
+
+  it('clamps progress and survives a non-finite one', () => {
+    const profile = buildTerrainProfile([0, 100]);
+
+    expect(getTerrainReliefForProgress(profile, -3)).toBe(0);
+    expect(getTerrainReliefForProgress(profile, 4)).toBeCloseTo(100 * TERRAIN_RELIEF_SCALE, 6);
+    expect(getTerrainReliefForProgress(profile, Number.NaN)).toBe(0);
+  });
+
+  it('never returns a non-finite height, whatever the input', () => {
+    const profile = buildTerrainProfile([10, Number.NaN, 30, 20]);
+
+    for (let t = 0; t <= 1; t += 0.05) {
+      expect(Number.isFinite(getTerrainReliefForProgress(profile, t))).toBe(true);
+    }
   });
 });
 

@@ -272,7 +272,21 @@ declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
     __PM5_DATA?: PM5Data;
-    __workoutService?: unknown;
+    /**
+     * The live WorkoutService, exposed only under __PLAYWRIGHT_TESTING so an
+     * E2E test can start and end sessions without driving the UI.
+     *
+     * Typed as the narrow surface the tests actually use rather than the whole
+     * service: `unknown` forced every call-site through an `any` cast, which
+     * meant a renamed method broke the suite at runtime instead of at build.
+     */
+    __workoutService?: {
+      getCurrentSession(): WorkoutSession | null;
+      getAllSessions(): WorkoutSession[];
+      endSession(): WorkoutSession | null;
+      updateSessionHeartRate(bpm: number): void;
+      exportSessionsAsCSV(): string;
+    };
     __PM5_SIMULATOR_PORT?: number;
     // Rower3D telemetry exposed for Playwright assertions
     __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };

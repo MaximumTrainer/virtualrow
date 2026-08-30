@@ -24,11 +24,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        # Kept at zero by #203. Runs before the build so a style regression is
+        # reported on its own line rather than buried behind a type error.
+        run: npm run lint
+
       - name: Build app
         run: npm run build
 
       - name: Run unit tests
         run: npm run test -- --run
+
+      - name: Run unit tests in shuffled order
+        # Guards against order-dependent suites (#201). A test that only passes
+        # because some other suite ran first fails here. The seed is echoed so
+        # a failure is reproducible: npm run test -- --run --sequence.shuffle
+        # --sequence.seed=<seed>
+        run: |
+          SEED=$RANDOM
+          echo "vitest shuffle seed: $SEED"
+          npm run test -- --run --sequence.shuffle --sequence.seed=$SEED
 
       - name: Run unit-test coverage gate
         # Thresholds are configured in vitest.config.ts (`test.coverage.thresholds`).

@@ -289,8 +289,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
       default:
         return (
           <>
-            <ProceduralTerrain side="left" boatZ={boatZ} />
-            <ProceduralTerrain side="right" boatZ={boatZ} />
+            <ProceduralTerrain side="left" boatZ={boatZ} enrichment={enrichment} />
+            <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
             <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
           </>

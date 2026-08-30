@@ -1,18 +1,21 @@
 import React, { useMemo, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { WATER_CHANNEL_WIDTH, RIVERBANK_WIDTH, LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
+import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
-import { useAnimationFrame } from './AnimationContext';
+import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
-import { makeSwayFoliageMaterial } from './vegetationComponents';
+import { makeSwayFoliageMaterial } from './foliageMaterial';
 import {
-  getWaterWidthSceneUnitsForProgress,
+  buildTerrainProfile,
+  getTerrainReliefForProgress,
   type RouteEnrichmentData,
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
+import { createBankGeometry } from './bankGeometry';
+import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -32,66 +35,10 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   
   const { leftBankGeometry, rightBankGeometry } = useMemo(() => {
     if (!curve) return { leftBankGeometry: null, rightBankGeometry: null };
-    
-    const segments = 200;
-    const createBankGeometry = (side: 'left' | 'right') => {
-      const positions: number[] = [];
-      const normals: number[] = [];
-      const uvs: number[] = [];
-      const indices: number[] = [];
-      
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const point = curve.getPointAt(t);
-        const tangent = curve.getTangentAt(t).normalize();
-        
-        const up = new THREE.Vector3(0, 1, 0);
-        const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
-        const waterWidth = getWaterWidthSceneUnitsForProgress(
-          enrichment?.segmentProfiles,
-          enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / 0.1,
-          t,
-        );
-        const waterHalfWidth = waterWidth / 2;
-        const bankWidth = Math.max(RIVERBANK_WIDTH * 0.25, waterWidth * 2.25);
-        
-        const innerOffset = side === 'left' ? -waterHalfWidth : waterHalfWidth;
-        const outerOffset = side === 'left' ? -(waterHalfWidth + bankWidth) : (waterHalfWidth + bankWidth);
-        
-        const inner = new THREE.Vector3().copy(point).addScaledVector(perp, innerOffset);
-        const outer = new THREE.Vector3().copy(point).addScaledVector(perp, outerOffset);
-        
-        inner.y = -0.5;
-        outer.y = -0.5;
-        
-        positions.push(inner.x, inner.y, inner.z);
-        positions.push(outer.x, outer.y, outer.z);
-        
-        normals.push(0, 1, 0);
-        normals.push(0, 1, 0);
-        
-        uvs.push(0, t * 10);
-        uvs.push(1, t * 10);
-        
-        if (i < segments) {
-          const base = i * 2;
-          indices.push(base, base + 2, base + 1);
-          indices.push(base + 1, base + 2, base + 3);
-        }
-      }
-      
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-      geometry.setIndex(indices);
-      
-      return geometry;
-    };
-    
+
     return {
-      leftBankGeometry: createBankGeometry('left'),
-      rightBankGeometry: createBankGeometry('right')
+      leftBankGeometry: createBankGeometry(curve, 'left', enrichment),
+      rightBankGeometry: createBankGeometry(curve, 'right', enrichment)
     };
   }, [curve, enrichment]);
 
@@ -180,22 +127,6 @@ const getSegmentStyle = (
   };
 };
 
-/** Returns the scenery profile of the nearest segment for the given progress (0–1). */
-export const getSegmentSceneryProfile = (
-  enrichment: RouteEnrichmentData | null | undefined,
-  progress: number,
-): SceneryProfile => {
-  const segmentProfiles = enrichment?.segmentProfiles;
-  if (!segmentProfiles || segmentProfiles.length === 0) return 'fallback';
-  const safeProgress = Number.isFinite(progress) ? progress : 0;
-  const clampedProgress = Math.max(0, Math.min(1, safeProgress));
-  const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
-  return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;
-};
-
-/** Baseline building height in scene units; profile heightRange multiplies this value. */
-export const BASE_BUILDING_HEIGHT = 12.5;
-
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
   theme,
@@ -210,6 +141,9 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     
     const elementSpacing = 0.02;
     const minOffset = LANDSCAPE_OFFSET;
+    // Same terrain the banks are built from, so trees and buildings stand on
+    // the raised ground rather than being buried in it (#202).
+    const terrain = buildTerrainProfile(enrichment?.elevations);
     
     let elemIdx = 0;
     for (let t = 0; t < 1; t += elementSpacing) {
@@ -242,7 +176,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
       const placementChance = 0.1 + segmentStyle.treeDensity * 0.55 + segmentStyle.vegetationDensity * 0.2;
       if (seededRandom(elemIdx * 7 + 4) < placementChance) {
         const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
-        leftPos.y = 0;
+        leftPos.y = getTerrainReliefForProgress(terrain, t);
         leftElements.push({
           position: leftPos,
           type: getElementType(3),
@@ -254,7 +188,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
       
       if (seededRandom(elemIdx * 7 + 6) < placementChance) {
         const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
-        rightPos.y = 0;
+        rightPos.y = getTerrainReliefForProgress(terrain, t);
         rightElements.push({
           position: rightPos,
           type: getElementType(7),
@@ -439,14 +373,36 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
 // ============================================================================
 // PROCEDURAL TERRAIN - Mountains along the banks
 // ============================================================================
-export const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number }> = ({ side, boatZ }) => {
+/**
+ * Elevation span, in metres, at which the procedural hills are drawn at their
+ * original height. Routes with less relief than this get proportionally lower
+ * hills, routes with more get taller ones — bounded, because these are scene
+ * dressing on the horizon rather than a survey.
+ */
+export const REFERENCE_TERRAIN_RANGE_METERS = 120;
+
+export const ProceduralTerrain: React.FC<{
+  side: 'left' | 'right';
+  boatZ: number;
+  enrichment?: RouteEnrichmentData | null;
+}> = ({ side, boatZ, enrichment }) => {
   const xOffset = side === 'left' ? -35 : 35;
-  
+
+  // Before #202 every route got the same 15–40 unit hills from a fixed seed,
+  // so a flat canal and an alpine course had identical horizons. Scale that
+  // band by how much the route actually climbs. No elevation data leaves the
+  // factor at 1, i.e. exactly the previous appearance.
+  const reliefFactor = useMemo(() => {
+    const { rangeMeters } = buildTerrainProfile(enrichment?.elevations);
+    if (rangeMeters <= 0) return 1;
+    return Math.max(0.35, Math.min(1.6, rangeMeters / REFERENCE_TERRAIN_RANGE_METERS));
+  }, [enrichment?.elevations]);
+
   const mountains = useMemo(() => {
     const result: Array<{ x: number; z: number; scale: number; height: number; snowLine: number; rockVariant: number }> = [];
     for (let z = -500; z < 500; z += 40) {
       const i = Math.round((z + 500) / 40);
-      const height = 15 + seededRandom(i * 11 + 1) * 25;
+      const height = (15 + seededRandom(i * 11 + 1) * 25) * reliefFactor;
       result.push({
         x: xOffset + (seededRandom(i * 11 + 2) - 0.5) * 10,
         z: z + (seededRandom(i * 11 + 3) - 0.5) * 20,
@@ -457,7 +413,7 @@ export const ProceduralTerrain: React.FC<{ side: 'left' | 'right'; boatZ: number
       });
     }
     return result;
-  }, [xOffset]);
+  }, [xOffset, reliefFactor]);
   
   const rockBodyMaterials = useMemo(() => [
     new THREE.MeshPhysicalMaterial({ color: '#5a6350', roughness: 0.92, metalness: 0.05, clearcoat: 0.02, clearcoatRoughness: 0.95 }),

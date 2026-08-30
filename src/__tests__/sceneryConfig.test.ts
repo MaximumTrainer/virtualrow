@@ -6,7 +6,7 @@ import {
 import {
   getSegmentSceneryProfile,
   BASE_BUILDING_HEIGHT,
-} from '../components/rower3d/bankComponents';
+} from '../components/rower3d/segmentScenery';
 import type { SceneryProfile } from '../services/routeEnrichmentService';
 import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
 

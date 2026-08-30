@@ -11,7 +11,8 @@ vi.mock('@react-three/fiber', () => ({
   }),
 }));
 
-import { AnimationProvider, useAnimationFrame } from '../components/rower3d/AnimationContext';
+import { AnimationProvider } from '../components/rower3d/AnimationContext';
+import { useAnimationFrame } from '../components/rower3d/animationFrame';
 
 // Helper: simulate one animation frame at the given elapsed time.
 function fireFrame(elapsedTime: number) {

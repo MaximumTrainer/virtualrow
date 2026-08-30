@@ -15,53 +15,20 @@
  */
 
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useState,
   type ReactNode,
 } from 'react';
 import type { AuthUser } from '../types/index';
 import { authService } from '../services/authService';
-
-export interface AuthContextValue {
-  user: AuthUser | null;
-  isAuthenticated: boolean;
-  /** True while the OAuth callback is being processed. */
-  isLoading: boolean;
-  /** Latest authentication error visible to the UI. */
-  authError: string | null;
-  /** Start the OAuth login flow (redirects the browser). */
-  login: () => Promise<void>;
-  /** Sign out: clears tokens and resets auth state. */
-  logout: () => void;
-  /** Clear any visible authentication error. */
-  clearAuthError: () => void;
-  /**
-   * An action identifier that was blocked by an auth gate in guest mode.
-   * After sign-in completes, the caller should retry the action.
-   */
-  pendingAction: string | null;
-  setPendingAction: (action: string | null) => void;
-}
-
-const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  isAuthenticated: false,
-  isLoading: false,
-  authError: null,
-  login: async () => {},
-  logout: () => {},
-  clearAuthError: () => {},
-  pendingAction: null,
-  setPendingAction: () => {},
-});
+import type { AuthPort } from '../ports';
+import { AuthContext } from './useAuth';
 
 export interface AuthProviderProps {
   children: ReactNode;
-  /** Override for tests — injects a pre-built auth service instance. */
-  service?: typeof authService;
+  /** Override for tests — injects any adapter satisfying the auth port. */
+  service?: AuthPort;
 }
 
 export function AuthProvider({ children, service = authService }: AuthProviderProps) {
@@ -146,9 +113,4 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
       {children}
     </AuthContext.Provider>
   );
-}
-
-/** Access the authentication context from any child component. */
-export function useAuth(): AuthContextValue {
-  return useContext(AuthContext);
 }

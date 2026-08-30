@@ -5,7 +5,7 @@ import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { IS_TEST_MODE } from './constants';
 import type { PerformanceMode } from './constants';
-import { useAnimationFrame } from './AnimationContext';
+import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme, ColorGradingConfig } from './themeConfig';
 import { createCausticsTexture } from './helpers';
@@ -145,6 +145,10 @@ export const PMREMEnvironment: React.FC<{ theme: RouteTheme }> = ({ theme }) => 
     const pmremGen = new THREE.PMREMGenerator(gl);
     pmremGen.compileEquirectangularShader();
     const envRT = pmremGen.fromScene(scene);
+    // react-hooks/immutability: `scene` is the live three.js graph handed over
+    // by useThree, not React state. Installing the environment map on it is
+    // the documented way to light an R3F scene.
+    // eslint-disable-next-line react-hooks/immutability
     scene.environment = envRT.texture;
     return () => {
       envRT.texture.dispose();
@@ -152,7 +156,6 @@ export const PMREMEnvironment: React.FC<{ theme: RouteTheme }> = ({ theme }) => 
       pmremGen.dispose();
       scene.environment = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, scene, theme]);
   return null;
 };
@@ -313,13 +316,7 @@ export const FinishSplash: React.FC<{
 export const CausticsLight: React.FC<{ boatZ: number }> = ({ boatZ }) => {
   const spotRef = useRef<THREE.SpotLight>(null);
   const targetRef = useRef<THREE.Object3D>(null);
-  const cookieRef = useRef<THREE.CanvasTexture | null>(null);
-
-  const causticsTexture = useMemo(() => {
-    const tex = createCausticsTexture();
-    cookieRef.current = tex;
-    return tex;
-  }, []);
+  const causticsTexture = useMemo(() => createCausticsTexture(), []);
   useEffect(() => () => { causticsTexture.dispose(); }, [causticsTexture]);
 
   useAnimationFrame((time) => {
@@ -329,9 +326,15 @@ export const CausticsLight: React.FC<{ boatZ: number }> = ({ boatZ }) => {
       spotRef.current.position.z = boatZ + Math.cos(time * 0.4) * r;
     }
     if (causticsTexture) {
+      // react-hooks/immutability: a THREE texture is a handle to GPU state and
+      // is mutated in place by design — scrolling its offset is how the
+      // caustics animate. There is no immutable equivalent, and reallocating
+      // the texture each frame would be a leak.
+      /* eslint-disable react-hooks/immutability */
       causticsTexture.offset.x = (time * 0.03) % 1;
       causticsTexture.offset.y = (time * 0.02) % 1;
       causticsTexture.needsUpdate = true;
+      /* eslint-enable react-hooks/immutability */
     }
   });
 

@@ -3,7 +3,9 @@ import {
   willowbrookRiverCoordinates,
 } from '../data/seedRouteCoordinates';
 import {
+  exceedsDropAllowance,
   parseKMLCoordinateList,
+  type ParsedCoordinateList,
   polylineLengthMeters,
   resampleCoordinates,
 } from '../utils/coordinateUtils';
@@ -51,6 +53,13 @@ export interface KMLImportCandidate {
   name: string;
   description: string;
   coordinates: Coordinate[];
+  /**
+   * Coordinates that were present in the file but unusable. Zero for a clean
+   * import; a small number means the file had junk rows that were skipped. An
+   * import where these exceed MAX_DROPPED_POINT_RATIO is refused outright, so
+   * this never reports a majority of the track (#191, KV-2).
+   */
+  droppedPoints: number;
 }
 
 export interface RownativeRouteImportData {
@@ -221,11 +230,13 @@ export class RouteService {
   // ── KML import ──────────────────────────────────────────────────────────
 
   /**
-   * Parse the text content of a KML <coordinates> element into Coordinate[].
-   * Each tuple is "lng,lat[,alt]"; altitude is ignored.
-   * Tuples that are not finite numbers or are out of valid lat/lng range are skipped.
+   * Parse the text content of a KML <coordinates> element.
+   *
+   * Each tuple is "lng,lat[,alt]"; altitude is ignored. Tuples that are not
+   * finite numbers or fall outside WGS-84 bounds are dropped and counted — the
+   * caller refuses the import if too many of them are (#191, KV-2).
    */
-  private parseKMLCoordinates(text: string): Coordinate[] {
+  private parseKMLCoordinates(text: string): ParsedCoordinateList {
     return parseKMLCoordinateList(text);
   }
 
@@ -289,14 +300,33 @@ export class RouteService {
 
         // Merge coordinates from all LineStrings within this single Placemark
         const coords: Coordinate[] = [];
+        let dropped = 0;
+        let total = 0;
         for (const ls of lineStrings) {
           const coordsText =
             ls.getElementsByTagNameNS('*', 'coordinates')[0]?.textContent ?? '';
-          coords.push(...this.parseKMLCoordinates(coordsText));
+          const parsed = this.parseKMLCoordinates(coordsText);
+          coords.push(...parsed.coordinates);
+          dropped += parsed.dropped;
+          total += parsed.total;
+        }
+
+        // A file this broken is not the file the user meant. Importing the
+        // readable tenth of it as though it were the whole route is worse than
+        // saying so.
+        if (exceedsDropAllowance({ coordinates: coords, dropped, total })) {
+          return {
+            status: 'error',
+            error:
+              `Could not read ${dropped} of ${total} coordinates in "${name}". ` +
+              'They are malformed or outside valid latitude/longitude range, ' +
+              'which usually means the file is truncated or in a different ' +
+              'coordinate system.',
+          };
         }
 
         if (coords.length >= 2) {
-          candidates.push({ name, description, coordinates: coords });
+          candidates.push({ name, description, coordinates: coords, droppedPoints: dropped });
         }
       }
 

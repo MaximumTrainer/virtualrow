@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import { ServicesProvider, useServices, defaultServices } from '../context/ServicesContext';
+import { ServicesProvider } from '../context/ServicesContext';
+import { useServices, defaultServices } from '../context/useServices';
 import type { Services } from '../ports';
 
 function Probe({ onResolve }: { onResolve: (s: Services) => void }) {
@@ -32,7 +33,11 @@ describe('ServicesProvider / useServices', () => {
   });
 
   it('lets callers override individual ports while inheriting the rest', () => {
-    const stubWorkout = { __stub: true } as unknown as Services['workoutService'];
+    // A distinct object that still satisfies the port. This test is about the
+    // provider's merge behaviour, so all it needs is a different identity.
+    const stubWorkout: Services['workoutService'] = Object.create(
+      defaultServices.workoutService,
+    );
     let resolved: Services | null = null;
     render(
       <ServicesProvider services={{ workoutService: stubWorkout }}>

@@ -600,6 +600,92 @@ export const getDragMultiplierForProgress = (
   return lower.dragMultiplier + (upper.dragMultiplier - lower.dragMultiplier) * blend;
 };
 
+// ============================================================================
+// TERRAIN RELIEF (#202)
+// ----------------------------------------------------------------------------
+// `elevations` holds one metre value per route coordinate, straight from
+// OpenTopoData. These helpers turn that into the height the 3D scene draws so
+// that a lowland river and an alpine course no longer render identically.
+// ============================================================================
+
+/**
+ * Real metres of elevation per scene unit of height.
+ *
+ * The scene renders horizontal distance at `SCENE_SCALE` (1 unit = 10 m). Using
+ * that same factor vertically would put a 60 m valley side 6 units above a boat
+ * that is half a unit wide, walling the rower into a trench. Relief is
+ * therefore compressed relative to the horizontal scale — the goal is for the
+ * shape of the terrain to read as the route's own, not to be survey-accurate.
+ */
+export const TERRAIN_RELIEF_SCALE = 0.02;
+
+/** Ceiling on relief, in scene units, so a mountain course stays rowable. */
+export const MAX_TERRAIN_RELIEF_SCENE_UNITS = 8;
+
+export interface TerrainProfile {
+  /**
+   * Height above the route's own lowest point, in scene units, one entry per
+   * elevation sample. Anchored to the route minimum rather than sea level so a
+   * course at 1,500 m does not float the whole scene into the sky.
+   */
+  relief: number[];
+  /** Raw elevation span of the route, in metres, before compression. */
+  rangeMeters: number;
+}
+
+/** A route with no usable elevation data renders exactly as it did before. */
+export const FLAT_TERRAIN_PROFILE: TerrainProfile = { relief: [], rangeMeters: 0 };
+
+export const buildTerrainProfile = (
+  elevations: ReadonlyArray<number> | undefined | null,
+): TerrainProfile => {
+  if (!elevations || elevations.length === 0) return FLAT_TERRAIN_PROFILE;
+
+  const finite = elevations.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) return FLAT_TERRAIN_PROFILE;
+
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const rangeMeters = max - min;
+
+  // The fallback enrichment fills `elevations` with zeros, and OpenTopoData
+  // returns a flat profile for genuinely flat water. Both mean "no relief to
+  // draw", which keeps those scenes byte-for-byte what they were before.
+  if (rangeMeters === 0) return FLAT_TERRAIN_PROFILE;
+
+  const relief = elevations.map((value) => {
+    if (!Number.isFinite(value)) return 0;
+    const scaled = (value - min) * TERRAIN_RELIEF_SCALE;
+    return Math.max(0, Math.min(MAX_TERRAIN_RELIEF_SCENE_UNITS, scaled));
+  });
+
+  return { relief, rangeMeters };
+};
+
+/**
+ * Height of the land at a point along the route, in scene units. Interpolates
+ * between samples so 200-segment bank geometry reads smoothly off a profile of
+ * a couple of hundred coordinates.
+ */
+export const getTerrainReliefForProgress = (
+  profile: TerrainProfile | undefined | null,
+  progress: number,
+): number => {
+  const relief = profile?.relief;
+  if (!relief || relief.length === 0) return 0;
+  if (relief.length === 1) return relief[0];
+
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
+  const clampedProgress = Math.max(0, Math.min(1, safeProgress));
+  const lastIndex = relief.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+
+  return relief[lowerIndex] + (relief[upperIndex] - relief[lowerIndex]) * blend;
+};
+
 export const getWaterWidthSceneUnitsForProgress = (
   segmentProfiles: RouteSegmentEnrichment[] | undefined,
   fallbackWidthMeters: number,

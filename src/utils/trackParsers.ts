@@ -83,7 +83,7 @@ export function parseKmlTrack(xml: string): Coordinate[] {
   const points: Coordinate[] = [];
   for (const lineString of Array.from(doc.getElementsByTagNameNS('*', 'LineString'))) {
     const text = lineString.getElementsByTagNameNS('*', 'coordinates')[0]?.textContent ?? '';
-    points.push(...parseKMLCoordinateList(text));
+    points.push(...parseKMLCoordinateList(text).coordinates);
   }
   return points;
 }
