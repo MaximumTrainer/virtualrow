@@ -63,7 +63,7 @@ jobs:
           echo "Using ${{ inputs.source_dir }}"
 
       - name: Create issues from markdown files
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           SOURCE_DIR: ${{ inputs.source_dir }}
           DRY_RUN: ${{ inputs.dry_run }}

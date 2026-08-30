@@ -45,11 +45,15 @@ To row real-world courses, search and import them directly from **rownative.icu*
 
 ## Getting Started
 
+Requires **Node.js 24** (the active LTS line). It is pinned in `.nvmrc`, so
+`nvm use` selects it for you.
+
 See **First-Time Setup** below under Testing, or for quick start:
 
 ```bash
 git clone <repository-url>
 cd virtualrow
+nvm use              # → Node 24, per .nvmrc
 npm install
 npm run dev          # → http://localhost:5173
 ```

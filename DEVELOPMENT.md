@@ -264,7 +264,9 @@ Edit `src/components/Rower3D.tsx`:
 
 ## Environment Setup
 
-Requires Node.js 20.19+ for best Vite compatibility.
+Requires **Node.js 24** (the active LTS line, Krypton). This is the version CI
+builds and tests on, and it is pinned in `.nvmrc` and `package.json`'s `engines`
+field — `nvm use` picks it up automatically.
 
 ```bash
 # Install dependencies
