@@ -491,6 +491,21 @@ function App() {
     handlePM5Data(data);
   }, [handlePM5Data]);
 
+  // Playwright reads this to compare the card's distance with the engine's own
+  // total; it is never set in a normal session.
+  useEffect(() => {
+    if (!window.__PLAYWRIGHT_TESTING) return;
+    window.__SELECTED_ROUTE = selectedRoute
+      ? {
+        id: selectedRoute.id,
+        name: selectedRoute.name,
+        distanceKm: selectedRoute.distance,
+        geometrySource: selectedRoute.geometrySource,
+        externalDistanceMeters: selectedRoute.externalDistanceMeters,
+      }
+      : undefined;
+  }, [selectedRoute]);
+
   const handleRouteImported = useCallback((route: WaterRoute) => {
     setRoutes(routeService.getAllRoutes());
     setSelectedRoute(route);

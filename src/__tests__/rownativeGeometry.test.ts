@@ -14,7 +14,9 @@ import { OsmWaterwayPathProvider } from '../services/osmWaterwayPathProvider';
 import { RouteService } from '../services/routeService';
 import { RownativeService } from '../services/rownativeService';
 import { TrackAttachmentStore } from '../services/trackAttachmentStore';
+import { createRouteCurve, distanceToProgress, getCurveDistances } from '../components/rower3d/curve';
 import { distanceBetweenMeters, polylineLengthMeters } from '../utils/coordinateUtils';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { projectPointOntoPolyline } from '../utils/polylineGeometry';
 import { parseTrackFile } from '../utils/trackParsers';
 
@@ -248,6 +250,25 @@ describe('rownative geometry resolution (issue #194)', () => {
       expect(route.distance).toBeGreaterThan(20);
       expect(route.distance).toBeLessThan(23);
       expect(route.externalDistanceMeters).toBe(19599);
+    });
+  });
+
+  describe('AC-7 — the card and the boat agree', () => {
+    it('rowing the distance on the card puts the boat at the end of the course', async () => {
+      const route = await importCourse(179, { track: { fileName: '179.gpx', coordinates: castleToCraneTrack() } });
+
+      // What the engine measures the route as, from the same coordinates.
+      const engineTotal = routeTotalDistanceMeters(route.coordinates);
+      expect(Math.abs(engineTotal - route.distance * 1000)).toBeLessThan(1);
+
+      // …and what it does with a rower's distance readings along the way.
+      const curve = createRouteCurve(route.coordinates, 0.1)!;
+      const distances = getCurveDistances(curve);
+      const curveLength = distances[distances.length - 1];
+
+      expect(distanceToProgress(engineTotal, engineTotal, distances, curveLength)).toBeCloseTo(1, 2);
+      expect(distanceToProgress(engineTotal / 2, engineTotal, distances, curveLength)).toBeCloseTo(0.5, 1);
+      expect(distanceToProgress(0, engineTotal, distances, curveLength)).toBeCloseTo(0, 2);
     });
   });
 

@@ -37,8 +37,14 @@ export const GEOMETRY_SOURCE_TAG_PREFIX = 'geometry:';
  * Show rownative's own distance alongside ours once the two differ by more
  * than this fraction. Their figure is a straight-line gate chain by
  * definition, so a meandering river routinely lands well outside it.
+ *
+ * R-11 proposes 15 %, but issue #194's own open question asks whether that is
+ * too high — and it is: Castle to Crane, the case AC-10 names, is 12 % out
+ * (21.95 km of river against a 19.6 km straight line) and would be hidden.
+ * 10 % still leaves every gate-chain course quiet, where the two figures
+ * agree to within a percent by construction.
  */
-export const DISTANCE_DISCREPANCY_THRESHOLD = 0.15;
+export const DISTANCE_DISCREPANCY_THRESHOLD = 0.10;
 
 /** A parsed KML placemark with its coordinate sequence, ready to import as a route. */
 export interface KMLImportCandidate {

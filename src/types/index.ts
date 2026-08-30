@@ -286,6 +286,20 @@ declare global {
     __ROWER3D_GPU_BACKEND?: string;
     __ROWER3D_WEBGL_LOST?: boolean;
     __ROWER3D_MAX_ANISOTROPY?: number;
+    /**
+     * The selected route's headline numbers, for Playwright assertions.
+     *
+     * Exposed so an E2E test can check that what the card says and what the
+     * engine rows are the same number (issue #194 AC-7) without reaching into
+     * React state.
+     */
+    __SELECTED_ROUTE?: {
+      id: string;
+      name: string;
+      distanceKm: number;
+      geometrySource?: GeometrySource;
+      externalDistanceMeters?: number;
+    };
     // Auth testing — set by E2E tests to inject a mock authenticated user
     __AUTH_USER?: AuthUser | null;
     __AUTH_TOKENS?: OAuthTokens | null;
