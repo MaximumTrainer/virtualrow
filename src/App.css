@@ -1677,6 +1677,27 @@ body {
   border: 1px solid rgba(168, 106, 8, 0.28);
 }
 
+/* Geometry provenance: a traced or map-derived path is trustworthy, so it
+   reads as information rather than the warning a gates-only course is. */
+.meta-badge--traced,
+.badge-traced,
+.meta-badge--osm,
+.badge-osm {
+  background: rgba(30, 110, 90, 0.12);
+  color: #17614f;
+  border: 1px solid rgba(30, 110, 90, 0.28);
+}
+
+.meta-badge--external-distance {
+  background: rgba(var(--color-primary-rgb), 0.08);
+  color: var(--color-text-secondary);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+}
+
+.route-item-external-distance {
+  color: var(--color-text-secondary);
+}
+
 /* ============================================================================
    SIGNED-OUT / DEMO
    ============================================================================ */

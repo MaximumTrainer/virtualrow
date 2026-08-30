@@ -72,10 +72,10 @@ test.describe('rownative.icu course import', () => {
     await page.getByRole('button', { name: /^Import$/ }).click();
 
     await expect(page.locator('.route-info-overlay h2')).toContainText('Quinsig S to N', { timeout: 15_000 });
-    // Surveyed distance_m wins over anything derived from gate centroids.
+    // The distance shown is measured from the geometry the boat rows (#194 R-5).
     await expect(page.locator('.route-info-overlay')).toContainText('5.35 km');
     // Gate-only geometry is disclosed rather than passed off as a surveyed path.
-    await expect(page.locator('.meta-badge--outline')).toBeVisible();
+    await expect(page.locator('.meta-badge--outline')).toContainText('gates only');
     // rownative source + status badges on the route row.
     await expect(page.locator('.route-item .badge-source')).toBeVisible();
     await expect(page.locator('.route-item .badge-status--established')).toBeVisible();
