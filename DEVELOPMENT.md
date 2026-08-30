@@ -208,6 +208,24 @@ Tests are in `src/__tests__/` directory:
 - `heartRateBluetoothService.test.ts` - HR service tests
 - `routeService.test.ts` - Route service tests
 - `workoutGeneratorService.test.ts` - Workout service tests
+- `routeEnrichment.test.ts` - OpenTopoData / Overpass enrichment tests
+
+#### Doubling upstream HTTP services
+
+Fetch doubles must dispatch on the **request URL**, not on invocation order.
+`mockResolvedValueOnce(...)` chains encode the order in which a service happens
+to issue its requests today, so batching a request, reordering a `Promise.all`,
+or adding a third upstream silently routes one API's body into another API's
+parser — the suite then fails, or passes for the wrong reason.
+
+`src/__tests__/routeEnrichment.test.ts` shows the pattern: `createFetchStub()`
+matches `OPEN_TOPO_DATA_URL` / `OVERPASS_API_URL`, models per-upstream status
+codes and payload shapes, and exposes `elevationCalls()` / `overpassCalls()` so
+request counts are asserted per upstream rather than against a single total.
+
+Services should also stay quiet under test: gate diagnostic logging on
+`import.meta.env.DEV && import.meta.env.MODE !== 'test'` (Vitest runs with
+`DEV === true`, so a bare `DEV` check floods the report with `stdout` blocks).
 
 ### E2E Tests (Playwright)
 
