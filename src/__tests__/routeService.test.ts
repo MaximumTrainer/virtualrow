@@ -21,8 +21,10 @@ describe('RouteService isolation', () => {
     const second = new RouteService();
 
     first.importRouteFromRownative({
-      courseId: 'isolation-check',
+      id: 'isolation-check',
       name: 'Isolation Check',
+      country: 'DE',
+      geometrySource: 'track',
       coordinates: [
         { lat: 48.1, lng: 11.5 },
         { lat: 48.2, lng: 11.6 },
