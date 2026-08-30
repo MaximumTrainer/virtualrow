@@ -13,11 +13,23 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      // Coverage is measured against logic that *should* be unit-tested. The
-      // exclusions below are validated by Playwright E2E or are vendor / pure
-      // data assets that would skew the unit-test gate.
+      // Setting `exclude` *replaces* vitest's defaults rather than extending
+      // them (same trap as `test.exclude` above). Without the first four
+      // entries a stray worktree under .claude/ or a nested node_modules
+      // inflates the denominator and the gate fails on code we don't own.
+      //
+      // Measured 2026-08-30 with these exclusions on the chore/clear-open-backlog
+      // branch: 81.79% lines / 77.69% branches / 73.26% functions.
       exclude: [
+        '**/node_modules/**',
+        '.claude/**',
+        'dist/**',
+        'coverage/**',
         'playwright/**',
+        // Build-time asset generators and utility scripts — not app logic.
+        'scripts/**',
+        // Generated Wasm bindings — tested through the services that call them.
+        'src/wasm-pkg/**',
         'src/main.tsx',
         'src/types/**',
         // R3F 3D scene components — exercised by Playwright E2E; pure utilities
@@ -48,13 +60,13 @@ export default defineConfig({
         'src/vendor/**',
       ],
       thresholds: {
-        // Thresholds locked to the current measured floor (rounded down) so the
-        // gate enforces "don't regress". Ratchet upward as coverage improves.
-        // Keys map to the v8 reporter's metric names.
-        lines: 55,        // % of executable lines covered
-        statements: 55,   // % of statements covered (mirrors `lines` for v8)
-        branches: 65,     // % of branch arms covered
-        functions: 50,    // % of declared functions invoked at least once
+        // Locked to the measured floor (rounded down) so the gate enforces
+        // "don't regress". Ratchet upward as coverage improves.
+        // Last measured 2026-08-30: 81.79 / 77.69 / 73.26.
+        lines: 80,
+        statements: 80,
+        branches: 76,
+        functions: 72,
       },
     },
   },

@@ -281,6 +281,7 @@ declare global {
      * meant a renamed method broke the suite at runtime instead of at build.
      */
     __workoutService?: {
+      startSession(routeId: string, routeName: string, structuredWorkoutId?: string, rowerType?: 'pm5' | 'ftms', hrConnectedAtStart?: boolean, isGuest?: boolean): WorkoutSession;
       getCurrentSession(): WorkoutSession | null;
       getAllSessions(): WorkoutSession[];
       endSession(): WorkoutSession | null;

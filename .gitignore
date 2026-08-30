@@ -92,3 +92,8 @@ crates/*/target
 src/wasm-pkg/*.wasm
 
 .copilot-specs-cache/
+
+# Claude Code agent state — worktrees and local settings are per-machine;
+# settings.json is tracked deliberately as shared permissions.
+.claude/*
+!.claude/settings.json

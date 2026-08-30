@@ -171,9 +171,8 @@ export class RouteService {
 
   // Parse GPX XML into coordinates (trkpt or rtept)
   private parseGPX(gpxXml: string): Coordinate[] {
-    // Shared with the rownative track-attach flow so both read a file the same way.
     try {
-      return parseGpxTrack(gpxXml);
+      return parseGpxTrack(gpxXml).coordinates;
     } catch {
       return [];
     }
@@ -182,7 +181,7 @@ export class RouteService {
   // Parse GeoJSON string into coordinates (LineString / MultiLineString)
   private parseGeoJSON(geojsonStr: string): Coordinate[] {
     try {
-      return parseGeoJsonTrack(geojsonStr);
+      return parseGeoJsonTrack(geojsonStr).coordinates;
     } catch {
       return [];
     }

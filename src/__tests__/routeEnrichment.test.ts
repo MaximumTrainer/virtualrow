@@ -335,6 +335,20 @@ describe('terrain relief (#202)', () => {
       expect(Number.isFinite(getTerrainReliefForProgress(profile, t))).toBe(true);
     }
   });
+
+  it('produces plausible relief for realistic waterway profiles (#214 A4)', () => {
+    // Cam (flat): ~8 m drop over 5 km — should be barely perceptible
+    const cam = buildTerrainProfile([12, 10, 8, 6, 4]);
+    expect(cam.rangeMeters).toBe(8);
+    expect(Math.max(...cam.relief)).toBeCloseTo(8 * TERRAIN_RELIEF_SCALE, 6);
+    expect(Math.max(...cam.relief)).toBeLessThan(1);
+
+    // Danube gorge: ~290 m range — should be dramatic but under the cap
+    const danube = buildTerrainProfile([60, 120, 200, 290, 350]);
+    expect(danube.rangeMeters).toBe(290);
+    expect(Math.max(...danube.relief)).toBeCloseTo(290 * TERRAIN_RELIEF_SCALE, 6);
+    expect(Math.max(...danube.relief)).toBeLessThan(MAX_TERRAIN_RELIEF_SCENE_UNITS);
+  });
 });
 
 describe('RouteEnrichmentService', () => {

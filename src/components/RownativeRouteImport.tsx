@@ -4,6 +4,7 @@ import { RownativeCourseNotFoundError, type RownativeCourseSummary } from '../se
 import { trackAttachmentStore, type AttachedTrack } from '../services/trackAttachmentStore';
 import { classifyPolygons, fitCandidateToGates } from '../services/rownativeGeometry';
 import { parseTrackFile } from '../utils/trackParsers';
+import { buildAttachedTrackGeoJSON, slugify, triggerBlobDownload } from '../utils/exporters';
 import type { WaterRoute } from '../types/index';
 import './RownativeRouteImport.css';
 
@@ -83,7 +84,7 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
     }
 
     try {
-      const coordinates = parseTrackFile(file.name, await file.text());
+      const { coordinates, droppedPoints } = parseTrackFile(file.name, await file.text());
       const course = await rownativeService.fetchCourseGeometry(courseId);
       const fit = fitCandidateToGates(coordinates, classifyPolygons(course).gates);
       if (!fit.ok) throw fit.error;
@@ -91,6 +92,9 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
       trackAttachmentStore.set(courseId, file.name, coordinates);
       setAttachments(trackAttachmentStore.list());
       await importCourseId(courseId, { replaceExisting: true });
+      if (droppedPoints > 0) {
+        setNotice(`Attached ${coordinates.length} points (${droppedPoints} unusable coordinate${droppedPoints === 1 ? '' : 's'} skipped).`);
+      }
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : `${file.name} could not be attached.`);
     } finally {
@@ -102,6 +106,15 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
     trackAttachmentStore.remove(courseId);
     setAttachments(trackAttachmentStore.list());
   }, []);
+
+  const handleExportTrack = useCallback((track: AttachedTrack) => {
+    const existing = routeService.findRouteByRownativeId(track.courseId);
+    const courseName = existing?.name ?? `Course ${track.courseId}`;
+    const geojson = buildAttachedTrackGeoJSON(track, courseName);
+    const json = JSON.stringify(geojson, null, 2);
+    const filename = `rownative-${track.courseId}-${slugify(courseName)}.geojson`;
+    triggerBlobDownload(json, 'application/geo+json', filename);
+  }, [routeService]);
 
   const handleImportPasted = async () => {
     setError(null);
@@ -262,9 +275,16 @@ export function RownativeRouteImport({ onRouteImported }: RownativeRouteImportPr
                     <button
                       type="button"
                       className="filter-btn"
+                      onClick={() => handleExportTrack(track)}
+                    >
+                      Export GeoJSON
+                    </button>
+                    <button
+                      type="button"
+                      className="filter-btn"
                       onClick={() => handleRemoveTrack(track.courseId)}
                     >
-                      Remove attached track
+                      Remove
                     </button>
                   </li>
                 ))}

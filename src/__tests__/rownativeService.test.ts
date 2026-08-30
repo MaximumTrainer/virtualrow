@@ -139,14 +139,24 @@ describe('RownativeService', () => {
   });
 
   it('reports a course missing from the mirror as recoverable, carrying the id', async () => {
-    // The live site lists more courses than the mirror carries, so a real id can 404.
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
     const service = new RownativeService(fetchMock as unknown as typeof fetch);
 
     await expect(service.importCourseById('2')).rejects.toBeInstanceOf(RownativeCourseNotFoundError);
-    await expect(service.importCourseById('2')).rejects.toThrow(/isn't in the public course data yet/i);
+    await expect(service.importCourseById('2')).rejects.toThrow(/isn't in the public mirror yet/i);
     await service.importCourseById('2').catch((e: unknown) => {
       expect((e as RownativeCourseNotFoundError).courseId).toBe('2');
+    });
+  });
+
+  it('names the mirror lag in the not-found message (#211 R-D)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
+    const service = new RownativeService(fetchMock as unknown as typeof fetch);
+
+    await service.importCourseById('99').catch((e: unknown) => {
+      const msg = (e as Error).message;
+      expect(msg).toMatch(/mirror lags/i);
+      expect(msg).toMatch(/rownative\.icu/);
     });
   });
 

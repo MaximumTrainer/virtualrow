@@ -34,14 +34,14 @@ const GEOJSON = JSON.stringify({
 
 describe('track file parsing (AC-11)', () => {
   it('reads the same line out of GPX, KML and GeoJSON', () => {
-    expect(parseTrackFile('track.gpx', GPX)).toEqual(POINTS);
-    expect(parseTrackFile('track.kml', KML)).toEqual(POINTS);
-    expect(parseTrackFile('track.geojson', GEOJSON)).toEqual(POINTS);
+    expect(parseTrackFile('track.gpx', GPX).coordinates).toEqual(POINTS);
+    expect(parseTrackFile('track.kml', KML).coordinates).toEqual(POINTS);
+    expect(parseTrackFile('track.geojson', GEOJSON).coordinates).toEqual(POINTS);
   });
 
   it('falls back to route points when a GPX has no track points', () => {
     const routeOnly = GPX.replace(/trkpt/g, 'rtept').replace(/trkseg/g, 'rte').replace(/<trk>|<\/trk>/g, '');
-    expect(parseTrackFile('route.gpx', routeOnly)).toEqual(POINTS);
+    expect(parseTrackFile('route.gpx', routeOnly).coordinates).toEqual(POINTS);
   });
 
   it('reads a MultiLineString and a FeatureCollection', () => {
@@ -52,7 +52,7 @@ describe('track file parsing (AC-11)', () => {
         geometry: { type: 'MultiLineString', coordinates: [POINTS.slice(0, 2).map((p) => [p.lng, p.lat])] },
       }],
     });
-    expect(parseTrackFile('multi.geojson', multi)).toEqual(POINTS.slice(0, 2));
+    expect(parseTrackFile('multi.geojson', multi).coordinates).toEqual(POINTS.slice(0, 2));
   });
 
   it('names the formats it can read rather than silently ignoring a file', () => {
@@ -69,6 +69,52 @@ describe('track file parsing (AC-11)', () => {
   it('rejects malformed XML and JSON', () => {
     expect(() => parseTrackFile('bad.gpx', '<gpx><trk>')).toThrow(TrackParseError);
     expect(() => parseTrackFile('bad.geojson', '{ not json')).toThrow(TrackParseError);
+  });
+
+  it('reports droppedPoints for coordinates that survived the allowance', () => {
+    const goodPoints = POINTS;
+    const withOneBad = [
+      ...goodPoints.map((p) => [p.lng, p.lat]),
+      [999, 999],
+    ];
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: withOneBad },
+    });
+    const result = parseTrackFile('mixed.geojson', geojson);
+    expect(result.coordinates).toHaveLength(3);
+    expect(result.droppedPoints).toBe(1);
+  });
+
+  it('applies the same drop allowance to GeoJSON as KML (#214 A1)', () => {
+    const good = [{ lat: 55.9, lng: -4.5 }, { lat: 55.8, lng: -4.4 }];
+    const badCoords = Array.from({ length: 8 }, () => [999, 999]);
+    const geojson = JSON.stringify({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          ...good.map((p) => [p.lng, p.lat]),
+          ...badCoords,
+        ],
+      },
+    });
+    expect(() => parseTrackFile('corrupt.geojson', geojson)).toThrow(/Could not read 8 of 10/);
+  });
+
+  it('applies the drop allowance to GPX files (#214 A1)', () => {
+    const badTrkpts = Array.from({ length: 8 }, () =>
+      '    <trkpt lat="999" lon="999" />',
+    ).join('\n');
+    const gpx = `<?xml version="1.0"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><trkseg>
+    <trkpt lat="55.9" lon="-4.5" />
+    <trkpt lat="55.8" lon="-4.4" />
+${badTrkpts}
+  </trkseg></trk>
+</gpx>`;
+    expect(() => parseTrackFile('corrupt.gpx', gpx)).toThrow(/Could not read 8 of 10/);
   });
 });
 
