@@ -46,7 +46,7 @@ describe('RownativeRouteImport', () => {
     } satisfies Services['rownativeService'];
   }
 
-  const noExisting = { ...defaultServices.routeService, findRouteByRownativeId: () => undefined } as unknown as Services['routeService'];
+  const noExisting = { ...defaultServices.routeService, findRouteByRownativeId: () => undefined } satisfies Services['routeService'];
 
   async function open(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: /add a rownative\.icu course/i }));
@@ -219,7 +219,7 @@ describe('RownativeRouteImport', () => {
     const importCourseById = vi.fn();
     const { onRouteImported } = renderWithServices({
       rownativeService: rownative({ importCourseById }),
-      routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } as unknown as Services['routeService'],
+      routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } satisfies Services['routeService'],
     });
 
     await open(user);

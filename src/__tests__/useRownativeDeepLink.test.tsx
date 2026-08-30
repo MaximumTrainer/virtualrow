@@ -34,7 +34,7 @@ function renderHook(search: string, overrides?: Partial<Services>, isReady = tru
 const noExistingRoute = {
   ...defaultServices.routeService,
   findRouteByRownativeId: () => undefined,
-} as unknown as Services['routeService'];
+} satisfies Services['routeService'];
 
 describe('useRownativeDeepLink', () => {
   beforeEach(() => {
@@ -143,7 +143,7 @@ describe('useRownativeDeepLink', () => {
     const importCourseById = vi.fn();
     const { onRouteLoaded } = renderHook('?rownativeCourseId=5', {
       rownativeService: { ...defaultServices.rownativeService, importCourseById } satisfies Services['rownativeService'],
-      routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } as unknown as Services['routeService'],
+      routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } satisfies Services['routeService'],
     });
 
     await waitFor(() => expect(onRouteLoaded).toHaveBeenCalledWith(existing));

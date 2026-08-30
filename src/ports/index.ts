@@ -31,7 +31,21 @@ export type FTMSBluetoothPort = FTMSBluetoothService;
 export type HeartRateBluetoothPort = HeartRateBluetoothService;
 
 /** Port for water-route catalogue queries / imports. */
-export type RoutePort = RouteService;
+export type RoutePort = Pick<
+  RouteService,
+  | 'getAllRoutes'
+  | 'getRouteById'
+  | 'searchRoutes'
+  | 'createRoute'
+  | 'updateRoute'
+  | 'deleteRoute'
+  | 'importRouteFromGPX'
+  | 'importRouteFromGeoJSON'
+  | 'importRouteFromKML'
+  | 'finalizeKMLImport'
+  | 'importRouteFromRownative'
+  | 'findRouteByRownativeId'
+>;
 
 /** Port for the structured-workout generator. */
 export type WorkoutGeneratorPort = WorkoutGeneratorService;
