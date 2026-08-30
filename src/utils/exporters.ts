@@ -7,7 +7,8 @@
  * DOM download machinery. The DOM-side "trigger a download" step still lives
  * in `App.tsx` (see {@link triggerBlobDownload}).
  */
-import type { WorkoutSession, WaterRoute } from '../types/index';
+import type { Coordinate, WorkoutSession, WaterRoute } from '../types/index';
+import type { AttachedTrack } from '../services/trackAttachmentStore';
 
 /**
  * Build a GPX 1.1 document representing the route polyline travelled during
@@ -143,6 +144,56 @@ export function buildSessionFITPayload(session: WorkoutSession): FITSessionPaylo
       heart_rate: split.heartRate,
     })),
   };
+}
+
+/** RFC 7946 GeoJSON Feature for an attached track. */
+export interface TrackGeoJSON {
+  type: 'Feature';
+  geometry: {
+    type: 'LineString';
+    coordinates: [number, number][];
+  };
+  properties: {
+    courseId: string;
+    courseName: string;
+    source: 'virtualrow-attached-track';
+    exportedAt: string;
+  };
+}
+
+/**
+ * Build a GeoJSON Feature (RFC 7946) from an attached track.
+ *
+ * Coordinates are emitted in `[lng, lat]` order per the spec. The Feature's
+ * `properties` carry provenance so the file is self-describing when shared.
+ */
+export function buildAttachedTrackGeoJSON(
+  track: AttachedTrack,
+  courseName: string,
+  now = new Date(),
+): TrackGeoJSON {
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: track.coordinates.map((c: Coordinate) => [c.lng, c.lat]),
+    },
+    properties: {
+      courseId: track.courseId,
+      courseName,
+      source: 'virtualrow-attached-track',
+      exportedAt: now.toISOString(),
+    },
+  };
+}
+
+/** Sanitise a name into a URL-safe slug for filenames. */
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60) || 'track';
 }
 
 /**

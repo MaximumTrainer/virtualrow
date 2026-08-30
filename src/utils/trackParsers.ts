@@ -8,7 +8,12 @@
  */
 
 import type { Coordinate } from '../types/index';
-import { parseGeoJSONCoordinate, parseKMLCoordinateList } from './coordinateUtils';
+import {
+  exceedsDropAllowance,
+  parseGeoJSONCoordinate,
+  parseKMLCoordinateList,
+  type ParsedCoordinateList,
+} from './coordinateUtils';
 
 /** Track formats the app can read. */
 export type TrackFormat = 'gpx' | 'kml' | 'geojson';
@@ -52,7 +57,7 @@ function isUsable(point: Coordinate): boolean {
 }
 
 /** Read `<trkpt>` points, falling back to `<rtept>` when a file has no track. */
-export function parseGpxTrack(xml: string): Coordinate[] {
+export function parseGpxTrack(xml: string): ParsedCoordinateList {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length > 0) {
     throw new TrackParseError('That GPX file could not be parsed as XML.');
@@ -61,60 +66,75 @@ export function parseGpxTrack(xml: string): Coordinate[] {
   for (const tagName of ['trkpt', 'rtept'] as const) {
     const nodes = Array.from(doc.getElementsByTagNameNS('*', tagName));
     if (nodes.length === 0) continue;
-    const points = nodes
-      .map((node) => ({
-        lat: parseFloat(node.getAttribute('lat') ?? ''),
-        lng: parseFloat(node.getAttribute('lon') ?? ''),
-      }))
-      .filter(isUsable);
-    if (points.length > 0) return points;
+    const all = nodes.map((node) => ({
+      lat: parseFloat(node.getAttribute('lat') ?? ''),
+      lng: parseFloat(node.getAttribute('lon') ?? ''),
+    }));
+    const coordinates = all.filter(isUsable);
+    const dropped = all.length - coordinates.length;
+    if (coordinates.length > 0) return { coordinates, dropped, total: all.length };
   }
 
-  return [];
+  return { coordinates: [], dropped: 0, total: 0 };
 }
 
 /** Read every `<LineString>` in a KML file, concatenated in document order. */
-export function parseKmlTrack(xml: string): Coordinate[] {
+export function parseKmlTrack(xml: string): ParsedCoordinateList {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length > 0) {
     throw new TrackParseError('That KML file could not be parsed as XML.');
   }
 
-  const points: Coordinate[] = [];
+  const coordinates: Coordinate[] = [];
+  let dropped = 0;
+  let total = 0;
   for (const lineString of Array.from(doc.getElementsByTagNameNS('*', 'LineString'))) {
     const text = lineString.getElementsByTagNameNS('*', 'coordinates')[0]?.textContent ?? '';
-    points.push(...parseKMLCoordinateList(text).coordinates);
+    const parsed = parseKMLCoordinateList(text);
+    coordinates.push(...parsed.coordinates);
+    dropped += parsed.dropped;
+    total += parsed.total;
   }
-  return points;
+  return { coordinates, dropped, total };
+}
+
+interface GeoJsonAccumulator {
+  coordinates: Coordinate[];
+  dropped: number;
+  total: number;
 }
 
 function collectGeoJsonGeometry(
   geometry: { type?: string; coordinates?: unknown } | null | undefined,
-  into: Coordinate[],
+  acc: GeoJsonAccumulator,
 ): void {
   if (!geometry?.type) return;
 
   if (geometry.type === 'LineString') {
     for (const position of (geometry.coordinates as number[][]) ?? []) {
+      acc.total++;
       const parsed = parseGeoJSONCoordinate(position);
-      if (parsed) into.push(parsed);
+      if (parsed) acc.coordinates.push(parsed);
+      else acc.dropped++;
     }
   } else if (geometry.type === 'MultiLineString') {
     for (const line of (geometry.coordinates as number[][][]) ?? []) {
       for (const position of line) {
+        acc.total++;
         const parsed = parseGeoJSONCoordinate(position);
-        if (parsed) into.push(parsed);
+        if (parsed) acc.coordinates.push(parsed);
+        else acc.dropped++;
       }
     }
   } else if (geometry.type === 'GeometryCollection') {
     for (const child of (geometry as { geometries?: unknown[] }).geometries ?? []) {
-      collectGeoJsonGeometry(child as { type?: string }, into);
+      collectGeoJsonGeometry(child as { type?: string }, acc);
     }
   }
 }
 
 /** Read `LineString` / `MultiLineString` geometry out of any GeoJSON envelope. */
-export function parseGeoJsonTrack(text: string): Coordinate[] {
+export function parseGeoJsonTrack(text: string): ParsedCoordinateList {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -122,27 +142,36 @@ export function parseGeoJsonTrack(text: string): Coordinate[] {
     throw new TrackParseError('That file is not valid JSON.');
   }
 
-  const points: Coordinate[] = [];
+  const acc: GeoJsonAccumulator = { coordinates: [], dropped: 0, total: 0 };
   const root = parsed as { type?: string; features?: unknown[]; geometry?: unknown };
   if (root?.type === 'FeatureCollection' && Array.isArray(root.features)) {
     for (const feature of root.features) {
-      collectGeoJsonGeometry((feature as { geometry?: { type?: string } })?.geometry, points);
+      collectGeoJsonGeometry((feature as { geometry?: { type?: string } })?.geometry, acc);
     }
   } else if (root?.type === 'Feature') {
-    collectGeoJsonGeometry(root.geometry as { type?: string }, points);
+    collectGeoJsonGeometry(root.geometry as { type?: string }, acc);
   } else {
-    collectGeoJsonGeometry(root as { type?: string }, points);
+    collectGeoJsonGeometry(root as { type?: string }, acc);
   }
-  return points;
+  return { coordinates: acc.coordinates, dropped: acc.dropped, total: acc.total };
+}
+
+/** Result of parsing a track file, with drop statistics. */
+export interface TrackParseResult {
+  coordinates: Coordinate[];
+  droppedPoints: number;
 }
 
 /**
  * Parse a track file of any supported format.
  *
+ * The same drop allowance (one point or 10 % of the track, whichever is
+ * larger) now applies uniformly to GPX, KML and GeoJSON.
+ *
  * @throws TrackParseError when the extension is unsupported, the file is
- *   malformed, or it holds fewer than two usable points.
+ *   malformed, too many points are unusable, or fewer than two survive.
  */
-export function parseTrackFile(fileName: string, text: string): Coordinate[] {
+export function parseTrackFile(fileName: string, text: string): TrackParseResult {
   const format = detectTrackFormat(fileName);
   if (!format) {
     throw new TrackParseError(
@@ -150,17 +179,24 @@ export function parseTrackFile(fileName: string, text: string): Coordinate[] {
     );
   }
 
-  const points = format === 'gpx'
+  const result = format === 'gpx'
     ? parseGpxTrack(text)
     : format === 'kml'
       ? parseKmlTrack(text)
       : parseGeoJsonTrack(text);
 
-  if (points.length < 2) {
+  if (exceedsDropAllowance(result)) {
+    throw new TrackParseError(
+      `Could not read ${result.dropped} of ${result.total} coordinates in "${fileName}". `
+      + 'They are malformed or outside valid latitude/longitude range.',
+    );
+  }
+
+  if (result.coordinates.length < 2) {
     throw new TrackParseError(
       `${fileName} has no line with at least 2 points. `
       + 'GPX needs <trkpt> or <rtept>, KML needs a <LineString>, GeoJSON needs a LineString.',
     );
   }
-  return points;
+  return { coordinates: result.coordinates, droppedPoints: result.dropped };
 }

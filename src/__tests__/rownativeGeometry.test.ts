@@ -60,7 +60,7 @@ function gateOffsets(line: Coordinate[], gates: Coordinate[]): number[] {
 
 /** The 43-point Clyde track shipped as the R-8 fixture for course 179. */
 function castleToCraneTrack(): Coordinate[] {
-  return parseTrackFile('179.gpx', fixture('179.gpx'));
+  return parseTrackFile('179.gpx', fixture('179.gpx')).coordinates;
 }
 
 /** Import a course through the real service with a controlled fetch and store. */

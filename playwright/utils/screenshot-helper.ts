@@ -1,4 +1,4 @@
-import { Page, TestInfo } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 
 /**
  * Helper utilities for capturing test evidence screenshots with error highlighting

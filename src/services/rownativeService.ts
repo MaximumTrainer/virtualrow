@@ -251,8 +251,10 @@ export class RownativeService {
 
     if (response.status === 404) {
       throw new RownativeCourseNotFoundError(
-        `Course ${courseId} isn't in the public course data yet. The mirror syncs from `
-        + 'rownative.icu periodically — try again later, or search for it by name.',
+        `Course ${courseId} isn't in the public mirror yet. `
+        + 'The GitHub mirror lags the live rownative.icu site — roughly a third of live courses '
+        + 'are not mirrored — so this course may exist on rownative.icu but not be available here yet. '
+        + 'Try searching by name, or check back after the mirror updates.',
         courseId,
       );
     }

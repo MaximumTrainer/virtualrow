@@ -617,9 +617,20 @@ export const getDragMultiplierForProgress = (
  * therefore compressed relative to the horizontal scale — the goal is for the
  * shape of the terrain to read as the route's own, not to be survey-accurate.
  */
+/**
+ * Confirmed (#214 A4): at 0.02 a 100 m river drop becomes 2 scene units
+ * against banks that are 60 units wide — a gentle ~1.9 degree slope. The
+ * ceiling kicks in at 400 m of real-world relief, which is well beyond any
+ * navigable waterway. Tested against the Danube gorge profile (290 m range)
+ * and the Cam (< 10 m range); both look plausible.
+ */
 export const TERRAIN_RELIEF_SCALE = 0.02;
 
-/** Ceiling on relief, in scene units, so a mountain course stays rowable. */
+/**
+ * Ceiling on relief, in scene units, so a mountain course stays rowable.
+ * At RIVERBANK_WIDTH = 60, 8 scene units is a ~7.6 degree incline — enough
+ * to read as hilly without walling in the rower.
+ */
 export const MAX_TERRAIN_RELIEF_SCENE_UNITS = 8;
 
 export interface TerrainProfile {

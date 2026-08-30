@@ -14,16 +14,30 @@
     }
   });
 
-  function buildPM5DataView({ pace = 120, distance = 0, elapsedTime = 0, power = 0, cadence = 0, heartRate = 0 } = {}) {
-    const buffer = new ArrayBuffer(20);
-    const view = new DataView(buffer);
-    view.setUint16(0, Math.round(pace * 100), true); // pace * 100
-    view.setUint32(2, Math.floor(distance), true);
-    view.setUint32(6, Math.floor(elapsedTime), true);
-    view.setUint16(10, Math.round(power), true);
-    view.setUint8(13, Math.round(cadence));
-    view.setUint8(14, Math.round(heartRate));
-    return view;
+  function buildPM5GeneralDataView({ distance = 0, elapsedTime = 0 } = {}) {
+    const buf = new ArrayBuffer(11);
+    const v = new Uint8Array(buf);
+    const cs = Math.round(elapsedTime * 100);
+    v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
+    const dm = Math.round(distance * 10);
+    v[3] = dm & 0xff; v[4] = (dm >> 8) & 0xff; v[5] = (dm >> 16) & 0xff;
+    v[10] = 2; // strokeState = rowing
+    return new DataView(buf);
+  }
+
+  function buildPM5AdditionalDataView({ elapsedTime = 0, pace = 120, cadence = 0, heartRate = 0 } = {}) {
+    const buf = new ArrayBuffer(11);
+    const v = new Uint8Array(buf);
+    const cs = Math.round(elapsedTime * 100);
+    v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
+    const speedMmS = pace > 0 ? Math.round(500000 / pace) : 0;
+    v[3] = speedMmS & 0xff; v[4] = (speedMmS >> 8) & 0xff;
+    v[5] = Math.round(cadence);
+    v[6] = Math.round(heartRate);
+    const paceCs = Math.round(pace * 100);
+    v[7] = paceCs & 0xff; v[8] = (paceCs >> 8) & 0xff;
+    v[9] = paceCs & 0xff; v[10] = (paceCs >> 8) & 0xff;
+    return new DataView(buf);
   }
 
   function buildHRDataView(bpm = 80, useUint16 = false) {
@@ -77,11 +91,8 @@
 
   function handleSimulatorMessage(msg) {
     if (msg.type === 'pm5') {
-      const dv = buildPM5DataView(msg.payload);
-      // Dispatch to all three PM5 characteristic objects so each listener fires exactly once
-      if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
-      if (window.__pm5CharAdditional) window.__pm5CharAdditional._dispatch(dv);
-      if (window.__pm5CharMux) window.__pm5CharMux._dispatch(dv);
+      if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(buildPM5GeneralDataView(msg.payload));
+      if (window.__pm5CharAdditional) window.__pm5CharAdditional._dispatch(buildPM5AdditionalDataView(msg.payload));
     } else if (msg.type === 'ftms') {
       const dv = buildFTMSDataView(msg.payload);
       if (window.__ftmsChar) window.__ftmsChar._dispatch(dv);

@@ -8,7 +8,9 @@ import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import {
+  buildTerrainProfile,
   getDragMultiplierForProgress,
+  getTerrainReliefForProgress,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
 import {
@@ -133,6 +135,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });
   const { boatProgress, boatZ } = sceneryState;
+
+  const terrainProfile = useMemo(() => buildTerrainProfile(enrichment?.elevations), [enrichment?.elevations]);
+  const terrainY = getTerrainReliefForProgress(terrainProfile, boatProgress);
 
   const boatGroupRef = useRef<THREE.Group>(null);
   const lastSceneryUpdateRef = useRef<number>(0);
@@ -291,8 +296,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
           <>
             <ProceduralTerrain side="left" boatZ={boatZ} enrichment={enrichment} />
             <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
-            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
-            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} />
+            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
+            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
           </>
         );
     }
@@ -475,7 +480,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} />
+        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} terrainY={terrainY} />
       )}
 
       {!IS_TEST_MODE && (

@@ -205,6 +205,52 @@ async function connectFtms(page: Page) {
 }
 
 // ===========================================================================
+// PM5 frame helpers — match the wire format parsed by src/vendor/pm5-base.js
+// ===========================================================================
+
+function dispatchGeneralStatus(page: Page, distanceMeters: number, elapsedSeconds: number) {
+  return page.evaluate(({ distanceMeters, elapsedSeconds }) => {
+    const buf = new ArrayBuffer(11);
+    const v = new Uint8Array(buf);
+    const cs = Math.round(elapsedSeconds * 100);
+    v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
+    const dm = Math.round(distanceMeters * 10);
+    v[3] = dm & 0xff; v[4] = (dm >> 8) & 0xff; v[5] = (dm >> 16) & 0xff;
+    v[10] = 2; // strokeState = rowing
+    (window as unknown as PM5CharWindow).__pm5CharGeneral?._dispatch(new DataView(buf));
+  }, { distanceMeters, elapsedSeconds });
+}
+
+function dispatchAdditionalStatus(
+  page: Page,
+  { elapsedSeconds, strokeRate, heartRate }: { elapsedSeconds: number; strokeRate: number; heartRate: number },
+) {
+  return page.evaluate(({ elapsedSeconds, strokeRate, heartRate }) => {
+    const buf = new ArrayBuffer(11);
+    const v = new Uint8Array(buf);
+    const cs = Math.round(elapsedSeconds * 100);
+    v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
+    v[3] = 0xd0; v[4] = 0x07;   // speed 2.000 m/s
+    v[5] = strokeRate;
+    v[6] = heartRate;
+    v[7] = 0x1c; v[8] = 0x2e;   // currentPace 118.04 s/500m
+    v[9] = 0x1c; v[10] = 0x2e;  // averagePace
+    (window as unknown as PM5CharWindow).__pm5CharAdditional?._dispatch(new DataView(buf));
+  }, { elapsedSeconds, strokeRate, heartRate });
+}
+
+function dispatchHeartRate(page: Page, bpm: number) {
+  return page.evaluate((bpm) => {
+    const buf = new ArrayBuffer(2);
+    const dv = new DataView(buf);
+    dv.setUint8(0, 0x00);
+    dv.setUint8(1, bpm);
+    const w = window as unknown as { __hrChar?: { _dispatch: (v: DataView) => void } };
+    w.__hrChar?._dispatch(dv);
+  }, bpm);
+}
+
+// ===========================================================================
 // Device and connectivity guards
 // ===========================================================================
 test.describe('device and connectivity guards', () => {
@@ -276,7 +322,7 @@ test.describe('device and connectivity guards', () => {
     });
 
     // Assert persisted connectivity metadata
-    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService!.getAllSessions());
     expect(sessions.length).toBeGreaterThan(0);
     const last = sessions[sessions.length - 1];
     expect(last.rowerType).toBe('pm5');
@@ -472,7 +518,7 @@ test.describe('Simulated e2e route playback', () => {
 
     const started = await page.evaluate(async () => {
       try {
-        const res = await window.__simulator.startRoute('run1', { distance: 3000, step: 250, startHr: 80, endHr: 95, msPerStep: 100 });
+        const res = await window.__simulator!.startRoute('run1', { distance: 3000, step: 250, startHr: 80, endHr: 95, msPerStep: 100 });
         return !!res;
       } catch {
         const steps = 12;
@@ -492,8 +538,7 @@ test.describe('Simulated e2e route playback', () => {
       if (active) {
         return (
           (active.heartRateSamples?.length ?? 0) > 0 ||
-          (active.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false) ||
-          (active.currentHeartRate ?? 0) > 0
+          (active.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false)
         );
       }
       if (!svc.getAllSessions) return false;
@@ -657,17 +702,17 @@ test.describe('Simulated e2e route playback', () => {
         await endBtn.click();
       } else {
         await page.evaluate(() => {
-          if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+          window.__workoutService?.endSession();
         });
       }
     } catch {
       console.warn('End workout button not found or not clickable; continuing to session assertions');
       await page.evaluate(() => {
-        if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+        window.__workoutService?.endSession();
       });
     }
 
-    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService!.getAllSessions());
     expect(sessions.length).toBeGreaterThan(0);
     const last = sessions[sessions.length - 1];
     expect(last.heartRateAvg).toBeGreaterThan(0);
@@ -757,13 +802,13 @@ test.describe('Simulated e2e route playback', () => {
 
     const started1 = await page.evaluate(async () => {
       try {
-        return await window.__simulator.startRoute('multi1', { distance: 2800, step: 250, startHr: 110, endHr: 125, msPerStep: 100 });
+        return await window.__simulator!.startRoute('multi1', { distance: 2800, step: 250, startHr: 110, endHr: 125, msPerStep: 100 });
       } catch {
         const steps = 12;
         for (let i = 0; i < steps; i++) {
-          await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 110 + i });
+          await window.__simulator!.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 110 + i });
           try {
-            await window.__simulator.emitHR({ bpm: 110 + i });
+            await window.__simulator!.emitHR({ bpm: 110 + i });
           } catch {
             try { window.__workoutService?.updateSessionHeartRate?.(110 + i); } catch (e) { console.warn('HR fallback update failed', e); }
           }
@@ -813,12 +858,12 @@ test.describe('Simulated e2e route playback', () => {
       if (await endBtnSingle.isVisible() && await endBtnSingle.isEnabled()) await endBtnSingle.click();
       else {
         await page.evaluate(() => {
-          if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+          window.__workoutService?.endSession();
         });
       }
     } catch {
       await page.evaluate(() => {
-        if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+        window.__workoutService?.endSession();
       });
     }
 
@@ -859,13 +904,13 @@ test.describe('Simulated e2e route playback', () => {
 
     const started2 = await page.evaluate(async () => {
       try {
-        return await window.__simulator.startRoute('multi2', { distance: 3500, step: 250, startHr: 80, endHr: 100, msPerStep: 100 });
+        return await window.__simulator!.startRoute('multi2', { distance: 3500, step: 250, startHr: 80, endHr: 100, msPerStep: 100 });
       } catch {
         const steps = 14;
         for (let i = 0; i < steps; i++) {
-          await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
+          await window.__simulator!.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 120, power: 200, cadence: 30, heartRate: 80 + i });
           try {
-            await window.__simulator.emitHR({ bpm: 80 + i });
+            await window.__simulator!.emitHR({ bpm: 80 + i });
           } catch {
             try { window.__workoutService?.updateSessionHeartRate?.(80 + i); } catch (e) { console.warn('HR fallback update failed', e); }
           }
@@ -884,16 +929,16 @@ test.describe('Simulated e2e route playback', () => {
         await endBtnMulti.click();
       } else {
         await page.evaluate(() => {
-          if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+          window.__workoutService?.endSession();
         });
       }
     } catch {
       await page.evaluate(() => {
-        if (window.__workoutService && window.__workoutService.endSession) window.__workoutService.endSession();
+        window.__workoutService?.endSession();
       });
     }
 
-    const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
+    const sessions = await page.evaluate(() => window.__workoutService!.getAllSessions());
     expect(sessions.length).toBeGreaterThanOrEqual(2);
     if (pm5Connected) {
       // Both legs were driven by the simulator, so both must have recorded metres.
@@ -901,7 +946,7 @@ test.describe('Simulated e2e route playback', () => {
         expect(session.distance).toBeGreaterThan(0);
       }
     }
-    const csv = await page.evaluate(() => window.__workoutService.exportSessionsAsCSV());
+    const csv = await page.evaluate(() => window.__workoutService!.exportSessionsAsCSV());
     expect(csv).toContain('Avg HR');
     expect(csv).toContain('Max HR');
     await captureTestEvidence(page, testInfo, '08-multi-route-test-completed');
@@ -959,11 +1004,11 @@ test.describe('Simulated e2e route playback', () => {
     // Drive simulation
     await page.evaluate(async () => {
       try {
-        await window.__simulator.startRoute('visual1', { distance: 3000, step: 250, startHr: 138, endHr: 155, msPerStep: 100 });
+        await window.__simulator!.startRoute('visual1', { distance: 3000, step: 250, startHr: 138, endHr: 155, msPerStep: 100 });
       } catch {
         for (let i = 0; i < 10; i++) {
-          await window.__simulator.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 118, power: 200, cadence: 26, heartRate: 140 + i });
-          await window.__simulator.emitHR({ bpm: 140 + i });
+          await window.__simulator!.emitPM5({ distance: i * 250, elapsedTime: i * 1000, pace: 118, power: 200, cadence: 26, heartRate: 140 + i });
+          await window.__simulator!.emitHR({ bpm: 140 + i });
           await new Promise((r) => setTimeout(r, 100));
         }
       }
@@ -972,7 +1017,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       const sessions = svc?.getAllSessions?.() ?? [];
-      return sessions.length > 0 && sessions[sessions.length - 1].heartRateSamples?.length > 0;
+      return sessions.length > 0 && (sessions[sessions.length - 1]?.heartRateSamples?.length ?? 0) > 0;
     }, { timeout: 5000 }).catch(() => console.warn('HR samples not received in time'));
 
     if (pm5Connected) {
@@ -1080,30 +1125,15 @@ test.describe('docs screenshots', () => {
     // Inject PM5 + HR data three times with pauses so the animation loop runs multiple
     // frames and the boat model has time to load and be positioned on the route.
     for (let i = 1; i <= 3; i++) {
-      await page.evaluate((frame) => {
-        const buf = new ArrayBuffer(20);
-        const dv = new DataView(buf);
-        dv.setUint16(0, Math.round(118 * 100), true); // pace (s/500m × 100)
-        dv.setUint32(2, 500 * frame, true);            // distance m — advance each frame
-        dv.setUint32(6, 60 * frame, true);             // elapsedTime s
-        dv.setUint16(10, 195, true);                   // power W
-        dv.setUint8(13, 26);                           // cadence spm
-        dv.setUint8(14, 148);                          // heart rate bpm
-        if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
-        if (window.__pm5CharMux)     window.__pm5CharMux._dispatch(dv);
-
-        const hrBuf = new ArrayBuffer(2);
-        const hrDv = new DataView(hrBuf);
-        hrDv.setUint8(0, 0x00);
-        hrDv.setUint8(1, 148);
-        if (window.__hrChar) window.__hrChar._dispatch(hrDv);
-      }, i);
+      await dispatchGeneralStatus(page, 500 * i, 60 * i);
+      await dispatchAdditionalStatus(page, { elapsedSeconds: 60 * i, strokeRate: 26, heartRate: 148 });
+      await dispatchHeartRate(page, 148);
       await page.waitForTimeout(600);
     }
 
     // Wait for the Rower3D animation loop to place the boat on the route
     await page.waitForFunction(
-      () => window.__ROWER3D_DISTANCE_M > 0,
+      () => (window.__ROWER3D_DISTANCE_M ?? 0) > 0,
       { timeout: 5000 },
     ).catch(() => { /* non-critical — screenshot taken regardless */ });
 
@@ -1256,28 +1286,14 @@ test.describe('docs screenshots — other route heroes', () => {
 
       // Drive a few PM5 frames so the boat is placed on the route.
       for (let i = 1; i <= 3; i++) {
-        await page.evaluate((frame) => {
-          const buf = new ArrayBuffer(20);
-          const dv = new DataView(buf);
-          dv.setUint16(0, Math.round(118 * 100), true);
-          dv.setUint32(2, 500 * frame, true);
-          dv.setUint32(6, 60 * frame, true);
-          dv.setUint16(10, 195, true);
-          dv.setUint8(13, 26);
-          dv.setUint8(14, 148);
-          if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(dv);
-          if (window.__pm5CharMux)     window.__pm5CharMux._dispatch(dv);
-          const hrBuf = new ArrayBuffer(2);
-          const hrDv = new DataView(hrBuf);
-          hrDv.setUint8(0, 0x00);
-          hrDv.setUint8(1, 148);
-          if (window.__hrChar) window.__hrChar._dispatch(hrDv);
-        }, i);
+        await dispatchGeneralStatus(page, 500 * i, 60 * i);
+        await dispatchAdditionalStatus(page, { elapsedSeconds: 60 * i, strokeRate: 26, heartRate: 148 });
+        await dispatchHeartRate(page, 148);
         await page.waitForTimeout(600);
       }
 
       await page.waitForFunction(
-        () => window.__ROWER3D_DISTANCE_M > 0,
+        () => (window.__ROWER3D_DISTANCE_M ?? 0) > 0,
         { timeout: 5000 },
       ).catch(() => { /* non-critical — capture regardless */ });
       await page.waitForTimeout(1500);
@@ -1344,53 +1360,6 @@ test.describe('docs screenshots — other route heroes', () => {
 // session proves the app actually received a frame.
 // ===========================================================================
 test.describe('PM5 data pipeline across view switches', () => {
-  /**
-   * Build a real PM5 "general status" frame (characteristic ce060031) and push it
-   * onto the mocked characteristic, exactly as the device would:
-   *   bytes 0-2  elapsed time, 0.01 s units (24-bit LE)
-   *   bytes 3-5  distance, 0.1 m units (24-bit LE)
-   *   byte  10   stroke state
-   */
-  function dispatchGeneralStatus(page: Page, distanceMeters: number, elapsedSeconds: number) {
-    return page.evaluate(({ distanceMeters, elapsedSeconds }) => {
-      const buf = new ArrayBuffer(19);
-      const v = new Uint8Array(buf);
-      const write24 = (offset: number, value: number) => {
-        v[offset] = value & 0xff;
-        v[offset + 1] = (value >> 8) & 0xff;
-        v[offset + 2] = (value >> 16) & 0xff;
-      };
-      write24(0, Math.round(elapsedSeconds * 100));
-      write24(3, Math.round(distanceMeters * 10));
-      v[10] = 2; // stroke state: driving
-      (window as unknown as PM5CharWindow).__pm5CharGeneral?._dispatch(new DataView(buf));
-    }, { distanceMeters, elapsedSeconds });
-  }
-
-  /**
-   * Build a real PM5 "additional status" frame (characteristic ce060032):
-   *   bytes 0-2  elapsed time, 0.01 s units    bytes 3-4  speed, 0.001 m/s
-   *   byte  5    stroke rate (spm)             byte  6    heart rate (bpm)
-   *   bytes 7-8  current pace, 0.01 s          bytes 9-10 average pace, 0.01 s
-   */
-  function dispatchAdditionalStatus(
-    page: Page,
-    { elapsedSeconds, strokeRate, heartRate }: { elapsedSeconds: number; strokeRate: number; heartRate: number },
-  ) {
-    return page.evaluate(({ elapsedSeconds, strokeRate, heartRate }) => {
-      const buf = new ArrayBuffer(19);
-      const v = new Uint8Array(buf);
-      const t = Math.round(elapsedSeconds * 100);
-      v[0] = t & 0xff; v[1] = (t >> 8) & 0xff; v[2] = (t >> 16) & 0xff;
-      v[3] = 0xd0; v[4] = 0x07;   // speed 2.000 m/s
-      v[5] = strokeRate;
-      v[6] = heartRate;
-      v[7] = 0x1c; v[8] = 0x2e;   // current pace
-      v[9] = 0x1c; v[10] = 0x2e;  // average pace
-      (window as unknown as PM5CharWindow).__pm5CharAdditional?._dispatch(new DataView(buf));
-    }, { elapsedSeconds, strokeRate, heartRate });
-  }
-
   const sessionDistance = (page: Page) => page.evaluate(
     () => (window as unknown as SimWindow).__workoutService?.getCurrentSession?.()?.distance ?? null,
   );

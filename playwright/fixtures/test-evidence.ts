@@ -1,4 +1,4 @@
-import { test as base, Page, TestInfo } from '@playwright/test';
+import { test as base, type Page, type TestInfo } from '@playwright/test';
 import { captureTestEvidence, captureErrorEvidence } from '../utils/screenshot-helper';
 
 /**
