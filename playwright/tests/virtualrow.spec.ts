@@ -17,11 +17,21 @@ let simProcess: child_process.ChildProcess;
 
 type SimWindow = Window & typeof globalThis & {
   __ftmsChar?: { _dispatch: (value: DataView) => void };
+  __PM5_DATA?: { distance: number };
   __simulator?: {
     startFtmsRoute: (id: string, options: Record<string, number>) => Promise<boolean>;
     emitFTMS: (payload: { flags: number; bytes: number[] }) => void;
   };
-  __workoutService?: { startSession?: (routeId: string, routeName: string) => void };
+  __workoutService?: {
+    startSession?: (routeId: string, routeName: string) => void;
+    getCurrentSession?: () => { distance: number } | null;
+  };
+};
+
+/** The per-UUID PM5 characteristic mocks created by mock-bluetooth.js. */
+type PM5CharWindow = Window & typeof globalThis & {
+  __pm5CharGeneral?: { _dispatch: (value: DataView) => void };
+  __pm5CharAdditional?: { _dispatch: (value: DataView) => void };
 };
 
 /**
@@ -128,6 +138,27 @@ async function startSimServer(retryCount = 0): Promise<void> {
 
 async function stopSimServer() {
   if (simProcess) simProcess.kill();
+}
+
+/**
+ * Assert the rower stream is actually feeding the live session.
+ *
+ * This is deliberately a hard assertion: it exercises only the BLE -> service ->
+ * session data path, with no dependency on the 3D renderer, so it is stable on
+ * software-GL CI where the animation-based checks below are not. Before issue
+ * #194 was fixed it was impossible to assert this at all — the device panel
+ * unmounted on the view switch and took the only listener with it, so every
+ * session recorded 0 m.
+ */
+async function expectSessionDistanceAdvances(page: Page, timeout = 15_000): Promise<void> {
+  await expect
+    .poll(
+      () => page.evaluate(
+        () => (window as unknown as SimWindow).__workoutService?.getCurrentSession?.()?.distance ?? 0,
+      ),
+      { timeout },
+    )
+    .toBeGreaterThan(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +506,13 @@ test.describe('Simulated e2e route playback', () => {
       );
     }, { timeout: 15000 });
 
+    // The simulator has been streaming PM5 frames for several seconds; they must have
+    // landed in the live session. (The fallback branch above never connects a rower,
+    // so it has no distance to record.)
+    if (pm5Connected) {
+      await expectSessionDistanceAdvances(page);
+    }
+
     await captureTestEvidence(page, testInfo, '09-workout-in-progress');
 
     // 3D canvas checks
@@ -634,7 +672,10 @@ test.describe('Simulated e2e route playback', () => {
     const last = sessions[sessions.length - 1];
     expect(last.heartRateAvg).toBeGreaterThan(0);
     expect(last.heartRateMax).toBeGreaterThan(0);
-    console.log('session hr avg/max', last.heartRateAvg, last.heartRateMax);
+    if (pm5Connected) {
+      expect(last.distance).toBeGreaterThan(0);
+    }
+    console.log('session hr avg/max', last.heartRateAvg, last.heartRateMax, 'distance', last.distance);
     await captureTestEvidence(page, testInfo, '12-test-completed-successfully');
   });
 
@@ -745,6 +786,9 @@ test.describe('Simulated e2e route playback', () => {
     // they never attach, so a timeout is not a failure.
     try { await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' }); } catch { /* overlay is optional */ }
     try { await page.waitForSelector('.mini-metrics', { timeout: 3000, state: 'attached' }); } catch { /* overlay is optional */ }
+    if (pm5Connected) {
+      await expectSessionDistanceAdvances(page);
+    }
     const initialProgress1 = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
     await page.waitForTimeout(300);
     const laterProgress1 = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? 0);
@@ -851,6 +895,12 @@ test.describe('Simulated e2e route playback', () => {
 
     const sessions = await page.evaluate(() => window.__workoutService.getAllSessions());
     expect(sessions.length).toBeGreaterThanOrEqual(2);
+    if (pm5Connected) {
+      // Both legs were driven by the simulator, so both must have recorded metres.
+      for (const session of sessions.slice(-2)) {
+        expect(session.distance).toBeGreaterThan(0);
+      }
+    }
     const csv = await page.evaluate(() => window.__workoutService.exportSessionsAsCSV());
     expect(csv).toContain('Avg HR');
     expect(csv).toContain('Max HR');
@@ -924,6 +974,10 @@ test.describe('Simulated e2e route playback', () => {
       const sessions = svc?.getAllSessions?.() ?? [];
       return sessions.length > 0 && sessions[sessions.length - 1].heartRateSamples?.length > 0;
     }, { timeout: 5000 }).catch(() => console.warn('HR samples not received in time'));
+
+    if (pm5Connected) {
+      await expectSessionDistanceAdvances(page);
+    }
 
     await captureGameplayCanvas(page, testInfo, 1, 'Gameplay start - session live');
 
@@ -1271,6 +1325,192 @@ test.describe('docs screenshots — other route heroes', () => {
       });
       await page.waitForSelector('.route-item', { timeout: 10_000 });
     }
+  });
+});
+
+// ===========================================================================
+// PM5 BLE pipeline survives the routes -> workout view switch (issue #194)
+//
+// The device panels (BluetoothDevice / FTMSDevice) render only on the routes
+// view. When they owned the bluetoothService subscription, starting a workout
+// unmounted them, removed the listeners, and every subsequent BLE frame was
+// dropped: the session recorded 0 m for the entire row. These tests drive raw
+// frames onto the mocked characteristics -- the real BLE path, not
+// __workoutService -- and assert they still land after the view switches.
+//
+// Note: do NOT assert on window.__PM5_DATA alone here. bluetoothService emits
+// its own mutable pm5Data object, so window.__PM5_DATA is a live alias of it
+// and keeps changing even when no listener is attached. Only the workout
+// session proves the app actually received a frame.
+// ===========================================================================
+test.describe('PM5 data pipeline across view switches', () => {
+  /**
+   * Build a real PM5 "general status" frame (characteristic ce060031) and push it
+   * onto the mocked characteristic, exactly as the device would:
+   *   bytes 0-2  elapsed time, 0.01 s units (24-bit LE)
+   *   bytes 3-5  distance, 0.1 m units (24-bit LE)
+   *   byte  10   stroke state
+   */
+  function dispatchGeneralStatus(page: Page, distanceMeters: number, elapsedSeconds: number) {
+    return page.evaluate(({ distanceMeters, elapsedSeconds }) => {
+      const buf = new ArrayBuffer(19);
+      const v = new Uint8Array(buf);
+      const write24 = (offset: number, value: number) => {
+        v[offset] = value & 0xff;
+        v[offset + 1] = (value >> 8) & 0xff;
+        v[offset + 2] = (value >> 16) & 0xff;
+      };
+      write24(0, Math.round(elapsedSeconds * 100));
+      write24(3, Math.round(distanceMeters * 10));
+      v[10] = 2; // stroke state: driving
+      (window as unknown as PM5CharWindow).__pm5CharGeneral?._dispatch(new DataView(buf));
+    }, { distanceMeters, elapsedSeconds });
+  }
+
+  /**
+   * Build a real PM5 "additional status" frame (characteristic ce060032):
+   *   bytes 0-2  elapsed time, 0.01 s units    bytes 3-4  speed, 0.001 m/s
+   *   byte  5    stroke rate (spm)             byte  6    heart rate (bpm)
+   *   bytes 7-8  current pace, 0.01 s          bytes 9-10 average pace, 0.01 s
+   */
+  function dispatchAdditionalStatus(
+    page: Page,
+    { elapsedSeconds, strokeRate, heartRate }: { elapsedSeconds: number; strokeRate: number; heartRate: number },
+  ) {
+    return page.evaluate(({ elapsedSeconds, strokeRate, heartRate }) => {
+      const buf = new ArrayBuffer(19);
+      const v = new Uint8Array(buf);
+      const t = Math.round(elapsedSeconds * 100);
+      v[0] = t & 0xff; v[1] = (t >> 8) & 0xff; v[2] = (t >> 16) & 0xff;
+      v[3] = 0xd0; v[4] = 0x07;   // speed 2.000 m/s
+      v[5] = strokeRate;
+      v[6] = heartRate;
+      v[7] = 0x1c; v[8] = 0x2e;   // current pace
+      v[9] = 0x1c; v[10] = 0x2e;  // average pace
+      (window as unknown as PM5CharWindow).__pm5CharAdditional?._dispatch(new DataView(buf));
+    }, { elapsedSeconds, strokeRate, heartRate });
+  }
+
+  const sessionDistance = (page: Page) => page.evaluate(
+    () => (window as unknown as SimWindow).__workoutService?.getCurrentSession?.()?.distance ?? null,
+  );
+
+  test.beforeEach(async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('./');
+
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+  });
+
+  test('BLE frames still reach the workout session after the view switches to workout', async ({ page }) => {
+    // A frame on the routes view proves the pipeline is live before the switch.
+    await dispatchGeneralStatus(page, 250, 60);
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as SimWindow).__PM5_DATA?.distance ?? 0), { timeout: 3000 })
+      .toBe(250);
+
+    // The PM5 panel is the only thing rendering the device on this view...
+    const pm5Panel = page.locator('.bluetooth-device-container:has(.device-name:has-text("Concept2 PM5"))');
+    await expect(pm5Panel).toBeVisible();
+
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+
+    // ...and starting the workout unmounts it. The subscription must not go with it.
+    await expect(pm5Panel).toHaveCount(0);
+
+    // The first frame after the start sets the session's distance baseline.
+    await dispatchGeneralStatus(page, 400, 90);
+    await expect.poll(() => sessionDistance(page), { timeout: 5000 }).toBe(0);
+
+    // Every later frame must advance the session -- this is what regressed.
+    await dispatchGeneralStatus(page, 900, 120);
+    await expect.poll(() => sessionDistance(page), { timeout: 5000 }).toBe(500);
+
+    await dispatchGeneralStatus(page, 1650, 180);
+    await expect.poll(() => sessionDistance(page), { timeout: 5000 }).toBe(1250);
+  });
+
+  test('the activity view renders live metrics driven straight off the BLE characteristics', async ({ page }) => {
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+
+    await dispatchGeneralStatus(page, 500, 120);       // baseline
+    await dispatchGeneralStatus(page, 1234, 240);      // + 734 m
+    await dispatchAdditionalStatus(page, { elapsedSeconds: 240, strokeRate: 26, heartRate: 148 });
+
+    const statValue = (label: string) => page.locator(
+      `.activity-stat-card:has(.activity-stat-label:has-text("${label}")) .activity-stat-value`,
+    );
+
+    await expect(statValue('Meters')).toHaveText('734 m', { timeout: 5000 });
+    await expect(statValue('SPM')).toHaveText('26 spm', { timeout: 5000 });
+    await expect(statValue('Heart Rate')).toHaveText('148 bpm', { timeout: 5000 });
+  });
+});
+
+// ===========================================================================
+// FTMS shares the same pipeline, and shared the same defect (issue #194).
+// ===========================================================================
+test.describe('FTMS data pipeline across view switches', () => {
+  /**
+   * Minimal FTMS Rower Data frame carrying only total distance:
+   *   flags 0x0005 = bit 0 (no basic stroke data) + bit 2 (total distance present)
+   *   bytes 2-4    = total distance in meters (24-bit LE)
+   */
+  function dispatchFtmsDistance(page: Page, distanceMeters: number) {
+    return page.evaluate((distanceMeters) => {
+      const buf = new ArrayBuffer(5);
+      const dv = new DataView(buf);
+      dv.setUint16(0, 0x0005, true);
+      dv.setUint8(2, distanceMeters & 0xff);
+      dv.setUint8(3, (distanceMeters >> 8) & 0xff);
+      dv.setUint8(4, (distanceMeters >> 16) & 0xff);
+      (window as unknown as SimWindow).__ftmsChar?._dispatch(dv);
+    }, distanceMeters);
+  }
+
+  test('FTMS frames still reach the workout session after the view switches', async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('./');
+
+    await connectFtms(page);
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.bluetooth-device-container:has(.device-name:has-text("FTMS Rower"))')).toHaveCount(0);
+
+    await dispatchFtmsDistance(page, 300);   // baseline
+    await dispatchFtmsDistance(page, 1100);  // + 800 m
+    await expect(
+      page.locator('.activity-stat-card:has(.activity-stat-label:has-text("Meters")) .activity-stat-value'),
+    ).toHaveText('800 m', { timeout: 5000 });
   });
 });
 

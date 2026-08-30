@@ -3,19 +3,16 @@ import type { BluetoothDeviceState, PM5Data } from '../types/index';
 import { bluetoothService } from '../services/bluetoothService';
 import './BluetoothDevice.css';
 
-interface BluetoothDeviceProps {
-  onConnected?: (deviceName: string) => void;
-  onDisconnected?: () => void;
-  onDataReceived?: (data: PM5Data) => void;
-  onError?: (error: string) => void;
-}
-
-export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
-  onConnected,
-  onDisconnected,
-  onDataReceived,
-  onError,
-}) => {
+/**
+ * Connect/disconnect panel for a Concept2 PM5, with a small live readout.
+ *
+ * This panel renders on the routes view only, so it deliberately owns nothing but its
+ * own display: the workout pipeline subscribes to `bluetoothService` from App (see
+ * `useRowerServiceEvents`) where the subscription survives the switch to the workout
+ * view. Do not reintroduce data/connection callbacks here — App is already listening,
+ * and a second path would feed every frame into the session twice.
+ */
+export const BluetoothDevice: React.FC = () => {
   const [deviceState, setDeviceState] = useState<BluetoothDeviceState>({
     isConnected: false,
   });
@@ -35,7 +32,6 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState((prev) => ({ ...prev, isConnected: true, deviceName }));
         setIsConnecting(false);
-        onConnected?.(deviceName);
       });
     };
 
@@ -43,17 +39,12 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState({ isConnected: false });
         setPM5Data(null);
-        onDisconnected?.();
       });
     };
 
     const handleData = (data: unknown) => {
-      const pm5 = data as PM5Data;
-      // Notify App synchronously so service-level updates are immediate.
-      // App.tsx's handlePM5Data already defers its own setState to RAF.
-      onDataReceived?.(pm5);
       // Throttle the local display update to prevent renders inside the WS stack.
-      latestPM5DataRef.current = pm5;
+      latestPM5DataRef.current = data as PM5Data;
       if (!pm5RafScheduledRef.current) {
         pm5RafScheduledRef.current = true;
         requestAnimationFrame(() => {
@@ -69,7 +60,6 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState((prev) => ({ ...prev, error: errorMsg }));
         setIsConnecting(false);
-        onError?.(errorMsg);
       });
     };
 
@@ -86,7 +76,7 @@ export const BluetoothDevice: React.FC<BluetoothDeviceProps> = ({
       bluetoothService.off('error', handleError);
       // We intentionally do NOT disconnect the device here to maintain connection
     };
-  }, [onConnected, onDisconnected, onDataReceived, onError]);
+  }, []);
 
   const handleConnect = async () => {
     setIsConnecting(true);

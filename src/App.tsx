@@ -9,6 +9,8 @@ import { routeService } from './services/routeService';
 import { workoutService } from './services/workoutService';
 import HeartRateMonitor from './components/HeartRateMonitor';
 import { heartRateBluetoothService } from './services/heartRateBluetoothService';
+import { bluetoothService } from './services/bluetoothService';
+import { ftmsBluetoothService } from './services/ftmsBluetoothService';
 // Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
 // Code-split it so the routes view doesn't pay the cost — the chunk only
 // loads when the user actually starts a workout (currentView === 'workout').
@@ -21,6 +23,7 @@ import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
 import { useServices } from './context/useServices';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
+import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
 import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
@@ -471,20 +474,22 @@ function App() {
   const handleHrConnected = useCallback(() => setHrConnected(true), []);
   const handleHrDisconnected = useCallback(() => setHrConnected(false), []);
 
+  // Connection state updates are deferred to RAF for the same reason as the PM5 data
+  // above: these now run directly on the BLE notification stack.
   const handlePM5Connected = useCallback(() => {
-    setPM5Connected(true);
+    requestAnimationFrame(() => setPM5Connected(true));
   }, []);
 
   const handlePM5Disconnected = useCallback(() => {
-    setPM5Connected(false);
+    requestAnimationFrame(() => setPM5Connected(false));
   }, []);
 
   const handleFtmsConnected = useCallback(() => {
-    setFtmsConnected(true);
+    requestAnimationFrame(() => setFtmsConnected(true));
   }, []);
 
   const handleFtmsDisconnected = useCallback(() => {
-    setFtmsConnected(false);
+    requestAnimationFrame(() => setFtmsConnected(false));
   }, []);
 
   // FTMS data arrives in the same PM5Data shape; merge into shared rower data state
@@ -492,6 +497,40 @@ function App() {
     // Re-use the PM5 data pipeline so all workout tracking works regardless of device type
     handlePM5Data(data);
   }, [handlePM5Data]);
+
+  // Only the selected rower drives the session. Both services stay subscribed for the
+  // lifetime of the app, so without this a PM5 left connected while FTMS is selected
+  // (or vice versa) would interleave a second device's frames into the same session.
+  const activeRowerTypeRef = useRef(activeRowerType);
+  useEffect(() => {
+    activeRowerTypeRef.current = activeRowerType;
+  }, [activeRowerType]);
+
+  const handleSelectedPM5Data = useCallback((data: PM5Data) => {
+    if (activeRowerTypeRef.current !== 'pm5') return;
+    handlePM5Data(data);
+  }, [handlePM5Data]);
+
+  const handleSelectedFtmsData = useCallback((data: PM5Data) => {
+    if (activeRowerTypeRef.current !== 'ftms') return;
+    handleFtmsData(data);
+  }, [handleFtmsData]);
+
+  // Persistent rower listeners. BluetoothDevice / FTMSDevice render only on the routes
+  // view, so subscribing from there stopped every frame the instant a workout started
+  // and the view switched to 'workout' — the session then recorded 0 m for the whole
+  // row. These subscriptions outlive the view switch.
+  useRowerServiceEvents(bluetoothService, {
+    onData: handleSelectedPM5Data,
+    onConnected: handlePM5Connected,
+    onDisconnected: handlePM5Disconnected,
+  });
+
+  useRowerServiceEvents(ftmsBluetoothService, {
+    onData: handleSelectedFtmsData,
+    onConnected: handleFtmsConnected,
+    onDisconnected: handleFtmsDisconnected,
+  });
 
   // Playwright reads this to compare the card's distance with the engine's own
   // total; it is never set in a normal session.
@@ -699,19 +738,7 @@ function App() {
                     FTMS
                   </button>
                 </div>
-                {activeRowerType === 'pm5' ? (
-                  <BluetoothDevice
-                    onConnected={handlePM5Connected}
-                    onDisconnected={handlePM5Disconnected}
-                    onDataReceived={handlePM5Data}
-                  />
-                ) : (
-                  <FTMSDevice
-                    onConnected={handleFtmsConnected}
-                    onDisconnected={handleFtmsDisconnected}
-                    onDataReceived={handleFtmsData}
-                  />
-                )}
+                {activeRowerType === 'pm5' ? <BluetoothDevice /> : <FTMSDevice />}
               </div>
               <div className="device-panel">
                 <HeartRateMonitor
