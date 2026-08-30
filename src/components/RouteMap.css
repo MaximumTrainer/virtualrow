@@ -33,7 +33,10 @@
 }
 
 /* Route Info Overlay */
-.route-info-overlay {
+/* Scoped to the map: unscoped, this absolutely positioned the identically
+   named card in .route-details-panel, lifting Start Workout out of the layout
+   and under the sidebar on narrow viewports (issue #195). */
+.route-map-container .route-info-overlay {
   position: absolute;
   bottom: 20px;
   left: 20px;
@@ -80,7 +83,7 @@
 
 .stat .label {
   font-family: 'Inter', sans-serif;
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -212,7 +215,7 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .route-info-overlay {
+  .route-map-container .route-info-overlay {
     bottom: 10px;
     left: 10px;
     right: 10px;

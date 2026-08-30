@@ -45,28 +45,33 @@ test.describe('3D postprocessing', () => {
     const errors = collectErrors(page);
 
     await startDemoRow(page);
-    await page.waitForTimeout(6_000);
+
+    // Assert the backing store early. Under software GL the full effect stack
+    // loses the WebGL context after roughly ten seconds (the app's own
+    // `webglcontextlost` handler then flags __ROWER3D_WEBGL_LOST and swaps in
+    // its marker), so a later read measures that, not the mount this test is
+    // about. Tracked separately; a real GPU is unaffected.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const canvases = Array.from(
+              document.querySelectorAll('.rower3d-canvas-container canvas'),
+            ) as HTMLCanvasElement[];
+            return canvases.reduce((best, c) => Math.max(best, Math.min(c.width, c.height)), 0);
+          }),
+        { timeout: 8_000, message: 'the 3D canvas never got a non-zero backing store' },
+      )
+      .toBeGreaterThan(0);
+
+    // The boundary's fallback never replaced the scene.
+    await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
 
     // The specific fault from #197: EffectComposer.addPass reading .alpha off a
     // null getContextAttributes() result.
     expect(errors.filter((e) => /reading 'alpha'/.test(e))).toEqual([]);
     // Nothing reached the GPU error boundary.
     expect(errors.filter((e) => /GPU Error Boundary/.test(e))).toEqual([]);
-
-    // The scene is present either way — postprocessing is an enhancement, and
-    // losing it must never cost the user the 3D view.
-    await expect(page.locator('.activity-route-stage .rower3d-canvas-container canvas')).toBeVisible();
-    // Read dimensions directly: the locator's own stability wait never settles
-    // while the render loop is animating the canvas.
-    const size = await page.evaluate(() => {
-      const c = document.querySelector('.activity-route-stage .rower3d-canvas-container canvas') as HTMLCanvasElement | null;
-      return c ? { w: c.width, h: c.height } : null;
-    });
-    expect(size?.w ?? 0).toBeGreaterThan(0);
-    expect(size?.h ?? 0).toBeGreaterThan(0);
-
-    // The boundary's fallback never replaced the scene.
-    await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
   });
 
   test('degrades deliberately when the context reports no attributes', async ({ page }) => {

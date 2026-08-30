@@ -38,7 +38,7 @@
 }
 
 .status-badge {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   padding: 3px 10px;
   border-radius: 10px;
   font-weight: 700;
@@ -233,7 +233,7 @@
 }
 
 .metric-item .label {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;

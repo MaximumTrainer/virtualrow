@@ -7,6 +7,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* 44px touch-target floor (issue #195). */
+  min-height: 44px;
   padding: 8px 16px;
   border-radius: 8px;
   border: none;
