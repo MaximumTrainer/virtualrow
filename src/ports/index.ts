@@ -5,9 +5,13 @@
  * concrete adapter implementations live under `src/services/` (real
  * implementations) and can be swapped out for stubs in tests / Storybook.
  *
- * To keep the migration low-risk, the port shapes here are *structurally*
- * compatible with the existing concrete classes (derived via `typeof`). New
- * call-sites should depend on the port type, not on the concrete class.
+ * Each port is a `Pick` of the members its call-sites actually use, so a stub
+ * is an ordinary object and is checked structurally. Do not alias a port to a
+ * class: a class type carries its private fields, which no stub can supply, so
+ * every fake needs an `as unknown as` cast — and a cast accepts a stub that has
+ * drifted from the real service just as happily as one that matches (#204).
+ *
+ * New call-sites should depend on the port type, not on the concrete class.
  */
 import type {
   Concept2BluetoothService,
@@ -22,13 +26,30 @@ import type { RownativeService } from '../services/rownativeService';
 import type { RouteEnrichmentService } from '../services/routeEnrichmentService';
 
 /** Port for the PM5 Bluetooth integration. */
-export type PM5BluetoothPort = Concept2BluetoothService;
+export type PM5BluetoothPort = Pick<
+  Concept2BluetoothService,
+  'connect' | 'disconnect' | 'sendCommand' | 'getPM5Data' | 'isConnected' | 'on' | 'off'
+>;
 
 /** Port for generic FTMS (Fitness Machine Service) rower integration. */
-export type FTMSBluetoothPort = FTMSBluetoothService;
+export type FTMSBluetoothPort = Pick<
+  FTMSBluetoothService,
+  'connect' | 'disconnect' | 'getLatestData' | 'isConnected' | 'on' | 'off'
+>;
 
 /** Port for an external heart-rate monitor BLE integration. */
-export type HeartRateBluetoothPort = HeartRateBluetoothService;
+export type HeartRateBluetoothPort = Pick<
+  HeartRateBluetoothService,
+  | 'connect'
+  | 'disconnect'
+  | 'isConnected'
+  | 'getSamples'
+  | 'simulateSample'
+  | 'simulateConnected'
+  | 'simulateDisconnected'
+  | 'on'
+  | 'off'
+>;
 
 /** Port for water-route catalogue queries / imports. */
 export type RoutePort = Pick<
@@ -48,7 +69,21 @@ export type RoutePort = Pick<
 >;
 
 /** Port for the structured-workout generator. */
-export type WorkoutGeneratorPort = WorkoutGeneratorService;
+export type WorkoutGeneratorPort = Pick<
+  WorkoutGeneratorService,
+  | 'getAllWorkouts'
+  | 'getWorkoutById'
+  | 'addWorkout'
+  | 'startWorkout'
+  | 'endWorkout'
+  | 'updateProgress'
+  | 'getCurrentProgress'
+  | 'getCurrentWorkout'
+  | 'getExpandedCurrentSegments'
+  | 'expandSegments'
+  | 'getSpeedAdjustmentFactor'
+  | 'importFromIntervalsICU'
+>;
 
 /** Port for workout session lifecycle + history. */
 export type WorkoutPort = Pick<
