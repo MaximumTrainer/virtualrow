@@ -51,7 +51,25 @@ export type RoutePort = Pick<
 export type WorkoutGeneratorPort = WorkoutGeneratorService;
 
 /** Port for workout session lifecycle + history. */
-export type WorkoutPort = WorkoutService;
+export type WorkoutPort = Pick<
+  WorkoutService,
+  | 'startSession'
+  | 'endSession'
+  | 'pauseSession'
+  | 'resumeSession'
+  | 'updateSessionWithPM5Data'
+  | 'updateSessionHeartRate'
+  | 'updateWorkoutProgress'
+  | 'getCurrentSession'
+  | 'getSessionById'
+  | 'getAllSessions'
+  | 'getSessionsByRoute'
+  | 'getRecentSessions'
+  | 'getStats'
+  | 'deleteSession'
+  | 'exportSessionsAsJSON'
+  | 'exportSessionsAsCSV'
+>;
 
 /** Port for OAuth authentication via intervals.icu. */
 export type AuthPort = Pick<
