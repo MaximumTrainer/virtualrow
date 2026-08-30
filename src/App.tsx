@@ -22,6 +22,7 @@ import { useAuth } from './context/AuthContext';
 import { useServices } from './context/ServicesContext';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
+import { resolvePerformanceMode } from './components/rower3d/constants';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -874,7 +875,7 @@ function App() {
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
-                      performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                      performanceMode={resolvePerformanceMode()}
                       debugMode={debugMode}
                     />
                   </Suspense>

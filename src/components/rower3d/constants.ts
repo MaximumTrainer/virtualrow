@@ -3,11 +3,34 @@
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
+    /**
+     * Forces a performance mode, independent of {@link IS_TEST_MODE}.
+     *
+     * Without this the test flag decided both "are we in a test" and "which
+     * effects run", so the postprocessing path could never execute under
+     * automation — it was exempt from testing by construction (issue #197).
+     * Setting this lets a spec run the full effect stack while still being in
+     * test mode.
+     */
+    __VIRTUALROW_PERFORMANCE_MODE?: 'low' | 'auto' | 'high';
   }
 }
 
 /** True when running under Playwright automation. Set before the SPA boots and never toggled. */
 export const IS_TEST_MODE = typeof window !== 'undefined' && !!window.__PLAYWRIGHT_TESTING;
+
+/**
+ * Performance mode to render at.
+ *
+ * An explicit override wins; otherwise automation defaults to `low` for speed
+ * and determinism, and real users get `auto`.
+ */
+export function resolvePerformanceMode(): 'low' | 'auto' | 'high' {
+  if (typeof window === 'undefined') return 'auto';
+  const override = window.__VIRTUALROW_PERFORMANCE_MODE;
+  if (override === 'low' || override === 'auto' || override === 'high') return override;
+  return window.__PLAYWRIGHT_TESTING ? 'low' : 'auto';
+}
 
 // Water channel width constant - keeps water wider than single scull (~1.5m wide)
 export const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)

@@ -4,6 +4,9 @@
 
 /* CSS Custom Properties - Dark Theme */
 :root {
+  /* Respect the browser's font-size setting rather than pinning to 16px. */
+  font-size: 100%;
+
   /* Primary Colors */
   --color-primary: #2474d9;
   --color-primary-dark: #1758ab;
@@ -38,6 +41,32 @@
   /* Border Colors */
   --color-border: rgba(91, 126, 160, 0.18);
   --color-border-hover: rgba(var(--color-primary-rgb), 0.3);
+
+  /* Modal aliases. GuestSessionSummary.css was written against these names,
+     which nothing defined, so every one of its rules fell through to a dark
+     fallback and the modal rendered dark over a light app (issue #195,
+     Phase 5). Aliased to the palette above rather than restated, so the modal
+     follows the theme. */
+  --surface-primary: var(--color-bg-card);
+  --surface-secondary: var(--color-bg-glass);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-muted);
+  --accent-primary: var(--color-primary);
+  --border-color: var(--color-border);
+
+  /* Spacing and radius scale (issue #195, Phase 4). The existing values, named
+     by role, so the narrow tier steps the whole scale in one place rather than
+     each padding and radius being edited on its own. */
+  --space-shell: 20px;   /* .app-layout padding and gap */
+  --space-view: 20px;    /* .view-container / .activity-view padding */
+  --space-card: 24px;    /* route info card, routes list */
+  --space-panel: 18px;   /* device / stats / import panels */
+  --radius-surface: 28px; /* .app-main, map and stage surfaces */
+  --radius-card: 26px;
+  --radius-panel: 24px;
+  --radius-item: 20px;
+  --radius-pill: 999px;
   
   /* Typography */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -110,10 +139,14 @@ button {
   color: var(--color-text-primary);
 }
 
-button:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-border-hover);
-  box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
+/* Hover-only, so a tap on a touch device doesn't leave the lifted state stuck
+   until the next tap elsewhere (issue #195). */
+@media (hover: hover) {
+  button:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-border-hover);
+    box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
+  }
 }
 
 button:active {
@@ -280,4 +313,33 @@ textarea::placeholder {
 
 .animate-glow {
   animation: glow 2s ease-in-out infinite;
+}
+
+/* The narrow tiers step the scale once, rather than every rule redefining its
+   own padding and radius (issue #195, Phase 4). */
+@media (max-width: 1200px) {
+  :root {
+    --space-shell: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --space-view: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  :root {
+    --space-shell: 12px;
+    --space-card: 18px;
+    --radius-card: 20px;
+  }
+}
+
+/* Short viewports give up padding before they give up content. */
+@media (max-height: 480px) {
+  :root {
+    --space-view: 12px;
+  }
 }

@@ -364,8 +364,37 @@ export const DynamicPostFx: React.FC<{
   theme: RouteTheme;
   sunMeshRef?: React.RefObject<THREE.Mesh>;
 }> = ({ velocityRef, performanceMode, theme, sunMeshRef }) => {
+  const gl = useThree((state) => state.gl);
   const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
   useEffect(() => () => caEffect.dispose(), [caEffect]);
+
+  /**
+   * Whether postprocessing can initialise at all.
+   *
+   * `EffectComposer.addPass` reads `renderer.getContext().getContextAttributes().alpha`,
+   * and `getContextAttributes()` returns null when the WebGL context is lost or
+   * was never validly created — software renderers and post-GPU-reset contexts
+   * both do this. Mounting the composer then throws into the GPU error boundary
+   * (issue #197). Checking up front lets us drop the effect stack deliberately
+   * and keep the scene, instead of throwing and relying on a catch.
+   */
+  const canPostProcess = useMemo(() => {
+    try {
+      const context = gl.getContext();
+      return !!context && context.getContextAttributes() !== null;
+    } catch {
+      return false;
+    }
+  }, [gl]);
+
+  useEffect(() => {
+    if (!canPostProcess) {
+      console.warn(
+        '[rower3d] Postprocessing unavailable — WebGL context reports no attributes. '
+        + 'Rendering the scene without the effect stack.',
+      );
+    }
+  }, [canPostProcess]);
 
   const colorGrading: ColorGradingConfig = useMemo(() => getThemeConfig(theme).colorGrading, [theme]);
 
@@ -377,6 +406,9 @@ export const DynamicPostFx: React.FC<{
     const targetExposure = vel > 3 ? 0.85 : 1.0;
     gl.toneMappingExposure = THREE.MathUtils.lerp(gl.toneMappingExposure, targetExposure, 0.015);
   });
+
+  // Every hook above runs unconditionally; only the render bails out.
+  if (!canPostProcess) return null;
 
   if (performanceMode === 'auto') {
     return (
