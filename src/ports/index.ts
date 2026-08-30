@@ -54,7 +54,18 @@ export type WorkoutGeneratorPort = WorkoutGeneratorService;
 export type WorkoutPort = WorkoutService;
 
 /** Port for OAuth authentication via intervals.icu. */
-export type AuthPort = AuthService;
+export type AuthPort = Pick<
+  AuthService,
+  | 'startLogin'
+  | 'handleCallback'
+  | 'logout'
+  | 'getUser'
+  | 'getAccessToken'
+  | 'getLastError'
+  | 'refreshAccessToken'
+  | 'scheduleRefresh'
+  | 'isAuthenticated'
+>;
 
 /** Port for rownative course discovery/import. */
 export type RownativePort = Pick<

@@ -22,12 +22,13 @@ import {
 } from 'react';
 import type { AuthUser } from '../types/index';
 import { authService } from '../services/authService';
+import type { AuthPort } from '../ports';
 import { AuthContext } from './useAuth';
 
 export interface AuthProviderProps {
   children: ReactNode;
-  /** Override for tests — injects a pre-built auth service instance. */
-  service?: typeof authService;
+  /** Override for tests — injects any adapter satisfying the auth port. */
+  service?: AuthPort;
 }
 
 export function AuthProvider({ children, service = authService }: AuthProviderProps) {

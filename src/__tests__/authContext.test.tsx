@@ -41,7 +41,7 @@ function makeServiceStub(overrides: Partial<{
     scheduleRefresh: vi.fn(),
     get isAuthenticated() { return false; },
     ...overrides,
-  } as unknown as import('../services/authService').AuthService;
+  } satisfies import('../ports').AuthPort;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
