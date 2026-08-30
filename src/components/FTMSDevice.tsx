@@ -3,26 +3,17 @@ import type { BluetoothDeviceState, PM5Data } from '../types/index';
 import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
 import './BluetoothDevice.css';
 
-interface FTMSDeviceProps {
-  onConnected?: (deviceName: string) => void;
-  onDisconnected?: () => void;
-  onDataReceived?: (data: PM5Data) => void;
-  onError?: (error: string) => void;
-}
-
 /**
  * BLE connection panel for FTMS-compatible rowing machines (WaterRower, Concept2 RowErg,
  * Sunny Rowing, NordicTrack RW900, etc.).
  *
  * Mirrors BluetoothDevice.tsx but uses ftmsBluetoothService instead of the PM5 CSAFE service.
  * The emitted PM5Data shape is identical, so all downstream workout tracking is unchanged.
+ *
+ * Like BluetoothDevice this panel owns only its own display — App subscribes to
+ * `ftmsBluetoothService` for the workout pipeline so data survives the view switch.
  */
-export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
-  onConnected,
-  onDisconnected,
-  onDataReceived,
-  onError,
-}) => {
+export const FTMSDevice: React.FC = () => {
   const [deviceState, setDeviceState] = useState<BluetoothDeviceState>({
     isConnected: false,
   });
@@ -40,7 +31,6 @@ export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState((prev) => ({ ...prev, isConnected: true, deviceName }));
         setIsConnecting(false);
-        onConnected?.(deviceName);
       });
     };
 
@@ -48,12 +38,10 @@ export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState({ isConnected: false });
         setRowerData(null);
-        onDisconnected?.();
       });
     };
 
     const handleData = (data: PM5Data) => {
-      onDataReceived?.(data);
       latestRowerDataRef.current = data;
       if (!ftmsRafScheduledRef.current) {
         ftmsRafScheduledRef.current = true;
@@ -70,7 +58,6 @@ export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
       requestAnimationFrame(() => {
         setDeviceState((prev) => ({ ...prev, error: msg }));
         setIsConnecting(false);
-        onError?.(msg);
       });
     };
 
@@ -85,7 +72,7 @@ export const FTMSDevice: React.FC<FTMSDeviceProps> = ({
       ftmsBluetoothService.off('data', handleData);
       ftmsBluetoothService.off('error', handleError);
     };
-  }, [onConnected, onDisconnected, onDataReceived, onError]);
+  }, []);
 
   const handleConnect = async () => {
     setIsConnecting(true);
