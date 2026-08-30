@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { ServicesProvider, defaultServices } from '../context/ServicesContext';
+import { ServicesProvider } from '../context/ServicesContext';
+import { defaultServices } from '../context/useServices';
 import { resetDeepLinkForTests, useRownativeDeepLink } from '../hooks/useRownativeDeepLink';
 import type { Services } from '../ports';
 import type { WaterRoute } from '../types/index';

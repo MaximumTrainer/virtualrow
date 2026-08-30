@@ -23,16 +23,16 @@ export interface GameplayState {
  */
 export async function readGameplayState(page: Page): Promise<GameplayState> {
   return page.evaluate(() => ({
-    speedMps:    (window as any).__ROWER3D_SPEED_MPS  ?? 0,
-    strokePhase: (window as any).__ROWER3D_STROKE_PHASE ?? 'unknown',
-    distanceM:   (window as any).__ROWER3D_DISTANCE_M  ?? 0,
-    progress:    (window as any).__ROWER3D_POS?.progress ?? 0,
-    oarAngle:    (window as any).__ROWER3D_OAR_ANGLE   ?? 0,
-    strokeRate:  (window as any).__ROWER3D_STROKE_RATE ?? 0,
-    gpuBackend:  (window as any).__ROWER3D_GPU_BACKEND ?? 'unknown',
-    posX:        (window as any).__ROWER3D_POS?.x ?? 0,
-    posY:        (window as any).__ROWER3D_POS?.y ?? 0,
-    posZ:        (window as any).__ROWER3D_POS?.z ?? 0,
+    speedMps:    window.__ROWER3D_SPEED_MPS  ?? 0,
+    strokePhase: window.__ROWER3D_STROKE_PHASE ?? 'unknown',
+    distanceM:   window.__ROWER3D_DISTANCE_M  ?? 0,
+    progress:    window.__ROWER3D_POS?.progress ?? 0,
+    oarAngle:    window.__ROWER3D_OAR_ANGLE   ?? 0,
+    strokeRate:  window.__ROWER3D_STROKE_RATE ?? 0,
+    gpuBackend:  window.__ROWER3D_GPU_BACKEND ?? 'unknown',
+    posX:        window.__ROWER3D_POS?.x ?? 0,
+    posY:        window.__ROWER3D_POS?.y ?? 0,
+    posZ:        window.__ROWER3D_POS?.z ?? 0,
   }));
 }
 

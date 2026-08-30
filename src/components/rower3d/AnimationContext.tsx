@@ -12,25 +12,9 @@
 //     useAnimationFrame((time) => { ... });
 // ============================================================================
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-} from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-
-type FrameCallback = (time: number) => void;
-
-interface AnimationContextValue {
-  /** Subscribe to the shared tick. Returns an unsubscribe function. */
-  subscribe: (callback: FrameCallback) => () => void;
-}
-
-const AnimationContext = createContext<AnimationContextValue>({
-  subscribe: () => () => undefined,
-});
+import { AnimationContext, type FrameCallback } from './animationFrame';
 
 // ============================================================================
 // Provider — owns the single useFrame and fans out to all subscribers
@@ -53,19 +37,4 @@ export const AnimationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       {children}
     </AnimationContext.Provider>
   );
-};
-
-// ============================================================================
-// Hook — subscribe to the shared tick from any child component.
-// Keeps a stable ref so the callback can close over changing props/state
-// without being re-subscribed every render.
-// ============================================================================
-export const useAnimationFrame = (callback: FrameCallback): void => {
-  const ctx = useContext(AnimationContext);
-  const callbackRef = useRef<FrameCallback>(callback);
-  callbackRef.current = callback;
-
-  useEffect(() => {
-    return ctx.subscribe((time) => callbackRef.current(time));
-  }, [ctx]);
 };

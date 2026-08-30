@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useServices } from '../context/ServicesContext';
+import { useServices } from '../context/useServices';
 import { RownativeCourseNotFoundError, type RownativeCourseSummary } from '../services/rownativeService';
 import { trackAttachmentStore, type AttachedTrack } from '../services/trackAttachmentStore';
 import { classifyPolygons, fitCandidateToGates } from '../services/rownativeGeometry';

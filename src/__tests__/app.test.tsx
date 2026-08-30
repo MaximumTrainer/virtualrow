@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { formatPace } from '../utils/formatters';
-import * as AuthContext from '../context/AuthContext';
-import type { AuthContextValue } from '../context/AuthContext';
+import * as UseAuth from '../context/useAuth';
+import type { AuthContextValue } from '../context/useAuth';
 
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
@@ -175,7 +175,7 @@ describe('App component', () => {
         pendingAction: null,
         setPendingAction: vi.fn(),
       };
-      vi.spyOn(AuthContext, 'useAuth').mockReturnValue(authedValue);
+      vi.spyOn(UseAuth, 'useAuth').mockReturnValue(authedValue);
 
       render(<App />);
 
@@ -195,7 +195,7 @@ describe('App component', () => {
         pendingAction: null,
         setPendingAction: vi.fn(),
       };
-      vi.spyOn(AuthContext, 'useAuth').mockReturnValue(authedValue);
+      vi.spyOn(UseAuth, 'useAuth').mockReturnValue(authedValue);
 
       render(<App />);
 

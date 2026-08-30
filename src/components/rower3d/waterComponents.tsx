@@ -4,7 +4,7 @@ import { useCubeCamera, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import { IS_TEST_MODE, WATER_CHANNEL_WIDTH } from './constants';
 import type { PerformanceMode } from './constants';
-import { useAnimationFrame } from './AnimationContext';
+import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { attachGerstnerShader, createWaterNormalMap } from './helpers';

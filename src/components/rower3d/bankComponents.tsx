@@ -3,10 +3,10 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
-import { useAnimationFrame } from './AnimationContext';
+import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
-import { makeSwayFoliageMaterial } from './vegetationComponents';
+import { makeSwayFoliageMaterial } from './foliageMaterial';
 import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
@@ -15,6 +15,7 @@ import {
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { createBankGeometry } from './bankGeometry';
+import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -125,22 +126,6 @@ const getSegmentStyle = (
     objectScale: lower.objectScale + (upper.objectScale - lower.objectScale) * blend,
   };
 };
-
-/** Returns the scenery profile of the nearest segment for the given progress (0–1). */
-export const getSegmentSceneryProfile = (
-  enrichment: RouteEnrichmentData | null | undefined,
-  progress: number,
-): SceneryProfile => {
-  const segmentProfiles = enrichment?.segmentProfiles;
-  if (!segmentProfiles || segmentProfiles.length === 0) return 'fallback';
-  const safeProgress = Number.isFinite(progress) ? progress : 0;
-  const clampedProgress = Math.max(0, Math.min(1, safeProgress));
-  const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
-  return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;
-};
-
-/** Baseline building height in scene units; profile heightRange multiplies this value. */
-export const BASE_BUILDING_HEIGHT = 12.5;
 
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,

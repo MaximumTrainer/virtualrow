@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ServicesProvider, defaultServices } from '../context/ServicesContext';
+import { ServicesProvider } from '../context/ServicesContext';
+import { defaultServices } from '../context/useServices';
 import { RownativeRouteImport } from '../components/RownativeRouteImport';
 import { RownativeCourseNotFoundError } from '../services/rownativeService';
 import type { Services } from '../ports';

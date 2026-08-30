@@ -1,7 +1,7 @@
 import React, { useRef, useMemo } from 'react';
 import { Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
-import { useAnimationFrame } from './AnimationContext';
+import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { seededRandom } from './helpers';

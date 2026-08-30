@@ -24,6 +24,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        # Kept at zero by #203. Runs before the build so a style regression is
+        # reported on its own line rather than buried behind a type error.
+        run: npm run lint
+
       - name: Build app
         run: npm run build
 

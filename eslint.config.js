@@ -18,14 +18,11 @@ export default defineConfig([
     '.claude',
     'src/wasm-pkg',
   ]),
+
+  // Baseline for every TypeScript file in the repo, React or not.
   {
     files: ['**/*.{ts,tsx}'],
-    extends: [
-      js.configs.recommended,
-      tseslint.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
@@ -33,5 +30,15 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+  },
+
+  // React rules apply to the app only. Playwright specs and build scripts are
+  // not React, and the hooks plugin cannot tell Playwright's `use` fixture
+  // callback from React's `use` hook — it reported three rules-of-hooks
+  // violations in playwright/fixtures/test-evidence.ts for ordinary fixture
+  // code.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
   },
 ])

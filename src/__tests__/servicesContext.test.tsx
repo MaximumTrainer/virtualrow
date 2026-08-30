@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import { ServicesProvider, useServices, defaultServices } from '../context/ServicesContext';
+import { ServicesProvider } from '../context/ServicesContext';
+import { useServices, defaultServices } from '../context/useServices';
 import type { Services } from '../ports';
 
 function Probe({ onResolve }: { onResolve: (s: Services) => void }) {
