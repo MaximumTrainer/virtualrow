@@ -16,10 +16,27 @@
   padding: 2rem;
   max-width: 480px;
   width: 100%;
+  /* Scroll rather than pushing its own actions off a short screen — on a
+     landscape phone Row Again sat at y=425 in a 375px viewport (issue #195). */
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* Reclaim vertical space on short viewports before resorting to scrolling. */
+@media (max-height: 560px) {
+  .guest-summary-modal {
+    padding: 1.25rem;
+    gap: 0.875rem;
+  }
+
+  .guest-summary-backdrop {
+    padding: 0.5rem;
+    align-items: flex-start;
+  }
 }
 
 .guest-summary-header {
@@ -107,6 +124,8 @@
 }
 
 .btn-guest-row-again {
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
   background: var(--accent-primary, #4a9bff);
   color: #fff;
   border: none;
@@ -118,12 +137,18 @@
   transition: background 0.2s, transform 0.1s;
 }
 
-.btn-guest-row-again:hover {
-  background: #3a8bef;
-  transform: translateY(-1px);
+/* Hover-only: on a touch device a tap would otherwise leave the lifted state
+   stuck until the next tap elsewhere (issue #195, Phase 4). */
+@media (hover: hover) {
+  .btn-guest-row-again:hover {
+    background: #3a8bef;
+    transform: translateY(-1px);
+  }
 }
 
 .btn-guest-exit {
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
   background: transparent;
   color: var(--text-secondary, #8892b0);
   border: 1px solid var(--border-color, #2a3550);
@@ -141,6 +166,8 @@
 }
 
 .btn-guest-sign-in {
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
   background: linear-gradient(135deg, rgba(36, 116, 217, 0.9), rgba(26, 91, 176, 0.9));
   color: #ffffff;
   border: none;

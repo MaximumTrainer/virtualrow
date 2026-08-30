@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { responsiveProjects } from './viewports';
 
 /**
  * Local Playwright configuration
@@ -15,6 +16,8 @@ export default defineConfig({
   // In CI, force single worker to avoid parallel servers and port conflicts
   workers: process.env.CI ? 1 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
+  // The responsive matrix (issue #195); every other spec runs at the default size.
+  projects: responsiveProjects(),
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5173',
     headless: true,

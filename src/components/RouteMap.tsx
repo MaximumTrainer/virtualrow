@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { latLngToMeters } from '../utils/geoUtils';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
@@ -51,6 +51,9 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     };
   }, [route]);
 
+  // Rendered canvas size, kept in state so the draw effect re-runs on resize.
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
   // Draw the route on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -71,8 +74,9 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     const canvasWidth = rect.width;
     const canvasHeight = rect.height;
     
-    // Calculate scale to fit route in canvas with padding
-    const padding = 40;
+    // Padding proportional to the canvas. A fixed 40px left the 148x110
+    // mini-map just 68x30 of usable area (issue #195).
+    const padding = Math.max(6, Math.min(40, Math.min(canvasWidth, canvasHeight) * 0.12));
     const availableWidth = canvasWidth - padding * 2;
     const availableHeight = canvasHeight - padding * 2;
     
@@ -278,21 +282,34 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       ctx.fillText(distanceLabel, scaleX + scaleBarWidth / 2, scaleY - 8);
     }
     
-  }, [points, bounds, progressPercent, highlightMode]);
+  }, [points, bounds, progressPercent, highlightMode, canvasSize]);
 
-  // Handle resize
+  /**
+   * Track the canvas's rendered size.
+   *
+   * This previously listened for window `resize` and *dispatched* a `resize`
+   * event from the handler, which re-entered itself until the stack blew
+   * ("Maximum call stack size exceeded" on every viewport change — issue #195).
+   * A ResizeObserver reports the real element size and feeds the draw effect
+   * through its dependencies, so it also catches container-only changes that a
+   * window listener never sees.
+   */
   useEffect(() => {
-    const handleResize = () => {
-      // Trigger re-render by updating canvas
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const event = new Event('resize');
-        window.dispatchEvent(event);
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setCanvasSize((prev) =>
+        Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
+          ? prev
+          : { width, height },
+      );
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
   }, []);
 
   return (

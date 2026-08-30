@@ -159,6 +159,48 @@ const defaultStorage = () => {
   return window.localStorage;
 };
 
+/**
+ * Diagnostic logging for the enrichment pipeline.
+ *
+ * Gated on `DEV` *and* a non-test mode: Vitest runs with `DEV === true`, so a
+ * bare `DEV` check turned every unit-test run into a wall of `stdout` blocks
+ * that masked real diagnostics. Dev-browser behaviour is unchanged.
+ */
+const debugLog = (message: string) => {
+  const env = import.meta.env;
+  if (env?.DEV && env.MODE !== 'test') {
+    console.debug(message);
+  }
+};
+
+/**
+ * Constrain an upstream elevation payload to exactly one finite number per
+ * route coordinate.
+ *
+ * OpenTopoData is untrusted input: it can return fewer results than requested
+ * (partial batch), more than requested, or `null` for no-data cells. Any of
+ * those would silently misalign `elevations` against `route.coordinates`.
+ * Short payloads are padded with the last known value (0 if there is none),
+ * long payloads are truncated, and `null`/non-finite entries become 0.
+ */
+export const normalizeElevations = (
+  elevations: ReadonlyArray<number | null | undefined>,
+  expectedCount: number,
+): number[] => {
+  const normalized: number[] = [];
+  let lastKnown = 0;
+
+  for (let index = 0; index < expectedCount; index++) {
+    if (index < elevations.length) {
+      const value = elevations[index];
+      lastKnown = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    }
+    normalized.push(lastKnown);
+  }
+
+  return normalized;
+};
+
 export const getRouteEnrichmentCacheKey = (routeId: string) =>
   `${ROUTE_ENRICHMENT_CACHE_PREFIX}${routeId}`;
 
@@ -691,14 +733,12 @@ export class RouteEnrichmentService {
 
   private async fetchElevations(coordinates: Coordinate[]) {
     const batches = splitCoordinatesIntoElevationBatches(coordinates);
-    const elevations: number[] = [];
+    const elevations: Array<number | null> = [];
 
     for (const [index, batch] of batches.entries()) {
-      if (import.meta.env?.DEV) {
-        console.debug(
-          `[route-enrichment] OpenTopoData batch ${index + 1}/${batches.length} (${batch.length} points)`,
-        );
-      }
+      debugLog(
+        `[route-enrichment] OpenTopoData batch ${index + 1}/${batches.length} (${batch.length} points)`,
+      );
 
       const locations = batch
         .map((coordinate) => `${coordinate.lat},${coordinate.lng}`)
@@ -711,17 +751,21 @@ export class RouteEnrichmentService {
       }
       const payload = (await response.json()) as OpenTopoDataResponse;
       elevations.push(
-        ...(payload.results ?? []).map((result) => result.elevation ?? 0),
+        ...(payload.results ?? []).map((result) => result.elevation),
       );
     }
 
-    if (import.meta.env?.DEV) {
-      console.debug(
-        `[route-enrichment] received ${elevations.length} elevation points`,
+    debugLog(
+      `[route-enrichment] received ${elevations.length} elevation points`,
+    );
+
+    if (elevations.length !== coordinates.length) {
+      debugLog(
+        `[route-enrichment] elevation payload mismatch: got ${elevations.length} for ${coordinates.length} coordinates`,
       );
     }
 
-    return elevations;
+    return normalizeElevations(elevations, coordinates.length);
   }
 
   private async fetchOverpassElements(coordinates: Coordinate[]) {
@@ -747,6 +791,11 @@ export class RouteEnrichmentService {
     if (cached.data && !cached.stale) {
       return cached.data;
     }
+
+    // Real-but-expired data beats the synthetic fallback: without this, a
+    // failed refresh on a flaky connection downgrades the scenery the user is
+    // already looking at to the generic tag-derived profile.
+    const staleCachedData = cached.data;
 
     const inflightRequest = this.inflight.get(route.id);
     if (inflightRequest) {
@@ -794,7 +843,7 @@ export class RouteEnrichmentService {
         saveCachedRouteEnrichment(route.id, enrichment, this.storage);
         return enrichment;
       } catch {
-        return getFallback();
+        return staleCachedData ?? getFallback();
       }
     })().finally(() => {
       this.inflight.delete(route.id);

@@ -96,7 +96,7 @@
 }
 
 .metric-label {
-  font-size: 9px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: var(--color-text-secondary);
   text-transform: uppercase;
   font-weight: 600;
@@ -112,7 +112,7 @@
 }
 
 .metric-unit {
-  font-size: 10px;
+  font-size: 11px; /* 11px legibility floor (issue #195) */
   color: var(--color-text-muted);
   margin-top: 2px;
 }
@@ -125,6 +125,8 @@
 .btn-connect,
 .btn-scan {
   flex: 1;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
   padding: 12px 16px;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   border: none;
@@ -142,10 +144,14 @@
   gap: 8px;
 }
 
-.btn-connect:hover,
-.btn-scan:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.3);
+/* Hover-only: on a touch device a tap would otherwise leave the lifted state
+   stuck until the next tap elsewhere (issue #195, Phase 4). */
+@media (hover: hover) {
+  .btn-connect:hover,
+  .btn-scan:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.3);
+  }
 }
 
 .btn-connect:disabled,
@@ -159,6 +165,8 @@
 
 .btn-disconnect {
   flex: 1;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
   padding: 12px 16px;
   background: rgba(var(--color-accent-red-rgb), 0.14);
   border: 1px solid rgba(var(--color-accent-red-rgb), 0.35);

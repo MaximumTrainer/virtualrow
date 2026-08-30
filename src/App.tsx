@@ -18,12 +18,13 @@ import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
-import { routeEnrichmentService } from './services/routeEnrichmentService';
 import { useAuth } from './context/AuthContext';
+import { useServices } from './context/ServicesContext';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
 import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
+import { resolvePerformanceMode } from './components/rower3d/constants';
 import { formatPace } from './utils/formatters';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -50,6 +51,7 @@ function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {
 
 function App() {
   const { isAuthenticated, isLoading, login } = useAuth();
+  const { routeEnrichmentService } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -201,7 +203,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRoute]);
+  }, [selectedRoute, routeEnrichmentService]);
 
   const activeRowerLabel = useMemo(() => (
     activeRowerType === 'pm5' ? 'PM5' : 'FTMS'
@@ -966,7 +968,7 @@ function App() {
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
-                      performanceMode={window.__PLAYWRIGHT_TESTING ? 'low' : 'auto'}
+                      performanceMode={resolvePerformanceMode()}
                       debugMode={debugMode}
                     />
                   </Suspense>

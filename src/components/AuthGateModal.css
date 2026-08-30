@@ -23,6 +23,8 @@
   padding: 32px 28px 24px;
   max-width: 400px;
   width: 100%;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   text-align: center;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
@@ -37,6 +39,12 @@
   font-size: 1rem;
   cursor: pointer;
   line-height: 1;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 4px 6px;
   border-radius: 4px;
   transition: color 0.15s;
@@ -115,4 +123,12 @@
 
 .auth-gate-link:hover {
   text-decoration: underline;
+}
+
+
+/* Short viewports: trade padding for content before scrolling (issue #195). */
+@media (max-height: 560px) {
+  .auth-gate-modal {
+    padding: 20px 18px 16px;
+  }
 }

@@ -458,7 +458,10 @@ const RowerScene: React.FC<Rower3DProps> = ({
         </>
       )}
 
-      {!IS_TEST_MODE && performanceMode !== 'low' && (
+      {/* Gated on performance mode alone (not IS_TEST_MODE) so a spec can opt
+          into the effect stack via __VIRTUALROW_PERFORMANCE_MODE — see #197.
+          Automation still defaults to 'low', which excludes this. */}
+      {performanceMode !== 'low' && (
         <DynamicPostFx
           velocityRef={velocityRef}
           performanceMode={performanceMode}
@@ -512,6 +515,35 @@ class PhysicsErrorBoundary extends React.Component<
 // ============================================================================
 // GPU ERROR BOUNDARY
 // ============================================================================
+/**
+ * Widen the vertical FOV on portrait/narrow canvases.
+ *
+ * Three's `fov` is vertical, so a tall narrow viewport crops horizontally and a
+ * portrait phone loses the banks either side of the lane (issue #195). Scaling
+ * the FOV by aspect restores roughly the same horizontal coverage.
+ */
+const CameraAspectFix: React.FC<{ baseFov?: number }> = ({ baseFov = 60 }) => {
+  // Read through the R3F store inside the effect: the camera is scene state we
+  // are meant to drive imperatively, and taking it from a hook selector makes
+  // the mutation below look like mutating a hook argument.
+  const store = useThree((state) => state.get);
+  const width = useThree((state) => state.size.width);
+  const height = useThree((state) => state.size.height);
+
+  useEffect(() => {
+    if (height === 0) return;
+    const perspective = store().camera as THREE.PerspectiveCamera;
+    if (!perspective?.isPerspectiveCamera) return;
+    const aspect = width / height;
+    const fov = aspect < 1 ? Math.min(100, baseFov + (1 - aspect) * 35) : baseFov;
+    if (Math.abs(perspective.fov - fov) < 0.01) return;
+    perspective.fov = fov;
+    perspective.updateProjectionMatrix();
+  }, [store, width, height, baseFov]);
+
+  return null;
+};
+
 class GPUErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; errorMessage: string }
@@ -657,6 +689,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             }, false);
           }}
         >
+          <CameraAspectFix />
           <RowerScene {...props} />
         </Canvas>
       </GPUErrorBoundary>
