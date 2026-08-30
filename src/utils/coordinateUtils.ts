@@ -84,15 +84,23 @@ export function parseKMLCoordinateList(text: string): Coordinate[] {
 }
 
 /**
+ * Mean Earth radius (IUGG), in metres.
+ *
+ * The single radius constant in the app: every distance the import layer and
+ * the 3D engine compute goes through `distanceBetweenMeters`, so a route's
+ * reported length and the length the boat rows can never drift apart.
+ */
+export const EARTH_RADIUS_M = 6371008.8;
+
+/**
  * Great-circle distance between two coordinates, in metres.
  *
- * Uses the haversine formula against a spherical Earth (R = 6,371,008.8 m,
- * the IUGG mean radius). Accurate to well under a metre at the segment
- * lengths we deal with, which is far below the resolution that matters for
- * route geometry.
+ * Uses the haversine formula against a spherical Earth. Accurate to well under
+ * a metre at the segment lengths we deal with, which is far below the
+ * resolution that matters for route geometry.
  */
 export function distanceBetweenMeters(a: Coordinate, b: Coordinate): number {
-  const R = 6_371_008.8;
+  const R = EARTH_RADIUS_M;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);

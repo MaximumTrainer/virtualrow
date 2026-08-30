@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { routeService } from '../services/routeService';
+import { polylineLengthMeters } from '../utils/coordinateUtils';
 
 // Willowbrook River bounding box
 const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };
@@ -83,7 +84,8 @@ describe('RouteService creation & search', () => {
       id: '99',
       name: 'Sample Rownative Course',
       country: 'Netherlands',
-      distanceMeters: 5000,
+      externalDistanceMeters: 5000,
+      geometrySource: 'gate-chain',
       coordinates: [
         { lat: 52.37, lng: 4.89 },
         { lat: 52.38, lng: 4.9 },
@@ -92,7 +94,9 @@ describe('RouteService creation & search', () => {
     });
 
     expect(route.source).toBe('rownative');
-    expect(route.distance).toBe(5);
+    // Distance is measured from the geometry, not taken from distance_m (R-5).
+    expect(Math.abs(route.distance * 1000 - polylineLengthMeters(route.coordinates))).toBeLessThan(1);
+    expect(route.externalDistanceMeters).toBe(5000);
     expect(route.tags).toContain('rownative');
     expect(route.tags).toContain('status:established');
   });
@@ -102,7 +106,8 @@ describe('RouteService creation & search', () => {
       id: '4242',
       name: 'Dedupe Course',
       country: 'Netherlands',
-      distanceMeters: 5000,
+      externalDistanceMeters: 5000,
+      geometrySource: 'gate-chain',
       coordinates: [{ lat: 52.37, lng: 4.89 }, { lat: 52.38, lng: 4.9 }],
     });
 
@@ -111,38 +116,43 @@ describe('RouteService creation & search', () => {
     expect(routeService.findRouteByRownativeId('not-imported')).toBeUndefined();
   });
 
-  it('marks a gate-only course as an outline and densifies its centreline (RF-1)', () => {
+  it('marks a gate-chain course as an outline and densifies its centreline (RF-1)', () => {
     const route = routeService.importRouteFromRownative({
       id: '1',
       name: 'Quinsig South to North',
       country: 'United States',
-      distanceMeters: 5306,
+      externalDistanceMeters: 5306,
+      geometrySource: 'gate-chain',
       // Two gate centroids, as rownative course 1 actually supplies.
       coordinates: [{ lat: 42.24, lng: -71.81 }, { lat: 42.28766, lng: -71.81 }],
       status: 'established',
     });
 
     expect(route.tags).toContain('outline-only');
-    // Surveyed distance_m stays authoritative over anything derived from centroids.
-    expect(route.distance).toBe(5.31);
+    expect(route.tags).toContain('geometry:gate-chain');
+    expect(Math.abs(route.distance * 1000 - polylineLengthMeters(route.coordinates))).toBeLessThan(1);
     expect(route.coordinates.length).toBeGreaterThanOrEqual(100);
     expect(route.coordinates[0]).toEqual({ lat: 42.24, lng: -71.81 });
   });
 
-  it('does not mark a densely surveyed course as an outline', () => {
-    const coordinates = Array.from({ length: 12 }, (_, i) => ({
-      lat: 52.37 + i * 0.001,
-      lng: 4.89,
-    }));
+  it('does not mark a course with real geometry as an outline, however few points it has', () => {
+    // Point count no longer decides the badge — provenance does (R-10).
     const route = routeService.importRouteFromRownative({
       id: '555',
       name: 'Detailed Course',
       country: 'Netherlands',
-      distanceMeters: 1300,
-      coordinates,
+      externalDistanceMeters: 1300,
+      geometrySource: 'track',
+      coordinates: [
+        { lat: 52.37, lng: 4.89 },
+        { lat: 52.3745, lng: 4.8925 },
+        { lat: 52.379, lng: 4.891 },
+      ],
     });
 
     expect(route.tags).not.toContain('outline-only');
+    expect(route.tags).toContain('geometry:track');
+    expect(route.geometrySource).toBe('track');
   });
 
   it('keeps imported coordinates inside valid WGS-84 bounds (KV-2)', () => {
@@ -150,7 +160,8 @@ describe('RouteService creation & search', () => {
       id: '778',
       name: 'Bounds Course',
       country: 'New Zealand',
-      distanceMeters: 4000,
+      externalDistanceMeters: 4000,
+      geometrySource: 'gate-chain',
       coordinates: [{ lat: -41.29, lng: 174.78 }, { lat: -41.32, lng: 174.81 }],
     });
 
@@ -172,7 +183,8 @@ describe('RouteService creation & search', () => {
       id: '100',
       name: 'Statusless Course',
       country: 'Canada',
-      distanceMeters: 3000,
+      externalDistanceMeters: 3000,
+      geometrySource: 'gate-chain',
       coordinates: [
         { lat: 45.42, lng: -75.69 },
         { lat: 45.43, lng: -75.68 },

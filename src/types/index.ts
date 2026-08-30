@@ -9,6 +9,16 @@ export interface Coordinate {
   lng: number;
 }
 
+/**
+ * Where an imported route's polyline came from (issue #194).
+ *
+ * - `track`        a user-attached GPX/KML/GeoJSON, or an upstream traced path
+ * - `polygon-path` a path-shaped polygon already in the course file
+ * - `osm-derived`  walked along OpenStreetMap waterway centrelines
+ * - `gate-chain`   start/finish gate centroids only, so straight lines between
+ */
+export type GeometrySource = 'track' | 'polygon-path' | 'osm-derived' | 'gate-chain';
+
 // Route enrichment metadata (optional - only present when route has been enriched)
 export interface RouteEnrichmentMetadata {
   enrichedAt: number; // timestamp when enrichment was performed
@@ -37,6 +47,16 @@ export interface WaterRoute {
   source?: 'manual' | 'imported' | 'rownative';
   /** Identifier of this route in its source system (e.g. a rownative course id). */
   externalId?: string;
+  /** How `coordinates` was arrived at. Set for every rownative import. */
+  geometrySource?: GeometrySource;
+  /**
+   * Distance the source system reports, in metres, kept for display only.
+   *
+   * `distance` is always measured from `coordinates`, so the card and the boat
+   * can never disagree; rownative's `distance_m` is a straight-line gate chain
+   * by definition and is shown alongside ours when the two differ materially.
+   */
+  externalDistanceMeters?: number;
   enrichment?: RouteEnrichmentMetadata; // Optional enrichment metadata
 }
 
@@ -174,6 +194,8 @@ export interface RouteFormData {
   estimatedTimeMin?: number;
   source?: WaterRoute['source'];
   externalId?: WaterRoute['externalId'];
+  geometrySource?: WaterRoute['geometrySource'];
+  externalDistanceMeters?: WaterRoute['externalDistanceMeters'];
 }
 
 // Structured workout with intervals (like intervals.icu)

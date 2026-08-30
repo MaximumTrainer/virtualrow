@@ -1,12 +1,18 @@
-import type { Coordinate, WaterRoute } from '../types/index';
+import type { WaterRoute } from '../types/index';
 import { routeService, type RownativeRouteImportData } from './routeService';
+import {
+  resolveCourseGeometry,
+  type RownativeCourseGeometryInput,
+  type RownativeCoursePolygon,
+  type WaterwayPathProvider,
+} from './rownativeGeometry';
+import { trackAttachmentStore, type TrackAttachmentStore } from './trackAttachmentStore';
 
 // Discovery note (issue #46): rownative Worker API exposes /api/courses and related routes,
 // but browser CORS restricts origins to rownative.icu/localhost. VirtualRow therefore reads the
 // public course data directly from the rownative/courses repository.
 const ROWNATIVE_INDEX_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses/index.json';
 const ROWNATIVE_COURSE_BASE_URL = 'https://raw.githubusercontent.com/rownative/courses/main/courses';
-const UNORDERED_POLYGON_SORT_KEY = Number.MAX_SAFE_INTEGER;
 /** Course JSON is a few kB in practice; cap well above that but below anything abusive. */
 const MAX_COURSE_BYTES = 2 * 1024 * 1024;
 /** Shape of a rownative course identifier. Exported so callers validate identically. */
@@ -41,17 +47,7 @@ interface RownativeCourseIndexEntry {
   status?: string;
 }
 
-interface RownativeCoursePolygonPoint {
-  lat: number;
-  lon: number;
-}
-
-interface RownativeCoursePolygon {
-  order?: number;
-  points?: RownativeCoursePolygonPoint[];
-}
-
-interface RownativeCourseFile {
+interface RownativeCourseFile extends RownativeCourseGeometryInput {
   id: string;
   name: string;
   country?: string;
@@ -73,6 +69,15 @@ export class RownativeService {
   private courseIndexPromise: Promise<RownativeCourseSummary[]> | null = null;
   private readonly fetchImpl: typeof fetch;
   private readonly importRoute: (data: RownativeRouteImportData) => WaterRoute;
+  private readonly tracks: TrackAttachmentStore;
+  /**
+   * Optional OSM waterway provider (issue #194 R-12).
+   *
+   * Left unset: the spike found a path for only 2 of 5 river courses against a
+   * "4 of 5" bar, because finish gates sit mid-estuary, far off the mapped
+   * centreline. See OsmWaterwayPathProvider for the measurements.
+   */
+  private readonly osmProvider: WaterwayPathProvider | null;
 
   constructor(
     // Forwarded through an arrow rather than passing `fetch` directly: stored on
@@ -81,9 +86,13 @@ export class RownativeService {
     // reject with "Illegal invocation". Injected test doubles are unaffected.
     fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
     importRoute: (data: RownativeRouteImportData) => WaterRoute = (data) => routeService.importRouteFromRownative(data),
+    tracks: TrackAttachmentStore = trackAttachmentStore,
+    osmProvider: WaterwayPathProvider | null = null,
   ) {
     this.fetchImpl = fetchImpl;
     this.importRoute = importRoute;
+    this.tracks = tracks;
+    this.osmProvider = osmProvider;
   }
 
   private async fetchJson<T>(url: string): Promise<T> {
@@ -132,38 +141,6 @@ export class RownativeService {
     return allCourses
       .filter((course) => course.name.toLowerCase().includes(normalized))
       .slice(0, limit);
-  }
-
-  private centroid(points: RownativeCoursePolygonPoint[]): Coordinate | null {
-    if (!points.length) return null;
-    let latSum = 0;
-    let lonSum = 0;
-    for (const point of points) {
-      latSum += point.lat;
-      lonSum += point.lon;
-    }
-    return { lat: latSum / points.length, lng: lonSum / points.length };
-  }
-
-  private deriveRouteCoordinates(course: RownativeCourseFile): Coordinate[] {
-    const polygons = Array.isArray(course.polygons) ? [...course.polygons] : [];
-    // Sorting the local copy keeps the source payload immutable for callers.
-    const orderedPolygons = polygons.sort(
-      (a, b) => (a.order ?? UNORDERED_POLYGON_SORT_KEY) - (b.order ?? UNORDERED_POLYGON_SORT_KEY),
-    );
-    const centroids = orderedPolygons
-      .map((polygon) => this.centroid((polygon.points ?? []).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon))))
-      .filter((point): point is Coordinate => point !== null);
-
-    if (centroids.length >= 2) {
-      return centroids;
-    }
-
-    const fallbackPoints = orderedPolygons[0]?.points ?? [];
-    return fallbackPoints
-      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon))
-      .slice(0, 2)
-      .map((point) => ({ lat: point.lat, lng: point.lon }));
   }
 
   async importCourse(course: RownativeCourseSummary): Promise<WaterRoute> {
@@ -290,22 +267,40 @@ export class RownativeService {
     return detail;
   }
 
-  private importCourseDetail(
+  /**
+   * Turn a fetched course file into a route.
+   *
+   * The polyline comes from `resolveCourseGeometry`, which prefers a track the
+   * user has attached to this course id, then a traced polygon in the file
+   * itself, then map-derived geometry, and only then the gate chain that made
+   * every rownative course render as straight lines (issue #194).
+   */
+  private async importCourseDetail(
     detail: RownativeCourseFile,
     fallback: { id: string; name?: string; country?: string; distanceMeters?: number; status?: string },
-  ): WaterRoute {
-    const coordinates = this.deriveRouteCoordinates(detail);
+  ): Promise<WaterRoute> {
+    const courseId = detail.id || fallback.id;
     const name = detail.name || fallback.name || `Course ${fallback.id}`;
-    if (coordinates.length < 2) {
+
+    const geometry = await resolveCourseGeometry(
+      { ...detail, id: courseId, name },
+      {
+        attachedTrack: this.tracks.getCoordinates(courseId),
+        osmProvider: this.osmProvider,
+      },
+    );
+
+    if (geometry.coordinates.length < 2) {
       throw new Error(`Course ${name} (${fallback.id}) has insufficient coordinate data. At least 2 coordinate points are required.`);
     }
 
     return this.importRoute({
-      id: detail.id || fallback.id,
+      id: courseId,
       name,
       country: detail.country || fallback.country || 'Unknown',
-      distanceMeters: detail.distance_m ?? fallback.distanceMeters ?? 0,
-      coordinates,
+      coordinates: geometry.coordinates,
+      geometrySource: geometry.source,
+      externalDistanceMeters: detail.distance_m ?? fallback.distanceMeters,
       status: detail.status ?? fallback.status,
     });
   }
