@@ -6,7 +6,18 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Only ever lint what git tracks. Build output, coverage reports and
+  // agent worktrees each carry their own copies of the source tree (and their
+  // own node_modules), which otherwise land in the problem count and make the
+  // CI gate below unmeasurable.
+  globalIgnores([
+    'dist',
+    'coverage',
+    'test-results',
+    'playwright-report',
+    '.claude',
+    'src/wasm-pkg',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

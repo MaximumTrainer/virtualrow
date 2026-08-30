@@ -2,7 +2,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    exclude: ['playwright/**', 'node_modules/**'],
+    // Setting `exclude` *replaces* vitest's defaults rather than extending
+    // them, so the node_modules glob has to be recursive: a nested
+    // node_modules (an agent worktree under .claude/, say) otherwise gets
+    // collected and we run our dependencies' own test suites.
+    exclude: ['playwright/**', '**/node_modules/**', '.claude/**', 'dist/**'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['src/setupTests.ts'],

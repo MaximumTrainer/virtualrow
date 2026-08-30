@@ -21,9 +21,17 @@ class MockIntersectionObserver implements IntersectionObserver {
 (globalThis as Record<string, unknown>).IntersectionObserver = MockIntersectionObserver;
 
 // Some jsdom builds expose `localStorage` as a bare object with no Storage
-// methods, so anything that persists state throws on first use. Swap in a
-// minimal in-memory Storage when that happens; a real one is left alone.
-if (typeof globalThis.localStorage?.setItem !== 'function') {
+// methods, so anything that persists state throws on first use. Node 22+ also
+// ships its own partial `localStorage` global that shadows jsdom's and is
+// missing `clear`, which fails the suite on a developer machine while CI's
+// pinned Node stays green. Check every method we rely on, not just one, and
+// swap in a minimal in-memory Storage unless all of them are present.
+const STORAGE_METHODS = ['getItem', 'setItem', 'removeItem', 'clear', 'key'] as const;
+const hasWorkingStorage = STORAGE_METHODS.every(
+  (method) => typeof globalThis.localStorage?.[method] === 'function',
+);
+
+if (!hasWorkingStorage) {
   const entries = new Map<string, string>();
   // Methods go on Storage.prototype, not the instance, so tests that spy on
   // Storage.prototype.setItem to simulate a full quota still work.
