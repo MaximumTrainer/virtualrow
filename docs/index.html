@@ -149,10 +149,6 @@
       max-width: 620px;
       position: relative;
     }
-    .hero-actions {
-      display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
-      margin-top: 2.5rem; position: relative;
-    }
     .btn-primary {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 0.9rem 2rem;
@@ -281,6 +277,42 @@
     }
     .feature-card p {
       font-size: 0.9rem; color: var(--text-muted); line-height: 1.65;
+    }
+    /* The rownative.icu route flow, spelled out on the routes card (WEB-2). */
+    .route-flow {
+      margin: 0.9rem 0 0;
+      padding-left: 1.1rem;
+      display: flex; flex-direction: column; gap: 0.6rem;
+      font-size: 0.86rem; color: var(--text-muted); line-height: 1.6;
+    }
+    .route-flow li::marker {
+      color: var(--blue-light);
+      font-weight: 700;
+    }
+    .route-flow strong {
+      color: #e8eef6;
+      font-weight: 600;
+    }
+    .route-flow code {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.82em;
+      padding: 1px 5px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: #cfe0f2;
+      overflow-wrap: anywhere;
+    }
+    /* Mirrors the badges the app puts on an imported route row. */
+    .inline-badge {
+      display: inline-block;
+      padding: 1px 7px;
+      background: var(--blue-dim);
+      border: 1px solid rgba(74,155,255,0.28);
+      border-radius: 100px;
+      font-size: 0.72rem; font-weight: 600;
+      color: var(--blue-light);
+      white-space: nowrap;
     }
     .feature-tags {
       display: flex; flex-wrap: wrap; gap: 6px;
@@ -531,7 +563,7 @@
   </ul>
   <a
     class="nav-cta nav-cta--try"
-    href="./app/?guest=true"
+    href="./app/"
     aria-label="Try VirtualRow now — no account required"
   >
     ⚡ Try Now
@@ -565,28 +597,6 @@
     VirtualRow connects your Concept2 PM5 to immersive 3D river environments
     via Bluetooth — Willowbrook demo rowing, rownative.icu route discovery, live metrics, and zero subscription fees.
   </p>
-  <div class="hero-actions fade-up delay-3">
-    <a
-      class="btn-primary"
-      href="https://github.com/MaximumTrainer/virtualrow"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
-      </svg>
-      Get Started on GitHub
-    </a>
-    <a class="btn-try-now" href="./app/?guest=true" aria-label="Try VirtualRow now — no account required">
-      ⚡ Try Now
-    </a>
-    <a class="btn-secondary" href="#features">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/>
-      </svg>
-      See Features
-    </a>
-  </div>
   <div class="hero-screenshot fade-up delay-3">
     <div class="hero-screenshot-glow" aria-hidden="true"></div>
     <img
@@ -641,11 +651,40 @@
           </svg>
         </div>
         <h3>Scenic Water Routes</h3>
-        <p>Row the bundled Willowbrook River (~5 km) or search rownative.icu and import real-world routes instantly.</p>
+        <p>
+          Row the bundled Willowbrook River (~5&nbsp;km), or bring in a real-world course
+          from the rownative.icu catalogue. Here is the whole flow:
+        </p>
+        <ol class="route-flow">
+          <li>
+            <strong>Sign in with intervals.icu.</strong>
+            No rownative.icu account is needed, and there is nothing to link.
+          </li>
+          <li>
+            <strong>Find a course.</strong>
+            Search the rownative.icu catalogue by name from inside VirtualRow, or paste a
+            course ID or a <code>https://rownative.icu/&hellip;</code> course link.
+          </li>
+          <li>
+            <strong>Share it.</strong>
+            A course opens directly from a link too:
+            <code>?rownativeCourseId=&lt;id&gt;</code>.
+          </li>
+          <li>
+            <strong>Row it.</strong>
+            The course joins the routes list beside the Willowbrook demo, badged
+            <span class="inline-badge">rownative.icu</span> with its
+            <span class="inline-badge">Established</span> or
+            <span class="inline-badge">Provisional</span> status, plus a
+            <span class="inline-badge">gates only</span> badge when the course is defined
+            by its start and finish gates rather than a surveyed line.
+          </li>
+        </ol>
         <div class="feature-tags">
           <span class="feature-tag">Willowbrook demo</span>
-          <span class="feature-tag">rownative.icu import</span>
-          <span class="feature-tag">Leaflet minimap</span>
+          <span class="feature-tag">Catalogue search</span>
+          <span class="feature-tag">Paste ID or link</span>
+          <span class="feature-tag">Shareable deep link</span>
         </div>
       </article>
 
@@ -782,7 +821,7 @@
       <div class="step" role="listitem">
         <div class="step-num" aria-label="Step 3">3</div>
         <h4>Pick a Route</h4>
-        <p>Select Willowbrook River for a scenic 5 km demo, or search rownative.icu and import a real-world course.</p>
+        <p>Select Willowbrook River for a scenic 5&nbsp;km demo, or search the rownative.icu catalogue by name — or paste a course ID or link — to import a real-world course.</p>
       </div>
 
       <div class="step" role="listitem">
@@ -842,7 +881,7 @@
         </svg>
         View on GitHub
       </a>
-      <a class="btn-try-now" href="./app/?guest=true" aria-label="Try VirtualRow now — no account required">
+      <a class="btn-try-now" href="./app/" aria-label="Try VirtualRow now — no account required">
         ⚡ Try Now
       </a>
       <a
