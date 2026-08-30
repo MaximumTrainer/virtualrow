@@ -138,7 +138,7 @@ describe('coordinateUtils', () => {
 
   describe('parseKMLCoordinateList', () => {
     it('parses multiple whitespace-separated tuples', () => {
-      const coords = parseKMLCoordinateList('13.405,52.52 14.0,53.0 15.0,54.0');
+      const { coordinates: coords } = parseKMLCoordinateList('13.405,52.52 14.0,53.0 15.0,54.0');
       expect(coords).toHaveLength(3);
       expect(coords[0]).toEqual({ lat: 52.52, lng: 13.405 });
       expect(coords[1]).toEqual({ lat: 53.0, lng: 14.0 });
@@ -146,23 +146,23 @@ describe('coordinateUtils', () => {
     });
 
     it('skips invalid tuples and keeps valid ones', () => {
-      const coords = parseKMLCoordinateList('13.405,52.52 abc,def 15.0,54.0');
+      const { coordinates: coords } = parseKMLCoordinateList('13.405,52.52 abc,def 15.0,54.0');
       expect(coords).toHaveLength(2);
       expect(coords[0]).toEqual({ lat: 52.52, lng: 13.405 });
       expect(coords[1]).toEqual({ lat: 54.0, lng: 15.0 });
     });
 
     it('handles newline-separated tuples (KML multiline format)', () => {
-      const coords = parseKMLCoordinateList('13.405,52.52,34\n14.0,53.0,0\n');
+      const { coordinates: coords } = parseKMLCoordinateList('13.405,52.52,34\n14.0,53.0,0\n');
       expect(coords).toHaveLength(2);
     });
 
     it('returns empty array for empty string', () => {
-      expect(parseKMLCoordinateList('')).toHaveLength(0);
+      expect(parseKMLCoordinateList('').coordinates).toHaveLength(0);
     });
 
     it('skips out-of-range tuples', () => {
-      const coords = parseKMLCoordinateList('181,0 13.405,52.52');
+      const { coordinates: coords } = parseKMLCoordinateList('181,0 13.405,52.52');
       expect(coords).toHaveLength(1);
       expect(coords[0]).toEqual({ lat: 52.52, lng: 13.405 });
     });

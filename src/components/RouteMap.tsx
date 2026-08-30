@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { latLngToMeters } from '../utils/geoUtils';
+import { createRouteMapTransform } from './routeMapProjection';
 import type { WaterRoute } from '../types/index';
 import './RouteMap.css';
 
@@ -74,26 +75,9 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     const canvasWidth = rect.width;
     const canvasHeight = rect.height;
     
-    // Padding proportional to the canvas. A fixed 40px left the 148x110
-    // mini-map just 68x30 of usable area (issue #195).
-    const padding = Math.max(6, Math.min(40, Math.min(canvasWidth, canvasHeight) * 0.12));
-    const availableWidth = canvasWidth - padding * 2;
-    const availableHeight = canvasHeight - padding * 2;
-    
-    const scaleX = bounds.width > 0 ? availableWidth / bounds.width : 1;
-    const scaleY = bounds.height > 0 ? availableHeight / bounds.height : 1;
-    const scale = Math.min(scaleX, scaleY);
-    
-    // Center offset
-    const routeWidth = bounds.width * scale;
-    const routeHeight = bounds.height * scale;
-    const offsetX = padding + (availableWidth - routeWidth) / 2;
-    const offsetY = padding + (availableHeight - routeHeight) / 2;
-    
-    // Transform function: meters to canvas pixels
-    const toCanvas = (x: number, y: number) => ({
-      x: offsetX + (x - bounds.minX) * scale,
-      y: offsetY + (bounds.maxY - y) * scale // Flip Y for canvas coordinates
+    const { toCanvas, scale, padding } = createRouteMapTransform(bounds, {
+      width: canvasWidth,
+      height: canvasHeight,
     });
     
     // Clear canvas

@@ -1042,7 +1042,7 @@ test.describe('docs screenshots', () => {
         const hrDv = new DataView(hrBuf);
         hrDv.setUint8(0, 0x00);
         hrDv.setUint8(1, 148);
-        if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+        if (window.__hrChar) window.__hrChar._dispatch(hrDv);
       }, i);
       await page.waitForTimeout(600);
     }
@@ -1217,7 +1217,7 @@ test.describe('docs screenshots — other route heroes', () => {
           const hrDv = new DataView(hrBuf);
           hrDv.setUint8(0, 0x00);
           hrDv.setUint8(1, 148);
-          if (w.__hrChar) w.__hrChar._dispatch(hrDv);
+          if (window.__hrChar) window.__hrChar._dispatch(hrDv);
         }, i);
         await page.waitForTimeout(600);
       }

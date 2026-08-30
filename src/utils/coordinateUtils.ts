@@ -73,14 +73,52 @@ export function parseGeoJSONCoordinate(coords: number[]): Coordinate | null {
  * content. Whitespace-separated tuples of the form `lng,lat[,alt]`. Invalid
  * tuples are silently skipped.
  */
-export function parseKMLCoordinateList(text: string): Coordinate[] {
+/**
+ * Share of a track's points that may be unusable before an import is refused.
+ *
+ * Real KML exports carry the occasional junk row, and failing a 900-point
+ * track over one bad tuple is hostile. A file where a tenth of the points are
+ * unreadable is a different thing — a wrong projection, a truncated download,
+ * or not the file the user meant — and importing a tenth of a river as if it
+ * were the whole one is worse than refusing it (#191, KV-2).
+ */
+export const MAX_DROPPED_POINT_RATIO = 0.1;
+
+export interface ParsedCoordinateList {
+  /** The points that parsed and fell inside WGS-84 bounds. */
+  coordinates: Coordinate[];
+  /** Tuples that were present but unusable: malformed, or out of range. */
+  dropped: number;
+  /** Tuples seen in total. */
+  total: number;
+}
+
+/**
+ * True when enough of a track was unreadable that it should not be imported.
+ *
+ * One bad tuple is always forgiven, whatever the track's length: a ratio alone
+ * would fail a four-point outline over a single junk row while waving through
+ * ninety bad points in a nine-hundred-point river.
+ */
+export function exceedsDropAllowance({ dropped, total }: ParsedCoordinateList): boolean {
+  if (total === 0) return false;
+  const allowance = Math.max(1, Math.floor(total * MAX_DROPPED_POINT_RATIO));
+  return dropped > allowance;
+}
+
+export function parseKMLCoordinateList(text: string): ParsedCoordinateList {
   const tuples = text.trim().split(/\s+/).filter((s) => s.length > 0);
-  const coords: Coordinate[] = [];
+  const coordinates: Coordinate[] = [];
+  let dropped = 0;
   for (const tuple of tuples) {
     const coord = parseKMLCoordinate(tuple);
-    if (coord) coords.push(coord);
+    if (coord) {
+      coordinates.push(coord);
+    } else {
+      dropped++;
+    }
   }
-  return coords;
+  return { coordinates, dropped, total: tuples.length };
 }
 
 /**

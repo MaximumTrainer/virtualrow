@@ -26,24 +26,19 @@ interface MockBluetoothCharacteristic {
 
 declare global {
   interface Window {
-    /** Drives simulated PM5 / heart-rate traffic from inside the page. */
+    /**
+     * Sends frames to the simulator server over its WebSocket. Only does
+     * anything while `npm run start:sim` is up — the emitters are no-ops when
+     * the socket is not open, so a spec that needs data without the server
+     * should dispatch through the characteristics below instead.
+     */
     __simulator?: {
-      emitHR: (bpm: number) => void;
-      emitPM: (payload: Record<string, number>) => void;
-      startRoute: (
-        id: string,
-        options: {
-          distance: number;
-          step: number;
-          startHr: number;
-          endHr: number;
-          msPerStep: number;
-        },
-      ) => Promise<boolean>;
-      startFtmsRoute?: (
-        id: string,
-        options: Record<string, number>,
-      ) => Promise<boolean>;
+      emitPM5: (payload: Record<string, number>) => void;
+      emitFTMS: (payload: { flags: number; bytes: number[] }) => void;
+      emitHR: (payload: { bpm: number }) => void;
+      startSequence: (id: string, sequence: unknown) => Promise<boolean>;
+      startRoute: (id: string, options: Record<string, number>) => Promise<boolean>;
+      startFtmsRoute: (id: string, options: Record<string, number>) => Promise<boolean>;
     };
 
     /** PM5 multiplexed characteristic, exposed so a test can push frames. */

@@ -357,7 +357,7 @@ describe('RouteService KML import', () => {
   });
 
   it('finalizeKMLImport creates a route from a candidate', () => {
-    const candidate = { name: 'Selected', description: 'desc', coordinates: [{ lat: 40.786, lng: -73.962 }, { lat: 40.787, lng: -73.961 }] };
+    const candidate = { name: 'Selected', description: 'desc', droppedPoints: 0, coordinates: [{ lat: 40.786, lng: -73.962 }, { lat: 40.787, lng: -73.961 }] };
     const route = routeService.finalizeKMLImport(candidate, { difficulty: 'hard' });
     expect(route.name).toBe('Selected');
     expect(route.difficulty).toBe('hard');
@@ -431,5 +431,139 @@ describe('RouteService KML import', () => {
     if (result.status === 'success') {
       expect(result.route.name).toBe('Doc Name');
     }
+  });
+});
+
+// ============================================================================
+// KV-2 (#191) — imported coordinates render without artefacts.
+//
+// The parsing half of AUTH-5 (KV-1) is covered by the KML import block above.
+// These cover the projection half: that lat and lng survive the round trip the
+// right way round, and that a file too broken to draw is refused rather than
+// half-imported.
+// ============================================================================
+describe('RouteService KML projection (KV-2)', () => {
+  // Latitude and longitude differ by more than 10 degrees, so a transposition
+  // cannot hide behind a plausible-looking pair.
+  const LAT = 51.5;
+  const LNG = -1.2;
+
+  const kmlWith = (coordinates: string) =>
+    `<?xml version="1.0"?><kml><Document><Placemark><name>Projection</name>` +
+    `<LineString><coordinates>${coordinates}</coordinates></LineString>` +
+    `</Placemark></Document></kml>`;
+
+  it('reads KML lon,lat ordering into the right fields (KV-2.1)', () => {
+    const result = routeService.importRouteFromKML(
+      kmlWith(`${LNG},${LAT} ${LNG + 0.01},${LAT + 0.01}`),
+      {},
+    );
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(result.route.coordinates[0].lat).toBeCloseTo(LAT, 6);
+    expect(result.route.coordinates[0].lng).toBeCloseTo(LNG, 6);
+  });
+
+  it('does not accept a transposed file as if it were the same route (KV-2.1)', () => {
+    // lat,lng instead of lon,lat. 51.5 is a legal longitude and -1.2 a legal
+    // latitude, so nothing rejects this — but it must not land on the same
+    // point as the correctly-ordered file.
+    const correct = routeService.importRouteFromKML(
+      kmlWith(`${LNG},${LAT} ${LNG + 0.01},${LAT + 0.01}`),
+      {},
+    );
+    const transposed = routeService.importRouteFromKML(
+      kmlWith(`${LAT},${LNG} ${LAT + 0.01},${LNG + 0.01}`),
+      {},
+    );
+
+    expect(correct.status).toBe('success');
+    expect(transposed.status).toBe('success');
+    if (correct.status !== 'success' || transposed.status !== 'success') return;
+    expect(transposed.route.coordinates[0]).not.toEqual(correct.route.coordinates[0]);
+    expect(transposed.route.coordinates[0].lat).toBeCloseTo(LNG, 6);
+  });
+
+  it('never admits a coordinate outside WGS-84 bounds (KV-2.2)', () => {
+    const result = routeService.importRouteFromKML(
+      kmlWith(`${LNG},${LAT} 181,0 ${LNG + 0.01},${LAT + 0.01}`),
+      {},
+    );
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    for (const point of result.route.coordinates) {
+      expect(point.lat).toBeGreaterThanOrEqual(-90);
+      expect(point.lat).toBeLessThanOrEqual(90);
+      expect(point.lng).toBeGreaterThanOrEqual(-180);
+      expect(point.lng).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it('forgives a single unreadable point and reports it (KV-2.2)', () => {
+    const result = routeService.importRouteFromKML(
+      kmlWith(`${LNG},${LAT} 999,999 ${LNG + 0.01},${LAT + 0.01} ${LNG + 0.02},${LAT + 0.02}`),
+      {},
+    );
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    expect(result.route.coordinates.length).toBe(3);
+  });
+
+  it('refuses a file where too many points are unreadable (KV-2.2)', () => {
+    // Eight of twelve out of range: a wrong projection or a truncated file,
+    // not a stray junk row.
+    const good = Array.from({ length: 4 }, (_, i) => `${LNG + i * 0.01},${LAT + i * 0.01}`);
+    const bad = Array.from({ length: 8 }, () => '999,999');
+    const result = routeService.importRouteFromKML(kmlWith([...good, ...bad].join(' ')), {});
+
+    expect(result.status).toBe('error');
+    if (result.status !== 'error') return;
+    expect(result.error).toMatch(/8 of 12/);
+    expect(result.error).toMatch(/latitude\/longitude/i);
+  });
+
+  it('adds no route when the drop allowance is exceeded (KV-2.2)', () => {
+    const before = routeService.getAllRoutes().length;
+    const bad = Array.from({ length: 8 }, () => '999,999');
+    routeService.importRouteFromKML(kmlWith(`${LNG},${LAT} ${bad.join(' ')}`), {});
+
+    expect(routeService.getAllRoutes().length).toBe(before);
+  });
+
+  it('reports the dropped count on each selection candidate (KV-2.2)', () => {
+    const kml =
+      `<?xml version="1.0"?><kml><Document>` +
+      `<Placemark><name>Clean</name><LineString><coordinates>` +
+      `${LNG},${LAT} ${LNG + 0.01},${LAT + 0.01}` +
+      `</coordinates></LineString></Placemark>` +
+      `<Placemark><name>One bad row</name><LineString><coordinates>` +
+      `${LNG},${LAT} 999,999 ${LNG + 0.01},${LAT + 0.01}` +
+      `</coordinates></LineString></Placemark>` +
+      `</Document></kml>`;
+    const result = routeService.importRouteFromKML(kml, {});
+
+    expect(result.status).toBe('selectionRequired');
+    if (result.status !== 'selectionRequired') return;
+    expect(result.candidates[0].droppedPoints).toBe(0);
+    expect(result.candidates[1].droppedPoints).toBe(1);
+  });
+
+  it('keeps every imported coordinate finite, so the 3D scene cannot see NaN (KV-2.4)', () => {
+    const result = routeService.importRouteFromKML(
+      kmlWith(`${LNG},${LAT} ${LNG + 0.01},${LAT + 0.01} ${LNG + 0.02},${LAT + 0.02}`),
+      {},
+    );
+
+    expect(result.status).toBe('success');
+    if (result.status !== 'success') return;
+    for (const point of result.route.coordinates) {
+      expect(Number.isFinite(point.lat)).toBe(true);
+      expect(Number.isFinite(point.lng)).toBe(true);
+    }
+    expect(Number.isFinite(result.route.distance)).toBe(true);
+    expect(result.route.distance).toBeGreaterThan(0);
   });
 });
