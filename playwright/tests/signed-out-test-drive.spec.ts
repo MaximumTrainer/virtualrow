@@ -11,9 +11,9 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * End the session via a DOM click.
  *
- * The activity stats panel sits under the 3D stage's compositing layer, whose
- * backdrop-filter intercepts pointer events in headless Chromium — the same
- * workaround `route-import-render.spec.ts` uses for the route overlay.
+ * The WebGL canvas can intercept pointer events aimed at the controls below it
+ * in headless Chromium. (The backdrop-filter compositing layers that used to
+ * compound this are gone as of issue #219, R1; the canvas itself remains.)
  */
 async function endWorkout(page: Page) {
   await page.locator('.btn-end-workout').waitFor({ state: 'visible', timeout: 20_000 });

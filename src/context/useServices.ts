@@ -17,6 +17,7 @@ import { heartRateBluetoothService } from '../services/heartRateBluetoothService
 import { authService } from '../services/authService';
 import { rownativeService } from '../services/rownativeService';
 import { routeEnrichmentService } from '../services/routeEnrichmentService';
+import { defaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 
 /** Production-adapter bundle wired from the existing service singletons. */
 export const defaultServices: Services = {
@@ -29,6 +30,7 @@ export const defaultServices: Services = {
   authService,
   rownativeService,
   routeEnrichmentService,
+  defaultRoutePreferenceStore,
 };
 
 export const ServicesContext = createContext<Services>(defaultServices);

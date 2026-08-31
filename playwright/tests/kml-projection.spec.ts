@@ -34,15 +34,26 @@ async function waitForDeviceConnected(page: Page, deviceLabel: string) {
   );
 }
 
+/** Route discovery lives on its own screen now (issue #219, R3). */
+async function goToRoutesScreen(page: Page) {
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
+  await expect(page.locator('.view-container--search')).toBeVisible();
+}
+
 async function importKmlRoute(page: Page) {
-  // DOM click: the route-info overlay's backdrop-filter compositing layer
-  // intercepts pointer events in headless Chromium.
-  await page.evaluate(() => {
-    (document.querySelector('button.btn-import-route') as HTMLButtonElement)?.click();
-  });
+  await goToRoutesScreen(page);
+
+  // The file import sits behind a disclosure; its input is not in the DOM until
+  // the disclosure is open (issue #219, AC3.5).
+  await page.getByRole('button', { name: /import a file/i }).click();
   await page.getByLabel('Route name').fill(ROUTE_NAME);
   await page.locator('.route-import input[type="file"]').setInputFiles(kmlFixturePath);
 
+  // Importing selects the route and hands the user back to the Row screen.
+  await expect(page.locator('.route-info-overlay h2')).toContainText(ROUTE_NAME, { timeout: 10_000 });
+
+  // The card itself is on the Routes screen; go back for the thumbnail check.
+  await goToRoutesScreen(page);
   const card = page.locator('.route-item', { hasText: ROUTE_NAME });
   await expect(card).toBeVisible({ timeout: 10_000 });
   return card;

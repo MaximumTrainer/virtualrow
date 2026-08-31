@@ -164,6 +164,40 @@ async function expectSessionDistanceAdvances(page: Page, timeout = 15_000): Prom
 // ---------------------------------------------------------------------------
 // Helper: wait for PM5 to show as Connected in the UI
 // ---------------------------------------------------------------------------
+/**
+ * Wait for the Row screen to be ready.
+ *
+ * Route discovery moved to its own screen in issue #219 (R3), so the presence
+ * of `.route-item` is no longer the "app has loaded" signal it used to be —
+ * the hero on the Row screen is.
+ */
+async function waitForRowScreen(page: Page, timeout = 10_000): Promise<void> {
+  await page.waitForSelector('.route-info-overlay h2', { timeout });
+}
+
+/**
+ * Pick a route by name: open the Routes screen, click its card, and land back
+ * on the Row screen with it selected (issue #219, AC3.4).
+ *
+ * Returns false when the catalogue has no such route, leaving the caller on
+ * the Row screen either way.
+ */
+async function selectRoute(page: Page, name: string, timeout = 10_000): Promise<boolean> {
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
+  await page.waitForSelector('.route-item', { timeout });
+
+  const card = page.locator(`.route-item:has-text("${name}")`);
+  if ((await card.count()) === 0) {
+    await page.getByRole('button', { name: /back to row/i }).click();
+    await waitForRowScreen(page, timeout);
+    return false;
+  }
+
+  await card.first().click({ force: true });
+  await waitForRowScreen(page, timeout);
+  return true;
+}
+
 async function waitForPM5Connected(page: Page, timeout = 10_000): Promise<void> {
   await page.waitForFunction(() => {
     const names = Array.from(document.querySelectorAll('.device-name'));
@@ -482,11 +516,13 @@ test.describe('Simulated e2e route playback', () => {
 
     // Select route and start (only if PM5 connected)
     if (pm5Connected) {
+      await page.getByRole('button', { name: 'Routes', exact: true }).click();
       await page.waitForSelector('.route-item:has-text("Willowbrook River")', { timeout: 10000 });
       await annotateElement(page, '.route-item:has-text("Willowbrook River")', 'Selecting Route', 'right');
       await captureTestEvidence(page, testInfo, '06-before-route-selection');
       await clearAnnotations(page);
       await page.click('.route-item:has-text("Willowbrook River")', { force: true });
+      await waitForRowScreen(page);
       await captureTestEvidence(page, testInfo, '07-after-route-selection');
     }
 
@@ -765,11 +801,10 @@ test.describe('Simulated e2e route playback', () => {
     await captureTestEvidence(page, testInfo, '02-multi-route-devices-connecting');
 
     // Select first route and start
-    if (pm5Connected && await page.$('.route-item:has-text("Lake Tahoe Circuit")')) {
-      await annotateElement(page, '.route-item:has-text("Lake Tahoe Circuit")', 'First Route', 'right');
+    if (pm5Connected && await selectRoute(page, 'Lake Tahoe Circuit')) {
+      await annotateElement(page, '.route-info-overlay h2', 'First Route', 'right');
       await captureTestEvidence(page, testInfo, '03-selecting-first-route');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Lake Tahoe Circuit")', { force: true });
     }
     if (pm5Connected) {
       await page.waitForSelector('.btn-start-workout');
@@ -868,11 +903,10 @@ test.describe('Simulated e2e route playback', () => {
     }
 
     // Select second route and start
-    if (pm5Connected && await page.$('.route-item:has-text("Venice Grand Canal")')) {
-      await annotateElement(page, '.route-item:has-text("Venice Grand Canal")', 'Second Route', 'right');
+    if (pm5Connected && await selectRoute(page, 'Venice Grand Canal')) {
+      await annotateElement(page, '.route-info-overlay h2', 'Second Route', 'right');
       await captureTestEvidence(page, testInfo, '06-selecting-second-route');
       await clearAnnotations(page);
-      await page.click('.route-item:has-text("Venice Grand Canal")', { force: true });
     }
     if (pm5Connected) {
       const startBtn2 = page.locator('.btn-start-workout');
@@ -982,8 +1016,7 @@ test.describe('Simulated e2e route playback', () => {
 
     // Select route and start
     if (pm5Connected) {
-      await page.waitForSelector('.route-item:has-text("Willowbrook River")', { timeout: 7000 });
-      await page.click('.route-item:has-text("Willowbrook River")', { force: true });
+      await selectRoute(page, 'Willowbrook River', 7000);
       try {
         await page.waitForFunction(
           () => {
@@ -1065,11 +1098,12 @@ test.describe('docs screenshots', () => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
     await page.goto('./');
-    await page.waitForSelector('.route-item');
+    await waitForRowScreen(page);
   });
 
   test('captures and publishes screenshots for documentation', async ({ page }) => {
-    // 1. Route selection screen — viewport only so the route list is prominently visible
+    // 1. The Row screen — viewport only, so the selected route and its map fill
+    //    the frame (the route list is its own screen now, issue #219 R3).
     await page.screenshot({ path: path.join(docsDir, 'screenshot-route-selection.png'), fullPage: false });
 
     // 2. Connect PM5 and HR
@@ -1087,11 +1121,11 @@ test.describe('docs screenshots', () => {
     await waitForHRConnected(page);
 
     // Select Willowbrook River route (fallback to first route if not found)
-    const willowbrookRoute = page.locator('.route-item:has-text("Willowbrook River")');
-    if ((await willowbrookRoute.count()) > 0) {
-      await willowbrookRoute.click({ force: true });
-    } else {
+    if (!(await selectRoute(page, 'Willowbrook River'))) {
+      await page.getByRole('button', { name: 'Routes', exact: true }).click();
+      await page.waitForSelector('.route-item', { timeout: 10_000 });
       await page.locator('.route-item').first().click({ force: true });
+      await waitForRowScreen(page);
     }
 
     // Wait for start button to become enabled
@@ -1237,7 +1271,7 @@ test.describe('docs screenshots — other route heroes', () => {
     const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
     await page.addInitScript({ content: initScript });
     await page.goto('./');
-    await page.waitForSelector('.route-item');
+    await waitForRowScreen(page);
 
     // Connect PM5 + HR once; subsequent routes reuse the same connections.
     await page.waitForSelector('button:has-text("Connect PM5")');
@@ -1253,15 +1287,11 @@ test.describe('docs screenshots — other route heroes', () => {
     await waitForHRConnected(page);
 
     for (const route of otherRoutes) {
-      // Make sure we are on the route selection view before picking the route.
-      await page.waitForSelector('.route-item', { timeout: 10_000 });
-
-      const routeLocator = page.locator(`.route-item:has-text("${route.name}")`);
-      if ((await routeLocator.count()) === 0) {
+      // The Routes screen is where a different course is picked (issue #219, R3).
+      if (!(await selectRoute(page, route.name))) {
         console.warn(`[docs-screenshots] route "${route.name}" not found — skipping`);
         continue;
       }
-      await routeLocator.first().click({ force: true });
 
       await page.waitForFunction(
         () => {
@@ -1339,7 +1369,7 @@ test.describe('docs screenshots — other route heroes', () => {
         const endBtn = buttons.find((b) => /End Workout/i.test(b.textContent ?? ''));
         endBtn?.click();
       });
-      await page.waitForSelector('.route-item', { timeout: 10_000 });
+      await waitForRowScreen(page);
     }
   });
 });

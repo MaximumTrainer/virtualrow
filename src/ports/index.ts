@@ -24,6 +24,7 @@ import type { WorkoutService } from '../services/workoutService';
 import type { AuthService } from '../services/authService';
 import type { RownativeService } from '../services/rownativeService';
 import type { RouteEnrichmentService } from '../services/routeEnrichmentService';
+import type { DefaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -144,6 +145,20 @@ export type RouteEnrichmentPort = Pick<
 >;
 
 /**
+ * Port for the per-athlete default-route preference (issue #219, R6).
+ *
+ * Backed by localStorage today; the shape is deliberately storage-agnostic so
+ * the Postgres layer (#37) can replace the adapter without touching call-sites.
+ */
+export type DefaultRoutePreferencePort = Pick<
+  DefaultRoutePreferenceStore,
+  | 'getDefaultRouteId'
+  | 'setDefaultRouteId'
+  | 'clearDefaultRouteId'
+  | 'resolveDefaultRouteId'
+>;
+
+/**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
  */
@@ -157,4 +172,5 @@ export interface Services {
   authService: AuthPort;
   rownativeService: RownativePort;
   routeEnrichmentService: RouteEnrichmentPort;
+  defaultRoutePreferenceStore: DefaultRoutePreferencePort;
 }

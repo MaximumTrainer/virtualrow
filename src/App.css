@@ -1,12 +1,11 @@
 /* ============================================================================
-   VIRTUALROW - UNIFIED DARK THEME
-   Fitness-app inspired design with glassmorphism
-   Primary: Dark (#0a0f1a, #0f172a, #1e293b)
-   Accents: Cyan (#00f5d4), Pink (#ff006e), Yellow (#ffd60a)
-   ============================================================================ */
+   VIRTUALROW — APP SHELL
 
-/* Font import - Inter for clean geometric sans-serif */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+   Flat, light chrome on rownative.icu's palette (issue #219, R1). Every colour,
+   radius, shadow and size below resolves through a token declared in
+   index.css; the only exception is the workout stage, which keeps its dark
+   treatment via the --stage-* tokens so the 3D render holds its contrast.
+   ============================================================================ */
 
 * {
   margin: 0;
@@ -18,12 +17,12 @@ html,
 body {
   width: 100%;
   height: 100%;
-  /* The shell itself never scrolls; .app-main is the one scroll container so
+  /* The shell itself never scrolls; .app-layout is the one scroll container so
      content that does not fit becomes reachable instead of being clipped
      (issue #195). */
   overflow: hidden;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0a0f1a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg-primary);
 }
 
 /* ============================================================================
@@ -38,33 +37,42 @@ body {
   height: 100dvh;
   width: 100%;
   min-height: 0;
-  background:
-    radial-gradient(circle at top left, rgba(var(--color-primary-rgb), 0.08), transparent 26%),
-    radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 52%, var(--color-bg-tertiary) 100%);
+  background: var(--color-bg-primary);
   overflow: hidden;
   position: relative;
 }
 
 /* ============================================================================
-   HEADER
+   HEADER — rownative's brand bar
    ============================================================================ */
 .app-header {
   background: var(--color-bg-header);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--color-text-primary);
-  padding: 18px 28px;
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: 0 12px 36px rgba(26, 52, 82, 0.08);
+  color: var(--color-brand-contrast);
+  padding: var(--space-md) var(--space-lg);
+  position: relative;
+  z-index: 1200;
+  flex-shrink: 0;
 }
 
 .header-content {
-  max-width: clamp(1480px, 78vw, 2400px);
+  max-width: clamp(1480px, 92vw, 2400px);
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  gap: var(--space-lg);
+}
+
+.app-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-brand-contrast);
+  letter-spacing: -0.01em;
+  /* The title is what gives way when the header runs out of room — the
+     hamburger and the auth control both have to stay at full size. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Auth button slot — always right-aligned in the header */
@@ -73,20 +81,176 @@ body {
   flex-shrink: 0;
 }
 
-.app-title {
-  /* Reproduces the old 26px/32px step without the breakpoint (issue #195). */
-  font-size: clamp(1.625rem, 1.2rem + 1.4vw, 2rem);
-  font-weight: 800;
-  color: var(--color-primary);
-  letter-spacing: -0.04em;
+.signed-out-notice {
+  max-width: clamp(1480px, 92vw, 2400px);
+  margin: var(--space-xs) auto 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.app-subtitle {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
+/* ============================================================================
+   HEADER NAV (issue #219, R8)
+   Inline links on desktop; a slide-out overlay behind a hamburger below 768px,
+   matching rownative.icu's .nav-overlay.
+   ============================================================================ */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  /* 44px, not rownative's 2.5rem: this repo holds every control to the touch
+     floor (issue #195, Phase 4). */
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  color: var(--color-brand-contrast);
+}
+
+.nav-toggle span {
+  display: block;
+  width: 1.25rem;
+  height: 2px;
+  background: currentColor;
+  margin: 0 auto;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.nav-toggle[aria-expanded='true'] span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle[aria-expanded='true'] span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle[aria-expanded='true'] span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.nav-overlay {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.nav-overlay-backdrop {
+  display: none;
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  /* 44px touch floor (issue #195, Phase 4) — rownative's nav is plain text
+     links, which would be a 20px target here. */
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-sm);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-link-on-brand);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+@media (hover: hover) {
+  .nav-tab:hover {
+    background: transparent;
+    border-color: transparent;
+    border-bottom-color: var(--color-link-on-brand);
+  }
+}
+
+.nav-tab.active {
+  color: var(--color-brand-contrast);
+  border-bottom-color: var(--color-brand-contrast);
   font-weight: 600;
-  margin-top: 2px;
-  text-align: left;
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--color-brand-contrast);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .nav-toggle {
+    display: flex;
+  }
+
+  .nav-overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(20rem, 85vw);
+    background: var(--color-brand);
+    padding: 3.5rem var(--space-lg) var(--space-lg);
+    z-index: 1100;
+    transform: translateX(100%);
+    /* visibility, not just transform: an off-screen panel that is still
+       visible stays in the tab order and the accessibility tree. rownative
+       toggles aria-hidden instead, which hides its desktop nav from assistive
+       tech as well — not a bug worth copying. */
+    visibility: hidden;
+    transition: transform 0.25s ease, visibility 0.25s ease;
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-overlay[data-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .nav-overlay-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: -1;
+    border: none;
+    border-radius: 0;
+  }
+
+  .app-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .nav-tab {
+    justify-content: flex-start;
+    text-align: left;
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .nav-tab.active {
+    border-bottom-color: var(--color-brand-contrast);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-overlay,
+  .nav-toggle span {
+    transition: none;
+  }
 }
 
 /* ============================================================================
@@ -99,22 +263,19 @@ body {
   gap: var(--space-shell);
   padding: var(--space-shell);
   padding-bottom: calc(var(--space-shell) + env(safe-area-inset-bottom, 0px));
-  /* Above 1920 the app used to sit as a centred strip; scale with the viewport
-     instead while keeping the tuned width on ordinary screens (issue #195). */
-  max-width: clamp(1480px, 78vw, 2400px);
+  max-width: clamp(1480px, 92vw, 2400px);
   margin: 0 auto;
   width: 100%;
   min-height: 0;
-  /* The single scroll container. It was overflow:hidden, which clipped
-     everything the viewport could not fit; scrolling here (rather than inside
-     .app-main alone) means a tall sidebar no longer squeezes the main panel to
-     nothing on phones (issue #195). */
+  /* The single scroll container (issue #195): scrolling here rather than inside
+     .app-main means a tall sidebar no longer squeezes the main panel to nothing
+     on phones. */
   overflow-y: auto;
   overflow-x: hidden;
 }
 
 /* ============================================================================
-   SIDEBAR
+   SIDEBAR — the device bar
    ============================================================================ */
 .app-sidebar {
   width: 100%;
@@ -140,83 +301,37 @@ body {
   overflow: hidden;
 }
 
-.app-sidebar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.app-sidebar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
-
-.app-sidebar::-webkit-scrollbar-thumb {
-  background: rgba(var(--color-primary-rgb), 0.3);
-  border-radius: 3px;
-}
-
-.app-sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--color-primary-rgb), 0.45);
-}
-
 /* ============================================================================
-   PANELS - Glassmorphism Style
+   PANELS
    ============================================================================ */
-.device-panel,
-.workout-stats-panel,
-.import-panel {
-  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+.device-panel {
+  background: var(--color-bg-card);
   border-radius: var(--radius-panel);
   padding: var(--space-panel);
   border: 1px solid var(--color-border);
-  box-shadow: 0 16px 40px rgba(26, 52, 82, 0.12);
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-title {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-sm);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-}
-
-.app-sidebar .bluetooth-device-container {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-.app-sidebar .device-panel,
-.app-sidebar .workout-stats-panel {
-  min-width: 0;
-}
-
-.app-sidebar .device-panel {
-  padding: 12px;
-}
-
-.app-sidebar .device-note {
-  margin-bottom: 0;
-}
-
-.app-layout--routes .app-sidebar .device-panel {
-  border-radius: 14px;
-  padding: 14px 16px;
+  letter-spacing: 0.08em;
 }
 
 .device-panel--selection {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-sm);
 }
 
 .device-panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-sm);
 }
 
 .device-panel-heading .panel-title {
@@ -226,134 +341,263 @@ body {
 .device-panel-status {
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 0.15rem var(--space-sm);
+  border-radius: var(--radius-control);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .device-panel-status.connected {
-  background: rgba(var(--color-primary-rgb), 0.12);
-  color: var(--color-primary-dark);
+  background: var(--color-status-established-bg);
+  color: var(--color-status-established-text);
 }
 
 .device-panel-status.disconnected {
-  background: rgba(var(--color-accent-red-rgb), 0.12);
-  color: var(--color-accent-red);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
 }
 
 .device-selector-tabs {
   display: inline-flex;
-  gap: 8px;
-  padding: 6px;
-  border-radius: var(--radius-pill);
-  background: rgba(var(--color-primary-rgb), 0.06);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.1);
+  gap: var(--space-2xs);
+  padding: 0;
   width: fit-content;
 }
 
 .device-selector-tab {
-  border: none;
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  /* 44px on both axes: "PM5" is a narrow label and came out 43px wide in the
+     compact strip (issue #195, Phase 4 touch floor). */
   min-height: 44px;
-  padding: 9px 14px;
-  background: transparent;
+  min-width: 44px;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
 .device-selector-tab.active {
-  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.14), rgba(var(--color-primary-rgb), 0.06));
-  color: var(--color-primary-dark);
-  box-shadow: 0 8px 18px rgba(var(--color-primary-rgb), 0.12);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-contrast);
+  font-weight: 600;
+}
+
+@media (hover: hover) {
+  .device-selector-tab.active:hover {
+    background: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+  }
 }
 
 /* ============================================================================
-   STATS DISPLAY
+   DEVICE BAR (issue #219, R5)
+   The rower and heart-rate panels are short, wide strips: one row of
+   icon + name + status + live metrics + action, side by side from 900px up.
+   The class names are load-bearing for the E2E suite — this is a layout change
+   only, so `.routes-devices-row`, `.device-panel` and the component-internal
+   `.bluetooth-device-container` markup all keep their names.
    ============================================================================ */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+.routes-devices-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: stretch;
+  min-width: 0;
+  /* No max-width: the strips track the content width rather than a fixed pixel
+     budget that left half the row empty on a wide screen (issue #219, AC5.2). */
+  width: 100%;
 }
 
-.stat-item {
+.routes-devices-row > .device-panel {
+  /* Side by side from ~900px (two 380px strips plus the gap), stacked below. */
+  flex: 1 1 380px;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 12px 8px;
-  background: var(--color-bg-glass);
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
+  gap: var(--space-md);
 }
 
-.stat-label {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
+/* The rower panel carries the PM5/FTMS selector ahead of the strip body. */
+.routes-devices-row > .device-panel--selection {
+  flex-direction: row;
+  flex-wrap: wrap;
 }
 
-.stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  line-height: 1;
-}
-
-.stat-unit {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 2px;
-}
-
-.stats-compact {
-  display: flex;
+.routes-devices-row .device-panel-heading {
   flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: var(--space-2xs);
+  flex-shrink: 0;
 }
 
-.stat-compact {
+.routes-devices-row .device-panel-heading .panel-title {
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.routes-devices-row .device-selector-tabs {
+  flex-shrink: 0;
+}
+
+.routes-devices-row .device-selector-tab {
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: 0.75rem;
+}
+
+/* The component body becomes the horizontal strip itself. */
+.routes-devices-row .bluetooth-device-container {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
   align-items: center;
-  padding: 10px 12px;
-  background: var(--color-bg-glass);
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
 }
 
-.stat-compact .label {
+.routes-devices-row .device-header {
+  margin-bottom: 0;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.routes-devices-row .device-icon-container {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-control);
+}
+
+.routes-devices-row .device-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.routes-devices-row .device-name {
+  font-size: 0.8rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.routes-devices-row .device-status {
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+/* Live metrics run inline and give way as the strip narrows, rather than
+   wrapping into the tall grid the panel used to be (issue #219, AC5.3). */
+.routes-devices-row .metrics-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+  overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.routes-devices-row .metric {
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.routes-devices-row .metric-label {
+  margin-bottom: 0;
+  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
+}
+
+.routes-devices-row .metric-value {
+  font-size: 0.9rem;
+}
+
+.routes-devices-row .metric-unit {
+  margin-top: 0;
   font-size: 0.6875rem;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
-.stat-compact .value {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
+.routes-devices-row .device-actions {
+  margin-top: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.routes-devices-row .device-actions .btn-connect,
+.routes-devices-row .device-actions .btn-disconnect {
+  padding: var(--space-2xs) var(--space-md);
+  white-space: nowrap;
+}
+
+.routes-devices-row .error-message {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+/* The "make sure your PM5 is on" hint costs a second row in a strip that has to
+   stay under one. Kept for assistive tech rather than dropped (issue #219,
+   AC5.1). */
+.routes-devices-row .device-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Below 600px the strip shows identity and action only; the metrics move to
+   their own line rather than being clipped (issue #219, AC5.3). */
+@media (max-width: 600px) {
+  .routes-devices-row .metrics-grid {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    order: 3;
+    gap: var(--space-sm) var(--space-md);
+  }
+
+  .routes-devices-row .device-actions {
+    margin-left: auto;
+  }
 }
 
 /* ============================================================================
    MAIN CONTENT AREA
    ============================================================================ */
 .app-main {
-  flex: 1;
-  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
-  backdrop-filter: blur(8px);
-  border-radius: var(--radius-surface);
-  /* Content flows at its natural height; .app-layout above does the scrolling.
-     Radius clipping is preserved by the children that need it
-     (.activity-route-stage, .map-container). */
+  /* basis auto + shrink 0, not `flex: 1`.
+     `flex: 1` means basis 0, and the explicit min-height below replaces the
+     automatic minimum size — together they let this shrink *below* its own
+     content. On a landscape phone that collapsed the routes grid to 225px, and
+     the z-index:1 map then painted straight over the details panel and its
+     buttons. Growing into spare space is still wanted; shrinking under content
+     is not — .app-layout scrolls instead (issue #219). */
+  flex: 1 0 auto;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-panel);
   overflow: visible;
   /* Without a floor the sidebar squeezes this to a couple of pixels on short
      viewports and the whole routes view disappears (issue #195). */
@@ -361,13 +605,28 @@ body {
   border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 22px 52px rgba(26, 52, 82, 0.12);
+  box-shadow: var(--shadow-panel);
+}
+
+/* The workout screen is a fixed-height stage, not a document: it has to fit the
+   viewport so Pause and End stay on screen. Without this the WebGL canvas's own
+   intrinsic height feeds back into .app-main's `auto` basis and the stage
+   ratchets taller than the space available (issue #219, R4). The routes screen
+   keeps the growing behaviour above, and .app-layout scrolls for it. */
+.app-layout--workout .app-main {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+/* Reserve the debug toggle's footprint. It is fixed to the bottom-right, which
+   on the workout screen is exactly where End Workout sits — a dev affordance
+   must not cover a session control. */
+.app-layout--workout {
+  padding-bottom: calc(var(--space-shell) + 48px + env(safe-area-inset-bottom, 0px));
 }
 
 .view-container {
   display: flex;
-  /* Grow with content; .app-layout scrolls when the total exceeds the viewport,
-     instead of the old fixed height that clipped. */
   min-height: 0;
   height: auto;
   flex: 1;
@@ -377,9 +636,11 @@ body {
   min-width: 0;
 }
 
+/* Map-dominant now the route list has moved to its own screen (issue #219,
+   AC4.5): the details column is capped and the map takes the rest. */
 .view-container--routes {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(360px, 430px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   align-items: stretch;
 }
 
@@ -388,464 +649,534 @@ body {
    ============================================================================ */
 .map-container {
   flex: 1;
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-panel);
   overflow: hidden;
   min-width: 0;
-  min-height: 0;
+  min-height: min(360px, 50dvh);
   position: relative;
   z-index: 1;
   border: 1px solid var(--color-border);
 }
 
-.three-map-container {
-  position: relative;
-  height: 100%;
-  display: flex;
-}
-
 /* ============================================================================
-   ROUTE INFO PANEL
+   ROUTE HERO
    ============================================================================ */
 .route-details-panel {
   position: relative;
   width: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-md);
   overflow-y: auto;
-  padding-right: 0;
   min-height: 0;
 }
 
 .route-info-overlay {
-  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
-  backdrop-filter: blur(12px);
-  border-radius: var(--radius-card);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-panel);
   padding: var(--space-card);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-card);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 18px 40px rgba(26, 52, 82, 0.12);
+  gap: var(--space-md);
+  box-shadow: var(--shadow-inset);
 }
 
 .route-info-overlay .route-info-header h2 {
   margin: 0;
-  /* 20px at 600 and below, 30px from 1280 up — the old breakpoint's end-points. */
-  font-size: clamp(1.25rem, 0.7rem + 1.47vw, 1.875rem);
-  font-weight: 800;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: var(--color-text-primary);
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .route-info-overlay .route-location {
-  margin: 10px 0 0 0;
+  margin: var(--space-2xs) 0 0 0;
   font-size: 0.875rem;
   color: var(--color-text-secondary);
 }
 
 .route-enrichment-status,
 .route-item-status {
-  margin: 10px 0 0;
-  font-size: 0.8125rem;
-  color: var(--color-primary);
-  font-weight: 600;
+  margin: var(--space-sm) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }
 
 .route-info-overlay .route-meta-compact {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-xs);
   align-items: center;
 }
 
 .route-info-overlay .meta-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: rgba(var(--color-primary-rgb), 0.08);
-  border-radius: var(--radius-pill);
+  gap: var(--space-2xs);
+  padding: 0.15rem var(--space-sm);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-control);
   font-size: 0.75rem;
-  color: var(--color-text-primary);
-  font-weight: 600;
-  border: 1px solid rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-card);
 }
 
 .route-info-overlay .meta-badge.badge-easy {
-  background: rgba(79, 169, 125, 0.14);
-  color: #2d7d57;
-  border-color: rgba(79, 169, 125, 0.2);
+  background: var(--color-status-established-bg);
+  color: var(--color-status-established-text);
+  border-color: transparent;
 }
 
 .route-info-overlay .meta-badge.badge-moderate {
-  background: rgba(217, 164, 41, 0.14);
-  color: #9d7316;
-  border-color: rgba(217, 164, 41, 0.22);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
+  border-color: transparent;
 }
 
 .route-info-overlay .meta-badge.badge-hard {
-  background: rgba(222, 93, 97, 0.14);
-  color: #b5494d;
-  border-color: rgba(222, 93, 97, 0.22);
-}
-
-.route-info-overlay .meta-badge.pb-badge {
-  background: rgba(217, 164, 41, 0.12);
-  color: #9d7316;
-  border-color: rgba(217, 164, 41, 0.22);
+  background: var(--color-status-hard-bg);
+  color: var(--color-status-hard-text);
+  border-color: transparent;
 }
 
 .route-info-overlay .route-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2xs);
   pointer-events: none;
 }
 
 .route-info-overlay .route-tags .tag {
-  padding: 4px 10px;
-  background: rgba(16, 38, 61, 0.06);
-  border-radius: var(--radius-pill);
-  font-size: 0.6875rem;
-  color: var(--color-text-secondary);
-  font-weight: 500;
+  padding: 0.1rem var(--space-sm);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-control);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
   pointer-events: none;
 }
 
-.route-info-overlay .selected-workout-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: rgba(var(--color-primary-rgb), 0.08);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.18);
-  border-radius: 18px;
-  font-size: 0.8125rem;
-  color: var(--color-primary-dark);
-}
-
-.route-info-overlay .selected-workout-info .btn-clear-workout {
-  background: none;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: 4px 8px;
-  font-size: 0.875rem;
-  transition: color 0.2s;
-}
-
-.route-info-overlay .selected-workout-info .btn-clear-workout:hover {
-  color: var(--color-accent-red);
-}
-
 /* ============================================================================
-   ROUTES LIST
+   ROUTES LIST — lives on the Routes screen (issue #219, R3)
    ============================================================================ */
 .routes-list {
-  background: linear-gradient(150deg, var(--color-bg-panel-start), var(--color-bg-panel-end));
-  backdrop-filter: blur(12px);
-  border-radius: var(--radius-card);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-panel);
   padding: var(--space-card);
   border: 1px solid var(--color-border);
   max-height: none;
   overflow-y: visible;
   flex: 0 0 auto;
-  box-shadow: 0 18px 40px rgba(26, 52, 82, 0.12);
+  box-shadow: var(--shadow-inset);
 }
 
 .routes-list h3 {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2xs);
 }
 
 .routes-list-header {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .route-filters {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .filter-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .filter-btn {
-  /* 44px touch floor; the padding keeps the chip's width unchanged
-     (issue #195, Phase 4). */
+  /* 44px touch floor (issue #195, Phase 4). */
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  padding: 7px 12px;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.74);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
   color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   cursor: pointer;
-  transition: all 0.15s;
 }
 
-.filter-btn:hover {
-  border-color: rgba(var(--color-primary-rgb), 0.35);
-  color: var(--color-primary-dark);
+@media (hover: hover) {
+  .filter-btn:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-hover);
+  }
 }
 
 .filter-btn--active {
-  background: rgba(var(--color-primary-rgb), 0.12);
-  border-color: rgba(var(--color-primary-rgb), 0.34);
-  color: var(--color-primary-dark);
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-contrast);
+  font-weight: 600;
 }
 
 .route-item {
-  padding: var(--space-panel);
-  border-radius: var(--radius-item);
+  padding: var(--space-md);
+  border-radius: var(--radius-inset);
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow: 0 8px 20px rgba(26, 52, 82, 0.08);
+  margin-bottom: var(--space-sm);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
 }
 
 .route-item:last-child {
   margin-bottom: 0;
 }
 
-/* Hover-only: on a touch device a tap would otherwise leave the lifted state
-   stuck until the next tap elsewhere (issue #195, Phase 4). */
 @media (hover: hover) {
   .route-item:hover {
-    background: rgba(255, 255, 255, 0.92);
-    border-color: rgba(var(--color-primary-rgb), 0.18);
-    transform: translateY(-1px);
+    background: var(--color-bg-tertiary);
+    border-color: var(--color-border-hover);
   }
 }
 
 .route-item.active {
-  background: linear-gradient(145deg, rgba(var(--color-primary-rgb), 0.16), rgba(var(--color-primary-rgb), 0.06));
-  border-color: rgba(var(--color-primary-rgb), 0.34);
-  box-shadow: 0 16px 30px rgba(var(--color-primary-rgb), 0.12);
+  background: var(--color-bg-secondary);
+  border-color: var(--color-brand);
+  box-shadow: inset 3px 0 0 var(--color-brand);
 }
 
 .route-item-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 4px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-2xs);
 }
 
 .route-item-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-2xs);
   align-items: center;
 }
 
 .route-item-header h4 {
-  /* 20px at 600 and below, 22px from 1280 up. */
-  font-size: clamp(1.25rem, 1.14rem + 0.294vw, 1.375rem);
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--color-text-primary);
   margin: 0;
 }
 
-.route-item .badge {
-  /* display/letter-spacing came from a global `.badge` in RouteMap.css, which
-     styled markup RouteMap never rendered. Kept here, where the markup is
-     (issue #195, Phase 5). */
+.route-item .badge,
+.badge {
   display: inline-block;
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  padding: 0.15rem var(--space-sm);
+  border-radius: var(--radius-control);
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .route-item .badge-easy {
-  background: rgba(79, 169, 125, 0.14);
-  color: #2d7d57;
-  border: 1px solid rgba(79, 169, 125, 0.22);
+  background: var(--color-status-established-bg);
+  color: var(--color-status-established-text);
 }
 
 .route-item .badge-moderate {
-  background: rgba(217, 164, 41, 0.14);
-  color: #9d7316;
-  border: 1px solid rgba(217, 164, 41, 0.22);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
 }
 
 .route-item .badge-hard {
-  background: rgba(222, 93, 97, 0.14);
-  color: #b5494d;
-  border: 1px solid rgba(222, 93, 97, 0.22);
+  background: var(--color-status-hard-bg);
+  color: var(--color-status-hard-text);
 }
 
 .route-item .badge-source {
-  background: rgba(56, 189, 248, 0.12);
-  color: #0ea5e9;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
 }
 
-.route-item .badge-status--provisional {
-  background: rgba(251, 191, 36, 0.12);
-  color: #d97706;
+/* rownative's own course-status colours, so a course reads the same in both
+   products (issue #219, AC1.5). */
+.badge-status--provisional {
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
 }
 
-.route-item .badge-status--established {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
+.badge-status--established {
+  background: var(--color-status-established-bg);
+  color: var(--color-status-established-text);
 }
 
 .route-item-thumbnail {
-  margin-top: 8px;
+  margin-top: var(--space-sm);
 }
 
 .route-item-location {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2xs);
 }
 
 .route-item-meta {
   display: flex;
-  gap: 8px;
-  font-size: 0.8125rem;
+  gap: var(--space-2xs);
+  font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+/* Default-route star (issue #219, R6) */
+.route-default-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.route-default-toggle--on {
+  background: var(--color-status-provisional-bg);
+  border-color: var(--color-status-provisional-text);
+  color: var(--color-status-provisional-text);
+  font-weight: 600;
+}
+
+.route-default-badge {
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
 }
 
 /* ============================================================================
    BUTTONS
    ============================================================================ */
 .btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .btn-start-workout {
   width: 100%;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: #ffffff;
-  font-weight: 800;
-  padding: 16px 24px;
-  border-radius: 18px;
-  box-shadow: 0 12px 28px rgba(var(--color-primary-rgb), 0.24);
+  min-height: 44px;
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+  font-weight: 600;
+  padding: var(--space-md);
 }
 
-/* Hover-only: on a touch device a tap would otherwise leave the lifted state
-   stuck until the next tap elsewhere (issue #195, Phase 4). */
 @media (hover: hover) {
   .btn-start-workout:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 32px rgba(var(--color-primary-rgb), 0.28);
+    background: var(--color-brand-hover);
   }
 }
 
 .btn-start-workout:disabled {
-  background: rgba(124, 144, 165, 0.18);
-  color: rgba(16, 38, 61, 0.35);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
   cursor: not-allowed;
-  box-shadow: none;
+}
+
+/* "Change route" — the single door from the Row screen to the Routes screen
+   (issue #219, AC2.2). */
+.btn-change-route {
+  width: 100%;
+  min-height: 44px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .btn-change-route:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-hover);
+  }
 }
 
 /* ============================================================================
-   WORKOUTS VIEW
+   ROUTES SCREEN (issue #219, R3)
    ============================================================================ */
-.workouts-view {
+.view-container--search {
+  display: block;
+  overflow-y: auto;
+}
+
+.route-search-screen {
+  display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-/* ============================================================================
-   ROUTE IMPORT PANEL
-   ============================================================================ */
+.route-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.route-search-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.btn-back-to-row {
+  min-height: 44px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .btn-back-to-row:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-hover);
+  }
+}
+
+.route-search-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: var(--space-card);
+  box-shadow: var(--shadow-inset);
+}
+
+.route-search-section > h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-sm);
+}
+
+.route-search-hint {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* File import — collapsed by default; the file input is not rendered until the
+   disclosure is open (issue #219, AC3.5). A button rather than <details> so the
+   closed state can genuinely omit the input from the DOM. */
 .btn-import-route {
-  background: rgba(0, 245, 212, 0.1);
-  color: #00f5d4;
-  border: 1px solid rgba(0, 245, 212, 0.3);
-  border-radius: 8px;
   /* 44px touch floor (issue #195, Phase 4). */
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.btn-import-route:hover {
-  background: rgba(0, 245, 212, 0.2);
+@media (hover: hover) {
+  .btn-import-route:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-hover);
+  }
+}
+
+.btn-import-route::before {
+  content: '▸';
+  font-size: 0.75rem;
+}
+
+.btn-import-route[aria-expanded='true']::before {
+  content: '▾';
 }
 
 .route-import {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin-top: var(--space-sm);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-inset);
+  border: 1px solid var(--color-border-card);
 }
 
 .route-import label {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.import-error {
+  color: var(--color-error);
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 /* ============================================================================
-   ACTIVITY VIEW
+   ACTIVITY VIEW — the dark stage (issue #219, R1 exception + R4)
    ============================================================================ */
 .activity-view {
   padding: var(--space-view);
-  /* Short viewports (1280x720 and below) push the controls past the fold;
-     keep them reachable by scrolling rather than clipping them off-screen. */
   overflow-y: auto;
 }
 
 .activity-screen {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-md);
   width: 100%;
+  /* `flex: 1`, not `height: 100%`: the percentage resolved against a parent of
+     auto height, which double-counted the view padding and pushed the workout
+     controls just below the fold on a 900px-tall laptop (issue #219, R4). */
+  flex: 1;
   min-height: 0;
-  height: 100%;
 }
 
 .activity-route-stage {
   position: relative;
-  flex: 1;
-  /* Was a flat 460px, which pushed the controls below the fold on any short
-     viewport — a width query never caught landscape phones (issue #195). */
-  min-height: clamp(220px, 45dvh, 520px);
-  border-radius: var(--radius-surface);
+  /* Takes every pixel the stats strip and controls do not need, with no pixel
+     cap — the old clamp(220px, 45dvh, 520px) held the scene to a third of a
+     1080p screen (issue #219, AC4.1/AC4.3). */
+  flex: 1 1 auto;
+  min-height: clamp(240px, 50dvh, 100vh);
+  border-radius: var(--radius-panel);
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(10, 18, 29, 0.9), rgba(10, 18, 29, 0.6));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 18px 44px rgba(14, 24, 38, 0.18);
+  background: linear-gradient(180deg, var(--stage-bg-start), var(--stage-bg-end));
+  border: 1px solid var(--stage-border);
+  box-shadow: var(--stage-shadow);
 }
 
 .activity-route-stage .rower3d-canvas-container,
@@ -857,105 +1188,108 @@ body {
 
 .activity-route-summary {
   position: absolute;
-  top: 22px;
-  left: 22px;
+  top: var(--space-lg);
+  left: var(--space-lg);
   z-index: 20;
   /* Leaves room for .activity-map-overlay opposite it: both insets plus one
      gap, and the map's own width (issue #195, Phase 3). */
   max-width: calc(100% - clamp(120px, 22%, 280px) - 66px);
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(9, 21, 34, 0.58);
-  backdrop-filter: blur(10px);
-  color: #f4f8fc;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-inset);
+  background: var(--stage-overlay-bg);
+  color: var(--stage-text);
 }
 
 .activity-route-summary h2 {
   margin: 0;
-  /* 20px at 600 and below, 24px from 1280 up. */
-  font-size: clamp(1.25rem, 1.03rem + 0.59vw, 1.5rem);
-  font-weight: 800;
-  line-height: 1.1;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .activity-route-summary p {
-  margin: 6px 0 0;
-  color: rgba(244, 248, 252, 0.78);
-  font-size: 0.8125rem;
+  margin: var(--space-2xs) 0 0;
+  color: var(--stage-text-muted);
+  font-size: 0.8rem;
 }
 
 .activity-map-overlay {
   position: absolute;
-  top: 22px;
-  right: 22px;
+  top: var(--space-lg);
+  right: var(--space-lg);
   z-index: 20;
   /* Scales with the stage rather than staying 250px wide on a 320px phone; the
      aspect ratio is the old 250x170 (issue #195, Phase 3). */
   width: clamp(120px, 22%, 280px);
   aspect-ratio: 25 / 17;
   height: auto;
-  border-radius: 20px;
+  border-radius: var(--radius-inset);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 16px 36px rgba(9, 21, 34, 0.3);
+  border: 1px solid var(--stage-overlay-border);
+  box-shadow: var(--stage-shadow);
 }
 
 .activity-map-overlay .route-map-container {
   height: 100%;
   width: 100%;
-  border-radius: 20px;
+  border-radius: var(--radius-inset);
 }
 
+/* Scoped to beat `.activity-route-summary p`, which is more specific than a
+   lone class and was painting this near-white on its own cream background. */
+.activity-route-summary .activity-demo-badge {
+  margin: var(--space-sm) 0 0;
+  padding: 0.1rem var(--space-sm);
+  display: inline-block;
+  border-radius: var(--radius-control);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Stats: a compact strip, not a slab. At laptop and above the eight cards fit
+   in one row (issue #219, AC4.4). */
 .activity-stats-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 0 10px 10px;
+  gap: var(--space-sm);
+  padding: 0;
+  flex: 0 0 auto;
 }
 
 .activity-stats-grid {
   width: 100%;
   display: grid;
-  /* auto-fit reproduces 8-across on desktop, 4-across on tablet and 2-3 on
-     phones with no extra breakpoints (issue #195), mirroring .metrics-grid. */
   grid-template-columns: repeat(auto-fit, minmax(clamp(96px, 11vw, 150px), 1fr));
-  gap: 10px;
+  gap: var(--space-2xs);
 }
 
 .activity-stat-card {
-  padding: 13px 10px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 18px rgba(26, 52, 82, 0.08);
+  padding: var(--space-sm) var(--space-2xs);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-card);
   text-align: center;
 }
 
 .activity-stat-label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 0.1rem;
   font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
 }
 
 .activity-stat-value {
   display: block;
-  font-size: 1.125rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--color-text-primary);
   line-height: 1.1;
-}
-
-.activity-progress-panel {
-  width: min(100%, 960px);
-}
-
-.activity-progress-panel .workout-progress-display {
-  width: 100%;
 }
 
 .activity-controls {
@@ -963,10 +1297,8 @@ body {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
-  margin-top: auto;
-  padding: 8px 0 4px;
 }
 
 .btn-activity-control {
@@ -974,584 +1306,87 @@ body {
   flex: 1 1 140px;
   min-width: 0;
   min-height: 44px;
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: #ffffff;
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+  border: 1px solid transparent;
+}
+
+@media (hover: hover) {
+  .btn-activity-control:hover {
+    background: var(--color-brand-hover);
+    border-color: transparent;
+  }
 }
 
 .btn-activity-control--subtle {
-  background: rgba(var(--color-primary-rgb), 0.1);
-  color: var(--color-primary-dark);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+@media (hover: hover) {
+  .btn-activity-control--subtle:hover {
+    background: var(--color-bg-secondary);
+    border-color: var(--color-border-hover);
+  }
 }
 
 .btn-activity-control--danger {
-  background: rgba(var(--color-accent-red-rgb), 0.12);
-  color: var(--color-accent-red);
-  border: 1px solid rgba(var(--color-accent-red-rgb), 0.24);
+  background: var(--color-error);
+  color: var(--color-brand-contrast);
+  border-color: transparent;
 }
 
-/* ============================================================================
-   DEBUG PANEL
-   ============================================================================ */
-.debug-panel-toggle {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 9999;
-}
-
-.btn-debug-toggle {
-  min-height: 44px;
-  padding: 8px 14px;
-  background: rgba(255, 68, 68, 0.2);
-  border: 1px solid rgba(255, 68, 68, 0.4);
-  border-radius: 8px;
-  color: #ff6666;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  backdrop-filter: blur(8px);
-}
-
-.btn-debug-toggle:hover,
-.btn-debug-toggle.active {
-  background: rgba(255, 68, 68, 0.3);
-  color: #ff8888;
-}
-
-.debug-info-panel {
-  position: fixed;
-  top: 80px;
-  right: 16px;
-  width: 320px;
-  max-height: calc(100vh - 120px);
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 68, 68, 0.3);
-  border-radius: 12px;
-  z-index: 9999;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-.debug-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 68, 68, 0.3);
-  background: rgba(255, 68, 68, 0.1);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.debug-info-panel h4 {
-  margin: 0;
-  color: #ff6666;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.debug-close-btn {
-  background: none;
-  border: none;
-  color: #ff6666;
-  font-size: 1.125rem;
-  cursor: pointer;
-  /* 44px touch floor (issue #195, Phase 4). */
-  min-width: 44px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.debug-close-btn:hover {
-  background: rgba(255, 68, 68, 0.2);
-  color: #fff;
-}
-
-.debug-section {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.debug-section:last-child {
-  border-bottom: none;
-}
-
-.debug-section h5 {
-  color: #ffd60a;
-  margin: 0 0 10px 0;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.debug-section p {
-  margin: 6px 0;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.75rem;
-}
-
-.debug-simulator-section {
-  padding: 12px;
-}
-
-.debug-simulator-section .pm5-simulator-container {
-  margin: 0;
-  border-radius: 8px;
-}
-
-.debug-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.debug-table td {
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.75rem;
-}
-
-.debug-table tr:last-child td {
-  border-bottom: none;
-}
-
-.debug-table td:first-child {
-  color: rgba(255, 255, 255, 0.5);
-  width: 50%;
-}
-
-.debug-table td:last-child {
-  color: #00f5d4;
-  font-weight: 600;
-  text-align: right;
-}
-
-/* Debug panel scrollbar */
-.debug-info-panel::-webkit-scrollbar {
-  width: 6px;
-}
-
-.debug-info-panel::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.debug-info-panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 68, 68, 0.4);
-  border-radius: 3px;
-}
-
-.debug-info-panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 68, 68, 0.6);
-}
-
-/* The .bluetooth-device and .heart-rate-* blocks that used to sit here styled
-   markup no component renders — the device components' root is
-   .bluetooth-device-container, and their real styles live in
-   BluetoothDevice.css. Deleted (issue #195, Phase 5). */
-
-/* ============================================================================
-   RESPONSIVE DESIGN
-   ============================================================================ */
-/* Two clean tiers. These were one @media (max-width: 1200px) block containing
-   both sets of declarations, so the later (narrow) ones always won and the
-   1200-900 tier never rendered as intended (issue #195, Phase 2). */
-@media (max-width: 1200px) {
-  .view-container--routes {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
-}
-
-@media (max-width: 900px) {
-  .view-container--routes {
-    grid-template-columns: 1fr;
-  }
-
-  .activity-route-stage {
-    /* Still viewport-relative: a flat height here is what pushed the controls
-       below the fold on short screens (issue #195, B2). */
-    min-height: clamp(200px, 40dvh, 380px);
-  }
-}
-
-@media (max-width: 600px) {
-  .app-header {
-    padding: 12px 16px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .device-panel-heading {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .device-selector-tabs {
-    width: 100%;
-  }
-
-  .device-selector-tab {
-    flex: 1;
-  }
-
-  .activity-route-stage {
-    min-height: clamp(180px, 34dvh, 300px);
-  }
-
-  .activity-route-summary {
-    top: 14px;
-    left: 14px;
-    max-width: calc(100% - clamp(120px, 22%, 280px) - 42px);
-    padding: 12px 14px;
-  }
-
-  .activity-map-overlay {
-    top: 14px;
-    right: 14px;
-    border-radius: 16px;
-  }
-
-  .activity-stat-value {
-    font-size: 1.25rem;
-  }
-
-  .btn-activity-control {
-    padding: 8px 8px;
-    font-size: 0.6875rem;
-  }
-}
-
-/* ============================================================================
-   ANIMATIONS
-   ============================================================================ */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 20px rgba(0, 245, 212, 0.3); }
-  50% { box-shadow: 0 0 40px rgba(0, 245, 212, 0.6); }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* ============================================================================
-   UTILITIES
-   ============================================================================ */
-.text-cyan { color: #00f5d4; }
-.text-pink { color: #ff006e; }
-.text-yellow { color: #ffd60a; }
-.text-muted { color: var(--color-text-secondary); }
-
-.bg-glass {
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border);
-}
-
-/* Routes list scrollbar */
-.routes-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.routes-list::-webkit-scrollbar-track {
-  background: rgba(91, 126, 160, 0.08);
-  border-radius: 3px;
-}
-
-.routes-list::-webkit-scrollbar-thumb {
-  background: rgba(var(--color-primary-rgb), 0.28);
-  border-radius: 3px;
-}
-
-.routes-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--color-primary-rgb), 0.42);
-}
-
-/* Route details scrollbar */
-.route-details-panel::-webkit-scrollbar {
-  width: 6px;
-}
-
-.route-details-panel::-webkit-scrollbar-track {
-  background: rgba(130, 164, 195, 0.08);
-}
-
-.route-details-panel::-webkit-scrollbar-thumb {
-  background: rgba(var(--color-primary-rgb), 0.3);
-  border-radius: 3px;
-}
-
-/* ============================================================================
-   GUEST MODE
-   ============================================================================ */
-
-.guest-mode-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* Place the rower and HR device panels side by side, wrapping when narrow. */
-.routes-devices-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: stretch;
-  min-width: 0;
-  max-width: 680px;
-}
-
-
-.routes-devices-row > .device-panel {
-  /* Wraps to its own row below ~640px instead of being squeezed off-screen. */
-  flex: 1 1 260px;
-  min-width: 0;
-  padding: 10px 12px;
-}
-
-/* Compact the inner component content for the side-by-side layout */
-.routes-devices-row .bluetooth-device-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.routes-devices-row .device-header {
-  gap: 6px;
-}
-
-.routes-devices-row .device-name {
-  font-size: 0.75rem;
-  margin: 0;
-}
-
-.routes-devices-row .device-status {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  margin: 0;
-}
-
-.routes-devices-row .metrics-grid {
-  gap: 4px;
-}
-
-.routes-devices-row .metric {
-  padding: 4px 6px;
-}
-
-.routes-devices-row .metric-value {
-  font-size: 1rem;
-}
-
-.routes-devices-row .device-note {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  margin: 0;
-}
-
-.routes-devices-row .device-actions {
-  margin-top: 4px;
-}
-
-.routes-devices-row .device-panel-heading {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.routes-devices-row .device-panel-heading .panel-title {
-  font-size: 0.75rem;
-  margin: 0;
-}
-
-.routes-devices-row .device-panel-status {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  padding: 3px 8px;
-}
-
-.routes-devices-row .device-selector-tabs {
-  width: 100%;
-  padding: 4px;
-}
-
-.routes-devices-row .device-selector-tab {
-  flex: 1;
-  padding: 4px 6px;
-  font-size: 0.6875rem;
-}
-
-/* ============================================================================
-   GUEST MODE — NARROW DEVICE BAR
-   In guest mode the sidebar collapses to a single slim horizontal strip
-   running the full page width. Each panel becomes an inline flex row
-   (icon + label + status + button) so the bar stays as short as possible.
-   ============================================================================ */
-/* Removed: .app-sidebar--guest styles had no consumer in TSX (issue #195). */
-
-
-.guest-badge-header {
-  background: rgba(74, 155, 255, 0.15);
-  color: #4a9bff;
-  border: 1px solid rgba(74, 155, 255, 0.35);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.guest-banner-text {
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-}
-
-.btn-exit-guest {
-  background: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 5px 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-
-.btn-exit-guest:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-text-secondary);
-}
-
-/* Quick Start banner */
-.quick-start-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 14px 20px;
-  margin: 12px 16px 0;
-  background: linear-gradient(135deg, rgba(74, 155, 255, 0.08), rgba(0, 245, 212, 0.05));
-  border: 1px solid rgba(74, 155, 255, 0.2);
-  border-radius: 12px;
-  flex-shrink: 0;
-}
-
-.quick-start-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.quick-start-label {
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #4a9bff;
-}
-
-.quick-start-content h3 {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.quick-start-content p {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
-}
-
-.btn-quick-start {
-  background: linear-gradient(135deg, #4a9bff 0%, #2474d9 100%);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 18px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* Hover-only: on a touch device a tap would otherwise leave the lifted state
-   stuck until the next tap elsewhere (issue #195, Phase 4). */
 @media (hover: hover) {
-  .btn-quick-start:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(74, 155, 255, 0.35);
+  .btn-activity-control--danger:hover {
+    background: var(--color-error-hover);
+    border-color: transparent;
   }
 }
 
 /* ============================================================================
-   ROWNATIVE HANDOFF
+   ROWNATIVE HANDOFF + PROVENANCE
    ============================================================================ */
 .rownative-handoff-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 14px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
   font-size: 0.875rem;
   line-height: 1.5;
-  border: 1px solid var(--color-border);
-  background: rgba(var(--color-primary-rgb), 0.08);
+  border: 1px solid var(--color-border-card);
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
 
 .rownative-handoff-banner--error {
-  background: rgba(179, 64, 47, 0.10);
-  border-color: rgba(179, 64, 47, 0.32);
+  background: var(--color-error-banner-bg);
+  border-color: transparent;
+  color: var(--color-brand-contrast);
 }
 
 .rownative-handoff-dismiss {
   margin-left: auto;
   background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-control);
+  padding: var(--space-2xs) var(--space-sm);
   font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  color: inherit;
   cursor: pointer;
-}
-
-.rownative-handoff-dismiss:hover {
-  color: var(--color-text-primary);
-  border-color: rgba(var(--color-primary-rgb), 0.35);
 }
 
 .meta-badge--outline,
 .badge-outline {
-  background: rgba(168, 106, 8, 0.12);
-  color: #8a5606;
-  border: 1px solid rgba(168, 106, 8, 0.28);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
+  border: 1px solid transparent;
 }
 
 /* Geometry provenance: a traced or map-derived path is trustworthy, so it
@@ -1560,81 +1395,266 @@ body {
 .badge-traced,
 .meta-badge--osm,
 .badge-osm {
-  background: rgba(30, 110, 90, 0.12);
-  color: #17614f;
-  border: 1px solid rgba(30, 110, 90, 0.28);
+  background: var(--color-status-established-bg);
+  color: var(--color-status-established-text);
+  border: 1px solid transparent;
 }
 
 .meta-badge--external-distance {
-  background: rgba(var(--color-primary-rgb), 0.08);
+  background: var(--color-bg-secondary);
   color: var(--color-text-secondary);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+  border: 1px solid var(--color-border-card);
 }
 
 .route-item-external-distance {
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 /* ============================================================================
-   SIGNED-OUT / DEMO
+   DEMO
    ============================================================================ */
-.signed-out-notice {
-  margin: 10px 0 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-
 .demo-row-cta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--color-border);
+  gap: var(--space-2xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-divider);
 }
 
 .btn-try-demo {
   width: 100%;
-  padding: 14px 20px;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  border: 1px solid rgba(var(--color-primary-rgb), 0.35);
-  background: rgba(var(--color-primary-rgb), 0.10);
-  color: var(--color-primary-dark);
-  border-radius: 18px;
+  min-height: 44px;
+  padding: var(--space-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid var(--color-brand);
+  background: var(--color-bg-card);
+  color: var(--color-brand);
+  border-radius: var(--radius-control);
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-/* Hover-only: on a touch device a tap would otherwise leave the lifted state
-   stuck until the next tap elsewhere (issue #195, Phase 4). */
 @media (hover: hover) {
   .btn-try-demo:hover {
-    background: rgba(var(--color-primary-rgb), 0.18);
-    transform: translateY(-1px);
+    background: var(--color-bg-secondary);
+    border-color: var(--color-brand-hover);
   }
 }
 
 .demo-row-note {
   margin: 0;
-  font-size: 0.78125rem;
+  font-size: 0.8rem;
   line-height: 1.5;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
-.activity-demo-badge {
-  margin: 8px 0 0;
-  padding: 4px 10px;
-  display: inline-block;
-  border-radius: var(--radius-pill);
-  background: rgba(168, 106, 8, 0.22);
-  border: 1px solid rgba(255, 214, 10, 0.45);
-  color: #ffe08a;
-  font-size: 0.75rem;
+/* ============================================================================
+   DEBUG PANEL — dev affordance, kept dark so it reads as "not the app"
+   ============================================================================ */
+.debug-panel-toggle {
+  position: fixed;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  z-index: 9999;
+}
+
+.btn-debug-toggle {
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-panel);
+}
+
+.btn-debug-toggle.active {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-contrast);
+}
+
+.debug-info-panel {
+  position: fixed;
+  top: 80px;
+  right: var(--space-lg);
+  width: min(320px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  z-index: 9999;
+  overflow-y: auto;
+  box-shadow: var(--shadow-modal);
+}
+
+.debug-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.debug-info-panel h4 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
+.debug-close-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+}
+
+.debug-section {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
+.debug-section:last-child {
+  border-bottom: none;
+}
+
+.debug-section h5 {
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-sm) 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.debug-section p {
+  margin: var(--space-2xs) 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.debug-simulator-section {
+  padding: var(--space-sm);
+}
+
+.debug-simulator-section .pm5-simulator-container {
+  margin: 0;
+  border-radius: var(--radius-inset);
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.debug-table td {
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid var(--color-border-divider);
+  font-size: 0.8rem;
+}
+
+.debug-table tr:last-child td {
+  border-bottom: none;
+}
+
+.debug-table td:first-child {
+  color: var(--color-text-muted);
+  width: 50%;
+}
+
+.debug-table td:last-child {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .debug-info-panel {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 70dvh;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  }
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   Two clean tiers. These were one @media (max-width: 1200px) block containing
+   both sets of declarations, so the later (narrow) ones always won and the
+   1200-900 tier never rendered as intended (issue #195, Phase 2).
+   ============================================================================ */
+@media (max-width: 1200px) {
+  .view-container--routes {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  }
+}
+
+@media (max-width: 900px) {
+  .view-container--routes {
+    grid-template-columns: 1fr;
+  }
+
+  .map-container {
+    min-height: clamp(220px, 36dvh, 360px);
+  }
+
+  .activity-route-stage {
+    /* Still viewport-relative: a flat height here is what pushed the controls
+       below the fold on short screens (issue #195, B2). */
+    min-height: clamp(220px, 42dvh, 100vh);
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .header-content {
+    gap: var(--space-sm);
+  }
+
+  .device-panel-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .device-selector-tab {
+    flex: 1;
+  }
+
+  .activity-route-stage {
+    min-height: clamp(200px, 38dvh, 100vh);
+  }
+
+  .activity-route-summary {
+    top: var(--space-sm);
+    left: var(--space-sm);
+    max-width: calc(100% - clamp(120px, 22%, 280px) - 42px);
+    padding: var(--space-2xs) var(--space-sm);
+  }
+
+  .activity-map-overlay {
+    top: var(--space-sm);
+    right: var(--space-sm);
+  }
+}
 
 /* ============================================================================
    SHORT LANDSCAPE (issue #195, Phase 3)
@@ -1645,7 +1665,7 @@ body {
   .activity-screen {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(200px, 30%);
-    gap: 12px;
+    gap: var(--space-sm);
     align-items: stretch;
   }
 
@@ -1655,14 +1675,14 @@ body {
 
   .activity-stats-panel {
     padding: 0;
-    gap: 10px;
+    gap: var(--space-sm);
     overflow-y: auto;
     min-height: 0;
   }
 
   .activity-stats-grid {
     grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-    gap: 6px;
+    gap: var(--space-2xs);
   }
 
   .activity-controls {
@@ -1675,27 +1695,30 @@ body {
   }
 }
 
+/* Short viewports: the map gives up height before the controls below it do. */
+@media (max-height: 560px) {
+  .map-container {
+    min-height: clamp(160px, 40dvh, 240px);
+  }
+}
+
+/* A landscape phone is wide but very short. Stacking the map above the hero —
+   which the width-only 900px tier does — pushes Start Workout and the demo
+   below the fold, and no amount of map-shrinking fixes that. Side by side does.
+   Must follow the 900px block: same specificity, later wins. */
+@media (max-height: 560px) and (min-width: 700px) {
+  .view-container--routes {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  }
+
+  .map-container {
+    min-height: 0;
+  }
+}
+
 /* Very short viewports of any orientation: let the stage give up space first. */
 @media (max-height: 480px) {
   .activity-route-stage {
     min-height: 160px;
-  }
-}
-
-
-/* Debug panel sizing (issue #195): never wider than the screen, never taller
-   than the viewport, and a bottom sheet on phones. */
-.debug-info-panel {
-  width: min(320px, calc(100vw - 32px));
-  max-height: calc(100dvh - 96px);
-  overflow-y: auto;
-}
-
-@media (max-width: 600px) {
-  .debug-info-panel {
-    inset: auto 0 0 0;
-    width: 100%;
-    max-height: 70dvh;
-    border-radius: 20px 20px 0 0;
   }
 }
