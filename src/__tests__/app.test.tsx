@@ -5,58 +5,24 @@ import App from '../App';
 import { formatPace } from '../utils/formatters';
 import * as UseAuth from '../context/useAuth';
 import type { AuthContextValue } from '../context/useAuth';
+import { installCanvasMock } from './canvasMock';
 
-const originalGetContext = HTMLCanvasElement.prototype.getContext;
+let uninstallCanvas: () => void;
 
 beforeAll(() => {
-  const gradient = { addColorStop: vi.fn() };
-  const baseContext = {
-    canvas: document.createElement('canvas'),
-    getExtension: vi.fn(),
-    createShader: vi.fn(),
-    createProgram: vi.fn(),
-    shaderSource: vi.fn(),
-    compileShader: vi.fn(),
-    attachShader: vi.fn(),
-    linkProgram: vi.fn(),
-    useProgram: vi.fn(),
-    getShaderParameter: vi.fn(() => true),
-    getProgramParameter: vi.fn(() => true),
-    getShaderInfoLog: vi.fn(() => ''),
-    getProgramInfoLog: vi.fn(() => ''),
-    viewport: vi.fn(),
-    clearColor: vi.fn(),
-    clear: vi.fn(),
-    createLinearGradient: vi.fn(() => gradient),
-    createRadialGradient: vi.fn(() => gradient),
-  };
-  // RouteMap uses a broad Canvas2D API surface; unknown members become no-op spies
-  // so jsdom can render App without requiring a full canvas implementation.
-  const context = new Proxy(baseContext as Record<string, unknown>, {
-    get(target, prop) {
-      if (!(prop in target)) target[prop as string] = vi.fn();
-      return target[prop as string];
-    },
-  });
-  HTMLCanvasElement.prototype.getContext = vi.fn(
-    ((contextType: string) => {
-      if (contextType === '2d') {
-        return context as unknown as CanvasRenderingContext2D;
-      }
-      return null;
-    }) as typeof HTMLCanvasElement.prototype.getContext,
-  ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  uninstallCanvas = installCanvasMock();
 });
 
 afterAll(() => {
-  HTMLCanvasElement.prototype.getContext = originalGetContext;
+  uninstallCanvas();
 });
 
 describe('App component', () => {
-  it('renders title, routes list, and heart rate panel', () => {
+  it('renders title, the selected route and the heart rate panel', () => {
     render(<App />);
     expect(screen.getByRole('heading', { name: /VirtualRow/i })).toBeInTheDocument();
-    // Check Willowbrook River route appears (the only route now)
+    // The Row screen shows one route — the list itself lives on the Routes
+    // screen now (issue #219, R2).
     const matches = screen.getAllByText(/Willowbrook River/i);
     expect(matches.length).toBeGreaterThan(0);
     // Heart Rate panel title
@@ -147,13 +113,21 @@ describe('App component', () => {
     expect(sidebar?.classList.contains('app-sidebar--guest')).toBe(false);
   });
 
-  it('does not show Import Route button for unauthenticated users', () => {
+  it('does not show the file import control for unauthenticated users', async () => {
+    const user = userEvent.setup();
     render(<App />);
-    expect(screen.queryByRole('button', { name: /Import Route/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Routes$/ }));
+    expect(screen.queryByRole('button', { name: /import a file/i })).not.toBeInTheDocument();
   });
 
-  it('does not show rownative import for unauthenticated users', () => {
+  it('does not show rownative import for unauthenticated users', async () => {
+    const user = userEvent.setup();
     render(<App />);
+
+    // Absent on the Row screen and on the Routes screen alike.
+    expect(screen.queryByRole('region', { name: /rownative course import/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Routes$/ }));
     expect(screen.queryByRole('region', { name: /rownative course import/i })).not.toBeInTheDocument();
   });
 
@@ -162,7 +136,7 @@ describe('App component', () => {
       vi.restoreAllMocks();
     });
 
-    it('shows Import Route and Open rownative.icu buttons when logged in', () => {
+    it('shows the rownative import and file import on the Routes screen when logged in', async () => {
       const authedValue: AuthContextValue = {
         user: { id: 'i12345', name: 'Test User', email: 'test@example.com' },
         isAuthenticated: true,
@@ -175,10 +149,12 @@ describe('App component', () => {
         setPendingAction: vi.fn(),
       };
       vi.spyOn(UseAuth, 'useAuth').mockReturnValue(authedValue);
+      const user = userEvent.setup();
 
       render(<App />);
+      await user.click(screen.getByRole('button', { name: /^Routes$/ }));
 
-      expect(screen.getByRole('button', { name: /Import Route/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /import a file/i })).toBeInTheDocument();
       expect(screen.getByRole('region', { name: /rownative course import/i })).toBeInTheDocument();
     });
 

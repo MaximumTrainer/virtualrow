@@ -39,17 +39,24 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
 
   await page.goto('./');
 
-  // Use DOM click here to avoid route-info-overlay backdrop-filter compositing layer
-  // intercepting pointer events on macOS headless Chromium.
-  await page.evaluate(() => {
-    (document.querySelector('button.btn-import-route') as HTMLButtonElement)?.click();
-  });
+  // Route discovery lives on its own screen now (issue #219, R3), with the file
+  // import behind a disclosure whose input is absent until it is open (AC3.5).
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
+  await expect(page.locator('.view-container--search')).toBeVisible();
+  await page.getByRole('button', { name: /import a file/i }).click();
   await page.getByLabel('Route name').fill('Rownative Fixture Course');
   await page.locator('.route-import input[type="file"]').setInputFiles(sampleGeoJsonPath);
 
+  // Importing selects the route and returns to the Row screen (AC3.3).
+  await expect(page.locator('.route-info-overlay h2')).toContainText('Rownative Fixture Course', {
+    timeout: 10_000,
+  });
+
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
   const importedRouteCard = page.locator('.route-item', { hasText: 'Rownative Fixture Course' });
   await expect(importedRouteCard).toBeVisible({ timeout: 10_000 });
   await expect(importedRouteCard.locator('.route-item-thumbnail')).toBeVisible();
+  await page.getByRole('button', { name: /back to row/i }).click();
 
   await page.getByRole('button', { name: 'Connect PM5', exact: true }).click();
   await waitForDeviceConnected(page, 'Concept2 PM5');

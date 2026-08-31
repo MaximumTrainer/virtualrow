@@ -18,8 +18,9 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-08-30 with these exclusions on the chore/clear-open-backlog
-      // branch: 81.79% lines / 77.69% branches / 73.26% functions.
+      // Measured 2026-08-31 with these exclusions on the issue-219 UX branch:
+      // 84.63% lines / 78.82% branches / 77.80% functions (was 81.79 / 77.69 /
+      // 73.26 before the Routes screen and the default-route store landed).
       exclude: [
         '**/node_modules/**',
         '.claude/**',
@@ -28,6 +29,10 @@ export default defineConfig({
         'playwright/**',
         // Build-time asset generators and utility scripts — not app logic.
         'scripts/**',
+        // Test helpers (canvasMock and friends). Vitest drops the spec files
+        // themselves, but a helper module beside them would otherwise count as
+        // app code and flatter the ratio (issue #219).
+        'src/__tests__/**',
         // Generated Wasm bindings — tested through the services that call them.
         'src/wasm-pkg/**',
         'src/main.tsx',
@@ -62,11 +67,11 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-08-30: 81.79 / 77.69 / 73.26.
-        lines: 80,
-        statements: 80,
-        branches: 76,
-        functions: 72,
+        // Last measured 2026-08-31: 84.63 / 78.82 / 77.80.
+        lines: 84,
+        statements: 84,
+        branches: 78,
+        functions: 77,
       },
     },
   },

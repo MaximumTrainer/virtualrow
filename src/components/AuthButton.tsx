@@ -38,7 +38,11 @@ export function AuthButton() {
           aria-label="Sign in with intervals.icu"
         >
           <span className="auth-icu-icon" aria-hidden="true">🔑</span>
-          Sign in with intervals.icu
+          {/* The full label does not fit beside the title and the hamburger on a
+              320px header. The accessible name comes from aria-label above, so
+              it stays the same at every width (issue #219, R8). */}
+          <span className="auth-button-text auth-button-text--long">Sign in with intervals.icu</span>
+          <span className="auth-button-text auth-button-text--short">Sign in</span>
         </button>
         {visibleError && (
           <div className="auth-login-error" role="alert" title={visibleError}>

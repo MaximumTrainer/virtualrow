@@ -1,56 +1,77 @@
 /* ============================================================================
    AUTH BUTTON — Sign in / User menu
+
+   Lives in the brand header, so the trigger is styled for the dark #1a3a4a
+   background while the dropdown it opens is a light panel over page content
+   (issue #219, R1).
    ============================================================================ */
 
 /* ── Sign-in button ── */
 .auth-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   /* 44px touch-target floor (issue #195). */
   min-height: 44px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.85rem;
-  font-weight: 600;
-  transition: opacity 0.15s, transform 0.1s;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .auth-button--signin {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: #fff;
+  background: transparent;
+  color: var(--color-brand-contrast);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
-/* Hover-only: on a touch device a tap would otherwise leave the lifted state
-   stuck until the next tap elsewhere (issue #195, Phase 4). */
 @media (hover: hover) {
   .auth-button--signin:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.7);
   }
+}
+
+.auth-button--signin:focus-visible {
+  outline: 2px solid var(--color-brand-contrast);
+  outline-offset: 2px;
 }
 
 .auth-button--loading {
   background: transparent;
-  color: var(--color-text-secondary, #94a3b8);
+  color: rgba(255, 255, 255, 0.75);
   cursor: default;
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.auth-button-text--short {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .auth-button-text--long {
+    display: none;
+  }
+
+  .auth-button-text--short {
+    display: inline;
+  }
 }
 
 .auth-signin-wrapper {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .auth-login-error {
-  font-size: 0.7rem;
-  color: var(--color-danger, #f87171);
+  font-size: 0.75rem;
+  color: var(--color-status-provisional-bg);
   max-width: 280px;
   text-align: left;
   white-space: normal;
@@ -72,6 +93,12 @@
   to { transform: rotate(360deg); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner {
+    animation: none;
+  }
+}
+
 /* ── User menu trigger ── */
 .auth-user-menu {
   position: relative;
@@ -82,21 +109,29 @@
 .auth-user-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 24px;
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-primary, #e2e8f0);
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: var(--space-2xs) var(--space-md) var(--space-2xs) var(--space-2xs);
+  border-radius: var(--radius-control);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: var(--color-brand-contrast);
   cursor: pointer;
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 500;
-  transition: background 0.15s;
 }
 
-.auth-user-trigger:hover {
-  background: rgba(255, 255, 255, 0.1);
+@media (hover: hover) {
+  .auth-user-trigger:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.auth-user-trigger:focus-visible {
+  outline: 2px solid var(--color-brand-contrast);
+  outline-offset: 2px;
 }
 
 .auth-avatar {
@@ -114,8 +149,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0ea5e9, #7c3aed);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-brand-contrast);
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -130,7 +165,7 @@
 
 .auth-caret {
   font-size: 0.65rem;
-  opacity: 0.6;
+  opacity: 0.75;
   margin-left: 2px;
 }
 
@@ -142,6 +177,8 @@
   /* Ensure pointer events pass through to dropdown items above */
   pointer-events: auto;
   background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .auth-dropdown {
@@ -149,16 +186,16 @@
   right: 0;
   top: calc(100% + 6px);
   min-width: 200px;
-  background: var(--color-bg-secondary, #1e293b);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-modal);
   z-index: 1000;
   overflow: hidden;
 }
 
 .auth-dropdown-header {
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -167,12 +204,12 @@
 .auth-dropdown-name {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--color-text-primary);
 }
 
 .auth-dropdown-email {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #64748b);
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -181,33 +218,33 @@
 .auth-dropdown-divider {
   margin: 0;
   border: none;
-  border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--color-border-divider);
 }
 
 .auth-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 10px 16px;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-lg);
   background: none;
   border: none;
-  color: var(--color-text-primary, #e2e8f0);
+  border-radius: 0;
+  color: var(--color-text-primary);
   font-family: inherit;
   font-size: 0.85rem;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s;
 }
 
-.auth-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+@media (hover: hover) {
+  .auth-dropdown-item:hover {
+    background: var(--color-bg-secondary);
+    border-color: transparent;
+  }
 }
 
 .auth-dropdown-item--signout {
-  color: var(--color-danger, #f87171);
-}
-
-.auth-dropdown-item--signout:hover {
-  background: rgba(248, 113, 113, 0.1);
+  color: var(--color-error);
 }

@@ -1,84 +1,155 @@
 /* ===========================================
-   index.css - Dark Theme Fitness App Global Styles
+   index.css — global tokens and base styles
+
+   The palette, radii, shadows and type scale below are rownative.icu's own
+   (read from its style.css), so a course looks the same in both products
+   (issue #219, R1). The chrome is flat and light; the 3D workout stage keeps
+   its dark treatment via the --stage-* tokens at the bottom of :root.
    =========================================== */
 
-/* CSS Custom Properties - Dark Theme */
 :root {
   /* Respect the browser's font-size setting rather than pinning to 16px. */
   font-size: 100%;
 
-  /* Primary Colors */
-  --color-primary: #2474d9;
-  --color-primary-dark: #1758ab;
-  --color-primary-rgb: 36, 116, 217;
-  --color-primary-glow: rgba(36, 116, 217, 0.18);
-  
-  /* Accent Colors */
-  --color-accent-pink: #f97363;
-  --color-accent-yellow: #d9a429;
-  --color-accent-red: #de5d61;
-  --color-accent-red-rgb: 222, 93, 97;
-  --color-accent-green: #4fa97d;
-  
-  /* Background Colors */
-  --color-bg-primary: #edf4fa;
-  --color-bg-secondary: #dfeaf4;
-  --color-bg-tertiary: #f8fbfe;
-  --color-bg-radial-highlight: #d8e7f6;
-  --color-bg-header: rgba(248, 251, 254, 0.92);
-  --color-bg-tabs: rgba(255, 255, 255, 0.88);
-  --color-bg-panel-start: rgba(255, 255, 255, 0.98);
-  --color-bg-panel-end: rgba(243, 248, 252, 0.96);
-  --color-bg-card: rgba(255, 255, 255, 0.98);
-  --color-bg-glass: rgba(233, 241, 249, 0.74);
-  
-  /* Text Colors */
-  --color-text-primary: #10263d;
-  --color-text-secondary: #58708a;
-  --color-text-muted: #7c90a5;
-  --color-primary-lightest: #7fb0ea;
-  
-  /* Border Colors */
-  --color-border: rgba(91, 126, 160, 0.18);
-  --color-border-hover: rgba(var(--color-primary-rgb), 0.3);
+  /* --- Brand ------------------------------------------------------------
+     rownative's header colour. Used for the app header, primary buttons and
+     anything that should read as "this is the same product family". */
+  --color-brand: #1a3a4a;
+  --color-brand-hover: #2a4a5a;
+  --color-brand-contrast: #ffffff;
+  /* Link colour on the brand background — 7.2:1 against #1a3a4a. */
+  --color-link-on-brand: #7dd;
 
-  /* Modal aliases. GuestSessionSummary.css was written against these names,
-     which nothing defined, so every one of its rules fell through to a dark
-     fallback and the modal rendered dark over a light app (issue #195,
-     Phase 5). Aliased to the palette above rather than restated, so the modal
-     follows the theme. */
+  /* --- Primary (links and focus on light surfaces) --------------------- */
+  --color-primary: #1a73e8;
+  --color-primary-dark: #1558b8;
+  --color-primary-rgb: 26, 115, 232;
+  --color-primary-glow: rgba(26, 115, 232, 0.16);
+  --color-primary-lightest: #7dd;
+
+  /* --- Status and accents ---------------------------------------------- */
+  --color-accent-green: #00aa77;
+  --color-accent-yellow: #ffaa00;
+  --color-accent-red: #cc0000;
+  --color-accent-red-rgb: 204, 0, 0;
+  --color-accent-pink: #cc6666;
+
+  --color-status-established-bg: #ccffcc;
+  --color-status-established-text: #226622;
+  --color-status-provisional-bg: #ffffcc;
+  --color-status-provisional-text: #666622;
+  /* rownative has no "hard" status, so this pair extends its scheme in the same
+     key for the route difficulty badge. 6.4:1. */
+  --color-status-hard-bg: #ffdddd;
+  --color-status-hard-text: #992222;
+  --color-error: #cc0000;
+  --color-error-hover: #aa0000;
+  --color-error-banner-bg: #bb5522;
+  --color-success: #226622;
+
+  /* --- Surfaces --------------------------------------------------------- */
+  --color-bg-primary: #f5f5f5;
+  --color-bg-secondary: #f0f4f8;
+  --color-bg-tertiary: #f8fafc;
+  /* Flat: the old radial highlight is folded into the flat page colour so the
+     gradients that reference it render as a single tone. */
+  --color-bg-radial-highlight: #f5f5f5;
+  --color-bg-header: var(--color-brand);
+  --color-bg-tabs: #f0f4f8;
+  /* Panel start/end are equal — the gradients they feed now render flat white
+     without every call-site needing to be rewritten to a solid colour. */
+  --color-bg-panel-start: #ffffff;
+  --color-bg-panel-end: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-glass: #ffffff;
+
+  /* --- Text -------------------------------------------------------------
+     Every value clears WCAG AA (4.5:1) on #fff and on #f5f5f5. rownative uses
+     #888 for its faintest text (3.5:1, below AA); --color-text-tertiary is the
+     AA-safe stand-in at the same visual weight. */
+  --color-text-primary: #333333;   /* 12.6:1 on #fff */
+  --color-text-secondary: #555555; /*  7.5:1 */
+  --color-text-muted: #666666;     /*  5.7:1 */
+  --color-text-tertiary: #767676;  /*  4.5:1 */
+
+  /* --- Borders ----------------------------------------------------------- */
+  --color-border: #dddddd;
+  --color-border-input: #cccccc;
+  --color-border-card: #e2e8f0;
+  --color-border-divider: #eeeeee;
+  --color-border-hover: #bbbbbb;
+  --color-scrollbar-thumb: #c4ccd4;
+
+  /* --- Radii -------------------------------------------------------------
+     rownative uses exactly two: 4px on controls and badges, 8px on panels and
+     modals, with 6px for panels inset inside another panel. The role names the
+     app already used (#195) are re-pointed here rather than duplicated. */
+  --radius-control: 4px;
+  --radius-inset: 6px;
+  --radius-panel: 8px;
+  --radius-surface: 8px;
+  --radius-card: 8px;
+  --radius-item: 6px;
+  --radius-pill: 999px;
+
+  /* --- Shadows ----------------------------------------------------------- */
+  --shadow-panel: 0 2px 12px rgba(0, 0, 0, 0.15);
+  --shadow-modal: 0 4px 20px rgba(0, 0, 0, 0.2);
+  --shadow-inset: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* --- Spacing -----------------------------------------------------------
+     rownative's 0.25rem step. The role-named variables from #195 sit on top of
+     the same scale so a narrow tier still steps everything in one place. */
+  --space-2xs: 0.25rem;
+  --space-xs: 0.35rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+
+  --space-shell: var(--space-lg);   /* .app-layout padding and gap */
+  --space-view: var(--space-lg);    /* .view-container padding */
+  --space-card: var(--space-lg);    /* route hero, routes list */
+  --space-panel: var(--space-md);   /* device / stats / import panels */
+
+  /* --- Dark workout stage ------------------------------------------------
+     The 3D scene and the overlays that sit on top of it keep their dark
+     treatment so the render keeps its contrast against the light chrome
+     (issue #219, R1 "dark-stage exception"). Nothing outside
+     .activity-route-stage may use these. */
+  --stage-bg-start: rgba(10, 18, 29, 0.95);
+  --stage-bg-end: rgba(10, 18, 29, 0.75);
+  --stage-border: rgba(255, 255, 255, 0.08);
+  --stage-overlay-bg: rgba(9, 21, 34, 0.72);
+  --stage-overlay-border: rgba(255, 255, 255, 0.18);
+  --stage-text: #f4f8fc;
+  --stage-text-muted: rgba(244, 248, 252, 0.82);
+  --stage-shadow: 0 4px 20px rgba(9, 21, 34, 0.3);
+
+  /* --- Modal aliases -----------------------------------------------------
+     GuestSessionSummary.css and AuthGateModal.css were written against these
+     names (issue #195, Phase 5). Aliased rather than restated so the modals
+     follow the theme. */
   --surface-primary: var(--color-bg-card);
-  --surface-secondary: var(--color-bg-glass);
+  --surface-secondary: var(--color-bg-secondary);
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
   --text-tertiary: var(--color-text-muted);
   --accent-primary: var(--color-primary);
   --border-color: var(--color-border);
 
-  /* Spacing and radius scale (issue #195, Phase 4). The existing values, named
-     by role, so the narrow tier steps the whole scale in one place rather than
-     each padding and radius being edited on its own. */
-  --space-shell: 20px;   /* .app-layout padding and gap */
-  --space-view: 20px;    /* .view-container / .activity-view padding */
-  --space-card: 24px;    /* route info card, routes list */
-  --space-panel: 18px;   /* device / stats / import panels */
-  --radius-surface: 28px; /* .app-main, map and stage surfaces */
-  --radius-card: 26px;
-  --radius-panel: 24px;
-  --radius-item: 20px;
-  --radius-pill: 999px;
-  
-  /* Typography */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  /* --- Typography --------------------------------------------------------
+     rownative's stack. No webfont is loaded: the Inter @import that used to sit
+     at the top of App.css cost a render-blocking request to fonts.googleapis.com
+     for a face the system stack already covers. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  
-  /* Color Scheme */
+
   color-scheme: light;
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
-  
-  /* Font Rendering */
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -108,7 +179,7 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at top, var(--color-bg-radial-highlight) 0%, var(--color-bg-primary) 40%, var(--color-bg-tertiary) 100%);
+  background: var(--color-bg-primary);
 }
 
 /* Links */
@@ -116,41 +187,32 @@ a {
   font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
-  transition: all 0.3s ease;
 }
 
 a:hover {
   color: var(--color-primary-dark);
-  text-shadow: 0 0 12px var(--color-primary-glow);
-  text-decoration: none;
+  text-decoration: underline;
 }
 
-/* Buttons */
+/* Buttons — rownative's .btn geometry: 0.5rem/0.75rem padding, 4px radius. */
 button {
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 600;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.9rem;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.3s ease;
   background: var(--color-bg-card);
   color: var(--color-text-primary);
+  border-color: var(--color-border);
 }
 
-/* Hover-only, so a tap on a touch device doesn't leave the lifted state stuck
-   until the next tap elsewhere (issue #195). */
 @media (hover: hover) {
   button:hover {
-    transform: translateY(-2px);
     border-color: var(--color-border-hover);
-    box-shadow: 0 10px 24px rgba(26, 52, 82, 0.12);
+    background: var(--color-bg-secondary);
   }
-}
-
-button:active {
-  transform: translateY(0);
 }
 
 button:focus,
@@ -162,62 +224,65 @@ button:focus-visible {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
 /* Primary Button */
 button.primary,
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: var(--color-bg-primary);
-  border: none;
-  font-weight: 700;
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+  border-color: transparent;
+  font-weight: 600;
 }
 
-button.primary:hover,
-.btn-primary:hover {
-  box-shadow: 0 8px 24px var(--color-primary-glow);
+@media (hover: hover) {
+  button.primary:hover,
+  .btn-primary:hover {
+    background: var(--color-brand-hover);
+    border-color: transparent;
+  }
 }
 
 /* Secondary Button */
 button.secondary,
 .btn-secondary {
-  background: transparent;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
+  background: var(--color-text-tertiary);
+  color: var(--color-brand-contrast);
+  border-color: transparent;
 }
 
-button.secondary:hover,
-.btn-secondary:hover {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+@media (hover: hover) {
+  button.secondary:hover,
+  .btn-secondary:hover {
+    background: var(--color-text-muted);
+    border-color: transparent;
+  }
 }
 
 /* Form Inputs */
 input,
 textarea,
 select {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm);
+  font-size: 0.9rem;
   font-family: inherit;
   color: var(--color-text-primary);
-  transition: all 0.3s ease;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  outline: none;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
   border-color: var(--color-primary);
-  box-shadow: 0 0 12px var(--color-primary-glow);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 /* Scrollbar Styling */
@@ -227,22 +292,22 @@ textarea::placeholder {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-secondary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-bg-secondary);
-  border-radius: 4px;
+  background: var(--color-scrollbar-thumb);
+  border-radius: var(--radius-control);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: var(--color-text-tertiary);
 }
 
 /* Selection */
 ::selection {
   background: var(--color-primary);
-  color: var(--color-bg-primary);
+  color: var(--color-brand-contrast);
 }
 
 /* Utility Classes */
@@ -250,27 +315,8 @@ textarea::placeholder {
   color: var(--color-primary);
 }
 
-.text-pink {
-  color: var(--color-accent-pink);
-}
-
-.text-yellow {
-  color: var(--color-accent-yellow);
-}
-
 .text-muted {
   color: var(--color-text-muted);
-}
-
-.glow-primary {
-  text-shadow: 0 0 15px var(--color-primary-glow);
-}
-
-.glass-panel {
-  background: var(--color-bg-glass);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
 }
 
 /* Animations */
@@ -294,15 +340,6 @@ textarea::placeholder {
   }
 }
 
-@keyframes glow {
-  0%, 100% {
-    box-shadow: 0 0 10px var(--color-primary-glow);
-  }
-  50% {
-    box-shadow: 0 0 25px var(--color-primary-glow);
-  }
-}
-
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out;
 }
@@ -311,35 +348,38 @@ textarea::placeholder {
   animation: pulse 2s ease-in-out infinite;
 }
 
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-pulse {
+    animation: none;
+  }
 }
 
 /* The narrow tiers step the scale once, rather than every rule redefining its
    own padding and radius (issue #195, Phase 4). */
 @media (max-width: 1200px) {
   :root {
-    --space-shell: 14px;
+    --space-shell: var(--space-md);
   }
 }
 
 @media (max-width: 900px) {
   :root {
-    --space-view: 16px;
+    --space-view: var(--space-md);
   }
 }
 
 @media (max-width: 600px) {
   :root {
-    --space-shell: 12px;
-    --space-card: 18px;
-    --radius-card: 20px;
+    --space-shell: var(--space-sm);
+    --space-view: var(--space-md);
+    --space-card: var(--space-md);
   }
 }
 
 /* Short viewports give up padding before they give up content. */
 @media (max-height: 480px) {
   :root {
-    --space-view: 12px;
+    --space-view: var(--space-sm);
   }
 }

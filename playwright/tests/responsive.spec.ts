@@ -65,7 +65,28 @@ async function expectHitTestable(page: Page, selector: string, label: string) {
   expect(result.hit, `${label} (${selector}) should be tappable — ${result.reason}`).toBe(true);
 }
 
+/**
+ * Open the Routes screen (issue #219, R3).
+ *
+ * Below 768px the nav is behind the hamburger, so this opens that first —
+ * which is also what makes the mobile nav part of the responsive matrix rather
+ * than something only the desktop projects ever exercise.
+ */
+async function openRoutesScreen(page: Page) {
+  const toggle = page.locator('.nav-toggle');
+  if (await toggle.isVisible()) {
+    await toggle.click();
+  }
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
+  await expect(page.locator('.view-container--search')).toBeVisible();
+}
+
 async function startDemo(page: Page) {
+  // Wait for the map canvas before clicking. It is the last thing to paint on
+  // the Row screen and the thing that intercepts pointer events aimed at the
+  // controls beside it, so clicking earlier spends the whole action timeout in
+  // Playwright's interception retry loop on a loaded machine.
+  await expect(page.locator('.map-container canvas')).toBeVisible({ timeout: 20_000 });
   await expectHitTestable(page, '.btn-try-demo', 'Try a demo row');
   await page.locator('.btn-try-demo').click();
   await expect(page.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
@@ -91,17 +112,90 @@ test.describe('responsive layout', () => {
     await expectHitTestable(page, '.btn-start-workout', 'Start Workout');
     // And the demo entry point that a visitor with no hardware needs.
     await expectHitTestable(page, '.btn-try-demo', 'Try a demo row');
+    // The one door to route discovery (issue #219, AC2.2).
+    await expectHitTestable(page, '.btn-change-route', 'Change route');
   });
 
-  test('the routes list is reachable', async ({ page }) => {
-    // The routes list is gated on sign-in (RS-5), so it is absent for a plain
-    // signed-out visitor. Enable the auth-feature surface the way the rest of
-    // the suite does, so this exercises the list's *layout* at each viewport.
+  test('the routes list is reachable on the Routes screen', async ({ page }) => {
+    // The route list lives on its own screen now (issue #219, R3). The import
+    // and search sections above it stay gated on sign-in, so the auth-feature
+    // surface is enabled the way the rest of the suite does it — this exercises
+    // the whole screen's layout at each viewport, not just the list.
     await page.addInitScript(() => {
       (window as unknown as { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING = true;
     });
     await page.goto('./');
+    await openRoutesScreen(page);
+
     await expectHitTestable(page, '.route-item', 'first route in the list');
+    await expectHitTestable(page, '.btn-back-to-row', 'Back to Row');
+  });
+
+  test('the device strips are short, wide rectangles side by side', async ({ page }, testInfo) => {
+    // issue #219, AC5.1/AC5.2. Geometry is asserted where there is room for the
+    // side-by-side layout; the narrower projects cover stacking through the
+    // overflow and hit-test checks above.
+    test.skip(
+      !['laptop', 'desktop'].includes(testInfo.project.name),
+      'strip geometry is specified at laptop and above',
+    );
+    await page.goto('./');
+
+    const boxes = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('.routes-devices-row > .device-panel')).map((el) => {
+        const r = el.getBoundingClientRect();
+        return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
+      }),
+    );
+
+    expect(boxes.length, 'expected a rower strip and a heart-rate strip').toBe(2);
+    for (const b of boxes) {
+      expect(b.h, `strip is ${b.h}px tall, over the 96px budget`).toBeLessThanOrEqual(96);
+      expect(
+        b.w,
+        `strip is ${b.w}x${b.h} — not a horizontal rectangle`,
+      ).toBeGreaterThan(2 * b.h);
+    }
+    expect(
+      Math.abs(boxes[0].top - boxes[1].top),
+      'the two strips should sit side by side, not stacked',
+    ).toBeLessThanOrEqual(2);
+  });
+
+  test('the stage takes the majority of the main panel', async ({ page }, testInfo) => {
+    // issue #219, AC4.1/AC4.2 — the game area is the product, so it gets the
+    // space the stats panel and chrome used to borrow.
+    const floors: Record<string, number> = {
+      desktop: 0.65,
+      laptop: 0.55,
+      'phone-landscape': 0.45,
+    };
+    const floor = floors[testInfo.project.name];
+    test.skip(floor === undefined, 'stage proportion is specified at these viewports');
+
+    await page.goto('./');
+    await startDemo(page);
+    await expect(page.locator('.activity-route-stage')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
+
+    // Poll rather than measure once: the R3F canvas mounts lazily and the stat
+    // cards grow as their values arrive, so the first frame after the stage
+    // appears is not yet the settled layout.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const main = document.querySelector('.app-main');
+            const stage = document.querySelector('.activity-route-stage');
+            if (!main || !stage) return 0;
+            return stage.getBoundingClientRect().height / main.getBoundingClientRect().height;
+          }),
+        {
+          timeout: 15_000,
+          message: `stage never reached the ${Math.round(floor * 100)}% floor of the main panel`,
+        },
+      )
+      .toBeGreaterThanOrEqual(floor);
   });
 
   test('the device panels stay inside the viewport', async ({ page }) => {
@@ -127,8 +221,9 @@ test.describe('responsive layout', () => {
     await expect(page.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
 
     await expectHitTestable(page, '.btn-end-workout', 'End Workout');
-    // DOM click: the stage's compositing layer intercepts pointer events in
-    // headless Chromium, as route-import-render.spec.ts also works around.
+    // DOM click: the WebGL canvas can still intercept pointer events in
+    // headless Chromium even though the backdrop-filter layers are gone
+    // (issue #219, R1).
     await page.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
 
     // The summary's own actions must be reachable too.
@@ -200,6 +295,27 @@ test.describe('responsive layout', () => {
     expect(await measure(), 'summary modal controls under 44px').toEqual([]);
   });
 
+  test('no webfont is fetched', async ({ page }) => {
+    // issue #219, AC1.2 — the app runs on the system stack, so the Inter
+    // @import (a render-blocking request to fonts.googleapis.com for a face the
+    // system already covers) is gone and must stay gone.
+    const fontRequests: string[] = [];
+    page.on('request', (r) => {
+      const url = r.url();
+      if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+        fontRequests.push(url);
+      }
+    });
+
+    await page.goto('./');
+    await expect(page.locator('.route-info-overlay h2')).toBeVisible();
+
+    expect(fontRequests, `webfont requests: ${fontRequests.join(', ')}`).toEqual([]);
+
+    const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily.toLowerCase());
+    expect(family).not.toContain('inter');
+  });
+
   test('no text renders below 11px', async ({ page }) => {
     await page.goto('./');
 
@@ -268,12 +384,20 @@ const PINNED_SELECTORS = {
     '.route-details-panel .route-info-overlay',
     '.route-details-panel .route-info-overlay .route-info-header h2',
     '.route-info-overlay .meta-badge',
+    '.btn-start-workout',
+    '.btn-change-route',
+    '.btn-try-demo',
+  ],
+  // The route list and its controls moved to their own screen (issue #219, R3),
+  // so they are captured after navigating rather than from the Row screen.
+  routeSearch: [
+    '.route-search-section',
+    '.btn-back-to-row',
     '.routes-list',
     '.route-item',
     '.route-item .badge',
     '.filter-btn',
-    '.btn-start-workout',
-    '.btn-try-demo',
+    '.btn-import-route',
   ],
   workout: [
     '.activity-route-stage',
@@ -352,11 +476,14 @@ test.describe('visual style pins', () => {
     });
     await page.goto('./');
     await expect(page.locator('.btn-try-demo')).toBeVisible();
-    await expect(page.locator('.route-item').first()).toBeVisible();
 
     const actual: Pins = {
       routes: await capturePins(page, PINNED_SELECTORS.routes, PINNED_PROPERTIES),
     };
+
+    await openRoutesScreen(page);
+    await expect(page.locator('.route-item').first()).toBeVisible();
+    actual.routeSearch = await capturePins(page, PINNED_SELECTORS.routeSearch, PINNED_PROPERTIES);
 
     // The summary modal is for a guest session, which `__PLAYWRIGHT_TESTING`
     // suppresses — so the workout and summary pins come from a second page

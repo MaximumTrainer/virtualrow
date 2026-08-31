@@ -36,6 +36,26 @@ import './App.css';
 // Session state type for workout controls
 type SessionState = 'idle' | 'active' | 'paused';
 
+/**
+ * The three screens (issue #219, R3).
+ *
+ * `routes` is the Row screen — one route, the devices and the two ways to
+ * start. `route-search` is where a different route is found and chosen.
+ * `workout` is the running session. State, not a router: the app has no
+ * addressable URLs beyond the rownative deep link, so adding one would buy
+ * nothing.
+ */
+type ViewMode = 'routes' | 'route-search' | 'workout';
+
+/** The bundled demo route, and the fallback when no default resolves. */
+const DEMO_ROUTE_ID = '1';
+
+/** Header nav. The workout screen is reached by starting a row, not by a tab. */
+const NAV_ITEMS: ReadonlyArray<{ view: ViewMode; label: string }> = [
+  { view: 'routes', label: 'Row' },
+  { view: 'route-search', label: 'Routes' },
+];
+
 /** Extract the rownative.icu status value from route tags (e.g. "status:provisional" → "provisional"). */
 function extractRouteStatus(tags: string[] | undefined): string | undefined {
   return tags?.find((t) => t.startsWith('status:'))?.replace('status:', '');
@@ -53,13 +73,15 @@ function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {
 }
 
 function App() {
-  const { isAuthenticated, isLoading, login } = useAuth();
-  const { routeEnrichmentService } = useServices();
+  const { isAuthenticated, isLoading, login, user } = useAuth();
+  const { routeEnrichmentService, defaultRoutePreferenceStore } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
   const showAuthFeatures = isAuthenticated || !!window.__PLAYWRIGHT_TESTING;
-  const [currentView, setCurrentView] = useState<'routes' | 'workout'>('routes');
+  const [currentView, setCurrentView] = useState<ViewMode>('routes');
+  // The header nav collapses behind a hamburger below 768px (issue #219, R8).
+  const [isNavOpen, setIsNavOpen] = useState(false);
   const [routes, setRoutes] = useState<WaterRoute[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<WaterRoute | null>(null);
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -101,21 +123,54 @@ function App() {
   const [importRouteName, setImportRouteName] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
 
-  // Pre-select Willowbrook River for unauthenticated users.
-  // Guarded to fire only once: this effect depends on `routes`, so without the
-  // guard every route import re-ran it and snapped the selection back to
-  // Willowbrook, discarding the route the user had just loaded.
+  // The athlete's default route, if they have set one (issue #219, R6).
+  const [defaultRouteId, setDefaultRouteId] = useState<string | null>(null);
+
+  /**
+   * Decide which route the app opens on, and which one the star is lit for.
+   *
+   * Precedence is deep link → stored default → the bundled demo route. The
+   * selection is guarded to happen once: this effect depends on `routes`, so
+   * without the guard every import re-ran it and snapped the selection back,
+   * discarding the route the user had just loaded. `handleRouteImported` and
+   * `handleRouteSelect` set the same guard, which is what lets a rownative deep
+   * link beat a stored default (AC6.10).
+   *
+   * The star state is *not* guarded — it has to follow a later sign-in or
+   * sign-out. Both jobs read `resolveDefaultRouteId` from this one place so a
+   * stale id it clears (AC6.4) can never leave the star lit for a route that no
+   * longer exists.
+   */
   const hasPreselectedRef = useRef(false);
   useEffect(() => {
-    if (hasPreselectedRef.current) return;
-    if (!isAuthenticated && routes.length > 0) {
-      const wb = routes.find(r => r.id === '1');
-      if (wb) {
-        setSelectedRoute(wb);
-        hasPreselectedRef.current = true;
-      }
+    if (routes.length === 0) return;
+
+    const resolved = defaultRoutePreferenceStore.resolveDefaultRouteId(
+      user?.id ?? null,
+      routes.map((r) => r.id),
+    );
+    setDefaultRouteId(resolved);
+
+    if (hasPreselectedRef.current || isLoading) return;
+    setSelectedRoute(
+      (resolved ? routes.find((r) => r.id === resolved) : undefined)
+      ?? routes.find((r) => r.id === DEMO_ROUTE_ID)
+      ?? routes[0],
+    );
+    hasPreselectedRef.current = true;
+  }, [defaultRoutePreferenceStore, isLoading, routes, user]);
+
+  /** Star / un-star a route as this athlete's default (AC6.5, AC6.6). */
+  const handleToggleDefaultRoute = useCallback((routeId: string) => {
+    if (!user) return;
+    if (defaultRouteId === routeId) {
+      defaultRoutePreferenceStore.clearDefaultRouteId(user.id);
+      setDefaultRouteId(null);
+      return;
     }
-  }, [isAuthenticated, routes]);
+    defaultRoutePreferenceStore.setDefaultRouteId(user.id, routeId);
+    setDefaultRouteId(routeId);
+  }, [defaultRoutePreferenceStore, defaultRouteId, user]);
 
   // Auto-start/stop the HR simulator for unauthenticated users
   // Skip in Playwright test mode so tests can control HR connection state explicitly.
@@ -153,11 +208,7 @@ function App() {
   }, [isWorkoutActive]);
 
   useEffect(() => {
-    const allRoutes = routeService.getAllRoutes();
-    setRoutes(allRoutes);
-    if (allRoutes.length > 0) {
-      setSelectedRoute(allRoutes[0]);
-    }
+    setRoutes(routeService.getAllRoutes());
   }, []);
 
   useEffect(() => {
@@ -244,6 +295,9 @@ function App() {
 
   const handleRouteSelect = useCallback((route: WaterRoute) => {
     setSelectedRoute(route);
+    // An explicit choice outranks the stored default for the rest of the visit.
+    hasPreselectedRef.current = true;
+    setCurrentView('routes');
   }, []);
 
   const selectedRouteEnrichment = selectedRoute ? routeEnrichments[selectedRoute.id] ?? null : null;
@@ -279,9 +333,11 @@ function App() {
   /**
    * Start a demo row on simulated devices.
    *
-   * Aimed at a visitor with no rowing machine: one control connects nothing by
-   * hand, starts the rower and heart-rate simulators, and drops straight into
-   * the session so the engine can be judged without buying hardware.
+   * Aimed at anyone with no rowing machine to hand: one control connects
+   * nothing by hand, starts the rower and heart-rate simulators, and drops
+   * straight into the session so the engine can be judged without buying
+   * hardware. Offered signed-in as well as signed-out (issue #219, AC7.2) — the
+   * session is still flagged as a demo and still not recorded as a real workout.
    */
   const handleStartDemo = useCallback(() => {
     if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
@@ -550,6 +606,9 @@ function App() {
   const handleRouteImported = useCallback((route: WaterRoute) => {
     setRoutes(routeService.getAllRoutes());
     setSelectedRoute(route);
+    // A deep-linked or freshly imported course outranks the stored default
+    // for this page load (issue #219, AC6.10).
+    hasPreselectedRef.current = true;
     setCurrentView('routes');
   }, []);
 
@@ -684,6 +743,48 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1 className="app-title">VirtualRow</h1>
+
+          {/* The nav stands down during a workout, as the device bar does
+              (issue #219, AC8.4). */}
+          {!isWorkoutActive && (
+            <>
+              <button
+                type="button"
+                className="nav-toggle"
+                aria-label="Menu"
+                aria-expanded={isNavOpen}
+                aria-controls="nav-overlay"
+                onClick={() => setIsNavOpen((open) => !open)}
+              >
+                <span /><span /><span />
+              </button>
+              <div className="nav-overlay" id="nav-overlay" data-open={isNavOpen}>
+                <button
+                  type="button"
+                  className="nav-overlay-backdrop"
+                  aria-label="Close menu"
+                  onClick={() => setIsNavOpen(false)}
+                />
+                <nav className="app-nav" aria-label="Main">
+                  {NAV_ITEMS.map(({ view, label }) => (
+                    <button
+                      key={view}
+                      type="button"
+                      className={`nav-tab${currentView === view ? ' active' : ''}`}
+                      aria-current={currentView === view ? 'page' : undefined}
+                      onClick={() => {
+                        setCurrentView(view);
+                        setIsNavOpen(false);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </>
+          )}
+
           <div className="header-auth">
             <AuthButton />
           </div>
@@ -744,6 +845,10 @@ function App() {
         </aside>
 
         <main className="app-main">
+          {/* -- Row screen ---------------------------------------------
+              One route, its map, and the two ways to start it. Everything to do
+              with finding a different route lives on the Routes screen
+              (issue #219, R2). */}
           {currentView === 'routes' && selectedRoute && (
             <div className="view-container view-container--routes">
               <div className="map-container">
@@ -756,7 +861,7 @@ function App() {
                     role={handoffStatus.kind === 'error' ? 'alert' : 'status'}
                   >
                     {handoffStatus.kind === 'loading'
-                      ? `Loading rownative course ${handoffStatus.courseId}…`
+                      ? `Loading rownative course ${handoffStatus.courseId}...`
                       : handoffStatus.message}
                     {handoffStatus.kind === 'error' && (
                       <button type="button" className="rownative-handoff-dismiss" onClick={dismissHandoff}>
@@ -766,7 +871,6 @@ function App() {
                   </div>
                 )}
 
-                {/* Route Info Overlay */}
                 <div className="route-info-overlay">
                   <div className="route-info-header">
                     <h2>{selectedRoute.name}</h2>
@@ -825,133 +929,198 @@ function App() {
                         : '⚠ Connect HR Monitor First'}
                   </button>
 
-                  {isGuestSession && (
-                    <div className="demo-row-cta">
-                      <button
-                        className="btn btn-try-demo"
-                        onClick={handleStartDemo}
-                        type="button"
-                      >
-                        ▶ Try a demo row — no rowing machine needed
-                      </button>
-                      <p className="demo-row-note">
-                        Rows this route on simulated rower and heart-rate data, so you can see how it
-                        feels before connecting anything.
-                      </p>
-                    </div>
-                  )}
+                  {/* The single door to route discovery (issue #219, AC2.2). */}
+                  <button
+                    className="btn btn-change-route"
+                    type="button"
+                    onClick={() => setCurrentView('route-search')}
+                  >
+                    Change route
+                  </button>
+
+                  {/* Offered to everyone, not only guests (issue #219, AC7.2). */}
+                  <div className="demo-row-cta">
+                    <button
+                      className="btn btn-try-demo"
+                      onClick={handleStartDemo}
+                      type="button"
+                    >
+                      ▶ Try a demo row — no rowing machine needed
+                    </button>
+                    <p className="demo-row-note">
+                      Rows this route on simulated rower and heart-rate data, so you can see how it
+                      feels before connecting anything.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* -- Routes screen ------------------------------------------------
+              Course ID first, then search by name, then the local catalogue,
+              then file import behind a disclosure (issue #219, R3). */}
+          {currentView === 'route-search' && (
+            <div className="view-container view-container--search">
+              <div className="route-search-screen">
+                <div className="route-search-header">
+                  <h2>Routes</h2>
+                  <button
+                    type="button"
+                    className="btn-back-to-row"
+                    onClick={() => setCurrentView('routes')}
+                  >
+                    ← Back to Row
+                  </button>
                 </div>
 
-                {showAuthFeatures && (
-                  <div className="routes-list">
-                    <div className="routes-list-header">
-                      <h3>Routes</h3>
-                      <button
-                        type="button"
-                        className="btn-import-route"
-                        onClick={() => setIsImportOpen((o) => !o)}
-                        aria-expanded={isImportOpen}
-                      >
-                        Import Route
-                      </button>
-                      <RownativeRouteImport
-                        onRouteImported={handleRouteImported}
-                      />
-                      {isImportOpen && (
-                        <div className="route-import">
-                          <label htmlFor="import-route-name">Route name</label>
-                          <input
-                            id="import-route-name"
-                            type="text"
-                            className="import-name-input"
-                            placeholder="Route name"
-                            value={importRouteName}
-                            onChange={(e) => setImportRouteName(e.target.value)}
-                          />
-                          <input
-                            type="file"
-                            accept=".geojson,.json,.gpx,.kml"
-                            aria-label="Route file"
-                            onChange={handleRouteFileImport}
-                          />
-                          {importError && (
-                            <p className="import-error" role="alert">⚠ {importError}</p>
-                          )}
-                        </div>
-                      )}
-                      <div className="route-filters">
-                        <div className="filter-group">
-                          {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
-                            <button
-                              key={d}
-                              className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
-                              onClick={() => setDifficultyFilter(d)}
-                            >
-                              {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
-                            </button>
-                          ))}
-                        </div>
+                <section className="route-search-section">
+                  <h3>Add a rownative course</h3>
+                  {showAuthFeatures ? (
+                    <>
+                      <p className="route-search-hint">
+                        Paste a course ID or a rownative.icu link to add it straight away, or
+                        search the catalogue by name.
+                      </p>
+                      <RownativeRouteImport onRouteImported={handleRouteImported} />
+                    </>
+                  ) : (
+                    <p className="route-search-hint">
+                      Sign in with intervals.icu to import courses from rownative.icu.
+                    </p>
+                  )}
+                </section>
+
+                <section className="route-search-section routes-list">
+                  <div className="routes-list-header">
+                    <h3>My routes</h3>
+                    <div className="route-filters">
+                      <div className="filter-group">
+                        {(['all', 'easy', 'moderate', 'hard'] as const).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            className={`filter-btn${difficultyFilter === d ? ' filter-btn--active' : ''}`}
+                            onClick={() => setDifficultyFilter(d)}
+                          >
+                            {d === 'all' ? 'All' : d.charAt(0).toUpperCase() + d.slice(1)}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    {filteredRoutes.map((route) => {
-                       const rownativeStatus = extractRouteStatus(route.tags);
-                       return (
-                         <div
-                           key={route.id}
-                           className={`route-item ${selectedRoute.id === route.id ? 'active' : ''}`}
-                           onClick={() => handleRouteSelect(route)}
-                         >
-                           <div className="route-item-header">
-                             <h4>{route.name}</h4>
-                             <div className="route-item-badges">
-                               <span className={`badge badge-${route.difficulty}`}>
-                                 {route.difficulty}
-                               </span>
-                               {route.source === 'rownative' && (
-                                 <span className="badge badge-source">rownative.icu</span>
-                               )}
-                               {rownativeStatus && (
-                                 <span className={`badge badge-status badge-status--${rownativeStatus}`}>
-                                   {rownativeStatus.charAt(0).toUpperCase() + rownativeStatus.slice(1)}
-                                 </span>
-                               )}
-                               {(() => {
-                                 const badge = geometryProvenanceBadge(routeGeometrySource(route));
-                                 return badge && (
-                                   <span className={`badge badge-${badge.modifier}`} title={badge.title}>
-                                     {badge.label}
-                                   </span>
-                                 );
-                               })()}
-                             </div>
-                           </div>
-                           <p className="route-item-location">{route.location}</p>
-                           <div className="route-item-meta">
-                             <span>{formatRouteDistanceKm(route.distance)}</span>
-                             <span>•</span>
-                             <span>{route.estimatedTime} min</span>
-                             {externalDistanceNote(route) && (
-                               <>
-                                 <span>•</span>
-                                 <span className="route-item-external-distance">{externalDistanceNote(route)}</span>
-                               </>
-                             )}
-                           </div>
-                           {route.coordinates && route.coordinates.length >= 2 && (
-                             <RouteThumbnail
-                               coordinates={route.coordinates}
-                               width={120}
-                               height={60}
-                               className="route-item-thumbnail"
-                             />
-                           )}
-                           {routeEnrichmentLoading[route.id] && (
-                             <p className="route-item-status">Loading route data…</p>
-                           )}
-                         </div>
-                       );
-                     })}
                   </div>
+                  {filteredRoutes.map((route) => {
+                    const rownativeStatus = extractRouteStatus(route.tags);
+                    const isDefault = defaultRouteId === route.id;
+                    return (
+                      <div
+                        key={route.id}
+                        className={`route-item ${selectedRoute?.id === route.id ? 'active' : ''}`}
+                        onClick={() => handleRouteSelect(route)}
+                      >
+                        <div className="route-item-header">
+                          <h4>{route.name}</h4>
+                          <div className="route-item-badges">
+                            {isDefault && (
+                              <span className="badge route-default-badge">Default</span>
+                            )}
+                            <span className={`badge badge-${route.difficulty}`}>
+                              {route.difficulty}
+                            </span>
+                            {route.source === 'rownative' && (
+                              <span className="badge badge-source">rownative.icu</span>
+                            )}
+                            {rownativeStatus && (
+                              <span className={`badge badge-status badge-status--${rownativeStatus}`}>
+                                {rownativeStatus.charAt(0).toUpperCase() + rownativeStatus.slice(1)}
+                              </span>
+                            )}
+                            {(() => {
+                              const badge = geometryProvenanceBadge(routeGeometrySource(route));
+                              return badge && (
+                                <span className={`badge badge-${badge.modifier}`} title={badge.title}>
+                                  {badge.label}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        <p className="route-item-location">{route.location}</p>
+                        <div className="route-item-meta">
+                          <span>{formatRouteDistanceKm(route.distance)}</span>
+                          <span>•</span>
+                          <span>{route.estimatedTime} min</span>
+                          {externalDistanceNote(route) && (
+                            <>
+                              <span>•</span>
+                              <span className="route-item-external-distance">{externalDistanceNote(route)}</span>
+                            </>
+                          )}
+                        </div>
+                        {route.coordinates && route.coordinates.length >= 2 && (
+                          <RouteThumbnail
+                            coordinates={route.coordinates}
+                            width={120}
+                            height={60}
+                            className="route-item-thumbnail"
+                          />
+                        )}
+                        {routeEnrichmentLoading[route.id] && (
+                          <p className="route-item-status">Loading route data…</p>
+                        )}
+                        {isAuthenticated && (
+                          <button
+                            type="button"
+                            className={`route-default-toggle${isDefault ? ' route-default-toggle--on' : ''}`}
+                            aria-pressed={isDefault}
+                            onClick={(e) => {
+                              // The card itself selects the route; the star must not.
+                              e.stopPropagation();
+                              handleToggleDefaultRoute(route.id);
+                            }}
+                          >
+                            {isDefault ? '★ Remove as default' : '☆ Set as default'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </section>
+
+                {showAuthFeatures && (
+                  <section className="route-search-section route-file-import">
+                    <button
+                      type="button"
+                      className="btn-import-route"
+                      aria-expanded={isImportOpen}
+                      aria-controls="route-file-import-body"
+                      onClick={() => setIsImportOpen((o) => !o)}
+                    >
+                      Import a file (GPX / KML / GeoJSON)
+                    </button>
+                    {isImportOpen && (
+                      <div className="route-import" id="route-file-import-body">
+                        <label htmlFor="import-route-name">Route name</label>
+                        <input
+                          id="import-route-name"
+                          type="text"
+                          className="import-name-input"
+                          placeholder="Route name"
+                          value={importRouteName}
+                          onChange={(e) => setImportRouteName(e.target.value)}
+                        />
+                        <input
+                          type="file"
+                          accept=".geojson,.json,.gpx,.kml"
+                          aria-label="Route file"
+                          onChange={handleRouteFileImport}
+                        />
+                        {importError && (
+                          <p className="import-error" role="alert">⚠ {importError}</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
                 )}
               </div>
             </div>

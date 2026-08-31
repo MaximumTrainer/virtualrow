@@ -49,7 +49,14 @@ async function bootstrap(page: Page, apiCalls: string[]) {
   await stubMirror(page, apiCalls);
 }
 
+/**
+ * Open the Routes screen and wait for the rownative import panel.
+ *
+ * The panel moved off the Row screen in issue #219 (R3) — course ID first, then
+ * search by name.
+ */
 async function waitForPanel(page: Page) {
+  await page.getByRole('button', { name: 'Routes', exact: true }).click();
   await page.getByLabel('Rownative course import').waitFor({ state: 'visible' });
 }
 
@@ -72,7 +79,9 @@ test.describe('rownative.icu course import', () => {
     await expect(page.locator('.route-info-overlay')).toContainText('5.35 km');
     // Gate-only geometry is disclosed rather than passed off as a surveyed path.
     await expect(page.locator('.meta-badge--outline')).toContainText('gates only');
-    // rownative source + status badges on the route row.
+    // rownative source + status badges on the route row, back on the Routes
+    // screen — importing hands the user to the Row screen (issue #219, AC3.3).
+    await page.getByRole('button', { name: 'Routes', exact: true }).click();
     await expect(page.locator('.route-item .badge-source')).toBeVisible();
     await expect(page.locator('.route-item .badge-status--established')).toBeVisible();
 
