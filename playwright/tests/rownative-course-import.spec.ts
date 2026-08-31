@@ -49,12 +49,8 @@ async function bootstrap(page: Page, apiCalls: string[]) {
   await stubMirror(page, apiCalls);
 }
 
-async function openPanel(page: Page) {
-  await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const target = buttons.find((b) => b.textContent?.includes('rownative.icu course'));
-    (target as HTMLButtonElement)?.click();
-  });
+async function waitForPanel(page: Page) {
+  await page.getByLabel('Rownative course import').waitFor({ state: 'visible' });
 }
 
 test.describe('rownative.icu course import', () => {
@@ -66,7 +62,7 @@ test.describe('rownative.icu course import', () => {
 
     await bootstrap(page, apiCalls);
     await page.goto('./');
-    await openPanel(page);
+    await waitForPanel(page);
 
     await page.getByLabel('Rownative course ID or link').fill('5');
     await page.getByRole('button', { name: /^Import$/ }).click();
@@ -88,7 +84,7 @@ test.describe('rownative.icu course import', () => {
     const apiCalls: string[] = [];
     await bootstrap(page, apiCalls);
     await page.goto('./');
-    await openPanel(page);
+    await waitForPanel(page);
 
     await page.getByLabel('Rownative course ID or link').fill('https://rownative.icu/course/5');
     await page.getByRole('button', { name: /^Import$/ }).click();
@@ -104,7 +100,7 @@ test.describe('rownative.icu course import', () => {
     page.on('request', (r) => { if (r.url().includes('courses/')) courseRequests.push(r.url()); });
 
     await page.goto('./');
-    await openPanel(page);
+    await waitForPanel(page);
     await page.getByLabel('Rownative course ID or link').fill('https://evil.example/course/5');
     await page.getByRole('button', { name: /^Import$/ }).click();
 
@@ -116,7 +112,7 @@ test.describe('rownative.icu course import', () => {
     const apiCalls: string[] = [];
     await bootstrap(page, apiCalls);
     await page.goto('./');
-    await openPanel(page);
+    await waitForPanel(page);
 
     await page.getByLabel('Search rownative courses by name').fill('quinsig');
     await page.getByRole('button', { name: /^Search$/ }).click();
@@ -132,7 +128,7 @@ test.describe('rownative.icu course import', () => {
     const apiCalls: string[] = [];
     await bootstrap(page, apiCalls);
     await page.goto('./');
-    await openPanel(page);
+    await waitForPanel(page);
 
     await page.getByLabel('Rownative course ID or link').fill('2');
     await page.getByRole('button', { name: /^Import$/ }).click();
