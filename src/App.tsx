@@ -704,15 +704,6 @@ function App() {
               : '',
           ].filter(Boolean).join(' ')}
         >
-          <nav className="nav-tabs">
-            <button
-              className={`nav-tab ${currentView === 'routes' ? 'active' : ''}`}
-              onClick={() => setCurrentView('routes')}
-            >
-              <span className="tab-icon">🗺️</span> Routes
-            </button>
-          </nav>
-
           {currentView === 'routes' && (
             <div className="routes-devices-row">
               <div className="device-panel device-panel--selection">
@@ -834,7 +825,7 @@ function App() {
                         : '⚠ Connect HR Monitor First'}
                   </button>
 
-                  {!selectedRowerConnected && (
+                  {isGuestSession && (
                     <div className="demo-row-cta">
                       <button
                         className="btn btn-try-demo"

@@ -118,16 +118,8 @@ body {
    ============================================================================ */
 .app-sidebar {
   width: 100%;
-  /* Keep the sidebar at its content height. As a shrinkable flex child it was
-     compressed well below that, and because it is overflow:visible the device
-     panels spilled out and painted over .app-main — which is why Start Workout
-     was rendered but not tappable on phones (issue #195, B1). */
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: minmax(220px, 260px) repeat(4, minmax(0, 1fr));
-  gap: 16px;
   overflow: visible;
-  padding-right: 0;
   position: relative;
   z-index: 10;
   min-height: 0;
@@ -164,70 +156,6 @@ body {
 
 .app-sidebar::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--color-primary-rgb), 0.45);
-}
-
-/* ============================================================================
-   NAVIGATION TABS
-   ============================================================================ */
-.nav-tabs {
-  grid-column: 1 / 2;
-  display: flex;
-  gap: 6px;
-  background: var(--color-bg-tabs);
-  backdrop-filter: blur(12px);
-  border-radius: var(--radius-pill);
-  padding: 6px;
-  border: 1px solid var(--color-border);
-  flex-shrink: 0;
-  min-width: 0;
-  align-self: start;
-  box-shadow: 0 10px 26px rgba(26, 52, 82, 0.08);
-}
-
-.nav-tab {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  transition: all 0.2s ease;
-  text-transform: none;
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nav-tab:hover {
-  background: rgba(var(--color-primary-rgb), 0.08);
-  color: var(--color-text-primary);
-}
-
-.nav-tab.active {
-  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.14), rgba(var(--color-primary-rgb), 0.05));
-  color: var(--color-primary-dark);
-  border: 1px solid rgba(var(--color-primary-rgb), 0.35);
-  box-shadow: 0 8px 18px rgba(var(--color-primary-rgb), 0.14);
-}
-
-.tab-icon {
-  font-size: 0.75rem;
-  flex-shrink: 0;
-}
-
-.tab-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ============================================================================
@@ -274,7 +202,6 @@ body {
 }
 
 .app-layout--routes .app-sidebar .device-panel {
-  grid-column: 1 / -1;
   border-radius: 14px;
   padding: 14px 16px;
 }
@@ -1242,35 +1169,12 @@ body {
    both sets of declarations, so the later (narrow) ones always won and the
    1200-900 tier never rendered as intended (issue #195, Phase 2). */
 @media (max-width: 1200px) {
-  .app-sidebar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .nav-tabs {
-    grid-column: 1 / -1;
-    width: max-content;
-    max-width: 100%;
-  }
-
-  .nav-tab {
-    font-size: 0.6875rem;
-    padding: 10px 12px;
-  }
-
   .view-container--routes {
     grid-template-columns: minmax(0, 1fr) 360px;
   }
 }
 
 @media (max-width: 900px) {
-  .app-sidebar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .nav-tabs {
-    width: fit-content;
-  }
-
   .view-container--routes {
     grid-template-columns: 1fr;
   }
@@ -1292,23 +1196,6 @@ body {
     align-items: flex-start;
   }
   
-  .app-sidebar {
-    grid-template-columns: 1fr;
-  }
-
-  .nav-tabs {
-    width: 100%;
-  }
-
-  .nav-tab {
-    padding: 10px;
-    font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  }
-  
-  .tab-icon {
-    font-size: 0.75rem;
-  }
-
   .device-panel-heading {
     flex-direction: column;
     align-items: flex-start;
@@ -1432,20 +1319,10 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   align-items: stretch;
-  grid-column: 1 / -1;
   min-width: 0;
+  max-width: 680px;
 }
 
-/* On wide layouts the nav-tabs occupy column 1; keep the devices row in
-   columns 2-end so they don't force the tabs to wrap below. Restricted to the
-   multi-column tier: below it the sidebar is a single column, where `2 / -1`
-   resolved to an implicit second column and pushed the panels off the right
-   edge of the screen (issue #195, B3). */
-@media (min-width: 901px) {
-  .app-layout--routes .app-sidebar .routes-devices-row {
-    grid-column: 2 / -1;
-  }
-}
 
 .routes-devices-row > .device-panel {
   /* Wraps to its own row below ~640px instead of being squeezed off-screen. */

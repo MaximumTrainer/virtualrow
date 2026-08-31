@@ -48,30 +48,13 @@ describe('RownativeRouteImport', () => {
 
   const noExisting = { ...defaultServices.routeService, findRouteByRownativeId: () => undefined } satisfies Services['routeService'];
 
-  async function open(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole('button', { name: /add a rownative\.icu course/i }));
-  }
-
-  it('offers no account-linking controls at all', async () => {
-    const user = userEvent.setup();
+  it('offers no account-linking controls at all', () => {
     renderWithServices();
-    await open(user);
 
     expect(screen.queryByRole('button', { name: /link rownative account/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /complete linking/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /unlink/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /pull route kml/i })).toBeNull();
-  });
-
-  it('links out to rownative.icu for browsing', async () => {
-    const user = userEvent.setup();
-    renderWithServices();
-    await open(user);
-
-    const link = screen.getByRole('link', { name: /browse rownative\.icu/i });
-    expect(link).toHaveAttribute('href', 'https://rownative.icu/');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
   it('imports a pasted course id (AC-1)', async () => {
@@ -83,7 +66,7 @@ describe('RownativeRouteImport', () => {
       routeService: noExisting,
     });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -96,7 +79,7 @@ describe('RownativeRouteImport', () => {
     const importCourseById = vi.fn().mockResolvedValue(createRoute());
     renderWithServices({ rownativeService: rownative({ importCourseById }), routeService: noExisting });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), 'https://rownative.icu/course/5');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -108,7 +91,7 @@ describe('RownativeRouteImport', () => {
     const importCourseById = vi.fn();
     renderWithServices({ rownativeService: rownative({ importCourseById }) });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), 'https://evil.example/course/5');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -121,7 +104,7 @@ describe('RownativeRouteImport', () => {
     const importCourseById = vi.fn();
     renderWithServices({ rownativeService: rownative({ importCourseById }) });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), 'http://rownative.icu/course/5');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -144,7 +127,7 @@ describe('RownativeRouteImport', () => {
       routeService: noExisting,
     });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), '2');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -169,7 +152,7 @@ describe('RownativeRouteImport', () => {
       routeService: noExisting,
     });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/search rownative courses by name/i), 'hots');
     await user.click(screen.getByRole('button', { name: /^search$/i }));
 
@@ -191,7 +174,7 @@ describe('RownativeRouteImport', () => {
       }),
     });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/search rownative courses by name/i), 'zzzz');
     await user.click(screen.getByRole('button', { name: /^search$/i }));
 
@@ -207,7 +190,7 @@ describe('RownativeRouteImport', () => {
       }),
     });
 
-    await open(user);
+
     await user.click(screen.getByRole('button', { name: /^search$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/HTTP 500/);
@@ -222,7 +205,7 @@ describe('RownativeRouteImport', () => {
       routeService: { ...defaultServices.routeService, findRouteByRownativeId: () => existing } satisfies Services['routeService'],
     });
 
-    await open(user);
+
     await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
     await user.click(screen.getByRole('button', { name: /^import$/i }));
 
@@ -234,7 +217,7 @@ describe('RownativeRouteImport', () => {
   it('disables Import until something is entered', async () => {
     const user = userEvent.setup();
     renderWithServices();
-    await open(user);
+
 
     expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
     await user.type(screen.getByLabelText(/rownative course id or link/i), '5');

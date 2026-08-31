@@ -75,10 +75,9 @@ describe('App component', () => {
     expect(screen.queryByRole('button', { name: /Quick Start/i })).not.toBeInTheDocument();
   });
 
-  it('shows route-only navigation (no History tab)', () => {
+  it('does not show a History tab', () => {
     render(<App />);
 
-    expect(screen.getByRole('button', { name: /Routes/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /History/i })).not.toBeInTheDocument();
   });
 
@@ -153,9 +152,9 @@ describe('App component', () => {
     expect(screen.queryByRole('button', { name: /Import Route/i })).not.toBeInTheDocument();
   });
 
-  it('does not show Open rownative.icu button for unauthenticated users', () => {
+  it('does not show rownative import for unauthenticated users', () => {
     render(<App />);
-    expect(screen.queryByRole('button', { name: /rownative\.icu/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /rownative course import/i })).not.toBeInTheDocument();
   });
 
   describe('authenticated user', () => {
@@ -180,7 +179,7 @@ describe('App component', () => {
       render(<App />);
 
       expect(screen.getByRole('button', { name: /Import Route/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /rownative\.icu/i })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /rownative course import/i })).toBeInTheDocument();
     });
 
     it('does not show a History tab when logged in', () => {
