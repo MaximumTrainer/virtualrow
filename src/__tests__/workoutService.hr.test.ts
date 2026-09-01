@@ -15,32 +15,43 @@ describe('WorkoutService heart rate integration', () => {
     expect(avg).toBe(100);
   });
 
-  it('caps heart rate samples length', () => {
+  it('retains every heart-rate sample for the whole row (issue #221, AC1.4)', () => {
+    // Regression: HR_SAMPLE_CAP kept only the last 600 samples, so a row past
+    // ten minutes silently lost its opening — and endSession() then averaged
+    // over a truncated window.
     const svc = new WorkoutService();
     svc.startSession('r2', 'Route 2');
     for (let i = 0; i < 700; i++) {
-      svc.updateSessionHeartRate(120);
+      svc.updateSessionHeartRate(i + 1);
     }
-    const current = svc.getCurrentSession();
-    expect(current?.heartRateSamples?.length).toBeLessThanOrEqual(600);
+    const samples = svc.getCurrentSession()!.heartRateSamples!;
+    expect(samples).toHaveLength(700);
+    expect(samples[0].bpm).toBe(1);
+    expect(samples[samples.length - 1].bpm).toBe(700);
   });
 
-  it('preserves chronological order after overflowing the cap', () => {
-    // Regression: when a ring buffer overwrote entries in place, downstream code could
-    // no longer assume the last entry is the most recent. After pushing 1200 samples,
-    // we should retain the most recent 600 in insertion order.
+  it('averages over the whole row, not the last ten minutes (issue #221, AC1.4)', () => {
+    // 1200 samples ramping 1..1200. Over the whole row the mean is 600.5;
+    // over the truncated last-600 window it would have been 900.5.
     const svc = new WorkoutService();
     svc.startSession('r2b', 'Route 2b');
     for (let i = 0; i < 1200; i++) {
-      svc.updateSessionHeartRate(i + 1); // unique non-zero bpm per sample
+      svc.updateSessionHeartRate(i + 1);
+    }
+    const completed = svc.endSession()!;
+    expect(completed.heartRateSamples).toHaveLength(1200);
+    expect(completed.heartRateAvg).toBe(601); // Math.round(600.5)
+    expect(completed.heartRateMax).toBe(1200);
+  });
+
+  it('preserves chronological order across a long row', () => {
+    const svc = new WorkoutService();
+    svc.startSession('r2c', 'Route 2c');
+    for (let i = 0; i < 1200; i++) {
+      svc.updateSessionHeartRate(i + 1);
     }
     const samples = svc.getCurrentSession()!.heartRateSamples!;
-    expect(samples.length).toBe(600);
-    // Every sample must have come from the most-recent 600 emissions (bpm 601..1200),
-    // and the ordering should be chronological.
-    expect(samples[0].bpm).toBe(601);
-    expect(samples[samples.length - 1].bpm).toBe(1200);
-    expect(samples.every((s) => s.bpm >= 601 && s.bpm <= 1200)).toBe(true);
+    expect(samples.every((s, i) => i === 0 || s.bpm > samples[i - 1].bpm)).toBe(true);
   });
 
   it('persists heartRateAvg and heartRateMax on endSession', () => {

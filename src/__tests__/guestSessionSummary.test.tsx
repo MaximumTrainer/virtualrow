@@ -17,6 +17,7 @@ function makeSession(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
     calories: 180,
     splits: [],
     isActive: false,
+    samples: [],
     ...overrides,
   };
 }

@@ -1,7 +1,13 @@
-import type { WorkoutSession, Split, PM5Data, HeartRateSample, WorkoutProgress } from '../types/index';
+import type {
+  Coordinate,
+  HeartRateSample,
+  PM5Data,
+  Split,
+  WorkoutProgress,
+  WorkoutSession,
+} from '../types/index';
+import { ActivitySampler } from './activitySampler';
 
-/** Maximum number of heart-rate samples retained per session (~10 minutes at 1 Hz). */
-export const HR_SAMPLE_CAP = 600;
 /** Minimum distance delta in meters between recorded splits. */
 export const SPLIT_DISTANCE_METERS = 500;
 
@@ -10,7 +16,13 @@ export class WorkoutService {
   private currentSession: WorkoutSession | null = null;
   private pm5DistanceOffsetMeters: number | null = null;
   private isPaused = false;
+  private sampler = new ActivitySampler();
 
+  /**
+   * @param routeCoordinates the selected route's polyline, so the 1 Hz activity
+   *   stream can place each sample on the water actually rowed (issue #221, R1).
+   *   Omitted for sessions with no route geometry — those samples carry no position.
+   */
   startSession(
     routeId: string,
     routeName: string,
@@ -18,6 +30,7 @@ export class WorkoutService {
     rowerType?: 'pm5' | 'ftms',
     hrConnectedAtStart?: boolean,
     isGuest?: boolean,
+    routeCoordinates?: Coordinate[],
   ): WorkoutSession {
     const session: WorkoutSession = {
       id: Date.now().toString(),
@@ -31,6 +44,7 @@ export class WorkoutService {
       splits: [],
       isActive: true,
       heartRateSamples: [],
+      samples: [],
       structuredWorkoutId,
       rowerType,
       hrConnectedAtStart,
@@ -40,6 +54,8 @@ export class WorkoutService {
     this.currentSession = session;
     this.pm5DistanceOffsetMeters = null;
     this.isPaused = false;
+    this.sampler.start(routeCoordinates);
+    session.samples = this.sampler.getSamples();
     this.sessions.push(session);
     try {
       if (typeof window !== 'undefined') {
@@ -116,13 +132,19 @@ export class WorkoutService {
       this.pm5DistanceOffsetMeters = data.distance;
     }
 
-    const elapsedSeconds = Math.floor(data.elapsedTime / 1000);
+    // `PM5Data.elapsedTime` is seconds: pm5-base.js scales the 24-bit
+    // centisecond field by 0.01, and FTMS reports whole seconds. Dividing by
+    // 1000 here left `duration` and every `Split.time` at zero for any row
+    // shorter than ~17 minutes, and pinned the activity stream to t=0.
+    const elapsedSeconds = Math.floor(data.elapsedTime);
     const adjustedDistance = Math.max(0, data.distance - this.pm5DistanceOffsetMeters);
 
     // Ensure distance never regresses due to transient stale/zero/backwards packets.
     this.currentSession.distance = Math.max(this.currentSession.distance, adjustedDistance);
     this.currentSession.duration = elapsedSeconds;
     this.currentSession.calories = data.calories || 0;
+
+    this.sampler.record(data, elapsedSeconds, this.currentSession.distance);
 
     // Add splits at each 500m boundary crossed (catch up if we jumped multiple splits).
     while (true) {
@@ -155,14 +177,17 @@ export class WorkoutService {
     if (!this.currentSession.heartRateSamples) {
       this.currentSession.heartRateSamples = [];
     }
-    // Maintain only last HR_SAMPLE_CAP samples (~10 minutes at 1s interval) to limit memory,
-    // preserving chronological order so the last entry represents the latest sample.
+    // Kept for the whole row (issue #221, AC1.4). The previous 600-sample cap
+    // silently discarded the opening of anything past ten minutes, so the
+    // heartRateAvg/heartRateMax computed in endSession() described a truncated
+    // window rather than the session.
+    //
+    // Footprint: a rower notifies at 4 Hz and a strap at 1 Hz, so an hour holds
+    // roughly 18,000 samples — a few hundred kB of plain objects. The chart
+    // reads only the last 120 (`HeartRateChart`'s maxPoints), so nothing
+    // downstream walks the whole series on every frame.
     const sample: HeartRateSample = { bpm, timestamp: new Date() };
-    const samples = this.currentSession.heartRateSamples;
-    if (samples.length >= HR_SAMPLE_CAP) {
-      samples.shift();
-    }
-    samples.push(sample);
+    this.currentSession.heartRateSamples.push(sample);
   }
 
   getCurrentSession(): WorkoutSession | null {

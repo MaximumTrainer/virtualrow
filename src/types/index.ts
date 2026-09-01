@@ -60,6 +60,30 @@ export interface WaterRoute {
   enrichment?: RouteEnrichmentMetadata; // Optional enrichment metadata
 }
 
+/**
+ * One second of a row, as the rower and strap reported it (issue #221, R1).
+ *
+ * Optional fields are absent rather than zero when the hardware said nothing:
+ * a row with no strap must not encode as a row at 0 bpm.
+ */
+export interface ActivitySample {
+  /** Seconds since session start. Strictly increasing; a pause leaves a gap. */
+  t: number;
+  /** Cumulative metres rowed. */
+  distance: number;
+  /** Seconds per 500 m. */
+  pace?: number;
+  /** Watts. */
+  power?: number;
+  /** Strokes per minute. */
+  cadence?: number;
+  /** Beats per minute. */
+  heartRate?: number;
+  /** Position on the route polyline at this distance. */
+  lat?: number;
+  lng?: number;
+}
+
 // Workout session data
 export interface WorkoutSession {
   id: string;
@@ -71,7 +95,9 @@ export interface WorkoutSession {
   distance: number; // in meters
   averagePace: number; // seconds per 500m
   calories: number;
-  heartRateSamples?: HeartRateSample[]; // rolling heart rate samples captured during session
+  heartRateSamples?: HeartRateSample[]; // heart rate samples captured during session
+  /** 1 Hz activity stream (issue #221, R1) — what the FIT encoder writes records from. */
+  samples: ActivitySample[];
   heartRateAvg?: number; // persisted average bpm at end of session
   heartRateMax?: number; // persisted max bpm at end of session
   splits: Split[];
@@ -97,7 +123,7 @@ export interface Split {
 export interface PM5Data {
   pace?: number; // seconds per 500m (optional, may not always be available)
   distance: number; // in meters
-  elapsedTime: number; // in milliseconds
+  elapsedTime: number; // seconds since the row began (PM5 centiseconds x 0.01; FTMS whole seconds)
   power?: number; // watts
   cadence?: number; // strokes per minute
   heartRate?: number;

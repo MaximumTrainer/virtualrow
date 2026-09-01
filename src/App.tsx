@@ -320,6 +320,7 @@ function App() {
         activeRowerType,
         hrConnected,
         isGuestSession,
+        selectedRoute.coordinates,
       );
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -358,6 +359,7 @@ function App() {
         'pm5',
         true,
         isGuestSession,
+        selectedRoute.coordinates,
       );
       setCurrentSession(session);
       setIsWorkoutActive(true);

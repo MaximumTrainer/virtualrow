@@ -55,6 +55,7 @@ function makeSession(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
       },
     ],
     isActive: false,
+    samples: [],
     heartRateAvg: 145,
     heartRateMax: 160,
   };
