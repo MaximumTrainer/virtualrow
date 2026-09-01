@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import {
-  BANK_SEGMENTS,
-  BANK_WATERLINE_Y,
-  createBankGeometry,
-} from '../components/rower3d/bankGeometry';
+import { BANK_WATERLINE_Y, createBankGeometry } from '../components/rower3d/bankGeometry';
+import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
 import {
   MAX_TERRAIN_RELIEF_SCENE_UNITS,
   type RouteEnrichmentData,
@@ -57,7 +54,7 @@ const innerHeights = (geometry: THREE.BufferGeometry): number[] => {
 
 describe('riverbank terrain relief (#202)', () => {
   it('draws a flat bank when there is no enrichment at all', () => {
-    const geometry = createBankGeometry(straightCurve(), 'left', null);
+    const geometry = createBankGeometry(straightCurve(), 'left');
 
     expect(outerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
     geometry.dispose();
@@ -66,7 +63,7 @@ describe('riverbank terrain relief (#202)', () => {
   it('draws a flat bank for the all-zero elevations the fallback produces', () => {
     // createFallbackRouteEnrichment fills elevations with zeros. A route that
     // never reached OpenTopoData must render exactly as it did before.
-    const geometry = createBankGeometry(straightCurve(), 'left', enrichmentWith([0, 0, 0, 0]));
+    const geometry = createBankGeometry(straightCurve(), 'left', { enrichment: enrichmentWith([0, 0, 0, 0]) });
 
     expect(outerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
     geometry.dispose();
@@ -76,7 +73,7 @@ describe('riverbank terrain relief (#202)', () => {
     const geometry = createBankGeometry(
       straightCurve(),
       'left',
-      enrichmentWith([0, 50, 100, 150]),
+      { enrichment: enrichmentWith([0, 50, 100, 150]) },
     );
     const heights = outerHeights(geometry);
 
@@ -94,7 +91,7 @@ describe('riverbank terrain relief (#202)', () => {
     const geometry = createBankGeometry(
       straightCurve(),
       'right',
-      enrichmentWith([0, 400, 900, 1500]),
+      { enrichment: enrichmentWith([0, 400, 900, 1500]) },
     );
 
     expect(innerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
@@ -105,7 +102,7 @@ describe('riverbank terrain relief (#202)', () => {
     const geometry = createBankGeometry(
       straightCurve(),
       'left',
-      enrichmentWith([0, 100000, 200000, 300000]),
+      { enrichment: enrichmentWith([0, 100000, 200000, 300000]) },
     );
     const ceiling = BANK_WATERLINE_Y + MAX_TERRAIN_RELIEF_SCENE_UNITS;
 
@@ -118,13 +115,13 @@ describe('riverbank terrain relief (#202)', () => {
     const geometry = createBankGeometry(
       straightCurve(),
       'left',
-      enrichmentWith([12, Number.NaN, 80, 45]),
+      { enrichment: enrichmentWith([12, Number.NaN, 80, 45]) },
     );
 
     const position = geometry.getAttribute('position');
     const normal = geometry.getAttribute('normal');
 
-    expect(position.count).toBe((BANK_SEGMENTS + 1) * 2);
+    expect(position.count).toBe((stripSegmentCount(straightCurve()) + 1) * 2);
     expect(normal).toBeDefined();
     for (let i = 0; i < position.count; i++) {
       expect(Number.isFinite(position.getX(i))).toBe(true);
@@ -138,8 +135,8 @@ describe('riverbank terrain relief (#202)', () => {
   });
 
   it('computes normals that tilt with the slope instead of pointing straight up', () => {
-    const flat = createBankGeometry(straightCurve(), 'left', enrichmentWith([0, 0, 0, 0]));
-    const sloped = createBankGeometry(straightCurve(), 'left', enrichmentWith([0, 60, 120, 180]));
+    const flat = createBankGeometry(straightCurve(), 'left', { enrichment: enrichmentWith([0, 0, 0, 0]) });
+    const sloped = createBankGeometry(straightCurve(), 'left', { enrichment: enrichmentWith([0, 60, 120, 180]) });
 
     const flatNormal = flat.getAttribute('normal');
     const slopedNormal = sloped.getAttribute('normal');

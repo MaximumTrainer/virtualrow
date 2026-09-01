@@ -1,17 +1,17 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useCallback, useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useCubeCamera, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
-import { IS_TEST_MODE, WATER_CHANNEL_WIDTH } from './constants';
+import { IS_TEST_MODE } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { attachGerstnerShader, createWaterNormalMap } from './helpers';
-import {
-  getWaterWidthSceneUnitsForProgress,
-  type RouteEnrichmentData,
-} from '../../services/routeEnrichmentService';
+import { createWaterChannelGeometry } from './waterGeometry';
+import { RouteStripChunks } from './routeStripChunks';
+import type { ProgressRange } from './geometryChunks';
+import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
 
 // ============================================================================
 // WATER REFLECTION PROBE — CubeCamera providing real-time env reflections
@@ -203,8 +203,6 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   theme,
   enrichment,
 }) => {
-  const meshRef        = useRef<THREE.Mesh>(null);
-  const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const timeUniformRef = useRef({ value: 0 });
 
   const waterConfig = useMemo(() => {
@@ -217,116 +215,66 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
     };
   }, [enrichment?.waterColor, enrichment?.waveIntensity, theme]);
 
+  // One material for every chunk of the channel: the Gerstner shader is
+  // compiled once and the per-frame roughness is written once (#224).
+  const material = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: waterConfig.color,
+        metalness: 0.05,
+        roughness: waterConfig.roughness,
+        transmission: waterConfig.transmission,
+        thickness: waterConfig.thickness,
+        ior: 1.333,
+        reflectivity: 0.95,
+        clearcoat: 0.4,
+        clearcoatRoughness: 0.25,
+        envMapIntensity: 1.8,
+        transparent: true,
+        opacity: 0.94,
+        emissive: waterConfig.emissive,
+        emissiveIntensity: waterConfig.emissiveIntensity,
+        attenuationColor: new THREE.Color(waterConfig.attenuationColor),
+        attenuationDistance: waterConfig.thickness * 1.5,
+        side: THREE.FrontSide,
+      }),
+    [waterConfig],
+  );
+
+  useEffect(() => () => material.dispose(), [material]);
+
   useEffect(() => {
     if (IS_TEST_MODE) return;
-    const mat = materialRef.current;
-    if (!mat) return;
     attachGerstnerShader(
-      mat,
+      material,
       timeUniformRef.current,
       'y',
       `curved-${theme}`,
       waterConfig.waveAmplitude,
       waterConfig.waveFrequency,
     );
-    mat.needsUpdate = true;
-  }, [theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
+    // react-hooks/immutability: a THREE material is a handle to a compiled
+    // shader program, mutated in place by design. Recreating it per frame
+    // would recompile the Gerstner shader on every tick.
+    // eslint-disable-next-line react-hooks/immutability
+    material.needsUpdate = true;
+  }, [material, theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
-    if (materialRef.current) {
-      const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
-      materialRef.current.roughness = waterConfig.roughness + windVariation;
-    }
+    const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
+    // react-hooks/immutability: see above — the wind ripple is a uniform write.
+    // eslint-disable-next-line react-hooks/immutability
+    material.roughness = waterConfig.roughness + windVariation;
   });
 
-  const waterGeometry = useMemo(() => {
-    if (!curve) return null;
-
-    const segments = 200;
-
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
-
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const point = curve.getPointAt(t);
-      const tangent = curve.getTangentAt(t).normalize();
-
-      const up = new THREE.Vector3(0, 1, 0);
-      const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
-      const halfWidth =
-        getWaterWidthSceneUnitsForProgress(
-          enrichment?.segmentProfiles,
-          enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / 0.1,
-          t,
-        ) / 2;
-
-      const left = new THREE.Vector3().copy(point).addScaledVector(perp, -halfWidth);
-      const right = new THREE.Vector3().copy(point).addScaledVector(perp, halfWidth);
-
-      left.y = -0.1;
-      right.y = -0.1;
-
-      positions.push(left.x, left.y, left.z);
-      positions.push(right.x, right.y, right.z);
-
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-
-      uvs.push(0, t);
-      uvs.push(1, t);
-
-      if (i < segments) {
-        const base = i * 2;
-        indices.push(base, base + 2, base + 1);
-        indices.push(base + 1, base + 2, base + 3);
-      }
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setIndex(indices);
-
-    return geometry;
-  }, [curve, enrichment]);
-
-  useEffect(() => {
-    return () => {
-      waterGeometry?.dispose();
-    };
-  }, [waterGeometry]);
-
-  if (!curve || !waterGeometry) {
-    return null;
-  }
-
-  return (
-    <mesh ref={meshRef} geometry={waterGeometry} receiveShadow>
-      <meshPhysicalMaterial
-        ref={materialRef}
-        color={waterConfig.color}
-        metalness={0.05}
-        roughness={waterConfig.roughness}
-        transmission={waterConfig.transmission}
-        thickness={waterConfig.thickness}
-        ior={1.333}
-        reflectivity={0.95}
-        clearcoat={0.4}
-        clearcoatRoughness={0.25}
-        envMapIntensity={1.8}
-        transparent
-        opacity={0.94}
-        emissive={waterConfig.emissive}
-        emissiveIntensity={waterConfig.emissiveIntensity}
-        attenuationColor={waterConfig.attenuationColor}
-        attenuationDistance={waterConfig.thickness * 1.5}
-        side={THREE.FrontSide}
-      />
-    </mesh>
+  const buildChunk = useCallback(
+    (range: ProgressRange) =>
+      createWaterChannelGeometry(curve as THREE.CatmullRomCurve3, { enrichment, range }),
+    [curve, enrichment],
   );
+
+  if (!curve) return null;
+
+  return <RouteStripChunks curve={curve} material={material} buildChunk={buildChunk} />;
 };

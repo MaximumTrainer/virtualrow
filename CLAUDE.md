@@ -16,7 +16,7 @@ npm run build            # Production build
 npm run lint             # ESLint (flat config, zero warnings policy)
 npx tsc --noEmit         # Type-check app
 npx tsc -p tsconfig.playwright.json --noEmit  # Type-check E2E suite
-npx vitest run           # Unit tests (700 tests, jsdom)
+npx vitest run           # Unit tests (783 tests, jsdom)
 npx vitest run --coverage # Unit tests with v8 coverage
 npm run test:e2e         # Playwright E2E (local, needs dev server)
 npm run test:e2e:ci      # Playwright E2E (CI, retries=2)

@@ -8,7 +8,12 @@
  */
 import * as THREE from 'three';
 import type { Coordinate } from '../../types/index';
+import {
+  DEFAULT_SIMPLIFY_EPSILON_METERS,
+  simplifyCoordinates,
+} from '../../utils/coordinateUtils';
 import { distanceBetweenLatLng, latLngToMeters } from '../../utils/geoUtils';
+import { SCENE_SCALE } from './constants';
 
 export const DEFAULT_ROUTE_POINT_RESOLUTION_METERS = 10;
 
@@ -143,17 +148,60 @@ export const gpsToScenePoints = (
  */
 export const createRouteCurve = (
   coordinates: Coordinate[],
-  sceneScale: number = 0.1,
+  sceneScale: number = SCENE_SCALE,
   minResolutionMeters: number = DEFAULT_ROUTE_POINT_RESOLUTION_METERS,
+  simplifyEpsilonMeters: number = DEFAULT_SIMPLIFY_EPSILON_METERS,
 ): THREE.CatmullRomCurve3 | null => {
+  // Simplify before upsampling, not after: a straight kilometre imported at
+  // 50 m spacing carries twenty points that say nothing, and each one would
+  // otherwise be blown up into five spline control points (#224).
+  const shape = simplifyCoordinates(coordinates, simplifyEpsilonMeters);
   const points = gpsToScenePoints(
-    upsampleRouteCoordinates(coordinates, minResolutionMeters),
+    upsampleRouteCoordinates(shape, minResolutionMeters),
     sceneScale,
   );
   if (points.length < 2) return null;
 
   return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
 };
+
+/** Real-world metres a scene curve covers. */
+export const curveLengthMeters = (
+  curve: THREE.CatmullRomCurve3,
+  sceneScale: number = SCENE_SCALE,
+): number => curve.getLength() / sceneScale;
+
+/** Metres of route each geometry segment should span. */
+export const TARGET_METERS_BETWEEN_SEGMENTS = 15;
+/** Fewest segments any route gets, however short. */
+export const MIN_ROUTE_SEGMENTS = 50;
+/** Most segments any route gets, however long. */
+export const MAX_ROUTE_SEGMENTS = 800;
+
+/**
+ * Lengthways resolution for geometry built along a route of this length.
+ *
+ * A fixed count spends the same geometry on a 500 m sprint and a 42 km
+ * marathon: detail nobody can see on one, visible faceting on the bends of the
+ * other. The floor keeps short courses from going polygonal; the ceiling keeps
+ * ultra-marathons from building geometry nobody rows past twice.
+ */
+export const adaptiveSegmentCount = (
+  routeLengthMeters: number,
+  targetMetersBetweenSegments: number = TARGET_METERS_BETWEEN_SEGMENTS,
+): number => {
+  if (!Number.isFinite(routeLengthMeters) || routeLengthMeters <= 0) {
+    return MIN_ROUTE_SEGMENTS;
+  }
+  const wanted = Math.ceil(routeLengthMeters / targetMetersBetweenSegments);
+  return Math.max(MIN_ROUTE_SEGMENTS, Math.min(MAX_ROUTE_SEGMENTS, wanted));
+};
+
+/** {@link adaptiveSegmentCount} for the route a scene curve was built from. */
+export const curveSegmentCount = (
+  curve: THREE.CatmullRomCurve3,
+  sceneScale: number = SCENE_SCALE,
+): number => adaptiveSegmentCount(curveLengthMeters(curve, sceneScale));
 
 /** Position and orientation of the boat at a given point along the curve. */
 export interface RoutePosition {
@@ -207,7 +255,7 @@ export const getRoutePositionAtProgress = (
  */
 export const getCurveDistances = (
   curve: THREE.CatmullRomCurve3,
-  samples: number = 200,
+  samples: number = curveSegmentCount(curve),
 ): number[] => {
   const distances: number[] = [0];
   let totalDist = 0;

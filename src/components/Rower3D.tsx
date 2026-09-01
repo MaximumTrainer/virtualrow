@@ -5,7 +5,12 @@ import * as THREE from 'three';
 import { Physics } from '@react-three/rapier';
 import type { WaterRoute } from '../types/index';
 import { routeTotalDistanceMeters } from '../utils/geoUtils';
-import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
+import {
+  isWebGPUAvailable,
+  isWebGLAvailable,
+  describeUnmaskedRenderer,
+  recommendPerformanceMode,
+} from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import {
   buildTerrainProfile,
@@ -23,7 +28,8 @@ import { getThemeConfig } from './rower3d/themeConfig';
 import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
-import { IS_TEST_MODE } from './rower3d/constants';
+import { IS_TEST_MODE, SCENE_SCALE, hasExplicitPerformanceMode } from './rower3d/constants';
+import { markRouteLoadStart, markFirstFrame } from './rower3d/sceneTiming';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
 import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
@@ -99,6 +105,32 @@ const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boat
 // ============================================================================
 // ROWER SCENE - Inner R3F scene component
 // ============================================================================
+/**
+ * Refine an `auto` request against the GPU that actually came up (#224).
+ *
+ * R3F builds the renderer before it renders the scene, so `capabilities` is
+ * already populated here and the mode is right on frame one — no settling, no
+ * second render. A mode pinned by a test or by `__VIRTUALROW_PERFORMANCE_MODE`
+ * is left exactly as it was asked for, and so is an explicit `low` or `high`:
+ * only `auto` is up for negotiation.
+ */
+const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode => {
+  const gl = useThree((state) => state.gl);
+
+  return useMemo(() => {
+    if (requested !== 'auto' || hasExplicitPerformanceMode()) return requested;
+    const renderer = gl as Partial<THREE.WebGLRenderer>;
+    const context =
+      typeof renderer.getContext === 'function' ? renderer.getContext() : null;
+    return recommendPerformanceMode({
+      maxTextureSize: renderer.capabilities?.maxTextureSize,
+      renderer: describeUnmaskedRenderer(context),
+      // A backend with no WebGL context to hand back is the WebGPU one.
+      webgpu: !context,
+    });
+  }, [gl, requested]);
+};
+
 const RowerScene: React.FC<Rower3DProps> = ({ 
   route, 
   enrichment,
@@ -107,10 +139,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   isPlaying, 
   cadence,
   intensityFactor,
-  performanceMode = 'auto',
+  performanceMode: requestedPerformanceMode = 'auto',
 }) => {
   const { camera } = useThree();
-  
+  const performanceMode = useHardwarePerformanceMode(requestedPerformanceMode);
+
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
   const landmarkConfig = useMemo(
@@ -119,7 +152,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
   );
   
   const routeCurve = useMemo(() => {
-    return createRouteCurve(route.coordinates, 0.1);
+    markRouteLoadStart();
+    return createRouteCurve(route.coordinates, SCENE_SCALE);
   }, [route.coordinates]);
   
   const curveData = useMemo(() => {
@@ -152,6 +186,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const velocityRef = useRef(0);
 
   useFrame((state, delta) => {
+    markFirstFrame();
     const pm5Data = {
       pace: paceSPer500 ?? undefined,
       power: undefined,

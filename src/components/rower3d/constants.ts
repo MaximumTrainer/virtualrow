@@ -32,6 +32,25 @@ export function resolvePerformanceMode(): 'low' | 'auto' | 'high' {
   return window.__PLAYWRIGHT_TESTING ? 'low' : 'auto';
 }
 
+/**
+ * Metres-to-scene-units factor for every route curve in the scene.
+ *
+ * One source of truth: the geometry builders divide by it to recover a route's
+ * real length when choosing their sampling resolution, so a curve built at a
+ * different scale would be sampled at the wrong one.
+ */
+export const SCENE_SCALE = 0.1;
+
+/**
+ * True when the mode was pinned by a test or a user, and hardware detection
+ * must keep its hands off.
+ */
+export function hasExplicitPerformanceMode(): boolean {
+  if (typeof window === 'undefined') return true;
+  const override = window.__VIRTUALROW_PERFORMANCE_MODE;
+  return override === 'low' || override === 'auto' || override === 'high' || IS_TEST_MODE;
+}
+
 // Water channel width constant - keeps water wider than single scull (~1.5m wide)
 export const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)
 export const RIVERBANK_WIDTH = 60; // width of each riverbank

@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   bearingBetweenLatLng,
   bearingDelta,
-  upsampleCoordinates,
   segmentRoute,
-  distanceBetweenLatLng,
 } from '../utils/geoUtils';
 
 describe('geoUtils', () => {
@@ -76,77 +74,6 @@ describe('geoUtils', () => {
     it('normalizes large negative deltas', () => {
       const delta = bearingDelta(350, 10); // +20° (shortest path)
       expect(delta).toBe(20);
-    });
-  });
-
-  describe('upsampleCoordinates', () => {
-    it('returns original coordinates if already close enough', () => {
-      const coords = [
-        { lat: 50.0, lng: 0.0 },
-        { lat: 50.0001, lng: 0.0 }, // ~11m apart
-      ];
-      const upsampled = upsampleCoordinates(coords, 20); // 20m resolution
-      expect(upsampled).toHaveLength(2);
-    });
-
-    it('inserts interpolated points for large gaps', () => {
-      const coords = [
-        { lat: 50.0, lng: 0.0 },
-        { lat: 50.001, lng: 0.0 }, // ~111m apart
-      ];
-      const upsampled = upsampleCoordinates(coords, 10); // 10m resolution
-      // Should have original 2 + interpolated points
-      expect(upsampled.length).toBeGreaterThan(2);
-      expect(upsampled.length).toBeLessThanOrEqual(13); // 111m / 10m = 11.1 segments
-    });
-
-    it('preserves first coordinate', () => {
-      const coords = [
-        { lat: 50.0, lng: 0.0 },
-        { lat: 50.01, lng: 0.0 },
-      ];
-      const upsampled = upsampleCoordinates(coords, 10);
-      expect(upsampled[0]).toEqual(coords[0]);
-    });
-
-    it('preserves last coordinate', () => {
-      const coords = [
-        { lat: 50.0, lng: 0.0 },
-        { lat: 50.01, lng: 0.0 },
-      ];
-      const upsampled = upsampleCoordinates(coords, 10);
-      expect(upsampled[upsampled.length - 1].lat).toBeCloseTo(coords[1].lat, 5);
-      expect(upsampled[upsampled.length - 1].lng).toBeCloseTo(coords[1].lng, 5);
-    });
-
-    it('handles single coordinate', () => {
-      const coords = [{ lat: 50.0, lng: 0.0 }];
-      const upsampled = upsampleCoordinates(coords, 10);
-      expect(upsampled).toHaveLength(1);
-      expect(upsampled[0]).toEqual(coords[0]);
-    });
-
-    it('handles empty coordinates', () => {
-      const coords: Array<{ lat: number; lng: number }> = [];
-      const upsampled = upsampleCoordinates(coords, 10);
-      expect(upsampled).toHaveLength(0);
-    });
-
-    it('creates evenly spaced interpolated points', () => {
-      const coords = [
-        { lat: 50.0, lng: 0.0 },
-        { lat: 50.001, lng: 0.0 }, // ~111m apart
-      ];
-      const upsampled = upsampleCoordinates(coords, 50); // 50m resolution
-      expect(upsampled.length).toBeGreaterThan(2);
-
-      // Check that distances between consecutive points are reasonably uniform
-      for (let i = 1; i < upsampled.length; i++) {
-        const prev = upsampled[i - 1];
-        const curr = upsampled[i];
-        const distance = distanceBetweenLatLng(prev.lat, prev.lng, curr.lat, curr.lng);
-        expect(distance).toBeLessThanOrEqual(60); // Allow some tolerance
-      }
     });
   });
 

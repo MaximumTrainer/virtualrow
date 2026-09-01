@@ -1,4 +1,4 @@
-import { distanceBetweenMeters } from './coordinateUtils';
+import { bearingRadians, distanceBetweenMeters } from './coordinateUtils';
 
 /**
  * WGS-84 equatorial radius, used only by the scene projection below.
@@ -36,16 +36,8 @@ export function distanceBetweenLatLng(lat1:number, lng1:number, lat2:number, lng
 }
 
 export function calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const phi1 = lat1 * DEG_TO_RAD;
-  const phi2 = lat2 * DEG_TO_RAD;
-  const deltaLambda = (lng2 - lng1) * DEG_TO_RAD;
-
-  const y = Math.sin(deltaLambda) * Math.cos(phi2);
-  const x =
-    Math.cos(phi1) * Math.sin(phi2) -
-    Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
-
-  return (Math.atan2(y, x) * RAD_TO_DEG + 360) % 360;
+  const radians = bearingRadians({ lat: lat1, lng: lng1 }, { lat: lat2, lng: lng2 });
+  return (radians * RAD_TO_DEG + 360) % 360;
 }
 
 export function bearingBetweenLatLng(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -59,48 +51,6 @@ export function bearingDelta(bearing1: number, bearing2: number) {
 
 export function normalizeBearingDelta(fromBearing: number, toBearing: number) {
   return Math.abs(bearingDelta(fromBearing, toBearing));
-}
-
-export function upsampleCoordinates(
-  coords: Array<{ lat: number; lng: number }>,
-  minResolutionMeters = 10,
-): Array<{ lat: number; lng: number }> {
-  if (coords.length < 2) return [...coords];
-
-  const upsampled: Array<{ lat: number; lng: number }> = [coords[0]];
-
-  for (let i = 1; i < coords.length; i++) {
-    const prev = coords[i - 1];
-    const curr = coords[i];
-    const distance = distanceBetweenLatLng(prev.lat, prev.lng, curr.lat, curr.lng);
-
-    if (distance > minResolutionMeters) {
-      const numSegments = Math.ceil(distance / minResolutionMeters);
-      const prevPrev = i > 1 ? coords[i - 2] : prev;
-      const nextNext = i < coords.length - 1 ? coords[i + 1] : curr;
-      const m1Lat = (curr.lat - prevPrev.lat) * 0.5;
-      const m1Lng = (curr.lng - prevPrev.lng) * 0.5;
-      const m2Lat = (nextNext.lat - prev.lat) * 0.5;
-      const m2Lng = (nextNext.lng - prev.lng) * 0.5;
-
-      for (let j = 1; j <= numSegments; j++) {
-        const t = j / numSegments;
-        const t2 = t * t;
-        const t3 = t2 * t;
-        const h00 = 2 * t3 - 3 * t2 + 1;
-        const h10 = t3 - 2 * t2 + t;
-        const h01 = -2 * t3 + 3 * t2;
-        const h11 = t3 - t2;
-        const lat = h00 * prev.lat + h10 * m1Lat + h01 * curr.lat + h11 * m2Lat;
-        const lng = h00 * prev.lng + h10 * m1Lng + h01 * curr.lng + h11 * m2Lng;
-        upsampled.push({ lat, lng });
-      }
-    } else {
-      upsampled.push(curr);
-    }
-  }
-
-  return upsampled;
 }
 
 export function segmentRoute(

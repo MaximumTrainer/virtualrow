@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
@@ -15,6 +15,8 @@ import {
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { createBankGeometry } from './bankGeometry';
+import { RouteStripChunks } from './routeStripChunks';
+import type { ProgressRange } from './geometryChunks';
 import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
 
 // ============================================================================
@@ -32,53 +34,43 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   enrichment,
 }) => {
   const bankConfig = useMemo(() => getThemeConfig(theme).bank, [theme]);
-  
-  const { leftBankGeometry, rightBankGeometry } = useMemo(() => {
-    if (!curve) return { leftBankGeometry: null, rightBankGeometry: null };
 
-    return {
-      leftBankGeometry: createBankGeometry(curve, 'left', enrichment),
-      rightBankGeometry: createBankGeometry(curve, 'right', enrichment)
-    };
-  }, [curve, enrichment]);
+  // Both banks and all their chunks share one material — they are the same
+  // ground, and one upload is cheaper than thirty-two (#224).
+  const material = useMemo(
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: bankConfig.color,
+        roughness: bankConfig.roughness,
+        metalness: bankConfig.metalness,
+        emissive: new THREE.Color(bankConfig.emissive),
+        emissiveIntensity: bankConfig.emissiveIntensity,
+        sheen: bankConfig.sheen,
+        sheenColor: new THREE.Color(bankConfig.sheenColor),
+        sheenRoughness: 0.8,
+      }),
+    [bankConfig],
+  );
 
-  useEffect(() => {
-    return () => {
-      leftBankGeometry?.dispose();
-      rightBankGeometry?.dispose();
-    };
-  }, [leftBankGeometry, rightBankGeometry]);
-  
-  if (!curve || !leftBankGeometry || !rightBankGeometry) {
-    return null;
-  }
-  
+  useEffect(() => () => material.dispose(), [material]);
+
+  const buildLeft = useCallback(
+    (range: ProgressRange) =>
+      createBankGeometry(curve as THREE.CatmullRomCurve3, 'left', { enrichment, range }),
+    [curve, enrichment],
+  );
+  const buildRight = useCallback(
+    (range: ProgressRange) =>
+      createBankGeometry(curve as THREE.CatmullRomCurve3, 'right', { enrichment, range }),
+    [curve, enrichment],
+  );
+
+  if (!curve) return null;
+
   return (
     <group>
-      <mesh geometry={leftBankGeometry} receiveShadow>
-        <meshPhysicalMaterial 
-          color={bankConfig.color} 
-          roughness={bankConfig.roughness}
-          metalness={bankConfig.metalness}
-          emissive={bankConfig.emissive}
-          emissiveIntensity={bankConfig.emissiveIntensity}
-          sheen={bankConfig.sheen}
-          sheenColor={bankConfig.sheenColor}
-          sheenRoughness={0.8}
-        />
-      </mesh>
-      <mesh geometry={rightBankGeometry} receiveShadow>
-        <meshPhysicalMaterial 
-          color={bankConfig.color} 
-          roughness={bankConfig.roughness}
-          metalness={bankConfig.metalness}
-          emissive={bankConfig.emissive}
-          emissiveIntensity={bankConfig.emissiveIntensity}
-          sheen={bankConfig.sheen}
-          sheenColor={bankConfig.sheenColor}
-          sheenRoughness={0.8}
-        />
-      </mesh>
+      <RouteStripChunks curve={curve} material={material} buildChunk={buildLeft} />
+      <RouteStripChunks curve={curve} material={material} buildChunk={buildRight} />
     </group>
   );
 };

@@ -18,10 +18,10 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-08-31 with these exclusions on the issue-221 upload branch:
-      // 86.00% lines / 80.22% branches / 80.38% functions (was 84.63 / 78.82 /
-      // 77.80 before the activity stream, the FIT encoder and the upload
-      // service landed).
+      // Measured 2026-09-01 with these exclusions on the issue-224 engine
+      // branch: 86.63% lines / 81.39% branches / 81.21% functions (was 86.00 /
+      // 80.22 / 80.38 before route simplification, adaptive segments, chunked
+      // strip geometry and the GPU tier classifier landed).
       exclude: [
         '**/node_modules/**',
         '.claude/**',
@@ -44,6 +44,7 @@ export default defineConfig({
         'src/components/rower3d/effectComponents.tsx',
         'src/components/rower3d/waterComponents.tsx',
         'src/components/rower3d/bankComponents.tsx',
+        'src/components/rower3d/routeStripChunks.tsx',
         'src/components/rower3d/vegetationComponents.tsx',
         'src/components/rower3d/skyComponents.tsx',
         'src/components/rower3d/boatComponents.tsx',
@@ -68,11 +69,11 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-08-31: 86.00 / 80.22 / 80.38 (issue #221).
+        // Last measured 2026-09-01: 86.63 / 81.39 / 81.21 (issue #224).
         lines: 86,
         statements: 86,
-        branches: 80,
-        functions: 80,
+        branches: 81,
+        functions: 81,
       },
     },
   },
