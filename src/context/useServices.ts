@@ -18,6 +18,7 @@ import { authService } from '../services/authService';
 import { rownativeService } from '../services/rownativeService';
 import { routeEnrichmentService } from '../services/routeEnrichmentService';
 import { defaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
+import { intervalsIcuActivityService } from '../services/intervalsIcuActivityService';
 
 /** Production-adapter bundle wired from the existing service singletons. */
 export const defaultServices: Services = {
@@ -31,6 +32,7 @@ export const defaultServices: Services = {
   rownativeService,
   routeEnrichmentService,
   defaultRoutePreferenceStore,
+  intervalsIcuActivityService,
 };
 
 export const ServicesContext = createContext<Services>(defaultServices);

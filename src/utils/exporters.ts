@@ -116,6 +116,18 @@ export function slugify(text: string): string {
 }
 
 /**
+ * The filename a session's activity file is saved or uploaded under
+ * (issue #221, AC4.4), e.g. `willowbrook-river-2026-03-14.fit`.
+ *
+ * Shared by the download button and the upload service so the athlete's disk
+ * and their training log agree on what the row is called.
+ */
+export function activityFileName(session: WorkoutSession, extension = 'fit'): string {
+  const date = new Date(session.startTime).toISOString().slice(0, 10);
+  return `${slugify(session.routeName)}-${date}.${extension}`;
+}
+
+/**
  * Programmatically trigger a browser download of `content` with the given
  * MIME type and filename. Kept isolated so the format-building helpers above
  * remain pure / unit-testable in jsdom.

@@ -25,6 +25,7 @@ import type { AuthService } from '../services/authService';
 import type { RownativeService } from '../services/rownativeService';
 import type { RouteEnrichmentService } from '../services/routeEnrichmentService';
 import type { DefaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
+import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivityService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -159,6 +160,11 @@ export type DefaultRoutePreferencePort = Pick<
 >;
 
 /**
+ * Port for uploading a completed row to intervals.icu (issue #221, R3).
+ */
+export type ActivityUploadPort = Pick<IntervalsIcuActivityService, 'uploadActivity'>;
+
+/**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
  */
@@ -173,4 +179,5 @@ export interface Services {
   rownativeService: RownativePort;
   routeEnrichmentService: RouteEnrichmentPort;
   defaultRoutePreferenceStore: DefaultRoutePreferencePort;
+  intervalsIcuActivityService: ActivityUploadPort;
 }
