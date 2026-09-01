@@ -1,6 +1,9 @@
 /**
- * Pure helpers that build GPX / FIT-JSON document payloads from a workout
- * session + its associated route.
+ * Pure helpers that build GPX / GeoJSON document payloads from a workout
+ * session, a route, or an attached track.
+ *
+ * The FIT activity file is *not* built here: it is binary, and
+ * `services/fitEncoderService` owns it behind a dynamic import (issue #221).
  *
  * Extracted from `App.tsx` so the (string-building) format logic can be unit
  * tested without rendering the whole app or stubbing `URL.createObjectURL` /
@@ -60,90 +63,6 @@ function escapeXml(value: string): string {
 export function sessionIdToSerialNumber(id: string): number {
   if (/^\d+$/.test(id)) return parseInt(id, 10);
   return id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-}
-
-/** Shape of the JSON document produced by {@link buildSessionFITPayload}. */
-export interface FITSessionPayload {
-  file_id: {
-    type: 'activity';
-    manufacturer: 'VirtualRow';
-    product: number;
-    serial_number: number;
-    time_created: string;
-  };
-  activity: {
-    timestamp: string;
-    total_timer_time: number;
-    num_sessions: 1;
-    type: 'manual';
-  };
-  session: {
-    timestamp: string;
-    start_time: string;
-    total_elapsed_time: number;
-    total_timer_time: number;
-    total_distance: number;
-    total_calories: number;
-    avg_pace: number;
-    avg_heart_rate: number | undefined;
-    max_heart_rate: number | undefined;
-    sport: 'rowing';
-    sub_sport: 'indoor_rowing';
-  };
-  records: Array<{
-    timestamp: string;
-    distance: number;
-    pace: number;
-    power: number | undefined;
-    heart_rate: number | undefined;
-  }>;
-}
-
-/**
- * Build a JSON document approximating the FIT activity file structure.
- *
- * NOTE: True FIT files are binary; this helper emits a JSON projection that
- * downstream tools (or a future FIT encoder) can consume. The shape is kept
- * intentionally close to FIT field names so the eventual binary encoder is a
- * mechanical conversion.
- */
-export function buildSessionFITPayload(session: WorkoutSession): FITSessionPayload {
-  const ts = new Date(session.startTime).toISOString();
-  return {
-    file_id: {
-      type: 'activity',
-      manufacturer: 'VirtualRow',
-      product: 1,
-      serial_number: sessionIdToSerialNumber(session.id),
-      time_created: ts,
-    },
-    activity: {
-      timestamp: ts,
-      total_timer_time: session.duration,
-      num_sessions: 1,
-      type: 'manual',
-    },
-    session: {
-      timestamp: ts,
-      start_time: ts,
-      total_elapsed_time: session.duration,
-      total_timer_time: session.duration,
-      total_distance: session.distance,
-      total_calories: session.calories,
-      avg_pace: session.averagePace,
-      avg_heart_rate: session.heartRateAvg,
-      max_heart_rate: session.heartRateMax,
-      sport: 'rowing',
-      sub_sport: 'indoor_rowing',
-    },
-    records: session.splits.map((split) => ({
-      timestamp: new Date(split.timestamp).toISOString(),
-      distance: split.distance,
-      pace: split.pace,
-      power: split.power,
-      heart_rate: split.heartRate,
-    })),
-  };
 }
 
 /** RFC 7946 GeoJSON Feature for an attached track. */
