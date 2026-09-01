@@ -131,8 +131,11 @@ export function activityFileName(session: WorkoutSession, extension = 'fit'): st
  * Programmatically trigger a browser download of `content` with the given
  * MIME type and filename. Kept isolated so the format-building helpers above
  * remain pure / unit-testable in jsdom.
+ *
+ * Takes any `BlobPart` so the binary FIT file downloads through the same path
+ * as the text formats (issue #221, AC4.4).
  */
-export function triggerBlobDownload(content: string, mimeType: string, filename: string): void {
+export function triggerBlobDownload(content: BlobPart, mimeType: string, filename: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

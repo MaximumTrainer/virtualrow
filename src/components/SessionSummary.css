@@ -1,0 +1,209 @@
+/*
+ * The signed-in end-of-session summary (issue #221, R4).
+ *
+ * Sized and spaced like GuestSessionSummary so the two paths read as one
+ * screen: it scrolls rather than pushing its actions off a short viewport, and
+ * every control clears the 44px touch floor (AC4.7).
+ */
+
+.session-summary-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.session-summary-modal {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-panel);
+  padding: var(--space-xl);
+  max-width: 480px;
+  width: 100%;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Reclaim vertical space on short viewports before resorting to scrolling. */
+@media (max-height: 560px) {
+  .session-summary-modal {
+    padding: var(--space-md);
+    gap: var(--space-md);
+  }
+
+  .session-summary-backdrop {
+    padding: var(--space-sm);
+    align-items: flex-start;
+  }
+}
+
+.session-summary-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.session-summary-badge {
+  display: inline-block;
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  padding: var(--space-2xs) var(--space-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.session-summary-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.session-summary-route {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.session-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+/* Three across is too tight for a phone; fall back to pairs. */
+@media (max-width: 420px) {
+  .session-summary-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.session-stat {
+  background: var(--surface-secondary);
+  border: 1px solid var(--color-border-card);
+  border-radius: var(--radius-inset);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.session-stat-label {
+  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.session-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.session-stat-unit {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-left: 0.25em;
+}
+
+.session-summary-unsaved,
+.session-summary-saved,
+.session-summary-error {
+  margin: 0;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.session-summary-unsaved {
+  color: var(--text-tertiary);
+}
+
+.session-summary-saved {
+  color: var(--text-secondary);
+}
+
+.session-summary-error {
+  color: var(--color-status-error-text, #b3261e);
+  background: var(--color-status-error-bg, rgba(179, 38, 30, 0.08));
+  border-radius: var(--radius-inset);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.session-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.session-summary-secondary {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.session-summary-secondary .btn {
+  flex: 1;
+}
+
+.btn-session-save {
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  padding: var(--space-md) var(--space-xl);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-session-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .btn-session-save:not(:disabled):hover {
+    background: var(--color-brand-hover);
+  }
+}
+
+.btn-session-download,
+.btn-session-done {
+  min-height: 44px;
+  background: var(--color-bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .btn-session-download:hover,
+  .btn-session-done:hover {
+    background: var(--color-bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--color-border-hover);
+  }
+}

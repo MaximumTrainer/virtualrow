@@ -176,6 +176,22 @@ async function waitForRowScreen(page: Page, timeout = 10_000): Promise<void> {
 }
 
 /**
+ * Clear the end-of-session summary if it is up (issue #221, R4).
+ *
+ * These specs run with `mock-bluetooth.js`, so `__PLAYWRIGHT_TESTING` is set
+ * and the app treats the row as a signed-in one — ending a workout now raises
+ * the summary over the Row screen instead of returning to it directly.
+ */
+async function dismissSessionSummary(page: Page): Promise<void> {
+  const done = page.locator('.session-summary-modal .btn-session-done');
+  if (await done.count() === 0) return;
+  await page.evaluate(() => {
+    (document.querySelector('.session-summary-modal .btn-session-done') as HTMLButtonElement | null)?.click();
+  });
+  await page.locator('.session-summary-modal').waitFor({ state: 'detached', timeout: 10_000 });
+}
+
+/**
  * Pick a route by name: open the Routes screen, click its card, and land back
  * on the Row screen with it selected (issue #219, AC3.4).
  *
@@ -747,6 +763,7 @@ test.describe('Simulated e2e route playback', () => {
         window.__workoutService?.endSession();
       });
     }
+    await dismissSessionSummary(page);
 
     const sessions = await page.evaluate(() => window.__workoutService!.getAllSessions());
     expect(sessions.length).toBeGreaterThan(0);
@@ -901,6 +918,7 @@ test.describe('Simulated e2e route playback', () => {
         window.__workoutService?.endSession();
       });
     }
+    await dismissSessionSummary(page);
 
     // Select second route and start
     if (pm5Connected && await selectRoute(page, 'Venice Grand Canal')) {
@@ -971,6 +989,7 @@ test.describe('Simulated e2e route playback', () => {
         window.__workoutService?.endSession();
       });
     }
+    await dismissSessionSummary(page);
 
     const sessions = await page.evaluate(() => window.__workoutService!.getAllSessions());
     expect(sessions.length).toBeGreaterThanOrEqual(2);
@@ -1369,6 +1388,7 @@ test.describe('docs screenshots — other route heroes', () => {
         const endBtn = buttons.find((b) => /End Workout/i.test(b.textContent ?? ''));
         endBtn?.click();
       });
+      await dismissSessionSummary(page);
       await waitForRowScreen(page);
     }
   });

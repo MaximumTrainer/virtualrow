@@ -17,6 +17,7 @@ import { ftmsBluetoothService } from './services/ftmsBluetoothService';
 const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
+import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
@@ -114,6 +115,8 @@ function App() {
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   // Holds a completed unauthenticated session until the summary modal is dismissed
   const [guestCompletedSession, setGuestCompletedSession] = useState<WorkoutSession | null>(null);
+  // The same, for a signed-in athlete — who gets the save controls too (issue #221, R4).
+  const [completedSession, setCompletedSession] = useState<WorkoutSession | null>(null);
   // Demo mode is cleared when the session ends, so remember it for the summary.
   const [completedSessionWasDemo, setCompletedSessionWasDemo] = useState(false);
   const [routeEnrichments, setRouteEnrichments] = useState<Record<string, RouteEnrichmentData>>({});
@@ -385,13 +388,24 @@ function App() {
     setCompletedSessionWasDemo(isDemoMode);
     if (isDemoMode) stopDemoDevices();
 
-    if (isGuestSession && completed) {
+    if (!completed) {
+      setCurrentView('routes');
+      return;
+    }
+
+    if (isGuestSession) {
       // Show summary modal for unauthenticated sessions
       setGuestCompletedSession(completed);
-    } else {
-      setCurrentView('routes');
+      return;
     }
+
+    setCompletedSession(completed);
   }, [isGuestSession, isDemoMode, stopDemoDevices]);
+
+  const handleSessionDone = useCallback(() => {
+    setCompletedSession(null);
+    setCurrentView('routes');
+  }, []);
 
   const handleGuestRowAgain = useCallback(() => {
     setGuestCompletedSession(null);
@@ -738,6 +752,14 @@ function App() {
           onRowAgain={handleGuestRowAgain}
           onExit={handleGuestExit}
           onSignIn={login}
+          isDemo={completedSessionWasDemo}
+        />
+      )}
+
+      {completedSession && (
+        <SessionSummary
+          session={completedSession}
+          onDone={handleSessionDone}
           isDemo={completedSessionWasDemo}
         />
       )}

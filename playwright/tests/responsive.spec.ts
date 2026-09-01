@@ -295,6 +295,48 @@ test.describe('responsive layout', () => {
     expect(await measure(), 'summary modal controls under 44px').toEqual([]);
   });
 
+  test('the signed-in session summary is usable at every viewport (issue #221, AC4.7)', async ({ page }) => {
+    // The rest of this file is a signed-out visitor, so the guest summary is
+    // what it sees. Sign in — the summary with the save controls is a taller
+    // modal with a three-across stat grid, and it is the one #221 added.
+    await page.addInitScript(() => {
+      sessionStorage.setItem('vr_auth_user', JSON.stringify({
+        id: 'i12345', name: 'Test Athlete', email: 'athlete@example.com',
+      }));
+    });
+    await page.goto('./');
+    await startDemo(page);
+
+    await page.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
+    const summary = page.locator('.session-summary-modal');
+    await expect(summary).toBeVisible({ timeout: 20_000 });
+
+    // Reachable: nothing is clipped out of an overflow:hidden ancestor.
+    await expectHitTestable(page, '.btn-session-download', 'Download .fit');
+    await expectHitTestable(page, '.btn-session-done', 'Done');
+
+    // The 44px touch floor, measured on the summary's own controls.
+    const undersized = await summary.evaluate((modal) => {
+      const bad: Array<{ cls: string; w: number; h: number }> = [];
+      for (const el of Array.from(modal.querySelectorAll('button, a'))) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.height < 44 - 0.5 || r.width < 44 - 0.5) {
+          bad.push({ cls: (el as HTMLElement).className, w: Math.round(r.width), h: Math.round(r.height) });
+        }
+      }
+      return bad;
+    });
+    expect(undersized, 'session summary controls under 44px').toEqual([]);
+
+    // The modal never forces the page to scroll sideways.
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.innerWidth + 1);
+  });
+
   test('no webfont is fetched', async ({ page }) => {
     // issue #219, AC1.2 — the app runs on the system stack, so the Inter
     // @import (a render-blocking request to fonts.googleapis.com for a face the

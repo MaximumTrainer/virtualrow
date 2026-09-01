@@ -216,9 +216,13 @@ test.describe('imported KML route rendering (KV-2)', () => {
       .toBeGreaterThan(0);
     expect(startProgress).toBe(0);
 
-    // Finish.
+    // Finish. The end-of-session summary comes up over the Row screen for a
+    // signed-in row (issue #221, R4); clear it before reading telemetry.
     await page.evaluate(() => {
       (document.querySelector('.btn-end-workout') as HTMLButtonElement)?.click();
+    });
+    await page.evaluate(() => {
+      (document.querySelector('.session-summary-modal .btn-session-done') as HTMLButtonElement | null)?.click();
     });
     assertFinite(await sampleTelemetry(), 'finish');
 
