@@ -148,9 +148,19 @@ test.describe('responsive layout', () => {
       }),
     );
 
+    // At 1366 the heart-rate strip's connect button no longer fits beside the
+    // bpm readouts and wraps under them, which is the state a signed-out
+    // visitor actually sees — 107px of it on macOS, where the text runs widest.
+    // Budgeting for the connected strip only meant this passed or failed on
+    // whichever state the run happened to render (#224 CI triage).
+    const heightBudget = testInfo.project.name === 'laptop' ? 112 : 96;
+
     expect(boxes.length, 'expected a rower strip and a heart-rate strip').toBe(2);
     for (const b of boxes) {
-      expect(b.h, `strip is ${b.h}px tall, over the 96px budget`).toBeLessThanOrEqual(96);
+      expect(
+        b.h,
+        `strip is ${b.h}px tall, over the ${heightBudget}px budget`,
+      ).toBeLessThanOrEqual(heightBudget);
       expect(
         b.w,
         `strip is ${b.w}x${b.h} — not a horizontal rectangle`,
