@@ -43,7 +43,9 @@ A `Services` aggregate interface gathers all nine ports. The `ServicesProvider` 
 | Route catalogue | `routeService` | In-memory `WaterRoute[]`; imports from GPX/GeoJSON/KML/rownative; calculates polyline distance |
 | Route enrichment | `routeEnrichmentService` | Fetches elevations (OpenTopoData) and land-use (Overpass); builds 50m segment profiles; caches in localStorage with 7-day TTL |
 | Rownative courses | `rownativeService` + `rownativeGeometry` | Fetches from GitHub mirror; resolves geometry via precedence chain (track → polygon-path → gate-chain); validates against gate centroids |
-| Workout sessions | `workoutService` | Session lifecycle, PM5 data accumulation, 500m splits, HR samples, CSV/JSON export |
+| Workout sessions | `workoutService` + `activitySampler` | Session lifecycle, PM5 data accumulation, 500m splits, HR samples, the 1 Hz activity stream, CSV/JSON export |
+| FIT encoding | `fitEncoderService` | Hand-written binary FIT Activity encoder; pure `encodeSession(session)`, reached by dynamic `import()` so it stays out of the main chunk |
+| Activity upload | `intervalsIcuActivityService` | Multipart `POST` of the encoded FIT to intervals.icu via the CORS proxy; 401-refresh-retry, duplicate suppression |
 | Workout generator | `workoutGeneratorService` | Structured workout templates, intervals.icu import, segment-level progress tracking |
 | Auth | `authService` | OAuth 2.0 PKCE with intervals.icu via CORS proxy |
 
@@ -80,7 +82,7 @@ No external state library. State lives in:
 | Service | Access | Notes |
 |---|---|---|
 | rownative.icu courses | GitHub mirror (`raw.githubusercontent.com/rownative/courses/`) | CORS-locked live API; mirror is the sole data path; ~60% coverage of live catalogue |
-| intervals.icu | OAuth PKCE via CORS proxy | Token exchange, profile, planned workout calendar |
+| intervals.icu | OAuth PKCE via CORS proxy | Token exchange, profile, planned workout calendar, and activity upload (`POST /api/v1/athlete/0/activities`, multipart FIT). The proxy forwards multipart `POST` unchanged — verified, see MaximumTrainer_Redux#359 |
 | OpenTopoData | `api.opentopodata.org/v1/srtm30m` | Batched in groups of 100 coordinates |
 | Overpass API | `overpass-api.de/api/interpreter` | Land-use, waterway, building queries by bounding box |
 
@@ -160,6 +162,10 @@ Write tests first, from the outside in. Start at the boundary the user or caller
 - **Track parsers return `ParsedCoordinateList`** (`{ coordinates, dropped, total }`), not bare arrays. The drop allowance (one point or 10% of total, whichever is larger) is checked in `parseTrackFile` and applies uniformly to GPX, KML, and GeoJSON.
 
 - **Coverage thresholds ratchet.** When your change improves coverage, raise the thresholds in `vitest.config.ts` to the new floor. Never lower them to make a PR pass.
+
+- **A completed row is recorded once per second, and its position comes from the route.** `ActivitySample` is the unit the FIT encoder writes records from. Positions are `distance` interpolated along the selected route's polyline (`interpolateAlong`), so an exported track covers the water actually rowed rather than the whole course. Do not reintroduce a sample cap: truncating the series silently falsifies the averages computed at `endSession()`.
+
+- **Simulated rows never leave the browser.** A guest row and a demo row are both excluded from the upload *and* from local persistence. The rule lives in `intervalsIcuActivityService.uploadActivity` and `saveCompletedSession`, not at the call-sites.
 
 ### 5. Commit discipline
 

@@ -18,9 +18,10 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-08-31 with these exclusions on the issue-219 UX branch:
-      // 84.63% lines / 78.82% branches / 77.80% functions (was 81.79 / 77.69 /
-      // 73.26 before the Routes screen and the default-route store landed).
+      // Measured 2026-08-31 with these exclusions on the issue-221 upload branch:
+      // 86.00% lines / 80.22% branches / 80.38% functions (was 84.63 / 78.82 /
+      // 77.80 before the activity stream, the FIT encoder and the upload
+      // service landed).
       exclude: [
         '**/node_modules/**',
         '.claude/**',
@@ -67,11 +68,11 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-08-31: 84.63 / 78.82 / 77.80.
-        lines: 84,
-        statements: 84,
-        branches: 78,
-        functions: 77,
+        // Last measured 2026-08-31: 86.00 / 80.22 / 80.38 (issue #221).
+        lines: 86,
+        statements: 86,
+        branches: 80,
+        functions: 80,
       },
     },
   },
