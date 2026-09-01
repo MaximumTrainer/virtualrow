@@ -30,6 +30,7 @@ import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } 
 import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { resolvePerformanceMode } from './components/rower3d/constants';
 import { formatPace } from './utils/formatters';
+import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -399,8 +400,16 @@ function App() {
       return;
     }
 
+    // The row is kept locally before any upload is attempted, so a row the
+    // athlete declines to upload — or that fails to — still survives a reload
+    // (issue #221, AC6.1).
+    if (user) saveCompletedSession(user.id, completed, { isDemo: isDemoMode });
     setCompletedSession(completed);
-  }, [isGuestSession, isDemoMode, stopDemoDevices]);
+  }, [isGuestSession, isDemoMode, stopDemoDevices, user]);
+
+  const handleSessionSaved = useCallback((activityId: string) => {
+    if (user && completedSession) markSessionUploaded(user.id, completedSession.id, activityId);
+  }, [completedSession, user]);
 
   const handleSessionDone = useCallback(() => {
     setCompletedSession(null);
@@ -760,6 +769,7 @@ function App() {
         <SessionSummary
           session={completedSession}
           onDone={handleSessionDone}
+          onSaved={handleSessionSaved}
           isDemo={completedSessionWasDemo}
         />
       )}

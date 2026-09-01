@@ -107,6 +107,8 @@ export interface WorkoutSession {
   rowerType?: 'pm5' | 'ftms'; // Which rower device was connected at session start
   hrConnectedAtStart?: boolean; // Whether HR monitor was connected when session started
   isGuest?: boolean; // True for anonymous/guest sessions — excluded from history
+  /** intervals.icu activity id, set once the row has been uploaded (issue #221, AC6.2). */
+  uploadedActivityId?: string;
 }
 
 // Individual split data (500m segments typical for rowing)

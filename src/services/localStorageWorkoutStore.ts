@@ -44,6 +44,37 @@ export function saveSession(userId: string, session: WorkoutSession): void {
 }
 
 /**
+ * Persist a finished row, if it is one that belongs in an athlete's history
+ * (issue #221, R6).
+ *
+ * A guest row has no athlete to file it under, and a demo row is simulated
+ * data that must never read as a real workout (AC6.4) — both are dropped here
+ * rather than at each call-site.
+ */
+export function saveCompletedSession(
+  userId: string,
+  session: WorkoutSession,
+  { isDemo }: { isDemo: boolean },
+): void {
+  if (isDemo || session.isGuest) return;
+  saveSession(userId, session);
+}
+
+/**
+ * Record that a stored row reached intervals.icu, and under which activity id
+ * (issue #221, AC6.2).
+ *
+ * A row this browser never stored is ignored: the upload still succeeded, and
+ * inventing a history entry for it would be worse than having none.
+ */
+export function markSessionUploaded(userId: string, sessionId: string, activityId: string): void {
+  const stored = loadSessions(userId);
+  const session = stored.find((s) => s.id === sessionId);
+  if (!session) return;
+  saveSession(userId, { ...session, uploadedActivityId: activityId });
+}
+
+/**
  * Load all stored workout sessions for an authenticated user.
  * Returns an empty array if nothing is stored or parsing fails.
  */
