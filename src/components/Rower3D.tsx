@@ -29,7 +29,14 @@ import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import { IS_TEST_MODE, SCENE_SCALE, hasExplicitPerformanceMode } from './rower3d/constants';
-import { markRouteLoadStart, markFirstFrame } from './rower3d/sceneTiming';
+import {
+  markRouteLoadStart,
+  markFirstFrame,
+  markRouteGeometryReady,
+  routeLoadCount,
+} from './rower3d/sceneTiming';
+import { createFrameStatsRecorder } from './rower3d/frameStats';
+import { measureSceneMemory } from './rower3d/sceneMemory';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
 import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
@@ -141,8 +148,11 @@ const RowerScene: React.FC<Rower3DProps> = ({
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
 }) => {
-  const { camera } = useThree();
+  const { camera, scene, gl } = useThree();
   const performanceMode = useHardwarePerformanceMode(requestedPerformanceMode);
+  // useState, not useRef: the recorder is a stable instance that the render
+  // pass legitimately reads, and a ref may not be touched during render.
+  const [frameStats] = useState(createFrameStatsRecorder);
 
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
@@ -155,11 +165,18 @@ const RowerScene: React.FC<Rower3DProps> = ({
     markRouteLoadStart();
     return createRouteCurve(route.coordinates, SCENE_SCALE);
   }, [route.coordinates]);
+
+  // A new route is a new measurement; the old route's frames say nothing about
+  // this one.
+  useEffect(() => {
+    frameStats.reset();
+  }, [frameStats, routeCurve]);
   
   const curveData = useMemo(() => {
     if (!routeCurve) return { distances: [], length: 0 };
     const distances = getCurveDistances(routeCurve);
     const length = distances[distances.length - 1] || 0;
+    markRouteGeometryReady();
     return { distances, length };
   }, [routeCurve]);
   
@@ -187,6 +204,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
 
   useFrame((state, delta) => {
     markFirstFrame();
+    // Not while the tab is hidden: the gap on return is not a dropped frame.
+    if (typeof document === 'undefined' || !document.hidden) frameStats.record(delta);
     const pm5Data = {
       pace: paceSPer500 ?? undefined,
       power: undefined,
@@ -280,11 +299,18 @@ const RowerScene: React.FC<Rower3DProps> = ({
         window.__ROWER3D_ROUTE = {
           hasCurve: !!routeCurve,
           totalDistance,
-          curveLength: curveData.length
+          curveLength: curveData.length,
+          builds: routeLoadCount()
         };
         window.__ROWER3D_SPEED_MPS = renderedSpeedMps;
         window.__ROWER3D_STROKE_PHASE = boatStateRef.current.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
+        window.__ROWER3D_FRAME_STATS = frameStats.read() ?? undefined;
+        // Walking the scene graph is not free, so it is sampled about once a
+        // second rather than every frame, and only under automation.
+        if (Math.floor(elapsedTime) !== Math.floor(elapsedTime - delta)) {
+          window.__ROWER3D_MEMORY = measureSceneMemory(scene, gl);
+        }
       }
     } catch { /* intentional: window access may fail in test environments */ }
   });

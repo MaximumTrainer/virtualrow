@@ -18,10 +18,10 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-09-01 with these exclusions on the issue-224 engine
-      // branch: 86.63% lines / 81.39% branches / 81.21% functions (was 86.00 /
-      // 80.22 / 80.38 before route simplification, adaptive segments, chunked
-      // strip geometry and the GPU tier classifier landed).
+      // Measured 2026-09-02 completing issue #224: 87.13% lines / 81.70%
+      // branches / 81.71% functions (was 86.63 / 81.39 / 81.21 before the
+      // frame-time recorder, the scene-memory sampler, the curvature-aware
+      // strip schedule and the graphics-quality control landed).
       exclude: [
         '**/node_modules/**',
         '.claude/**',
@@ -69,9 +69,9 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-01: 86.63 / 81.39 / 81.21 (issue #224).
-        lines: 86,
-        statements: 86,
+        // Last measured 2026-09-02: 87.13 / 81.70 / 81.71 (issue #224).
+        lines: 87,
+        statements: 87,
         branches: 81,
         functions: 81,
       },

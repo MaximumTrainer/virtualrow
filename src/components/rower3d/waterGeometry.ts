@@ -3,8 +3,7 @@ import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import { WHOLE_ROUTE } from './geometryChunks';
 import {
   sampleStripFrame,
-  stripProgressAt,
-  stripSegmentCount,
+  stripProgressSchedule,
   type StripGeometryOptions,
 } from './routeStripGeometry';
 import {
@@ -31,7 +30,8 @@ export const createWaterChannelGeometry = (
   curve: THREE.CatmullRomCurve3,
   { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
 ): THREE.BufferGeometry => {
-  const segments = stripSegmentCount(curve, range);
+  const schedule = stripProgressSchedule(curve, range);
+  const segments = schedule.length - 1;
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
@@ -42,7 +42,7 @@ export const createWaterChannelGeometry = (
   const edge = new THREE.Vector3();
 
   for (let i = 0; i <= segments; i++) {
-    const t = stripProgressAt(range, i, segments);
+    const t = schedule[i];
     sampleStripFrame(curve, t, point, perp);
 
     const halfWidth =

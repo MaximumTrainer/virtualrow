@@ -271,3 +271,75 @@ describe('Rower3D curve helpers', () => {
     });
   });
 });
+
+describe('upsampleRouteCoordinates on unevenly spaced input (#224)', () => {
+  const METERS_PER_DEGREE_LAT = 111_195;
+  const ORIGIN_LAT = 51.45;
+  const LNG_SCALE = METERS_PER_DEGREE_LAT * Math.cos((ORIGIN_LAT * Math.PI) / 180);
+  const at = (east: number, north: number): Coordinate => ({
+    lat: ORIGIN_LAT + north / METERS_PER_DEGREE_LAT,
+    lng: east / LNG_SCALE,
+  });
+  const eastOf = (c: Coordinate) => c.lng * LNG_SCALE;
+  const northOf = (c: Coordinate) => (c.lat - ORIGIN_LAT) * METERS_PER_DEGREE_LAT;
+
+  /**
+   * Simplification leaves a long straight leg next to short steps around a
+   * bend. Tangents taken as plain centred differences are then dominated by the
+   * long leg and fling the interpolated points off the route (#224).
+   */
+  const unevenBend: Coordinate[] = [
+    at(-40, 600), // 602 m straight leg
+    at(-40, -2),
+    at(-36, -17), // then 15 m steps around a hairpin
+    at(-28, -29),
+    at(-16, -37),
+    at(-1, -40),
+  ];
+
+  it('keeps every inserted point inside the span of the leg it subdivides', () => {
+    const upsampled = upsampleRouteCoordinates(unevenBend, 10);
+
+    for (let i = 0; i < upsampled.length; i++) {
+      const north = northOf(upsampled[i]);
+      const east = eastOf(upsampled[i]);
+      // The whole route lies within these bounds; an overshoot leaves them.
+      expect(north).toBeGreaterThan(-45);
+      expect(north).toBeLessThan(605);
+      expect(east).toBeGreaterThan(-45);
+      expect(east).toBeLessThan(5);
+    }
+  });
+
+  it('does not reverse direction between consecutive points', () => {
+    const upsampled = upsampleRouteCoordinates(unevenBend, 10);
+    for (let i = 1; i < upsampled.length - 1; i++) {
+      const ax = eastOf(upsampled[i]) - eastOf(upsampled[i - 1]);
+      const ay = northOf(upsampled[i]) - northOf(upsampled[i - 1]);
+      const bx = eastOf(upsampled[i + 1]) - eastOf(upsampled[i]);
+      const by = northOf(upsampled[i + 1]) - northOf(upsampled[i]);
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 1e-6 || lb < 1e-6) continue;
+      const turn = Math.acos(
+        Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb))),
+      );
+      expect((turn * 180) / Math.PI).toBeLessThan(90);
+    }
+  });
+
+  it('still reduces to the plain centred difference on evenly spaced input', () => {
+    // A regular arc: the weighting must not change the shape it already made.
+    const arc: Coordinate[] = Array.from({ length: 12 }, (_, i) => {
+      const angle = (i / 11) * Math.PI;
+      return at(Math.cos(angle) * 100, Math.sin(angle) * 100);
+    });
+    const upsampled = upsampleRouteCoordinates(arc, 10);
+
+    for (const point of upsampled) {
+      const radius = Math.hypot(eastOf(point), northOf(point));
+      expect(radius).toBeGreaterThan(95);
+      expect(radius).toBeLessThan(105);
+    }
+  });
+});

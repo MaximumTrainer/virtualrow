@@ -1722,3 +1722,44 @@ body {
     min-height: 160px;
   }
 }
+
+/* Graphics quality override (#224 4G) — the rower's call when the hardware
+   heuristic guesses wrong, or when they would rather have frames than shadows. */
+.graphics-quality {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.graphics-quality-legend {
+  padding: 0 0 var(--space-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.graphics-quality-options {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.graphics-quality-option {
+  flex: 1;
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.graphics-quality-option.is-selected {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg-card);
+}

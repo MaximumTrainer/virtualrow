@@ -29,6 +29,8 @@ import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
 import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { resolvePerformanceMode } from './components/rower3d/constants';
+import { useGraphicsQuality } from './hooks/useGraphicsQuality';
+import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
 import { formatPace } from './utils/formatters';
 import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
@@ -110,6 +112,10 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+
+  // The rower's own call on graphics quality, overruling hardware detection
+  // when they know better than the heuristic does (#224).
+  const graphics = useGraphicsQuality();
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
   const [isDemoMode, setIsDemoMode] = useState(false);
   // Session state for the overlay UI
@@ -972,6 +978,11 @@ function App() {
                     Change route
                   </button>
 
+                  <GraphicsQualityPicker
+                    quality={graphics.quality}
+                    onChange={graphics.setQuality}
+                  />
+
                   {/* Offered to everyone, not only guests (issue #219, AC7.2). */}
                   <div className="demo-row-cta">
                     <button
@@ -1189,7 +1200,7 @@ function App() {
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
-                      performanceMode={resolvePerformanceMode()}
+                      performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
                       debugMode={debugMode}
                     />
                   </Suspense>

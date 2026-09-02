@@ -34,6 +34,18 @@ const cubicHermite = (
   );
 };
 
+/**
+ * Densify a route onto a `minResolutionMeters` grid, following a cubic Hermite
+ * through the points rather than cutting the corners with straight chords.
+ *
+ * Tangents are weighted by the spacing either side of each point. An unweighted
+ * centred difference is only correct when the points are evenly spaced, and
+ * simplification deliberately makes them anything but: a 600 m straight leg can
+ * sit next to 15 m steps around a hairpin, and the long leg's tangent then
+ * flings the interpolated points tens of metres off the water (#224). With even
+ * spacing the weights are 1/2 and this reduces exactly to the plain centred
+ * difference it replaced.
+ */
 export const upsampleRouteCoordinates = (
   coordinates: Coordinate[],
   minResolutionMeters: number = DEFAULT_ROUTE_POINT_RESOLUTION_METERS,
@@ -42,29 +54,39 @@ export const upsampleRouteCoordinates = (
     return coordinates;
   }
 
-  const tangents = coordinates.map((coord, index) => {
+  const spans = coordinates.slice(0, -1).map((coord, index) =>
+    distanceBetweenLatLng(
+      coord.lat,
+      coord.lng,
+      coordinates[index + 1].lat,
+      coordinates[index + 1].lng,
+    ),
+  );
+
+  /**
+   * Hermite tangent at `index`, scaled for the segment of length `spanMeters`
+   * it is about to be used on.
+   */
+  const tangentAt = (index: number, spanMeters: number): Coordinate => {
     const previous = coordinates[Math.max(0, index - 1)];
     const next = coordinates[Math.min(coordinates.length - 1, index + 1)];
 
-    if (index === 0) {
-      return {
-        lat: next.lat - coord.lat,
-        lng: next.lng - coord.lng,
-      };
+    if (index === 0 || index === coordinates.length - 1) {
+      const from = index === 0 ? coordinates[0] : previous;
+      const to = index === 0 ? next : coordinates[index];
+      return { lat: to.lat - from.lat, lng: to.lng - from.lng };
     }
 
-    if (index === coordinates.length - 1) {
-      return {
-        lat: coord.lat - previous.lat,
-        lng: coord.lng - previous.lng,
-      };
-    }
+    const before = spans[index - 1];
+    const after = spans[index];
+    const neighbourhood = before + after;
+    const weight = neighbourhood > 0 ? spanMeters / neighbourhood : 0.5;
 
     return {
-      lat: (next.lat - previous.lat) / 2,
-      lng: (next.lng - previous.lng) / 2,
+      lat: (next.lat - previous.lat) * weight,
+      lng: (next.lng - previous.lng) * weight,
     };
-  });
+  };
 
   const upsampled: Coordinate[] = [];
 
@@ -73,35 +95,18 @@ export const upsampleRouteCoordinates = (
     const end = coordinates[index + 1];
     upsampled.push(start);
 
-    const segmentDistance = distanceBetweenLatLng(
-      start.lat,
-      start.lng,
-      end.lat,
-      end.lng,
-    );
+    const segmentDistance = spans[index];
     const subdivisions = Math.ceil(segmentDistance / minResolutionMeters);
 
     if (subdivisions <= 1) continue;
 
-    const startTangent = tangents[index];
-    const endTangent = tangents[index + 1];
+    const startTangent = tangentAt(index, segmentDistance);
+    const endTangent = tangentAt(index + 1, segmentDistance);
     for (let step = 1; step < subdivisions; step++) {
       const t = step / subdivisions;
       upsampled.push({
-        lat: cubicHermite(
-          start.lat,
-          end.lat,
-          startTangent.lat,
-          endTangent.lat,
-          t,
-        ),
-        lng: cubicHermite(
-          start.lng,
-          end.lng,
-          startTangent.lng,
-          endTangent.lng,
-          t,
-        ),
+        lat: cubicHermite(start.lat, end.lat, startTangent.lat, endTangent.lat, t),
+        lng: cubicHermite(start.lng, end.lng, startTangent.lng, endTangent.lng, t),
       });
     }
   }
@@ -146,6 +151,15 @@ export const gpsToScenePoints = (
  *
  * Returns `null` if fewer than two coordinates are provided.
  */
+/**
+ * How near the two ends of a route must be before it counts as a closed loop.
+ *
+ * A lap course finishes where it started, give or take where the athlete's
+ * watch stopped. Five metres is inside GPS scatter and well below the width of
+ * any water worth rowing.
+ */
+export const LOOP_CLOSURE_TOLERANCE_METERS = 5;
+
 export const createRouteCurve = (
   coordinates: Coordinate[],
   sceneScale: number = SCENE_SCALE,
@@ -162,8 +176,28 @@ export const createRouteCurve = (
   );
   if (points.length < 2) return null;
 
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
+  // A lap course is built as a genuinely closed spline. Left open, the curve
+  // takes a one-sided tangent at each end, so the bank normals either side of
+  // the join point in different directions and the water shows a seam where
+  // the rower crosses the line (#224).
+  const closed = isClosedLoop(coordinates);
+  if (closed) {
+    points.pop();
+    if (points.length < 3) return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
+  }
+
+  return new THREE.CatmullRomCurve3(points, closed, 'catmullrom', 0.5);
 };
+
+/** True when a route finishes where it started. */
+export const isClosedLoop = (coordinates: Coordinate[]): boolean =>
+  coordinates.length >= 4 &&
+  distanceBetweenLatLng(
+    coordinates[0].lat,
+    coordinates[0].lng,
+    coordinates[coordinates.length - 1].lat,
+    coordinates[coordinates.length - 1].lng,
+  ) <= LOOP_CLOSURE_TOLERANCE_METERS;
 
 /** Real-world metres a scene curve covers. */
 export const curveLengthMeters = (

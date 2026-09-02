@@ -3,8 +3,7 @@ import { SCENE_SCALE, WATER_CHANNEL_WIDTH, RIVERBANK_WIDTH } from './constants';
 import { WHOLE_ROUTE } from './geometryChunks';
 import {
   sampleStripFrame,
-  stripProgressAt,
-  stripSegmentCount,
+  stripProgressSchedule,
   type StripGeometryOptions,
 } from './routeStripGeometry';
 import {
@@ -34,7 +33,8 @@ export const createBankGeometry = (
   side: 'left' | 'right',
   { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
 ): THREE.BufferGeometry => {
-  const segments = stripSegmentCount(curve, range);
+  const schedule = stripProgressSchedule(curve, range);
+  const segments = schedule.length - 1;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -49,7 +49,7 @@ export const createBankGeometry = (
   const outer = new THREE.Vector3();
 
   for (let i = 0; i <= segments; i++) {
-    const t = stripProgressAt(range, i, segments);
+    const t = schedule[i];
     sampleStripFrame(curve, t, point, perp);
 
     const waterWidth = getWaterWidthSceneUnitsForProgress(

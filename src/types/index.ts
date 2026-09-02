@@ -320,7 +320,7 @@ declare global {
     // Rower3D telemetry exposed for Playwright assertions
     __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
     __ROWER3D_CAMERA?: { position: [number, number, number] };
-    __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number };
+    __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number; builds?: number };
     __ROWER3D_SPEED_MPS?: number;
     __ROWER3D_STROKE_PHASE?: string;
     __ROWER3D_DISTANCE_M?: number;
@@ -329,6 +329,20 @@ declare global {
     __ROWER3D_GPU_BACKEND?: string;
     __ROWER3D_WEBGL_LOST?: boolean;
     __ROWER3D_MAX_ANISOTROPY?: number;
+    __ROWER3D_FRAME_STATS?: {
+      frames: number;
+      windowSeconds: number;
+      fps: number;
+      p50Ms: number;
+      p95Ms: number;
+      maxMs: number;
+    };
+    __ROWER3D_MEMORY?: {
+      geometryBytes: number;
+      geometryMb: number;
+      geometries: number;
+      textures: number;
+    };
     /**
      * The selected route's headline numbers, for Playwright assertions.
      *

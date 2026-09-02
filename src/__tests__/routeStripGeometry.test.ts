@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import type { Coordinate } from '../types/index';
-import { createRouteCurve, curveSegmentCount } from '../components/rower3d/curve';
+import { createRouteCurve } from '../components/rower3d/curve';
+import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
 import { createWaterChannelGeometry, WATER_SURFACE_Y } from '../components/rower3d/waterGeometry';
 import { createBankGeometry, BANK_WATERLINE_Y } from '../components/rower3d/bankGeometry';
 import { chunkProgressRanges } from '../components/rower3d/geometryChunks';
@@ -50,7 +51,7 @@ describe('createWaterChannelGeometry', () => {
   it('lays two vertices per sample along the whole route', () => {
     const curve = curveFor(3000);
     const geometry = createWaterChannelGeometry(curve);
-    expect(vertexCount(geometry)).toBe((curveSegmentCount(curve) + 1) * 2);
+    expect(vertexCount(geometry)).toBe((stripSegmentCount(curve) + 1) * 2);
   });
 
   it('spends more geometry on a long route than a short one', () => {
@@ -123,8 +124,10 @@ describe('chunked strips', () => {
       .map((range) => vertexCount(createWaterChannelGeometry(curve, { range })))
       .reduce((a, b) => a + b, 0);
 
-    // Every chunk repeats its predecessor's closing pair of vertices.
-    expect(chunked).toBe(whole + 7 * 2);
+    // Every chunk repeats its predecessor's closing pair of vertices, and each
+    // chunk rounds its own share of the budget, so the totals agree loosely.
+    expect(chunked).toBeGreaterThan(whole);
+    expect(chunked).toBeLessThan(whole * 1.2);
   });
 
   it('traces the same water as the unchunked build', () => {
@@ -132,12 +135,26 @@ describe('chunked strips', () => {
     const whole = createWaterChannelGeometry(curve);
     const middle = createWaterChannelGeometry(curve, { range: { from: 0.5, to: 0.75 } });
 
+    // Chunked and unchunked builds place their samples independently, so a
+    // chunk vertex need not coincide with a whole-route vertex — it must lie on
+    // the same edge. Measured against the edge's segments: nearest-vertex
+    // distance would just report the sample spacing. 0.05 scene units is 50 cm.
     const startOfChunk = vertexAt(middle, 0);
-    const nearest = Array.from({ length: vertexCount(whole) }, (_, i) =>
-      startOfChunk.distanceTo(vertexAt(whole, i)),
-    ).reduce((a, b) => Math.min(a, b));
+    const edge: THREE.Vector3[] = [];
+    for (let i = 0; i < vertexCount(whole); i += 2) edge.push(vertexAt(whole, i));
 
-    expect(nearest).toBeLessThan(1e-6);
+    const nearest = edge.slice(0, -1).reduce((best, a, i) => {
+      const b = edge[i + 1];
+      const span = b.clone().sub(a);
+      const lengthSquared = span.lengthSq();
+      const along =
+        lengthSquared > 0
+          ? Math.max(0, Math.min(1, startOfChunk.clone().sub(a).dot(span) / lengthSquared))
+          : 0;
+      return Math.min(best, startOfChunk.distanceTo(a.clone().addScaledVector(span, along)));
+    }, Infinity);
+
+    expect(nearest).toBeLessThan(0.05);
   });
 
   it('builds a drawable chunk even for a hair-thin range', () => {

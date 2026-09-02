@@ -71,3 +71,48 @@ describe('scene timing marks', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('route geometry timing', () => {
+  beforeEach(() => {
+    performance.clearMarks();
+    performance.clearMeasures();
+  });
+
+  it('measures the part of the wait that is the route geometry', async () => {
+    const { markRouteLoadStart, markRouteGeometryReady, GEOMETRY_READY_MEASURE } =
+      await loadTiming();
+
+    markRouteLoadStart();
+    markRouteGeometryReady();
+
+    const [measure] = performance.getEntriesByName(GEOMETRY_READY_MEASURE);
+    expect(measure).toBeDefined();
+    expect(measure.duration).toBeGreaterThanOrEqual(0);
+  });
+
+  it('records nothing when no route load was marked', async () => {
+    const { markRouteGeometryReady, GEOMETRY_READY_MEASURE } = await loadTiming();
+    markRouteGeometryReady();
+    expect(performance.getEntriesByName(GEOMETRY_READY_MEASURE)).toHaveLength(0);
+  });
+
+  it('measures the first build only, not every re-render', async () => {
+    const { markRouteLoadStart, markRouteGeometryReady, GEOMETRY_READY_MARK } = await loadTiming();
+    markRouteLoadStart();
+    markRouteGeometryReady();
+    markRouteGeometryReady();
+    expect(performance.getEntriesByName(GEOMETRY_READY_MARK)).toHaveLength(1);
+  });
+
+  it('starts a clean clock for the next route', async () => {
+    const { markRouteLoadStart, markRouteGeometryReady, GEOMETRY_READY_MEASURE } =
+      await loadTiming();
+    markRouteLoadStart();
+    markRouteGeometryReady();
+    markRouteLoadStart();
+    expect(performance.getEntriesByName(GEOMETRY_READY_MEASURE)).toHaveLength(0);
+
+    markRouteGeometryReady();
+    expect(performance.getEntriesByName(GEOMETRY_READY_MEASURE)).toHaveLength(1);
+  });
+});

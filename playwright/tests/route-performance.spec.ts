@@ -16,6 +16,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
 const FIRST_FRAME_MEASURE = 'virtualrow:route-to-first-frame';
+const GEOMETRY_READY_MEASURE = 'virtualrow:route-to-geometry-ready';
+
+/** Budget for building the spline and its distance table on a dense import. */
+const GEOMETRY_BUDGET_MS = 50;
+
+/** #224's end-to-end budget, on hardware where the clock means anything. */
+const FIRST_FRAME_BUDGET_MS = 150;
 
 const METERS_PER_DEGREE_LAT = 111_195;
 
@@ -127,6 +134,20 @@ async function rowGeneratedCourse(
   return errors;
 }
 
+/** The GPU actually drawing, so a budget is only enforced where it means something. */
+async function unmaskedRenderer(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl2') as WebGL2RenderingContext | null;
+      if (!gl) return 'none';
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      return String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'undisclosed');
+    } catch {
+      return 'unknown';
+    }
+  });
+}
+
 /** The app's own measure, once the scene has ticked at least once. */
 async function firstFrameMeasureMs(page: Page): Promise<number> {
   await page.waitForFunction(
@@ -148,17 +169,30 @@ test('a 10,000-point route reaches its first frame promptly', async ({ page }) =
   );
 
   const firstFrameMs = await firstFrameMeasureMs(page);
-  console.log(`route curve to first frame: ${firstFrameMs.toFixed(1)} ms`);
+  const geometryMs = await page.evaluate(
+    (name) => performance.getEntriesByName(name)[0]?.duration ?? -1,
+    GEOMETRY_READY_MEASURE,
+  );
+  const renderer = await unmaskedRenderer(page);
+  console.log(
+    `route curve to first frame: ${firstFrameMs.toFixed(1)} ms ` +
+      `(geometry ${geometryMs.toFixed(1)} ms) on ${renderer}`,
+  );
 
-  // Deliberately loose. Issue #224 sets a 150 ms target, and a cold page on a
-  // quiet machine measures 85-90 ms — but this number also carries Vite's
-  // on-demand transforms, SwiftShader context creation and whatever else is
-  // sharing the box: the same page measures 1,013 ms with four specs running
-  // beside it. A tight bound here would be measuring the machine. This ceiling
-  // only catches a scene that never comes up; the deterministic guarantee —
-  // that a dense import does not become a dense spline — is asserted in
-  // `routeGeometryResolution.test.ts`, where no clock is involved.
-  expect(firstFrameMs).toBeLessThan(3000);
+  // The deterministic half, and the half #224 optimised: simplify, upsample,
+  // spline, distance table. Measured at ~5 ms for this route.
+  expect(geometryMs).toBeGreaterThanOrEqual(0);
+  expect(geometryMs).toBeLessThanOrEqual(GEOMETRY_BUDGET_MS);
+
+  // The rest of the gap is React committing the scene and the driver compiling
+  // shaders. On a software rasteriser that dwarfs everything else and no
+  // geometry work will move it, so the end-to-end budget is only enforced where
+  // a real GPU is drawing.
+  if (/swiftshader|llvmpipe|software/i.test(renderer)) {
+    expect(firstFrameMs).toBeLessThan(3000);
+  } else {
+    expect(firstFrameMs).toBeLessThanOrEqual(FIRST_FRAME_BUDGET_MS);
+  }
 
   expect(
     errors.filter((text) => /typeerror|referenceerror|cannot read properties/i.test(text)),

@@ -228,6 +228,14 @@ export function bearingRadians(a: Coordinate, b: Coordinate): number {
  * Three metres is under the scatter of consumer GPS and well below the 10 m
  * grid the scene curve is upsampled onto, so the simplifier can only remove
  * points the renderer was about to interpolate back anyway.
+ *
+ * This epsilon bounds the distance to the straight *chord* that replaces a
+ * dropped point, not to the spline the scene actually draws through those
+ * chords. The two only stay close because `upsampleRouteCoordinates` weights
+ * its Hermite tangents by point spacing; without that, simplification's uneven
+ * spacing threw the drawn water 6.8 m off a hairpin at this same epsilon.
+ * `renderedRouteFidelity.test.ts` measures what is drawn, and is the test to
+ * trust if this number is ever raised (#224).
  */
 export const DEFAULT_SIMPLIFY_EPSILON_METERS = 3;
 
