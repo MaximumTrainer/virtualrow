@@ -23,16 +23,21 @@ async function isHitTestable(page: Page, selector: string) {
   // that no amount of scrolling can reach, which is the #195 bug: an
   // overflow:hidden ancestor with no scrollable container leaves scrollIntoView
   // a no-op and the element permanently off-screen.
-  await page.evaluate((sel) => {
-    document.querySelector(sel)?.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
-  }, selector);
-  // Give the scroll a frame or two to settle before measuring; at 150ms the
-  // measurement could still land mid-scroll and report the pre-scroll stack.
-  await page.waitForTimeout(400);
-
-  return page.evaluate((sel) => {
+  // Scroll and measure together, retrying until the element is reachable or the
+  // screen has had three seconds to settle. A single fixed wait was enough on
+  // most runners and not on Windows, where this reported a still-unscrolled
+  // position for a control that is perfectly reachable — flaky for two releases
+  // before it failed outright. Retrying the whole check, not just the position,
+  // also covers an element that is briefly covered while the screen loads. A
+  // genuinely unreachable element (the #195 bug: an overflow:hidden ancestor
+  // with nothing scrollable) never becomes reachable, so it still fails, with
+  // the last reason it gave.
+  const check = (sel: string) => {
     const el = document.querySelector(sel) as HTMLElement | null;
     if (!el) return { found: false, hit: false, reason: 'not in DOM' };
+
+    el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return { found: true, hit: false, reason: 'zero size' };
 
@@ -56,7 +61,14 @@ async function isHitTestable(page: Page, selector: string) {
         : `covered by ${top ? `${top.tagName}.${(top as HTMLElement).className}` : 'nothing'}`
           + ` (element at ${Math.round(r.top)}..${Math.round(r.bottom)})`,
     };
-  }, selector);
+  };
+
+  let result = await page.evaluate(check, selector);
+  for (let attempt = 0; attempt < 12 && !result.hit; attempt++) {
+    await page.waitForTimeout(250);
+    result = await page.evaluate(check, selector);
+  }
+  return result;
 }
 
 async function expectHitTestable(page: Page, selector: string, label: string) {
