@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useServices } from '../context/useServices';
 import type {
   PM5Data,
@@ -72,7 +72,12 @@ export interface StructuredWorkoutControl {
   ) => Promise<ImportOutcome>;
 }
 
-export const useStructuredWorkout = (): StructuredWorkoutControl => {
+/**
+ * @param deviceConnected Whether the ergometer is currently connected. A
+ *   workout does not advance while it is away, and the time it was away is not
+ *   counted against the rower when it comes back (#67 §8).
+ */
+export const useStructuredWorkout = (deviceConnected = true): StructuredWorkoutControl => {
   const { workoutGeneratorService } = useServices();
 
   // The service owns the workouts; this is the app's view of them, refreshed
@@ -93,6 +98,14 @@ export const useStructuredWorkout = (): StructuredWorkoutControl => {
   // A remembered id whose workout has gone resolves to no selection on its own,
   // so nothing needs clearing. Leaving the id in storage is deliberate: if the
   // workout comes back — re-imported, say — the choice comes back with it.
+
+  // A reconnected ergometer brings a clock that kept running while it was
+  // gone. Tell the workout so the next reading's jump is not counted as rowing.
+  const wasConnected = useRef(deviceConnected);
+  useEffect(() => {
+    if (deviceConnected && !wasConnected.current) workoutGeneratorService.resumeAfterGap();
+    wasConnected.current = deviceConnected;
+  }, [deviceConnected, workoutGeneratorService]);
 
   const select = useCallback((id: string | null) => {
     setSelectedId(id);

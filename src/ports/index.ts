@@ -85,6 +85,7 @@ export type WorkoutGeneratorPort = Pick<
   | 'expandSegments'
   | 'getSpeedAdjustmentFactor'
   | 'importFromIntervalsICU'
+  | 'resumeAfterGap'
 >;
 
 /** Port for workout session lifecycle + history. */

@@ -458,6 +458,12 @@ export class WorkoutGeneratorService {
     // Expand repeating segments for easier tracking
     const expandedSegments = this.expandSegments(workout.segments);
     
+    this.segmentStartElapsedSec = 0;
+    this.segmentStartDistanceM = 0;
+    this.lastReadingElapsedSec = null;
+    this.notRowedSec = 0;
+    this.rebaseOnNextReading = false;
+
     this.currentProgress = {
       workoutId: workout.id,
       currentSegmentIndex: 0,
@@ -499,11 +505,18 @@ export class WorkoutGeneratorService {
   updateProgress(pm5Data: PM5Data): WorkoutProgress | null {
     if (!this.currentProgress || !this.currentWorkout) return null;
 
-    const elapsedSeconds = Math.floor(pm5Data.elapsedTime / 1000);
+    const readingElapsedSec = Math.floor(pm5Data.elapsedTime / 1000);
+    if (this.rebaseOnNextReading && this.lastReadingElapsedSec !== null) {
+      this.notRowedSec += Math.max(0, readingElapsedSec - this.lastReadingElapsedSec);
+    }
+    this.rebaseOnNextReading = false;
+    this.lastReadingElapsedSec = readingElapsedSec;
+
+    const elapsedSeconds = readingElapsedSec - this.notRowedSec;
     this.currentProgress.totalElapsedTime = elapsedSeconds;
 
     // Update segment progress
-    this.currentProgress.segmentElapsedTime = elapsedSeconds - this.getSegmentStartTime(this.currentProgress.currentSegmentIndex);
+    this.currentProgress.segmentElapsedTime = elapsedSeconds - this.segmentStartElapsedSec;
 
     const segment = this.currentProgress.currentSegment;
     
@@ -513,16 +526,15 @@ export class WorkoutGeneratorService {
       
       // Move to next segment if current is complete
       if (this.currentProgress.segmentElapsedTime >= segment.duration) {
-        this.advanceToNextSegment();
+        this.advanceToNextSegment(elapsedSeconds, pm5Data.distance);
       }
     } else if (segment.distance) {
       // Distance-based segment
-      const segmentStartDistance = this.getSegmentStartDistance(this.currentProgress.currentSegmentIndex);
-      const distanceInSegment = pm5Data.distance - segmentStartDistance;
+      const distanceInSegment = pm5Data.distance - this.segmentStartDistanceM;
       this.currentProgress.segmentProgress = Math.min(100, (distanceInSegment / segment.distance) * 100);
       
       if (distanceInSegment >= segment.distance) {
-        this.advanceToNextSegment();
+        this.advanceToNextSegment(elapsedSeconds, pm5Data.distance);
       }
     }
 
@@ -541,35 +553,40 @@ export class WorkoutGeneratorService {
   }
 
   // Get the start time for a specific segment
-  private getSegmentStartTime(segmentIndex: number): number {
-    if (!this.currentWorkout) return 0;
-    
-    const expandedSegments = this.expandSegments(this.currentWorkout.segments);
-    let startTime = 0;
-    
-    for (let i = 0; i < segmentIndex; i++) {
-      startTime += expandedSegments[i].duration || 0;
-    }
-    
-    return startTime;
-  }
+  /**
+   * Where the current segment began, in the ergometer's own elapsed seconds and
+   * metres.
+   *
+   * Recorded when the segment starts rather than summed from the plan. Summing
+   * the plan only works when every segment is measured the same way: a distance
+   * segment contributes no duration, so a timed segment following one was
+   * measured from the start of the row and completed instantly, and a distance
+   * segment following a timed one counted the metres of the whole row (#67).
+   */
+  private segmentStartElapsedSec = 0;
+  private segmentStartDistanceM = 0;
 
-  // Get the start distance for a specific segment
-  private getSegmentStartDistance(segmentIndex: number): number {
-    if (!this.currentWorkout) return 0;
-    
-    const expandedSegments = this.expandSegments(this.currentWorkout.segments);
-    let startDistance = 0;
-    
-    for (let i = 0; i < segmentIndex; i++) {
-      startDistance += expandedSegments[i].distance || 0;
-    }
-    
-    return startDistance;
-  }
+  /**
+   * Elapsed seconds the workout should not count, and whether the next reading
+   * should add to them.
+   *
+   * A rower whose ergometer drops out mid-workout comes back to a clock that
+   * kept running: the first reading after a three-minute disconnect carries all
+   * three minutes, and counting it would burn through the segments they were
+   * about to row. The caller knows when the device went away, so it says so
+   * through {@link resumeAfterGap} rather than this guessing from how often
+   * readings arrive — a guess that mistakes a throttled feed for a dropout and
+   * a quick reconnect for rowing (#67 §8).
+   *
+   * Distance is never discounted: the clock can advance with nobody on the
+   * machine, but the flywheel cannot.
+   */
+  private lastReadingElapsedSec: number | null = null;
+  private notRowedSec = 0;
+  private rebaseOnNextReading = false;
 
   // Advance to the next segment in the workout
-  private advanceToNextSegment(): void {
+  private advanceToNextSegment(elapsedSeconds: number, distanceMeters: number): void {
     if (!this.currentProgress || !this.currentWorkout) return;
 
     const expandedSegments = this.expandSegments(this.currentWorkout.segments);
@@ -580,6 +597,9 @@ export class WorkoutGeneratorService {
       this.currentProgress.currentSegment = expandedSegments[nextIndex];
       this.currentProgress.segmentElapsedTime = 0;
       this.currentProgress.segmentProgress = 0;
+      // The next segment is measured from here, whichever way it is bounded.
+      this.segmentStartElapsedSec = elapsedSeconds;
+      this.segmentStartDistanceM = distanceMeters;
     } else {
       // Final segment completed — mark the workout as complete
       this.currentProgress.isComplete = true;
@@ -630,6 +650,17 @@ export class WorkoutGeneratorService {
 
     this.currentProgress.isOnTarget = isOnTarget;
     this.currentProgress.deviationPercent = deviation;
+  }
+
+  /**
+   * Tell the workout that the readings it is about to receive follow a gap the
+   * rower did not row through — a reconnected ergometer, typically.
+   *
+   * The next reading's jump in elapsed time is discounted; everything after it
+   * counts as normal.
+   */
+  resumeAfterGap(): void {
+    this.rebaseOnNextReading = true;
   }
 
   // Get current workout progress

@@ -18,8 +18,8 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-09-03 completing issue #67: 87.54% lines / 82.27%
-      // branches / 82.50% functions (was 87.13 / 81.70 / 81.71 before the
+      // Measured 2026-09-03 completing issue #67: 87.78% lines / 82.47%
+      // branches / 82.84% functions (was 87.13 / 81.70 / 81.71 before the
       // structured-workout library, overlay and hook landed). The two
       // WorkoutGenerator/WorkoutProgressDisplay exclusions went with it: those
       // files never existed, and the workout UI that does is unit-tested.
@@ -68,7 +68,7 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-03: 87.54 / 82.27 / 82.50 (issue #67).
+        // Last measured 2026-09-03: 87.78 / 82.47 / 82.84 (issue #67).
         lines: 87,
         statements: 87,
         branches: 82,

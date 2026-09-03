@@ -57,6 +57,7 @@ const stubPort = (over: Partial<WorkoutGeneratorPort> = {}) => {
     getExpandedCurrentSegments: () => [segment()],
     expandSegments: (s: WorkoutSegment[]) => s,
     getSpeedAdjustmentFactor: () => 0.8,
+    resumeAfterGap: vi.fn(),
     importFromIntervalsICU: vi.fn(),
     ...over,
   } as unknown as WorkoutGeneratorPort;
@@ -69,6 +70,44 @@ const wrap = (port: WorkoutGeneratorPort) =>
       <ServicesProvider services={{ workoutGeneratorService: port }}>{children}</ServicesProvider>
     );
   };
+
+describe('useStructuredWorkout and a dropped ergometer', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('tells the workout to discount the gap when the device comes back', () => {
+    const { port } = stubPort();
+    const { rerender } = renderHook(
+      ({ connected }: { connected: boolean }) => useStructuredWorkout(connected),
+      { wrapper: wrap(port), initialProps: { connected: true } },
+    );
+
+    rerender({ connected: false });
+    expect(port.resumeAfterGap).not.toHaveBeenCalled();
+
+    rerender({ connected: true });
+    expect(port.resumeAfterGap).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing while the device stays connected', () => {
+    const { port } = stubPort();
+    const { rerender } = renderHook(
+      ({ connected }: { connected: boolean }) => useStructuredWorkout(connected),
+      { wrapper: wrap(port), initialProps: { connected: true } },
+    );
+
+    rerender({ connected: true });
+    rerender({ connected: true });
+    expect(port.resumeAfterGap).not.toHaveBeenCalled();
+  });
+
+  it('does not treat the first render as a reconnection', () => {
+    const { port } = stubPort();
+    renderHook(() => useStructuredWorkout(true), { wrapper: wrap(port) });
+    expect(port.resumeAfterGap).not.toHaveBeenCalled();
+  });
+});
 
 describe('useStructuredWorkout', () => {
   beforeEach(() => {

@@ -121,12 +121,6 @@ function App() {
   // when they know better than the heuristic does (#224).
   const graphics = useGraphicsQuality();
 
-  // The structured workout, if one is selected. With none, every flow below is
-  // exactly as it was — a free row (#67 §2).
-  const structuredWorkout = useStructuredWorkout();
-  // The hook's callbacks are stable; the object around them is not, so pull
-  // out the two the memoised handlers below close over.
-  const { stop: stopStructuredWorkout, tick: tickStructuredWorkout } = structuredWorkout;
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
   const [isDemoMode, setIsDemoMode] = useState(false);
   // Session state for the overlay UI
@@ -286,6 +280,13 @@ function App() {
   const selectedRowerConnected = useMemo(() => (
     activeRowerType === 'pm5' ? pm5Connected : ftmsConnected
   ), [activeRowerType, ftmsConnected, pm5Connected]);
+
+  // The structured workout, if one is selected. With none, every flow below is
+  // exactly as it was — a free row (#67 §2).
+  const structuredWorkout = useStructuredWorkout(selectedRowerConnected);
+  // The hook's callbacks are stable; the object around them is not, so pull
+  // out the two the memoised handlers below close over.
+  const { stop: stopStructuredWorkout, tick: tickStructuredWorkout } = structuredWorkout;
 
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
