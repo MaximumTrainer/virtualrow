@@ -978,11 +978,6 @@ function App() {
                     Change route
                   </button>
 
-                  <GraphicsQualityPicker
-                    quality={graphics.quality}
-                    onChange={graphics.setQuality}
-                  />
-
                   {/* Offered to everyone, not only guests (issue #219, AC7.2). */}
                   <div className="demo-row-cta">
                     <button
@@ -997,6 +992,11 @@ function App() {
                       feels before connecting anything.
                     </p>
                   </div>
+
+                  <GraphicsQualityPicker
+                    quality={graphics.quality}
+                    onChange={graphics.setQuality}
+                  />
                 </div>
               </div>
             </div>

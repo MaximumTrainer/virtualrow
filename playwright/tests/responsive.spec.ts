@@ -529,6 +529,12 @@ test.describe('visual style pins', () => {
     await page.goto('./');
     await expect(page.locator('.btn-try-demo')).toBeVisible();
 
+    // Park the cursor off every control first. `getComputedStyle` reports the
+    // hover colour for whatever the pointer happens to rest on, so a pin
+    // captured with the mouse anywhere near a button records `:hover` and the
+    // fixture drifts the moment the layout shifts by a few pixels.
+    await page.mouse.move(0, 0);
+
     const actual: Pins = {
       routes: await capturePins(page, PINNED_SELECTORS.routes, PINNED_PROPERTIES),
     };
@@ -546,10 +552,14 @@ test.describe('visual style pins', () => {
     await visitor.locator('.btn-try-demo').click();
     await expect(visitor.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
     await expect(visitor.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
+    // Clicking the demo button left the pointer wherever that button was, which
+    // in the activity view may be over the End Workout control.
+    await visitor.mouse.move(0, 0);
     actual.workout = await capturePins(visitor, PINNED_SELECTORS.workout, PINNED_PROPERTIES);
 
     await visitor.evaluate(() => (document.querySelector('.btn-end-workout') as HTMLButtonElement | null)?.click());
     await expect(visitor.locator('.guest-summary-modal')).toBeVisible({ timeout: 20_000 });
+    await visitor.mouse.move(0, 0);
     actual.summary = await capturePins(visitor, PINNED_SELECTORS.summary, PINNED_PROPERTIES);
     await visitor.close();
 
