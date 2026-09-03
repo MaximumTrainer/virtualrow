@@ -68,6 +68,9 @@ describe.skipIf(!enabled)('rownative mirror contract (live network)', () => {
   it('reports a known-absent id as not found rather than crashing', async () => {
     const service = new RownativeService();
     // id 2 is absent from the mirror while present on the live site.
-    await expect(service.importCourseById('2')).rejects.toThrow(/isn't in the public course data yet/i);
+    // Same wording `rownativeService.test.ts` pins offline. This assertion had
+    // drifted from it: the copy became "public mirror" and nothing noticed,
+    // because this file only runs under ROWNATIVE_CONTRACT_CHECK=1 (#208 AC-3).
+    await expect(service.importCourseById('2')).rejects.toThrow(/isn't in the public mirror yet/i);
   }, 30_000);
 });
