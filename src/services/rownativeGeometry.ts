@@ -16,6 +16,24 @@
  *
  * Everything here runs before `createRoute()`. The 3D engine is untouched: give
  * it a real water path and it already renders correct curvature and scale.
+ *
+ * ## Where a real path is meant to come from (#208)
+ *
+ * The `track` slot at the head of that chain is filled by either of two things:
+ * a course file carrying an optional top-level `path`, or a track the rower has
+ * attached themselves (R-8 of #194, `trackAttachmentStore`).
+ *
+ * Neither exists in the mirror today. Across all 169 KML files there are 1,047
+ * `<Polygon>` elements and zero `<LineString>`, so no upstream artefact carries
+ * a traced centreline at all; courses 257 and 277 resort to storing one as a
+ * polygon. The `path` field has been proposed upstream in
+ * rownative/courses#23, with the data-quality anomalies it would help settle in
+ * rownative/courses#24. VirtualRow needs no change if it is accepted —
+ * `rownativeMirrorContract.test.ts` guards the shape against the live mirror
+ * under `ROWNATIVE_CONTRACT_CHECK=1`.
+ *
+ * If upstream declines it, the rower-attached track is the long-term answer and
+ * this chain already prefers it. Record the outcome on #208 either way.
  */
 
 import type { Coordinate, GeometrySource } from '../types/index';
