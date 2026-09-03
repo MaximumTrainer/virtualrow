@@ -1842,3 +1842,21 @@ body {
 .workout-timeline { display: flex; gap: 2px; list-style: none; margin: var(--space-sm) 0 0; padding: 0; height: 10px; }
 .workout-timeline-step { border-radius: 2px; min-width: 3px; opacity: 0.55; }
 .workout-timeline-step.is-current { opacity: 1; outline: 2px solid var(--color-text-primary); outline-offset: 1px; }
+
+/* Planned workouts from the signed-in intervals.icu session (#67) */
+.workout-planned { display: grid; gap: var(--space-xs); margin-bottom: var(--space-md); }
+.workout-planned h4 { margin: 0; }
+.workout-planned-hint,
+.workout-import-hint { margin: 0; font-size: 0.8rem; color: var(--color-text-secondary); }
+.workout-planned-empty { font-size: 0.85rem; color: var(--color-text-secondary); }
+.workout-planned-list { list-style: none; margin: var(--space-xs) 0 0; padding: 0; display: grid; gap: var(--space-xs); }
+.workout-planned-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border); border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+}
+.workout-planned-name { display: block; font-weight: 600; font-size: 0.9rem; }
+.workout-planned-meta { display: block; font-size: 0.78rem; color: var(--color-text-secondary); }
+.btn-workout-planned-load, .btn-workout-manual, .btn-workout-add { min-height: 44px; }
+.btn-workout-manual { background: none; text-decoration: underline; }

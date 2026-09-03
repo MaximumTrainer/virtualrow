@@ -26,6 +26,7 @@ import type { RownativeService } from '../services/rownativeService';
 import type { RouteEnrichmentService } from '../services/routeEnrichmentService';
 import type { DefaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivityService';
+import type { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -86,6 +87,17 @@ export type WorkoutGeneratorPort = Pick<
   | 'getSpeedAdjustmentFactor'
   | 'importFromIntervalsICU'
   | 'resumeAfterGap'
+>;
+
+/**
+ * Port for the athlete's planned workouts on intervals.icu.
+ *
+ * Reached with the OAuth access token a signed-in rower already has, so the
+ * calendar is available without asking them for an API key (#67).
+ */
+export type IntervalsIcuWorkoutPort = Pick<
+  IntervalsIcuWorkoutService,
+  'fetchPlannedRowingWorkouts' | 'toStructuredWorkout'
 >;
 
 /** Port for workout session lifecycle + history. */
@@ -173,6 +185,7 @@ export interface Services {
   workoutService: WorkoutPort;
   routeService: RoutePort;
   workoutGeneratorService: WorkoutGeneratorPort;
+  intervalsIcuWorkoutService: IntervalsIcuWorkoutPort;
   pm5BluetoothService: PM5BluetoothPort;
   ftmsBluetoothService: FTMSBluetoothPort;
   heartRateBluetoothService: HeartRateBluetoothPort;

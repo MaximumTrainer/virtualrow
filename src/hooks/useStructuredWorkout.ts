@@ -7,6 +7,7 @@ import type {
   WorkoutSegment,
 } from '../types/index';
 import { validateWorkout } from '../utils/workoutPlan';
+import { IntervalsWorkoutFetchError } from '../services/intervalsIcuWorkoutService';
 
 /**
  * The rower's structured-workout session (issue #67).
@@ -70,6 +71,20 @@ export interface StructuredWorkoutControl {
     athleteId: string,
     workoutId: string,
   ) => Promise<ImportOutcome>;
+
+  /**
+   * True when the rower's intervals.icu session can fetch their calendar, so
+   * the UI can offer that instead of asking for credentials.
+   */
+  canUseIntervalsIcuSession: boolean;
+  /** The rower's planned rowing workouts, once loaded. */
+  plannedWorkouts: StructuredWorkout[];
+  plannedLoading: boolean;
+  plannedError: string | null;
+  /** Fetch the signed-in rower's planned workouts. No credentials needed. */
+  loadPlannedWorkouts: (daysAhead?: number) => Promise<void>;
+  /** Put a planned workout into the library and select it for the next row. */
+  addPlannedWorkout: (workout: StructuredWorkout) => void;
 }
 
 /**
@@ -78,7 +93,11 @@ export interface StructuredWorkoutControl {
  *   counted against the rower when it comes back (#67 §8).
  */
 export const useStructuredWorkout = (deviceConnected = true): StructuredWorkoutControl => {
-  const { workoutGeneratorService } = useServices();
+  const { workoutGeneratorService, intervalsIcuWorkoutService, authService } = useServices();
+
+  const [plannedWorkouts, setPlannedWorkouts] = useState<StructuredWorkout[]>([]);
+  const [plannedLoading, setPlannedLoading] = useState(false);
+  const [plannedError, setPlannedError] = useState<string | null>(null);
 
   // The service owns the workouts; this is the app's view of them, refreshed
   // when an import adds one.
@@ -183,6 +202,64 @@ export const useStructuredWorkout = (deviceConnected = true): StructuredWorkoutC
     [workoutGeneratorService],
   );
 
+  const loadPlannedWorkouts = useCallback(
+    async (daysAhead?: number): Promise<void> => {
+      const athleteId = authService.getUser()?.id;
+      if (!athleteId || !authService.getAccessToken()) {
+        setPlannedError('Sign in with intervals.icu to see your planned workouts.');
+        return;
+      }
+
+      setPlannedLoading(true);
+      setPlannedError(null);
+
+      /** One attempt with whatever token the session currently holds. */
+      const attempt = async () => {
+        const token = authService.getAccessToken();
+        if (!token) throw new IntervalsWorkoutFetchError('Signed out.', 401);
+        return intervalsIcuWorkoutService.fetchPlannedRowingWorkouts(token, athleteId, daysAhead);
+      };
+
+      try {
+        let plans;
+        try {
+          plans = await attempt();
+        } catch (error) {
+          // An access token that expired mid-session is the app's problem to
+          // fix, not the rower's. Refresh once and try again before saying so.
+          if (error instanceof IntervalsWorkoutFetchError && error.status === 401) {
+            const refreshed = await authService.refreshAccessToken();
+            if (!refreshed) throw error;
+            plans = await attempt();
+          } else {
+            throw error;
+          }
+        }
+
+        setPlannedWorkouts(plans.map((plan) => intervalsIcuWorkoutService.toStructuredWorkout(plan)));
+      } catch (error) {
+        setPlannedWorkouts([]);
+        setPlannedError(
+          error instanceof Error ? error.message : 'Could not load your planned workouts.',
+        );
+      } finally {
+        setPlannedLoading(false);
+      }
+    },
+    [authService, intervalsIcuWorkoutService],
+  );
+
+  const addPlannedWorkout = useCallback(
+    (workout: StructuredWorkout) => {
+      workoutGeneratorService.addWorkout(workout);
+      setLibrary(workoutGeneratorService.getAllWorkouts());
+      setSelectedId(workout.id);
+      writeStoredId(workout.id);
+      setValidationErrors([]);
+    },
+    [workoutGeneratorService],
+  );
+
   return {
     library,
     selected,
@@ -197,5 +274,12 @@ export const useStructuredWorkout = (deviceConnected = true): StructuredWorkoutC
     isComplete: progress?.isComplete === true,
     speedFactor: isRunning ? workoutGeneratorService.getSpeedAdjustmentFactor() : undefined,
     importFromIntervalsIcu,
+    canUseIntervalsIcuSession:
+      authService.getUser() !== null && authService.getAccessToken() !== null,
+    plannedWorkouts,
+    plannedLoading,
+    plannedError,
+    loadPlannedWorkouts,
+    addPlannedWorkout,
   };
 };

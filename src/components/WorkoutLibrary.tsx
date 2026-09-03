@@ -19,6 +19,14 @@ export interface WorkoutLibraryProps {
   /** Why the selected workout cannot start, from `validateWorkout`. */
   validationErrors: string[];
   onImport: (apiKey: string, athleteId: string, workoutId: string) => Promise<ImportOutcome>;
+
+  /** True when the rower's intervals.icu session can fetch their calendar. */
+  canUseSession: boolean;
+  plannedWorkouts: StructuredWorkout[];
+  plannedLoading: boolean;
+  plannedError: string | null;
+  onLoadPlanned: () => Promise<void>;
+  onAddPlanned: (workout: StructuredWorkout) => void;
 }
 
 /** `600` → `10:00`; `3725` → `1:02:05`. */
@@ -95,13 +103,79 @@ const summariseSegments = (workout: StructuredWorkout) => {
   }));
 };
 
+/**
+ * The signed-in path: the rower's own intervals.icu calendar, fetched with the
+ * session they already have. No API key, no athlete id, no workout id (#67).
+ */
+const PlannedWorkouts: React.FC<{
+  workouts: StructuredWorkout[];
+  loading: boolean;
+  error: string | null;
+  loaded: boolean;
+  onLoad: () => void;
+  onAdd: (workout: StructuredWorkout) => void;
+}> = ({ workouts, loading, error, loaded, onLoad, onAdd }) => (
+  <section className="workout-planned">
+    <h4>Your intervals.icu workouts</h4>
+    <p className="workout-planned-hint">
+      You are signed in, so your planned rowing workouts can be loaded straight from your calendar.
+    </p>
+
+    <button type="button" className="btn btn-workout-planned-load" onClick={onLoad} disabled={loading}>
+      {loading ? 'Loading…' : loaded ? 'Refresh planned workouts' : 'Load planned workouts'}
+    </button>
+
+    {error && (
+      <p className="workout-import-error" role="alert">
+        {error}
+      </p>
+    )}
+
+    {loaded && !loading && workouts.length === 0 && !error && (
+      <p className="workout-planned-empty">
+        No planned rowing workouts in the next fortnight.
+      </p>
+    )}
+
+    {workouts.length > 0 && (
+      <ul className="workout-planned-list">
+        {workouts.map((workout) => {
+          const summary = summariseWorkout(workout);
+          return (
+            <li key={workout.id} className="workout-planned-item">
+              <div>
+                <span className="workout-planned-name">{workout.name}</span>
+                <span className="workout-planned-meta">
+                  {summary.segmentCount} segment{summary.segmentCount === 1 ? '' : 's'}
+                  {summary.totalDurationSec > 0 && ` · ${formatDuration(summary.totalDurationSec)}`}
+                </span>
+              </div>
+              <button type="button" className="btn btn-workout-add" onClick={() => onAdd(workout)}>
+                Use this
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </section>
+);
+
 export const WorkoutLibrary: React.FC<WorkoutLibraryProps> = ({
   library,
   selected,
   onSelect,
   validationErrors,
   onImport,
+  canUseSession,
+  plannedWorkouts,
+  plannedLoading,
+  plannedError,
+  onLoadPlanned,
+  onAddPlanned,
 }) => {
+  const [plannedLoaded, setPlannedLoaded] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [athleteId, setAthleteId] = useState('');
   const [workoutId, setWorkoutId] = useState('');
@@ -168,8 +242,44 @@ export const WorkoutLibrary: React.FC<WorkoutLibraryProps> = ({
         </ul>
       )}
 
-      <form className="workout-import" onSubmit={submitImport}>
+      {canUseSession && (
+        <PlannedWorkouts
+          workouts={plannedWorkouts}
+          loading={plannedLoading}
+          error={plannedError}
+          loaded={plannedLoaded}
+          onLoad={() => {
+            setPlannedLoaded(true);
+            void onLoadPlanned();
+          }}
+          onAdd={onAddPlanned}
+        />
+      )}
+
+      {/* A signed-in rower never needs this, so it is tucked away for them —
+          but it stays reachable for a key belonging to another athlete, and it
+          is the only route for someone who has not signed in (#67). */}
+      {canUseSession && !manualOpen && (
+        <button
+          type="button"
+          className="btn btn-workout-manual"
+          onClick={() => setManualOpen(true)}
+        >
+          Import with an API key instead
+        </button>
+      )}
+
+      <form
+        className="workout-import"
+        onSubmit={submitImport}
+        hidden={canUseSession && !manualOpen}
+      >
         <h4>Import from intervals.icu</h4>
+        {!canUseSession && (
+          <p className="workout-import-hint">
+            Sign in with intervals.icu and your planned workouts load without any of this.
+          </p>
+        )}
 
         <label htmlFor="workout-import-key">API key</label>
         <input

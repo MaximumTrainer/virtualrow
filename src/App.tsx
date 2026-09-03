@@ -1201,6 +1201,12 @@ function App() {
                 onSelect={structuredWorkout.select}
                 validationErrors={structuredWorkout.validationErrors}
                 onImport={structuredWorkout.importFromIntervalsIcu}
+                canUseSession={structuredWorkout.canUseIntervalsIcuSession}
+                plannedWorkouts={structuredWorkout.plannedWorkouts}
+                plannedLoading={structuredWorkout.plannedLoading}
+                plannedError={structuredWorkout.plannedError}
+                onLoadPlanned={structuredWorkout.loadPlannedWorkouts}
+                onAddPlanned={structuredWorkout.addPlannedWorkout}
               />
               <button
                 className="btn btn-back-to-row"

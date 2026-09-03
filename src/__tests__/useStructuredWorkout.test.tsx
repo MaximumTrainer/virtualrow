@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ServicesProvider } from '../context/ServicesContext';
-import type { WorkoutGeneratorPort } from '../ports';
+import type { Services, WorkoutGeneratorPort } from '../ports';
+import { IntervalsWorkoutFetchError } from '../services/intervalsIcuWorkoutService';
 import type { StructuredWorkout, WorkoutProgress, WorkoutSegment } from '../types/index';
 import {
   useStructuredWorkout,
@@ -70,6 +71,161 @@ const wrap = (port: WorkoutGeneratorPort) =>
       <ServicesProvider services={{ workoutGeneratorService: port }}>{children}</ServicesProvider>
     );
   };
+
+describe('useStructuredWorkout and the signed-in intervals.icu session', () => {
+  const plan = { id: 'p1', name: 'Tuesday intervals', summary: '', source: 'intervals.icu' as const, blocks: [], totalDurationSec: 1200 };
+  const planned = aWorkout({ id: 'icu-plan-p1', name: 'Tuesday intervals', source: 'intervals.icu' });
+
+  const wrapWith = (
+    port: WorkoutGeneratorPort,
+    icu: Partial<Services['intervalsIcuWorkoutService']>,
+    auth: Partial<Services['authService']>,
+  ) =>
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <ServicesProvider
+          services={{
+            workoutGeneratorService: port,
+            intervalsIcuWorkoutService: {
+              fetchPlannedRowingWorkouts: vi.fn().mockResolvedValue([plan]),
+              toStructuredWorkout: () => planned,
+              ...icu,
+            } as Services['intervalsIcuWorkoutService'],
+            authService: {
+              getUser: () => ({ id: 'i123', name: 'Rower', email: 'r@example.com' }),
+              getAccessToken: () => 'token',
+              refreshAccessToken: vi.fn().mockResolvedValue(true),
+              ...auth,
+            } as unknown as Services['authService'],
+          }}
+        >
+          {children}
+        </ServicesProvider>
+      );
+    };
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('knows the session can be used when signed in with a token', () => {
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, {}, {}),
+    });
+    expect(result.current.canUseIntervalsIcuSession).toBe(true);
+  });
+
+  it('does not offer the session without a token', () => {
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, {}, { getAccessToken: () => null }),
+    });
+    expect(result.current.canUseIntervalsIcuSession).toBe(false);
+  });
+
+  it('loads the calendar with the session, asking for no credentials', async () => {
+    const fetchPlanned = vi.fn().mockResolvedValue([plan]);
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, { fetchPlannedRowingWorkouts: fetchPlanned }, {}),
+    });
+
+    await act(async () => {
+      await result.current.loadPlannedWorkouts();
+    });
+
+    expect(fetchPlanned).toHaveBeenCalledWith('token', 'i123', undefined);
+    expect(result.current.plannedWorkouts).toHaveLength(1);
+    expect(result.current.plannedError).toBeNull();
+  });
+
+  it('refreshes a stale token once and retries rather than blaming the rower', async () => {
+    const fetchPlanned = vi
+      .fn()
+      .mockRejectedValueOnce(new IntervalsWorkoutFetchError('Unauthorized', 401))
+      .mockResolvedValueOnce([plan]);
+    const refreshAccessToken = vi.fn().mockResolvedValue(true);
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, { fetchPlannedRowingWorkouts: fetchPlanned }, { refreshAccessToken }),
+    });
+
+    await act(async () => {
+      await result.current.loadPlannedWorkouts();
+    });
+
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchPlanned).toHaveBeenCalledTimes(2);
+    expect(result.current.plannedWorkouts).toHaveLength(1);
+    expect(result.current.plannedError).toBeNull();
+  });
+
+  it('gives up cleanly when the refresh cannot help', async () => {
+    const fetchPlanned = vi
+      .fn()
+      .mockRejectedValue(new IntervalsWorkoutFetchError('Unauthorized', 401));
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, { fetchPlannedRowingWorkouts: fetchPlanned }, {
+        refreshAccessToken: vi.fn().mockResolvedValue(false),
+      }),
+    });
+
+    await act(async () => {
+      await result.current.loadPlannedWorkouts();
+    });
+
+    expect(result.current.plannedError).toContain('Unauthorized');
+    expect(result.current.plannedWorkouts).toEqual([]);
+  });
+
+  it('does not retry a failure a refresh cannot fix', async () => {
+    const fetchPlanned = vi
+      .fn()
+      .mockRejectedValue(new IntervalsWorkoutFetchError('Unable to load planned workouts (500).', 500));
+    const refreshAccessToken = vi.fn();
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, { fetchPlannedRowingWorkouts: fetchPlanned }, { refreshAccessToken }),
+    });
+
+    await act(async () => {
+      await result.current.loadPlannedWorkouts();
+    });
+
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(fetchPlanned).toHaveBeenCalledTimes(1);
+    expect(result.current.plannedError).toContain('(500)');
+  });
+
+  it('asks a signed-out rower to sign in rather than calling the API', async () => {
+    const fetchPlanned = vi.fn();
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, { fetchPlannedRowingWorkouts: fetchPlanned }, { getUser: () => null }),
+    });
+
+    await act(async () => {
+      await result.current.loadPlannedWorkouts();
+    });
+
+    expect(fetchPlanned).not.toHaveBeenCalled();
+    expect(result.current.plannedError).toMatch(/sign in/i);
+  });
+
+  it('puts a chosen planned workout in the library and selects it', () => {
+    const { port } = stubPort();
+    const { result } = renderHook(() => useStructuredWorkout(), {
+      wrapper: wrapWith(port, {}, {}),
+    });
+
+    act(() => result.current.addPlannedWorkout(planned));
+
+    expect(port.addWorkout).toHaveBeenCalledWith(planned);
+    expect(localStorage.getItem(SELECTED_WORKOUT_STORAGE_KEY)).toBe('icu-plan-p1');
+  });
+});
 
 describe('useStructuredWorkout and a dropped ergometer', () => {
   beforeEach(() => {

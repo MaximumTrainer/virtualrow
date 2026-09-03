@@ -128,6 +128,24 @@ function buildBlocks(steps: IntervalsWorkoutStep[]): IntervalBlock[] {
   return blocks.filter((block) => block !== null) as IntervalBlock[];
 }
 
+/**
+ * A planned-workout fetch that failed, carrying the status.
+ *
+ * An access token that expired mid-session is a 401 and nothing more: the
+ * caller can refresh and retry rather than showing the rower an error for a
+ * problem it can fix itself (#67).
+ */
+export class IntervalsWorkoutFetchError extends Error {
+  /** The HTTP status the fetch came back with. */
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'IntervalsWorkoutFetchError';
+    this.status = status;
+  }
+}
+
 export class IntervalsIcuWorkoutService {
   async fetchPlannedRowingWorkouts(
     accessToken: string,
@@ -157,7 +175,10 @@ export class IntervalsIcuWorkoutService {
     }
 
     if (!response.ok) {
-      throw new Error(`Unable to load planned workouts (${response.status}).`);
+      throw new IntervalsWorkoutFetchError(
+        `Unable to load planned workouts (${response.status}).`,
+        response.status,
+      );
     }
 
     const data = await response.json() as IntervalsPlannedEvent[];
