@@ -31,6 +31,9 @@ import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { resolvePerformanceMode } from './components/rower3d/constants';
 import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
+import { useStructuredWorkout } from './hooks/useStructuredWorkout';
+import { WorkoutLibrary } from './components/WorkoutLibrary';
+import { WorkoutOverlay } from './components/WorkoutOverlay';
 import { formatPace } from './utils/formatters';
 import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
@@ -49,7 +52,7 @@ type SessionState = 'idle' | 'active' | 'paused';
  * addressable URLs beyond the rownative deep link, so adding one would buy
  * nothing.
  */
-type ViewMode = 'routes' | 'route-search' | 'workout';
+type ViewMode = 'routes' | 'route-search' | 'workouts' | 'workout';
 
 /** The bundled demo route, and the fallback when no default resolves. */
 const DEMO_ROUTE_ID = '1';
@@ -58,6 +61,7 @@ const DEMO_ROUTE_ID = '1';
 const NAV_ITEMS: ReadonlyArray<{ view: ViewMode; label: string }> = [
   { view: 'routes', label: 'Row' },
   { view: 'route-search', label: 'Routes' },
+  { view: 'workouts', label: 'Workouts' },
 ];
 
 /** Extract the rownative.icu status value from route tags (e.g. "status:provisional" → "provisional"). */
@@ -116,6 +120,13 @@ function App() {
   // The rower's own call on graphics quality, overruling hardware detection
   // when they know better than the heuristic does (#224).
   const graphics = useGraphicsQuality();
+
+  // The structured workout, if one is selected. With none, every flow below is
+  // exactly as it was — a free row (#67 §2).
+  const structuredWorkout = useStructuredWorkout();
+  // The hook's callbacks are stable; the object around them is not, so pull
+  // out the two the memoised handlers below close over.
+  const { stop: stopStructuredWorkout, tick: tickStructuredWorkout } = structuredWorkout;
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
   const [isDemoMode, setIsDemoMode] = useState(false);
   // Session state for the overlay UI
@@ -332,6 +343,11 @@ function App() {
         isGuestSession,
         selectedRoute.coordinates,
       );
+      // A selected structured workout runs over the top of the session. If it
+      // cannot start, the row still goes ahead as a free row and the library
+      // shows why (#67 §2, F.3).
+      structuredWorkout.start();
+
       setCurrentSession(session);
       setIsWorkoutActive(true);
       setSessionState('active');
@@ -389,6 +405,7 @@ function App() {
 
   const handleEndWorkout = useCallback(() => {
     const completed = workoutService.endSession();
+    stopStructuredWorkout();
     setIsWorkoutActive(false);
     setCurrentSession(null);
     setSessionState('idle');
@@ -411,7 +428,7 @@ function App() {
     // (issue #221, AC6.1).
     if (user) saveCompletedSession(user.id, completed, { isDemo: isDemoMode });
     setCompletedSession(completed);
-  }, [isGuestSession, isDemoMode, stopDemoDevices, user]);
+  }, [isGuestSession, isDemoMode, stopDemoDevices, stopStructuredWorkout, user]);
 
   const handleSessionSaved = useCallback((activityId: string) => {
     if (user && completedSession) markSessionUploaded(user.id, completedSession.id, activityId);
@@ -474,6 +491,10 @@ function App() {
 
         setPM5Data(latest);
 
+        // Advance the structured workout, if one is running. No-op otherwise,
+        // so a free row is untouched (#67 §4, §5).
+        tickStructuredWorkout(latest);
+
         if (isWorkoutActive) {
           if (latest.heartRate) {
             const updated = workoutService.getCurrentSession();
@@ -496,7 +517,7 @@ function App() {
         }
       });
     }
-  }, [isWorkoutActive, selectedRoute, handleEndWorkout]);
+  }, [isWorkoutActive, selectedRoute, handleEndWorkout, tickStructuredWorkout]);
 
   // While the demo is running, simulated rower data flows through exactly the
   // same pipeline as a real PM5, so nothing downstream needs to know it is fake.
@@ -1171,6 +1192,25 @@ function App() {
             </div>
           )}
 
+          {currentView === 'workouts' && (
+            <div className="view-container view-container--workouts">
+              <WorkoutLibrary
+                library={structuredWorkout.library}
+                selected={structuredWorkout.selected}
+                onSelect={structuredWorkout.select}
+                validationErrors={structuredWorkout.validationErrors}
+                onImport={structuredWorkout.importFromIntervalsIcu}
+              />
+              <button
+                className="btn btn-back-to-row"
+                type="button"
+                onClick={() => setCurrentView('routes')}
+              >
+                Back to Row
+              </button>
+            </div>
+          )}
+
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div className="view-container activity-view">
               <div className="activity-screen">
@@ -1201,9 +1241,19 @@ function App() {
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
+                      intensityFactor={structuredWorkout.speedFactor}
                       debugMode={debugMode}
                     />
                   </Suspense>
+
+                  {structuredWorkout.selected && structuredWorkout.progress && (
+                    <WorkoutOverlay
+                      workout={structuredWorkout.selected}
+                      segments={structuredWorkout.segments}
+                      progress={structuredWorkout.progress}
+                      deviceConnected={selectedRowerConnected}
+                    />
+                  )}
 
                   <div className="activity-route-summary">
                     <h2>{selectedRoute?.name}</h2>

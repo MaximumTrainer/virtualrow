@@ -18,10 +18,11 @@ export default defineConfig({
       // entries a stray worktree under .claude/ or a nested node_modules
       // inflates the denominator and the gate fails on code we don't own.
       //
-      // Measured 2026-09-02 completing issue #224: 87.13% lines / 81.70%
-      // branches / 81.71% functions (was 86.63 / 81.39 / 81.21 before the
-      // frame-time recorder, the scene-memory sampler, the curvature-aware
-      // strip schedule and the graphics-quality control landed).
+      // Measured 2026-09-03 completing issue #67: 87.54% lines / 82.27%
+      // branches / 82.50% functions (was 87.13 / 81.70 / 81.71 before the
+      // structured-workout library, overlay and hook landed). The two
+      // WorkoutGenerator/WorkoutProgressDisplay exclusions went with it: those
+      // files never existed, and the workout UI that does is unit-tested.
       exclude: [
         '**/node_modules/**',
         '.claude/**',
@@ -57,8 +58,6 @@ export default defineConfig({
         'src/components/HeartRateZonesChart.tsx',
         'src/components/FTMSDevice.tsx',
         'src/components/RouteImport.tsx',
-        'src/components/WorkoutGenerator.tsx',
-        'src/components/WorkoutProgressDisplay.tsx',
         'src/components/GuestSessionSummary.tsx',
         'src/components/ErrorBoundary.tsx',
         // Pure coordinate-data exports (no executable logic).
@@ -69,11 +68,11 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-02: 87.13 / 81.70 / 81.71 (issue #224).
+        // Last measured 2026-09-03: 87.54 / 82.27 / 82.50 (issue #67).
         lines: 87,
         statements: 87,
-        branches: 81,
-        functions: 81,
+        branches: 82,
+        functions: 82,
       },
     },
   },
