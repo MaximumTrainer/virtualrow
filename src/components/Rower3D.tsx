@@ -375,8 +375,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             {!IS_TEST_MODE && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
               <Suspense fallback={null}>
-                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} />
-                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} />
+                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
               </Suspense>
             )}
           </>
@@ -496,6 +496,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
             performanceMode={performanceMode}
             track={sceneryTrack}
             region={sceneryRegion}
+            coordinates={route.coordinates}
           />
         </Suspense>
       )}
