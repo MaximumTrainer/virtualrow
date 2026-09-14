@@ -17,7 +17,10 @@ scenery/
   tier-c/   Crossings (8) — arch, concrete, truss, girder, bascule, suspension, lift, cantilever
   tier-d/   Regional architecture kits (25) — US / GB / NL / CE / IT
   tier-e/   Vegetation (14) — stylized low-poly trees, reeds, ground
-  tier-f/   Generic biome kit (10) — bank edges, scatter, infrastructure
+  tier-f/   Generic biome kit (47) — bank edges, landform, scatter, water, infra, backdrop
+  tier-g/   Additional archetypes (12) — skyscraper, bridges, dam, lighthouse, windmotor, towers, islet
+  tier-l/   Liveried landmark heroes (3) — Barnes, Fremont, Ponte Isabella
+  (../boat/) Tier H crew & craft — scull.glb, scull-male.glb, scull-female.glb
   renders/  Multi-view coloured PNG previews of each model
 ```
 

@@ -1952,6 +1952,65 @@ MODELS.update({
     "e15-palm": e15,
 })
 
+# ============================================================
+# Landmarks — iconic liveried heroes (issue #229 §3)
+# Reuse the bridge archetype forms, built to the real livery.
+# ============================================================
+BARNES_GRN="#2E5A3E"; BARNES_GOLD="#B8942E"
+FREMONT_ORANGE="#E06A1E"; FREMONT_BLUE="#1E4F8A"; FREMONT_CONC="#D8D4CC"
+ISABELLA_STONE="#D8CFBC"; ISABELLA_VOUSS="#C8BFA8"; ISABELLA_PARAPET="#E4DCC8"
+
+def l_barnes():  # Barnes Railway Bridge — green with gold detail (Tideway)
+    p=[]; L=60000
+    p.append((box(L,9000,1400,(0,0,4000)), BARNES_GRN))              # deck girder
+    for cx in (-15000,15000):                                        # two bowstring arches
+        arch=(cq.Workplane("XZ").moveTo(cx-14000,4700).threePointArc((cx,11000),(cx+14000,4700))
+              .threePointArc((cx,10400),(cx-13400,4700)).close().extrude(9200).translate((0,-4600,0)))
+        p.append((arch, BARNES_GRN))
+        gold=(cq.Workplane("XZ").moveTo(cx-14000,11000).threePointArc((cx,11400),(cx+14000,11000))
+              .threePointArc((cx,11200),(cx-13800,11000)).close().extrude(9300).translate((0,-4650,0)))
+        p.append((gold, BARNES_GOLD))                                # gold arch trim
+    for x in range(-28000,28001,4000):                              # hangers
+        p.append((strut((x,0,5400),(x,0,9000),120), BARNES_GRN))
+    p.append((box(L,9200,200,(0,0,5500)), BARNES_GOLD))             # gold deck edge
+    return "l","Barnes Railway Bridge (60m, green/gold)",p
+
+def l_fremont():  # Fremont Bridge, Seattle — orange & blue double-leaf bascule
+    p=[]
+    for xo in (-16000,16000):                                       # counterweight/machinery houses
+        p.append((box(6000,9000,7000,(xo,0,3500)), FREMONT_CONC))
+        p.append((box(6200,9200,1200,(xo,0,7200)), FREMONT_BLUE))
+    for s in (-1,1):                                                # two raised leaves meeting mid-air
+        leaf=box(14000,8000,600,(s*7000,0,0)).rotate((0,0,0),(0,1,0),s*38).translate((s*10000,0,7000))
+        p.append((leaf, FREMONT_ORANGE))
+    p.append((box(9000,8200,700,(0,0,4200)), FREMONT_ORANGE))       # fixed centre-ish deck hint
+    for yo in (-4200,4200):                                         # blue handrail
+        p.append((box(40000,150,700,(0,yo,7700)), FREMONT_BLUE))
+    return "l","Fremont Bridge (orange/blue bascule)",p
+
+def l_ponte_isabella():  # Ponte Isabella, Turin — pale ashlar masonry arch
+    p=[]; L=70000; D=11000
+    body=cq.Workplane("XY").box(L,D,11000).translate((0,0,5500))
+    for cx in (-23000,0,23000):
+        arch=(cq.Workplane("XZ").moveTo(cx-8000,0).lineTo(cx-8000,4500).threePointArc((cx,12500),(cx+8000,4500)).lineTo(cx+8000,0).close()
+              .extrude(D+200).translate((0,(D+200)/2,0)))
+        body=body.cut(arch)
+    p.append((body, ISABELLA_STONE))
+    for cx in (-23000,0,23000):                                     # voussoir rings
+        ring=(cq.Workplane("XZ").moveTo(cx-8400,4300).threePointArc((cx,12900),(cx+8400,4300))
+              .threePointArc((cx,12100),(cx-7600,4300)).close().extrude(D+280).translate((0,(D+280)/2,0)))
+        p.append((ring, ISABELLA_VOUSS))
+    parapet = box(L,D,1400,(0,0,11700)).cut(box(L,D-1800,1400,(0,0,11700)))
+    p.append((parapet, ISABELLA_PARAPET))
+    return "l","Ponte Isabella (70m, pale ashlar)",p
+
+
+MODELS.update({
+    "l-barnes-railway-bridge": l_barnes,
+    "l-fremont-bridge": l_fremont,
+    "l-ponte-isabella": l_ponte_isabella,
+})
+
 if __name__ == "__main__":
     ok=fail=0
     for name, fn in MODELS.items():
