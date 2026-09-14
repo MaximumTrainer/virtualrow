@@ -385,9 +385,6 @@ const GltfScullBase: React.FC<{
 
 export const GltfScull = React.memo(GltfScullBase, (prev, next) => prev.cadence === next.cadence && prev.crew === next.crew);
 
-useGLTF.preload(CREW_URL.male);
-useGLTF.preload(CREW_URL.female);
-
 // ============================================================================
 // BOAT KINEMATIC CONTROLLER
 // ============================================================================
