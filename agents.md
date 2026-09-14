@@ -112,6 +112,21 @@ Write tests first, from the outside in. Start at the boundary the user or caller
 - Do not write infrastructure (helpers, abstractions, utilities) before the test that needs them. Let the test pull the design into existence.
 - Do not mock what you own unless the real thing is slow or has side effects. Prefer stubs (plain objects satisfying a port type) over mock libraries.
 - When fixing a bug, first write a test that reproduces it. Then fix.
+- Commit red-to-green in one commit. The test and the code that satisfies it are the same logical change (§5); the point is that the test existed first, not that it was pushed first.
+
+**This is enforced, not merely encouraged.** The `pre-commit` hook runs `scripts/tdd-guard.mjs` over the git index and blocks a commit when:
+
+| Situation | Verdict |
+|---|---|
+| A **new** module under `src/` with no staged test naming it | blocked |
+| A **changed** module that no test anywhere names | blocked |
+| A changed module covered by an existing test, with no test change staged | warning — the refactor path |
+| A staged spec containing `it.only` / `describe.only` / `test.only` | blocked |
+| A coverage threshold in `vitest.config.ts` edited downward or deleted | blocked |
+
+"Names it" means a test file under `src/__tests__/` or `playwright/tests/` mentions the module's basename — `routeService.ts` is covered by any spec that references `routeService`. Exemptions are not a second list to maintain: the guard reads `test.coverage.exclude` from `vitest.config.ts`, so anything that counts toward the coverage gate needs a test, and anything excluded there (the R3F scene, vendored code, generated bindings, `src/data/`) does not.
+
+See §6 for the full gate and its escape hatches.
 
 ### 2. Test organisation
 
@@ -174,7 +189,39 @@ Write tests first, from the outside in. Start at the boundary the user or caller
 - Tests and implementation in the same commit when they're part of the same logical change.
 - Reference issue numbers in commit messages when the change closes or advances an issue.
 
-### 6. What not to do
+### 6. Verification gates
+
+Three gates run the same checks at widening scope. Each one is the previous one plus what it can afford at that point in the loop.
+
+| Gate | Runs | Roughly |
+|---|---|---|
+| `pre-commit` (`.githooks/pre-commit`) | TDD guard → ESLint on staged files → `tsc --noEmit` → `vitest related` for the staged files | seconds |
+| `pre-push` (`.githooks/pre-push`) | `npm run lint` → `npm run build` → `npm run coverage` (full suite + thresholds) | ~2 minutes |
+| CI (`.github/workflows/playwright-e2e-clean.yml`) | the preflight set, plus a shuffled-order run, then Playwright E2E on Linux, Windows and macOS | minutes |
+
+**Installation is automatic.** `npm install` runs `prepare` → `scripts/install-hooks.mjs`, which sets `core.hooksPath` to `.githooks`. Wire an existing clone up by hand with `npm run hooks:install`. The hooks are version-controlled, so a change to the gate arrives with a `git pull` rather than a wiki page nobody reads.
+
+**Escape hatches, in order of preference:**
+
+```bash
+VERIFY_FULL=1 git commit    # run the whole unit suite instead of the related tests
+TDD_GUARD=off git commit    # skip the TDD guard only — a genuine no-behaviour change
+SKIP_HOOKS=1 git commit     # skip the hook entirely
+git commit --no-verify      # same, via git
+```
+
+Reaching for the last two is a judgement call you should be able to defend in review. Reaching for them repeatedly means the gate is wrong — fix the gate, in a commit of its own, rather than routing around it.
+
+**What the guard reads.** Pairing, focused specs and thresholds are judged against the *index* — `git show :path` — so a half-staged change is assessed as the commit it would become. Lint, types and tests run against the working tree, which is the usual pragmatic trade: keep the tree and the index in step while committing.
+
+**Two known limits of the heuristics**, both deliberate — the guard is a floor, not a proof:
+
+- Pairing matches a module's basename anywhere in a staged spec, so an unrelated spec that happens to mention the name satisfies it.
+- A focused spec is detected at the head of a line, which is where a real `it.only` lives; one nested inside a single-line expression slips through to CI, where vitest fails the run on `.only` anyway.
+
+**The guard's own logic is unit-tested** (`src/__tests__/tddGuard.test.ts`). Change the rules there test-first, like everything else.
+
+### 7. What not to do
 
 - Don't add comments that restate the code. Only comment the *why* when it's non-obvious.
 - Don't add `// TODO` without an issue number.

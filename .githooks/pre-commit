@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# Pre-commit verification — the outside-in TDD gate (agents.md §1, §6).
+#
+# Four steps, cheapest first, each one blocking:
+#   1. tdd-guard   production code staged without a test, focused specs,
+#                  coverage thresholds edited downward
+#   2. lint        ESLint on the staged JS/TS files (zero-warning policy)
+#   3. types       tsc --noEmit for the app, and for the E2E suite when it changed
+#   4. tests       the unit tests that import the staged files
+#
+# Escape hatches, in order of preference:
+#   VERIFY_FULL=1 git commit   run the whole suite instead of the related tests
+#   TDD_GUARD=off git commit   skip step 1 only (a genuine no-behaviour change)
+#   git commit --no-verify     skip everything — last resort, say why in the PR
+#
+set -e
+
+if [ "$SKIP_HOOKS" = "1" ]; then
+  echo "pre-commit: skipped (SKIP_HOOKS=1)"
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+staged_code=$(printf '%s\n' "$staged" | grep -E '\.([cm]?[jt]sx?)$' || true)
+staged_e2e=$(printf '%s\n' "$staged" | grep -E '^playwright/' || true)
+
+step() {
+  echo ""
+  echo "── $1"
+}
+
+step "1/4 outside-in TDD guard"
+node scripts/tdd-guard.mjs
+
+if [ -n "$staged_code" ]; then
+  step "2/4 lint"
+  # shellcheck disable=SC2086
+  # --no-warn-ignored: a staged file outside eslint's config (a .d.mts, a build
+  # script) is skipped rather than counted against the zero-warning policy.
+  npx eslint --max-warnings=0 --no-warn-ignored $staged_code
+
+  step "3/4 types"
+  npx tsc --noEmit -p tsconfig.app.json
+  if [ -n "$staged_e2e" ]; then
+    npx tsc --noEmit -p tsconfig.playwright.json
+  fi
+
+  step "4/4 tests"
+  if [ "$VERIFY_FULL" = "1" ]; then
+    npx vitest run
+  else
+    # `related` runs every suite that imports a staged file, so the red/green
+    # cycle stays fast. The full suite and the coverage gate run on pre-push.
+    # shellcheck disable=SC2086
+    npx vitest related --run --passWithNoTests $staged_code
+  fi
+fi
+
+echo ""
+echo "pre-commit: green"
