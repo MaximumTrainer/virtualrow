@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import {
+  MAX_INSTANCES_PER_SIDE,
+  thinToCeiling,
   budgetFor,
   distinctProfiles,
   pick,
@@ -194,5 +196,41 @@ describe('an authored track dresses the route (#232)', () => {
     expect(late.size).toBeGreaterThan(0);
     // The headwaters and the delta are different places.
     expect([...late].some((id) => !early.has(id))).toBe(true);
+  });
+});
+
+describe('instance ceiling (#232 phase 3)', () => {
+  const placementsOf = (count: number): Placement[] =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `f0${i % 9}-model`,
+      position: [0, 0, i] as [number, number, number],
+      rotationY: 0,
+      scale: 1,
+      progress: i / (count - 1),
+    }));
+
+  it('leaves a route inside the ceiling untouched', () => {
+    const few = placementsOf(10);
+
+    expect(thinToCeiling(few)).toEqual(few);
+  });
+
+  it('caps a long route, which is where the frame budget goes', () => {
+    const many = placementsOf(MAX_INSTANCES_PER_SIDE * 3);
+
+    expect(thinToCeiling(many).length).toBeLessThanOrEqual(MAX_INSTANCES_PER_SIDE);
+  });
+
+  it('thins evenly rather than truncating, so the far end is still dressed', () => {
+    const thinned = thinToCeiling(placementsOf(MAX_INSTANCES_PER_SIDE * 3));
+
+    expect(thinned[0].progress).toBeLessThan(0.05);
+    expect(thinned[thinned.length - 1].progress).toBeGreaterThan(0.9);
+  });
+
+  it('is deterministic', () => {
+    const many = placementsOf(MAX_INSTANCES_PER_SIDE * 2);
+
+    expect(thinToCeiling(many)).toEqual(thinToCeiling(many));
   });
 });
