@@ -86,6 +86,16 @@ interface RawAthleteProfile {
   email?: string;
   avatar?: string;
   avatarUrl?: string;
+  /** intervals.icu returns "M" / "F" (case-insensitive); may be absent. */
+  sex?: string;
+}
+
+/** Map the intervals.icu `sex` field ("M"/"F") to the app's gender, or undefined. */
+export function genderFromSex(sex?: string | null): 'male' | 'female' | undefined {
+  const s = sex?.trim().toLowerCase();
+  if (s === 'm' || s === 'male') return 'male';
+  if (s === 'f' || s === 'female') return 'female';
+  return undefined;
 }
 
 export class AuthService {
@@ -357,6 +367,7 @@ export class AuthService {
           name,
           email: raw.email ?? '',
           avatarUrl: raw.avatar ?? raw.avatarUrl,
+          gender: genderFromSex(raw.sex),
         };
       }
 

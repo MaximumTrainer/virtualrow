@@ -46,6 +46,7 @@ import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
 import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController } from './rower3d/boatComponents';
+import type { Crew } from './rower3d/crewModel';
 import { CrystalBledLandscape } from './rower3d/themes/CrystalBledScene';
 import { GothicVeniceLandscape } from './rower3d/themes/GothicVeniceScene';
 import { SteampunkHenleyLandscape } from './rower3d/themes/SteampunkHenleyScene';
@@ -89,6 +90,8 @@ interface Rower3DProps {
   performanceMode?: PerformanceMode;
   intensityFactor?: number;
   debugMode?: boolean;
+  /** Rower model to show, from the athlete's gender. Defaults to male. */
+  crew?: Crew;
 }
 
 // ============================================================================
@@ -149,6 +152,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
   cadence,
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
+  crew = 'male',
 }) => {
   const { camera, scene, gl } = useThree();
   const performanceMode = useHardwarePerformanceMode(requestedPerformanceMode);
@@ -507,6 +511,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
               rotationRef={boatRotationRef}
               cadence={cadence || 30}
               strokeCycleTRef={strokeCycleTRef}
+              crew={crew}
             />
           </Physics>
         </PhysicsErrorBoundary>

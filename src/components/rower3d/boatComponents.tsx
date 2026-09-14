@@ -6,6 +6,7 @@ import type { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { IS_TEST_MODE } from './constants';
 import { createBoatNormalMap } from './helpers';
+import { CREW_URL, type Crew } from './crewModel';
 
 // ============================================================================
 // OAR RIG — HD rigger, oarlock, shaft, and blade for one side
@@ -344,12 +345,10 @@ export const RowingScull = React.memo(RowingScullBase, (prev, next) => prev.cade
 // GLB (authored to the rig contract: Hull, Seat, Left/RightOar, Rower...) and
 // drives the oar sweep from the same stroke phase the procedural boat used.
 // ============================================================================
-const CREW_URL = { male: '/assets/boat/scull-male.glb', female: '/assets/boat/scull-female.glb' } as const;
-
 const GltfScullBase: React.FC<{
   cadence: number;
   strokeCycleTRef?: React.MutableRefObject<number>;
-  crew?: 'male' | 'female';
+  crew?: Crew;
 }> = ({ cadence, strokeCycleTRef, crew = 'male' }) => {
   const { scene } = useGLTF(CREW_URL[crew]);
   // Clone so the boat is independent of the cached source scene (static meshes,
@@ -387,6 +386,7 @@ const GltfScullBase: React.FC<{
 export const GltfScull = React.memo(GltfScullBase, (prev, next) => prev.cadence === next.cadence && prev.crew === next.crew);
 
 useGLTF.preload(CREW_URL.male);
+useGLTF.preload(CREW_URL.female);
 
 // ============================================================================
 // BOAT KINEMATIC CONTROLLER
@@ -396,7 +396,8 @@ export const BoatKinematicController: React.FC<{
   rotationRef: React.MutableRefObject<number>;
   cadence: number;
   strokeCycleTRef: React.MutableRefObject<number>;
-}> = ({ positionRef, rotationRef, cadence, strokeCycleTRef }) => {
+  crew?: Crew;
+}> = ({ positionRef, rotationRef, cadence, strokeCycleTRef, crew = 'male' }) => {
   const bodyRef = useRef<RapierRigidBody>(null);
 
   useFrame(() => {
@@ -424,7 +425,7 @@ export const BoatKinematicController: React.FC<{
         // Production HD scull; the procedural boat is the fallback while the GLB
         // loads (and if it fails to load).
         <Suspense fallback={<RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />}>
-          <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
+          <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} crew={crew} />
         </Suspense>
       )}
     </RigidBody>

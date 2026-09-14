@@ -22,6 +22,7 @@ import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
+import { resolveCrew } from './components/rower3d/crewModel';
 import { useServices } from './context/useServices';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
@@ -1250,6 +1251,7 @@ function App() {
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
                       intensityFactor={structuredWorkout.speedFactor}
                       debugMode={debugMode}
+                      crew={resolveCrew(user?.gender)}
                     />
                   </Suspense>
 
