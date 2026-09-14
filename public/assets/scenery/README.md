@@ -94,6 +94,28 @@ species heights in #216 and kept boolean-free so they stay light for instancing.
 - **F5 infrastructure** (12): `f33` post-rail fence · `f34` wire stock fence · `f35` hedgerow · `f36` towpath · `f37` park bench · `f38` lamp post · `f39` litter bin · `f40` pylon · `f41` telegraph pole · `f42` culvert outfall · `f43` mooring bollard · `f44` navigation marker
 - **F6 distant backdrop** (3): `f45` treeline strip · `f46` far hill ridge · `f47` town skyline
 
+## Wiring into the scene
+
+The GLBs are wired to the enrichment enums the scene already produces:
+
+- `src/components/rower3d/sceneryAssets.ts` — the **selection logic**: maps
+  `SceneryProfile` and `WaterBodyType` to model ids (the issue's selection
+  matrix), plus `resolveSceneryModels()` / `collectSceneryPaths()` and the
+  `isGlbSceneryEnabled()` flag. Pure and unit-tested
+  (`src/__tests__/sceneryAssets.test.ts`).
+- `src/components/rower3d/sceneryModels.tsx` — `SceneryModels`, which loads the
+  resolved GLBs with drei `useGLTF` and places cloned instances along the route
+  curve (per-segment profile) or in bands on the flat path.
+- `src/components/Rower3D.tsx` — renders `SceneryModels` on the default
+  (`willowbrook`) theme, inside a `<Suspense>` boundary.
+
+**Opt-in for now.** These models are un-decimated and add draw calls to an
+already heavy post-processed scene, which can exhaust the WebGL context, so the
+kit is gated behind a flag (default off): add `?glb=1` to the URL or set
+`window.__VIRTUALROW_SCENERY_MODELS = true`. Turning it on by default is a
+follow-up once the `_lod2` variants from the issue are generated and the draw
+cost is validated on target hardware.
+
 ## Regenerating
 
 Models are generated from `scripts/build_scenery.py` (CadQuery via llm-cad).

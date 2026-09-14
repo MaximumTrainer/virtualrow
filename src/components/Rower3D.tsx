@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -41,6 +41,8 @@ import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
 import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
 import { PineTrees, GroundCover } from './rower3d/vegetationComponents';
+import { SceneryModels } from './rower3d/sceneryModels';
+import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
 import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController } from './rower3d/boatComponents';
@@ -359,6 +361,12 @@ const RowerScene: React.FC<Rower3DProps> = ({
             <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
             <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
+            {!IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+              <Suspense fallback={null}>
+                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
+                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
+              </Suspense>
+            )}
           </>
         );
     }
@@ -463,6 +471,18 @@ const RowerScene: React.FC<Rower3DProps> = ({
         />
       ) : (
         renderThemedLandscape()
+      )}
+
+      {routeCurve && routeTheme === 'willowbrook' && !IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+        <Suspense fallback={null}>
+          <SceneryModels
+            curve={routeCurve}
+            boatProgress={boatProgress}
+            theme={routeTheme}
+            enrichment={enrichment}
+            performanceMode={performanceMode}
+          />
+        </Suspense>
       )}
 
       {landmarkConfig && (
