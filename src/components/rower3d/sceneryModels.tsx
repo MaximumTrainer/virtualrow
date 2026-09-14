@@ -36,6 +36,7 @@ import {
   type SceneryModelId,
 } from './sceneryAssets';
 import { trackWaterForProfile, type SceneryTrack } from './sceneryTrack';
+import type { SceneryRegion } from './sceneryRegion';
 import {
   budgetFor,
   distinctProfiles,
@@ -55,6 +56,8 @@ interface SceneryModelsProps {
   curve?: THREE.Curve<THREE.Vector3> | null;
   /** Authored dressing for a route that states its own progression (#232). */
   track?: SceneryTrack | null;
+  /** Regional building kit for the route's geography (#232). */
+  region?: SceneryRegion | null;
 }
 
 /**
@@ -70,6 +73,7 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   performanceMode = 'high',
   curve = null,
   track = null,
+  region = null,
 }) => {
   const waterType = enrichment?.waterBodyType ?? 'unknown';
 
@@ -81,10 +85,10 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
       // An authored band carries its own water body, so the delta resolves as a
       // lake while the rest of the same route stays a river.
       const water = track ? trackWaterForProfile(track, p) : waterType;
-      map.set(p, resolveSceneryModels(p, water, SCENERY_PROFILES[p]?.trees.species ?? []));
+      map.set(p, resolveSceneryModels(p, water, SCENERY_PROFILES[p]?.trees.species ?? [], region));
     }
     return map;
-  }, [enrichment, waterType, track]);
+  }, [enrichment, waterType, track, region]);
 
   // Union of every GLB the route can show — loaded once, shared across instances.
   const paths = useMemo(() => {

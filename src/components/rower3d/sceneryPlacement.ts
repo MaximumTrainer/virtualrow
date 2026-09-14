@@ -30,6 +30,7 @@ export const CATEGORY_OFFSET: Record<Category, [number, number]> = {
   bankEdge: [2.5, 4.5],
   furniture: [3, 6],
   scatter: [6, 14],
+  buildings: [18, 38],
   trees: [16, 44],
   landform: [46, 60],
   backdrop: [78, 95],
@@ -38,7 +39,7 @@ export const CATEGORY_OFFSET: Record<Category, [number, number]> = {
 /** Whether a category should yaw to face the water. */
 export const CATEGORY_FACE: Record<Category, boolean> = {
   surface: false, inWater: false, bankEdge: true, furniture: true, scatter: false,
-  trees: false, landform: true, backdrop: true,
+  trees: false, landform: true, backdrop: true, buildings: true,
 };
 
 /** Categories placed as we walk the bank, one per sample per side. */
@@ -142,6 +143,9 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
         if (i % 8 === 0 && sign < 0) { seed += 5; place('landform', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         if (i % 12 === 0 && sign > 0) { seed += 5; place('backdrop', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         if (i % 5 === 0) { seed += 5; place('furniture', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        // Buildings only appear where the profile is built-up and the region has
+        // a kit; pick() returns null otherwise, so wild stretches cost nothing.
+        if (i % 4 === 0) { seed += 5; place('buildings', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
       }
     }
   } else if (fallback) {
