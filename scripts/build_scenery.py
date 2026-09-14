@@ -1693,6 +1693,87 @@ MODELS.update({
     "f47-skyline-strip": f47,
 })
 
+# ============================================================
+# Remaining TIER B water-edge structures (b04-b08)
+# ============================================================
+RACK_FRAME="#5A6068"; QUAY_STONE="#9A9184"; QUAY_COPE="#B5AE9E"; QUAY_RING="#3A3A38"
+WHARF_BRK="#7A4034"; HOIST="#2E2A26"; WDOOR="#4A3E30"
+CRANE_STL="#C4622D"; CRANE_HOUSE="#3A3F44"; PONTOON_DECK="#A89985"
+
+def b04():  # outdoor boat rack, six eights on edge  18x3x3.2
+    p=[]
+    p.append((box(18000,3000,150,(0,0,75)), CONCRETE))            # concrete pad
+    for x in (-8000,-2700,2700,8000):                            # frame uprights
+        for y in (-1000,1000):
+            p.append((box(150,150,3100,(x,y,1550)), RACK_FRAME))
+    for z in (900,1900,2900):                                    # horizontal bearers
+        for y in (-1000,1000):
+            p.append((box(17000,120,120,(0,y,z)), RACK_FRAME))
+    for lvl,z in enumerate((1050,2050,3050)):                    # six eights (2 per level)
+        for yo in (-1000,1000):
+            hull=ellipsoid(8500,180,300,(0,yo,z))
+            p.append((hull, HULL_WHITE))
+    return "b","18000 x 3000 x 3200mm",p
+
+def b05():  # coursed stone quay wall  8x1.2x3 (tiles)
+    p=[]
+    p.append((box(8000,1200,2700,(0,0,1350)), QUAY_STONE))
+    for z in range(400,2600,450):                               # coursing grooves
+        p.append((box(8000,1240,60,(0,0,z)), QUAY_COPE))
+    p.append((box(8000,1400,300,(0,0,2850)), QUAY_COPE))         # coping course
+    for xo in (-2500,2500):                                      # mooring rings on face
+        p.append((cq.Solid.makeTorus(160,30,cq.Vector(xo,600,1900),cq.Vector(0,1,0)), QUAY_RING))
+    p.append((box(500,700,2400,(3400,150,1200)), QUAY_RING))     # ladder recess
+    for z in range(300,2400,400):
+        p.append((box(600,120,60,(3400,650,z)), QUAY_COPE))      # ladder rungs
+    return "b","8000 x 1200 x 3000mm (tiles)",p
+
+def b06():  # four-storey brick wharf warehouse  28x16x16
+    p=[]
+    p.append((box(28000,16000,15000,(0,0,7500)), WHARF_BRK))
+    p.append((gable(28000,16000,15000,16500,0,0,0), MILL_ROOF))  # low-pitch roof
+    for z in (2200,5800,9400,13000):                            # stacked loading doors (centre)
+        p.append((box(2600,300,3000,(0,8000,z)), WDOOR))
+        for xo in (-9000,-4500,4500,9000):                      # segmental windows each floor
+            p.append((box(1400,120,1800,(xo,8020,z)), MILL_SILL))
+    p.append((box(1200,3000,600,(0,9500,15200)), HOIST))        # projecting hoist beam
+    p.append((box(500,500,900,(0,10600,14900)), HOIST))         # hoist wheel housing
+    return "b","28000 x 16000 x 16000mm",p
+
+def b07():  # fixed luffing quay crane on portal base  12x6x18
+    p=[]
+    for x in (-4500,4500):                                       # portal legs on rails
+        for y in (-2200,2200):
+            p.append((strut((x,y,0),(x,y,8000),350), CRANE_STL))
+    p.append((box(11000,5500,700,(0,0,300)), CRANE_HOUSE))       # rail base sleeper
+    p.append((box(5000,5000,4000,(0,0,10000)), CRANE_HOUSE))     # slew / machinery house
+    p.append((strut((0,0,12000),(0,-2000,12000),400), CRANE_STL))# counterweight arm (back)
+    p.append((box(2200,2200,2200,(0,-2600,12000)), CRANE_HOUSE)) # counterweight
+    p.append((strut((0,1500,12000),(0,10000,17000),350), CRANE_STL))  # luffing jib
+    p.append((strut((0,9500,16800),(0,9500,13500),60), CRANE_STL))    # hoist rope
+    p.append((box(500,500,700,(0,9500,13200)), CRANE_HOUSE))     # hook block
+    return "b","12000 x 6000 x 18000mm",p
+
+def b08():  # marina pontoon cluster  40x25x2
+    p=[]
+    p.append((box(40000,2500,300,(0,-11000,150)), PONTOON_DECK)) # spine walkway
+    random.seed(71)
+    for i in range(7):                                          # radiating finger pontoons
+        x=-16000+i*5500
+        p.append((box(1800,20000,250,(x,200,125)), PONTOON_DECK))
+        for yo in (-6000,4000):                                 # small craft either side
+            col=HULL_WHITE if (i+ (0 if yo<0 else 1))%2 else HULL_TRIM
+            p.append((ellipsoid(3000,900,700,(x+2200,yo,350)), col))
+    p.append((box(2500,2500,2600,(-19000,-11000,1300)), CRANE_HOUSE))  # fuel point at head
+    p.append((cyl(200,1200,(-19000,-9200,300)), CRANE_STL))     # fuel pump
+    return "b","40000 x 25000 x 2000mm",p
+
+MODELS.update({
+    "b04-boat-rack-outdoor": b04, "b05-quay-wall-stone": b05,
+    "b06-wharf-warehouse": b06, "b07-quay-crane": b07,
+    "b08-marina-pontoon-cluster": b08,
+})
+
 if __name__ == "__main__":
     ok=fail=0
     for name, fn in MODELS.items():

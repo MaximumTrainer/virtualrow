@@ -4,16 +4,16 @@
 [issue #216](https://github.com/MaximumTrainer/virtualrow/issues/216) using
 [llm-cad](https://github.com/MaximumTrainer/llm-cad).
 
-**109 of 114 models.** Complete tiers: **A** (12), **C** (8), **D** (25),
-**E** (14), **F** (47). Remaining: Tier B `b04`–`b08` (boat rack, quay wall,
-wharf warehouse, quay crane, marina pontoon) plus the hero landmark register.
+**All 114 models complete** — Tier **A** (12), **B** (8), **C** (8), **D** (25),
+**E** (14), **F** (47). This is the full de-duplicated model set from #216; the
+hero landmark register in the appendices is a separate one-off effort.
 
 ## Directory layout
 
 ```
 scenery/
   tier-a/   Universal rowing furniture (12) — every venue
-  tier-b/   Water-edge structures (3 of 8) — boathouses / clubhouse
+  tier-b/   Water-edge structures (8) — boathouses, clubhouse, rack, quay, wharf, crane, marina
   tier-c/   Crossings (8) — arch, concrete, truss, girder, bascule, suspension, lift, cantilever
   tier-d/   Regional architecture kits (25) — US / GB / NL / CE / IT
   tier-e/   Vegetation (14) — stylized low-poly trees, reeds, ground
@@ -60,8 +60,10 @@ Colours and proportions were checked against real references, not guessed:
 `a08` umpire launch · `a09` hexagonal gazebo · `a10` slipway ramp ·
 `a11` bank railing · `a12` regatta flagpole
 
-### Tier B — water-edge structures (3)
-`b01` New England boathouse · `b02` UK Victorian boathouse · `b03` modern clubhouse
+### Tier B — water-edge structures (8)
+`b01` New England boathouse · `b02` UK Victorian boathouse · `b03` modern clubhouse ·
+`b04` outdoor boat rack · `b05` stone quay wall · `b06` wharf warehouse ·
+`b07` luffing quay crane · `b08` marina pontoon cluster
 
 ### Tier C — crossings (8)
 `c01` masonry arch · `c02` concrete beam · `c03` steel through-truss ·
