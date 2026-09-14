@@ -1,5 +1,6 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import { RigidBody } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
@@ -337,6 +338,57 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
 export const RowingScull = React.memo(RowingScullBase, (prev, next) => prev.cadence === next.cadence);
 
 // ============================================================================
+// GLB SCULL — production single scull + rower (public/assets/boat/, issue #229)
+//
+// Drop-in replacement for RowingScull with the same props.  Loads the crewed
+// GLB (authored to the rig contract: Hull, Seat, Left/RightOar, Rower...) and
+// drives the oar sweep from the same stroke phase the procedural boat used.
+// ============================================================================
+const CREW_URL = { male: '/assets/boat/scull-male.glb', female: '/assets/boat/scull-female.glb' } as const;
+
+const GltfScullBase: React.FC<{
+  cadence: number;
+  strokeCycleTRef?: React.MutableRefObject<number>;
+  crew?: 'male' | 'female';
+}> = ({ cadence, strokeCycleTRef, crew = 'male' }) => {
+  const { scene } = useGLTF(CREW_URL[crew]);
+  // Clone so the boat is independent of the cached source scene (static meshes,
+  // so a plain deep clone preserves the named nodes we animate).
+  const model = useMemo(() => scene.clone(true), [scene]);
+  const oarsRef = useRef<{ left: THREE.Object3D | null; right: THREE.Object3D | null }>({ left: null, right: null });
+  useEffect(() => {
+    oarsRef.current = {
+      left: model.getObjectByName('LeftOar') ?? null,
+      right: model.getObjectByName('RightOar') ?? null,
+    };
+  }, [model]);
+
+  useFrame((state) => {
+    const strokesPerMinute = Math.max(18, cadence || 24);
+    const freqHz = strokesPerMinute / 60;
+    const phase = strokeCycleTRef ? strokeCycleTRef.current : (state.clock.elapsedTime * freqHz % 1);
+    const oarSweep = Math.sin(phase * Math.PI * 2) * 0.5;
+    // The GLB is authored in the scene frame (up +Y), so local Y is world up and
+    // rotation.y sweeps the oar horizontally about its gate — as the rig intends.
+    const oars = oarsRef.current;
+    if (oars.left) oars.left.rotation.y = oarSweep;
+    if (oars.right) oars.right.rotation.y = -oarSweep;
+    try {
+      if (IS_TEST_MODE) {
+        window.__ROWER3D_OAR_ANGLE = oarSweep;
+        window.__ROWER3D_STROKE_RATE = strokesPerMinute;
+      }
+    } catch { /* intentional: window access may fail in test environments */ }
+  });
+
+  return <primitive object={model} />;
+};
+
+export const GltfScull = React.memo(GltfScullBase, (prev, next) => prev.cadence === next.cadence && prev.crew === next.crew);
+
+useGLTF.preload(CREW_URL.male);
+
+// ============================================================================
 // BOAT KINEMATIC CONTROLLER
 // ============================================================================
 export const BoatKinematicController: React.FC<{
@@ -365,7 +417,16 @@ export const BoatKinematicController: React.FC<{
 
   return (
     <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false}>
-      <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
+      {IS_TEST_MODE ? (
+        // Tests rely on the procedural boat's synchronous, asset-free oar signal.
+        <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
+      ) : (
+        // Production HD scull; the procedural boat is the fallback while the GLB
+        // loads (and if it fails to load).
+        <Suspense fallback={<RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />}>
+          <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
+        </Suspense>
+      )}
     </RigidBody>
   );
 };

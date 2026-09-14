@@ -21,7 +21,12 @@
     "start:sim:bg": "node scripts/start-sim-bg.mjs",
     "stop:sim": "node scripts/stop-sim.mjs",
     "kill:ports": "node scripts/kill-ports.mjs 9001 9002",
-    "generate:environment-assets": "node scripts/generate-environment-assets.cjs"
+    "generate:environment-assets": "node scripts/generate-environment-assets.cjs",
+    "prepare": "node scripts/install-hooks.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "git config --unset core.hooksPath",
+    "verify": "npm run lint && npx tsc --noEmit -p tsconfig.app.json && npx vitest run",
+    "verify:staged": "node scripts/tdd-guard.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
