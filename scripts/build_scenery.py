@@ -5,7 +5,7 @@ Exports coloured GLB + STEP, renders a coloured multi-view PNG.
 All dims in mm; Z=0 at waterline contact; +Y faces water; centred on X/Y.
 """
 import cadquery as cq
-import sys, os, math, traceback, tempfile
+import sys, os, math, traceback, tempfile, random
 from pathlib import Path
 import numpy as np
 
@@ -24,6 +24,36 @@ def hx(h):
 def to_shape(obj):
     """Accept a Workplane or Shape, return a Shape."""
     return obj.val() if isinstance(obj, cq.Workplane) else obj
+
+
+# --- geometry helpers (Tier D/E) -----------------------------------------
+def ellipsoid(rx, ry, rz, center=(0, 0, 0)):
+    from OCP.gp import gp_GTrsf
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_GTransform
+    m = max(rx, ry, rz)
+    s = cq.Workplane("XY").sphere(m)
+    gt = gp_GTrsf()
+    gt.SetValue(1, 1, rx / m); gt.SetValue(2, 2, ry / m); gt.SetValue(3, 3, rz / m)
+    sh = cq.Shape(BRepBuilderAPI_GTransform(s.val().wrapped, gt, True).Shape())
+    return sh.translate(center)
+
+def cone(rbase, rtop, h, center=(0, 0, 0)):
+    return cq.Solid.makeCone(rbase, rtop, h).translate(center)
+
+def cyl(r, h, center=(0, 0, 0)):
+    return cq.Solid.makeCylinder(r, h).translate(center)
+
+def box(w, d, h, center=(0, 0, 0)):
+    return cq.Workplane("XY").box(w, d, h).val().translate(center)
+
+def gable(w, d, wall_h, ridge_h, cx=0, cy=0, cz=0):
+    prof = (cq.Workplane("XZ").moveTo(-w/2, wall_h).lineTo(0, ridge_h)
+            .lineTo(w/2, wall_h).close().extrude(d))
+    return prof.val().translate((cx, cy + d/2, cz))
+
+def pyramid(w, d, base_z, apex_h, cx=0, cy=0):
+    return (cq.Workplane("XY").rect(w, d).workplane(offset=apex_h).rect(4, 4)
+            .loft().val().translate((cx, cy, base_z)))
 
 
 def build_assembly(parts):
@@ -670,6 +700,507 @@ MODELS = {
     "f21-boulder-cluster": f21, "f25-bramble-scrub": f25,
     "f33-post-rail-fence": f33, "f37-park-bench": f37,
 }
+
+# ============================================================
+# TIER D - regional architecture kits
+# Colours from issue #216 palette per region.
+# ============================================================
+BARK_PLANE="#9A8E70"; PLANE_FOL="#4E7A3E"
+WIL_BARK="#6E5F4A"; WIL_FOL="#8AA85C"
+POP_BARK="#8A8578"; POP_FOL="#5E8A46"
+OAK_BARK="#5A4A3A"; OAK_FOL="#3E6B32"
+MAP_BARK="#6E6258"; MAP_FOL="#4A7A3A"; MAP_AUT="#B83A26"
+BIR_BARK="#EDEAE0"; BIR_FOL="#7AA84E"
+EWP_BARK="#4A423A"; EWP_NDL="#3A5E4A"
+SCP_BARK="#B06A3E"; SCP_NDL="#3E5A48"
+ALD_BARK="#4E453C"; ALD_FOL="#41663A"
+CYP="#2E4A38"
+POLL_TR="#6E5F4A"; POLL_WH="#8A9A56"
+LEAF1="#B8722E"; LEAF2="#8B4A20"
+
+# D-US
+CLAP_US="#E4E0D4"; ROOF_US="#4A4038"; TRIM_US="#F5F3ED"; CHIM="#8C4A38"
+MILL_BRK="#8C4A38"; MILL_SILL="#C8C0B0"; MILL_ROOF="#3E3A34"
+LIME="#D8D2C2"; DOME_CU="#6E9284"; COL_US="#E8E4D8"
+CTOWER_ST="#A89E8C"; CTOWER_RF="#3E4A52"; CLOCK="#F2EFE4"
+WT_TANK="#C8CCC8"; WT_LEG="#5A5F66"
+GANTRY="#8A9096"; SIGN_G="#1F6B3A"
+# D-GB
+TER_BRK="#8B4A3A"; TER_SLATE="#4A4E54"; TER_STUC="#E8E0D0"
+RAG="#9A968A"; CH_RF="#4A4E54"; LOUVRE="#3A3228"
+PUB_REN="#F0EAD8"; PUB_TRIM="#1E3A2E"; PUB_SIGN="#8B2E20"
+COT_RUB="#8E8778"; COT_RF="#3E4248"; COT_DOOR="#2E4A3A"
+BARN_ST="#8E8778"; BARN_RF="#6E6A62"
+CANVAS="#F5F3ED"; MARQ_POLE="#8B7355"
+# D-NL
+NL_BRK="#7A4034"; NL_GABLE="#F2F2F0"; NL_SHUT="#1E3A2E"
+THATCH="#9A7E52"; MILL_BASE="#6E4A38"; SAIL="#E8E4DA"
+STOLP_BRK="#7A4034"; STOLP_BOARD="#2E4A3A"; STOLP_RF="#5A5248"
+LOCK_MAS="#A29A8C"; LOCK_GATE="#2E4A3A"; LOCK_BEAM="#F2F2F0"
+TURBINE="#F2F2F0"
+NL_PILE="#6E5A42"; NL_REED="#A89A6E"
+# D-CE
+CE_REN="#E8DCC0"; CE_DOME="#5E6E68"; CE_TRIM="#F2ECDC"
+PANEL="#D8D4C8"; PBALC="#A8B0AE"; PJOINT="#B0ACA0"
+VILLA_ST="#E4D8C0"; VILLA_RF="#6E5248"; VILLA_VER="#F2ECDC"
+WEIR_CONC="#B0ACA4"; WEIR_HOUSE="#8B7355"; WEIR_GEAR="#3A4048"
+# D-IT
+PAL_OCH="#D8A860"; PAL_SHUT="#3E5A3E"; PAL_CORN="#E8DCC0"
+CAST_BRK="#9A5A44"; CAST_RF="#3E4A52"; CAST_ST="#E0D8C4"
+EMB_ST="#C0B49C"; EMB_BAL="#D8D0BC"
+
+
+# --- D-US ---
+def d_us_01():  # clapboard house 12x9x9
+    p=[]
+    p.append((box(12000,9000,5500,(0,0,2750)), CLAP_US))
+    p.append((gable(12000,9000,5500,9000,0,0,0), ROOF_US))
+    p.append((box(1200,300,2600,(0,4500,1300)), TRIM_US))     # door surround
+    p.append((box(900,200,2200,(0,4550,1100)), COT_DOOR))     # door
+    p.append((cyl(400,2200,(3800,0,8000)), CHIM))             # chimney
+    return "d","12000 x 9000 x 9000mm (D-US)",p
+
+def d_us_02():  # brick mill 70x20x22
+    p=[]
+    p.append((box(70000,20000,18000,(0,0,9000)), MILL_BRK))
+    # low-pitch roof
+    p.append((gable(70000,20000,18000,22000,0,0,0), MILL_ROOF))
+    # sill bands (windows suggested)
+    for z in (5000,9000,13000):
+        p.append((box(70000,60,600,(0,10020,z)), MILL_SILL))
+    # stair tower
+    p.append((box(6000,6000,24000,(-30000,4000,12000)), MILL_BRK))
+    # tall square chimney
+    p.append((box(2600,2600,10000,(30000,-6000,23000)), MILL_BRK))
+    return "d","70000 x 20000 x 22000mm (D-US)",p
+
+def d_us_03():  # collegiate dome 45x30x28
+    p=[]
+    p.append((box(45000,30000,16000,(0,0,8000)), LIME))
+    # portico: 6 Ionic columns + pediment (front +Y)
+    for i in range(6):
+        x=-11000+i*4400
+        p.append((cyl(700,11000,(x,14500,0)), COL_US))
+    p.append((box(16000,3000,2000,(0,15000,12000)), COL_US))      # entablature
+    p.append((gable(16000,3000,12000,16000,0,15000,0), LIME))     # pediment
+    # drum + copper dome
+    p.append((cyl(6000,4000,(0,0,16000)), LIME))
+    p.append((ellipsoid(6000,6000,5000,(0,0,20000)), DOME_CU))
+    p.append((cyl(400,2000,(0,0,25000)), DOME_CU))               # finial
+    return "d","45000 x 30000 x 28000mm (D-US)",p
+
+def d_us_04():  # collegiate gothic tower 12x12x40
+    p=[]
+    p.append((box(12000,12000,36000,(0,0,18000)), CTOWER_ST))
+    # corner pinnacles
+    for xo in (-5500,5500):
+        for yo in (-5500,5500):
+            p.append((cone(900,80,4000,(xo,yo,36000)), CTOWER_RF))
+    # louvred belfry band
+    p.append((box(12200,12200,4000,(0,0,30000)), LOUVRE))
+    # clock faces two sides
+    for yo,cy in ((6100,0),(-6100,0)):
+        p.append((box(2600,60,2600,(0,yo,26000)), CLOCK))
+    return "d","12000 x 12000 x 40000mm (D-US)",p
+
+def d_us_05():  # elevated water tower dia9 x26
+    p=[]
+    p.append((cyl(4500,7000,(0,0,17000)), WT_TANK))          # tank
+    p.append((cone(4700,300,3500,(0,0,24000)), WT_TANK))     # conical roof
+    for i in range(6):
+        a=math.radians(i*60); x=3600*math.cos(a); y=3600*math.sin(a)
+        p.append((box(300,300,17000,(x,y,8500)), WT_LEG))    # legs
+    p.append((cyl(4900,300,(0,0,17000)), WT_LEG))            # walkway ring base
+    return "d","dia 9000 x 26000mm (D-US)",p
+
+def d_us_06():  # highway sign gantry 20x2x8
+    p=[]
+    for xo in (-9000,9000):
+        p.append((box(500,500,8000,(xo,0,4000)), GANTRY))
+    p.append((box(20000,600,1200,(0,0,7500)), GANTRY))       # truss beam
+    p.append((box(9000,150,3000,(0,-400,6200)), SIGN_G))     # green sign
+    return "d","20000 x 2000 x 8000mm (D-US)",p
+
+# --- D-GB ---
+def d_gb_01():  # brick terrace of 4  24x8x10
+    p=[]
+    p.append((box(24000,8000,7000,(0,0,3500)), TER_BRK))
+    p.append((gable(24000,8000,7000,10000,0,0,0), TER_SLATE))
+    for i in range(4):
+        x=-9000+i*6000
+        p.append((box(2400,1200,2600,(x,4600,2200)), TER_STUC))   # bay window
+        p.append((box(900,900,3000,(x,0,10500)), CHIM))           # party chimney
+    p.append((box(24000,200,900,(0,4700,700)), TER_STUC))         # front wall
+    return "d","24000 x 8000 x 10000mm (D-GB)",p
+
+def d_gb_02():  # parish church square tower 32x14x24
+    p=[]
+    p.append((box(20000,14000,10000,(-4000,0,5000)), RAG))        # nave
+    p.append((gable(20000,14000,10000,14000,-4000,0,0), CH_RF))
+    p.append((box(9000,9000,22000,(-13000,0,11000)), RAG))        # west tower
+    for xo in (-16500,-9500):
+        for yo in (-4000,4000):
+            p.append((cone(700,60,2600,(xo,yo,22000)), CH_RF))    # pinnacles
+    p.append((box(9200,9200,3000,(-13000,0,18000)), LOUVRE))      # belfry louvres
+    p.append((box(2200,60,2200,(-13000,4700,15000)), CLOCK))      # clock
+    return "d","32000 x 14000 x 24000mm (D-GB)",p
+
+def d_gb_03():  # riverside pub 16x11x9
+    p=[]
+    p.append((box(16000,11000,6500,(0,0,3250)), PUB_REN))
+    p.append((gable(16000,11000,6500,9000,0,0,0), TER_SLATE))
+    p.append((box(3000,400,1400,(0,5500,4500)), PUB_TRIM))        # fascia band
+    p.append((box(1600,120,1000,(6000,5600,3500)), PUB_SIGN))     # hanging sign
+    p.append((cyl(80,1200,(6800,5600,3900)), PUB_TRIM))           # sign bracket
+    # terrace with benches + parasols
+    p.append((box(9000,4000,120,(0,8000,60)), MARQ_POLE))
+    for xo in (-2500,2500):
+        p.append((box(1600,400,700,(xo,8000,400)), MARQ_POLE))    # benches
+        p.append((cone(1400,80,900,(xo,8000,2200)), CANVAS))      # parasols
+        p.append((cyl(50,1800,(xo,8000,900)), WT_LEG))
+    return "d","16000 x 11000 x 9000mm (D-GB)",p
+
+def d_gb_04():  # stone cottage 10x7x7
+    p=[]
+    p.append((box(10000,7000,3500,(0,0,1750)), COT_RUB))
+    p.append((gable(10000,7000,3500,7000,0,0,0), COT_RF))
+    p.append((box(1600,2000,1600,(1500,0,4200)), COT_RF))         # dormer
+    p.append((box(900,200,1900,(0,3550,950)), COT_DOOR))          # door
+    p.append((box(800,800,1600,(-4000,0,7000)), COT_RUB))         # gable chimney
+    return "d","10000 x 7000 x 7000mm (D-GB)",p
+
+def d_gb_05():  # stone barn 18x9x8
+    p=[]
+    body=cq.Workplane("XY").box(18000,9000,5000).translate((0,0,2500))
+    body=body.cut(cq.Workplane("XY").box(4000,3000,4200).translate((0,4600,2100)))  # cart opening
+    p.append((body, BARN_ST))
+    p.append((gable(18000,9000,5000,8000,0,0,0), BARN_RF))
+    p.append((box(6000,3000,3200,(11000,0,1600)), BARN_ST))       # lean-to
+    p.append((gable(6000,3000,3200,4200,11000,0,0), BARN_RF))
+    return "d","18000 x 9000 x 8000mm (D-GB)",p
+
+def d_gb_06():  # regatta marquee 20x10x6
+    p=[]
+    for xo in (-9000,-3000,3000,9000):
+        for yo in (-4500,4500):
+            p.append((cyl(120,4000,(xo,yo,2000)), MARQ_POLE))
+    # peaked canvas roof (two gable slopes)
+    p.append((gable(20000,10000,4000,6000,0,0,0), CANVAS))
+    p.append((box(20000,10000,120,(0,0,4000)), CANVAS))          # eaves band
+    # scalloped valance
+    p.append((box(20000,200,600,(0,5000,3700)), CANVAS))
+    return "d","20000 x 10000 x 6000mm (D-GB)",p
+
+# --- D-NL ---
+def d_nl_01():  # gabled canal house 6x12x16
+    p=[]
+    p.append((box(6000,12000,15000,(0,0,7500)), NL_BRK))
+    # stepped gable (front +Y)
+    for i,(w,z) in enumerate([(6000,15200),(4400,16000),(2800,16800),(1400,17600)]):
+        p.append((box(w,600,900,(0,5700,z-450)), NL_GABLE))
+    p.append((box(400,1400,400,(0,6200,17400)), NL_BRK))         # hoist beam
+    # shuttered windows
+    for z in (4000,8000,12000):
+        for xo in (-1400,1400):
+            p.append((box(700,80,1500,(xo,5980,z)), NL_SHUT))
+    p.append((box(2400,1200,600,(0,6200,300)), NL_GABLE))        # stoop
+    return "d","6000 x 12000 x 16000mm (D-NL)",p
+
+def d_nl_02():  # polder windmill dia12 x22, sails dia26
+    p=[]
+    p.append((cone(6000,5000,4000,(0,0,0)), MILL_BASE))         # brick base
+    # octagonal tapered thatched body
+    body=(cq.Workplane("XY").polygon(8,10000).workplane(offset=15000).polygon(8,6000).loft())
+    p.append((body.val().translate((0,0,4000)), THATCH))
+    p.append((cone(3200,300,2500,(0,0,19000)), MILL_BASE))      # cap
+    # 4 lattice sails (cross) in XZ plane facing +Y, at hub z=17000
+    hub=17000
+    for ang in (0,90,180,270):
+        arm=box(1400,300,13000,(0,-800,0))
+        arm=arm.rotate((0,0,0),(0,1,0),ang).translate((0,-900,hub))
+        p.append((arm, SAIL))
+    p.append((box(400,3000,400,(0,-900,hub)), MILL_BASE))       # tailpole hint
+    return "d","dia 12000 x 22000mm, sails dia 26000 (D-NL)",p
+
+def d_nl_03():  # stolpboerderij 24x24x14
+    p=[]
+    p.append((box(24000,24000,5000,(0,0,2500)), STOLP_BRK))
+    p.append((box(24000,24000,3000,(0,0,6000)), STOLP_BOARD))   # green boarding band
+    p.append((pyramid(25000,25000,7500,7000,0,0), STOLP_RF))    # huge pyramidal roof
+    for xo in (-8000,-2700,2700,8000):
+        p.append((box(2000,200,3500,(xo,12000,1750)), STOLP_RF))  # stable doors
+    return "d","24000 x 24000 x 14000mm (D-NL)",p
+
+def d_nl_04():  # canal lock (sluis) 30x12x6
+    p=[]
+    for yo in (-4500,4500):
+        p.append((box(30000,3000,6000,(0,yo,3000)), LOCK_MAS))  # chambers
+    for xo in (-13000,13000):
+        p.append((box(1000,6000,5000,(xo,0,2500)), LOCK_GATE))  # mitre gates
+        p.append((box(6000,300,300,(xo-2500,0,5200)), LOCK_BEAM))  # balance beams
+    p.append((box(2000,12000,400,(0,0,6000)), LOCK_BEAM))       # walkway
+    for xo in (-13000,13000):
+        for yo in (-5500,5500):
+            p.append((cyl(300,700,(xo,yo,6000)), LOCK_GATE))    # bollards
+    return "d","30000 x 12000 x 6000mm (D-NL)",p
+
+def d_nl_05():  # wind turbine rotor dia90 hub85
+    p=[]
+    p.append((cone(2500,1200,85000,(0,0,0)), TURBINE))          # tapered tower
+    p.append((box(4000,2000,2200,(0,-1500,85000)), TURBINE))    # nacelle
+    for ang in (90,210,330):
+        blade=box(2200,400,45000,(0,0,22000))
+        blade=blade.rotate((0,0,0),(0,1,0),ang).translate((0,-2600,85000))
+        p.append((blade, TURBINE))
+    return "d","rotor dia 90000, hub 85000mm (D-NL)",p
+
+def d_nl_06():  # reed bank edge 8x3x1.5
+    p=[]
+    bank=(cq.Workplane("YZ").polyline([(0,0),(0,1500),(3000,300),(3000,0),(0,0)]).close()
+          .extrude(8000).translate((-4000,-1500,0)))
+    p.append((bank, NL_PILE))
+    for xo in range(-3600,3601,600):
+        p.append((box(120,120,1600,(xo,-1400,300)), NL_PILE))   # piles
+    reeds=None; random.seed(9)
+    for i in range(40):
+        x=random.uniform(-3800,3800); y=random.uniform(-1300,200)
+        r=cq.Workplane("XY").rect(18,18).extrude(random.uniform(900,1400)).translate((x,y,600))
+        reeds=r if reeds is None else reeds.union(r)
+    p.append((reeds, NL_REED))
+    return "d","8000 x 3000 x 1500mm (D-NL, tiles)",p
+
+# --- D-CE ---
+def d_ce_01():  # baroque onion church 28x16x30
+    p=[]
+    p.append((box(28000,16000,16000,(0,0,8000)), CE_REN))
+    p.append((gable(28000,16000,16000,20000,0,0,0), VILLA_RF))
+    p.append((box(7000,7000,22000,(-9000,0,11000)), CE_REN))    # tower
+    p.append((cyl(3600,3000,(-9000,0,22000)), CE_DOME))         # onion base
+    p.append((ellipsoid(4200,4200,4500,(-9000,0,25500)), CE_DOME))  # bulbous onion
+    p.append((cone(1200,80,2500,(-9000,0,29000)), CE_DOME))     # lantern spike
+    p.append((cyl(1200,1600,(-9000,0,29500)), CE_TRIM))         # lantern
+    return "d","28000 x 16000 x 30000mm (D-CE)",p
+
+def d_ce_02():  # panelak slab 60x14x26
+    p=[]
+    p.append((box(60000,14000,26000,(0,0,13000)), PANEL))
+    for i in range(8):
+        z=1600+i*3100
+        p.append((box(60200,14200,200,(0,0,z)), PJOINT))        # floor joints
+        p.append((box(60000,600,900,(0,7000,z+800)), PBALC))    # balcony band
+    for xo in range(-27000,27001,6000):
+        p.append((box(200,14200,26000,(xo,0,13000)), PJOINT))   # vertical joints
+    return "d","60000 x 14000 x 26000mm (D-CE)",p
+
+def d_ce_03():  # riverside villa 16x14x14
+    p=[]
+    p.append((box(16000,14000,9000,(0,0,4500)), VILLA_ST))
+    p.append((pyramid(17000,15000,9000,4000,0,0), VILLA_RF))    # hipped roof
+    p.append((box(4000,4000,13000,(-6000,-5000,6500)), VILLA_ST))  # corner tower
+    p.append((cone(2900,80,4000,(-6000,-5000,13000)), VILLA_RF))   # spirelet
+    p.append((box(9000,2500,3200,(0,8000,1600)), VILLA_VER))    # veranda facing water
+    return "d","16000 x 14000 x 14000mm (D-CE)",p
+
+def d_ce_04():  # hydro weir house 40x12x12
+    p=[]
+    p.append((box(40000,12000,4000,(0,0,2000)), WEIR_CONC))     # weir sill
+    for xo in (-13000,0,13000):
+        p.append((box(2000,12000,5000,(xo,0,2500)), WEIR_CONC)) # piers
+    p.append((box(40000,8000,4000,(0,0,8000)), WEIR_HOUSE))     # machine house
+    p.append((gable(40000,8000,4000,11000,0,0,0), WEIR_GEAR))
+    p.append((box(42000,1200,1200,(0,-5000,6500)), WEIR_GEAR))  # gantry
+    return "d","40000 x 12000 x 12000mm (D-CE)",p
+
+# --- D-IT ---
+def d_it_01():  # po palazzo 30x18x22
+    p=[]
+    body=cq.Workplane("XY").box(30000,18000,20000).translate((0,0,10000))
+    # ground-floor arcade (front +Y)
+    for i in range(5):
+        x=-12000+i*6000
+        arch=(cq.Workplane("XZ").moveTo(x-2000,0).lineTo(x-2000,3500)
+              .threePointArc((x,5000),(x+2000,3500)).lineTo(x+2000,0).close()
+              .extrude(-4000).translate((0,9000+2000,0)))
+        body=body.cut(arch)
+    p.append((body, PAL_OCH))
+    for z in (8000,12000,16000):                                # shuttered windows
+        for i in range(5):
+            x=-12000+i*6000
+            p.append((box(1600,80,2600,(x,9020,z)), PAL_SHUT))
+    p.append((box(31000,19000,1200,(0,0,20600)), PAL_CORN))     # deep cornice
+    p.append((pyramid(31000,19000,21200,2500,0,0), CAST_RF))    # shallow hipped roof
+    return "d","30000 x 18000 x 22000mm (D-IT)",p
+
+def d_it_02():  # castello valentino 60x45x30
+    p=[]
+    p.append((box(60000,45000,18000,(0,0,9000)), CAST_BRK))
+    for xo in (-27000,27000):
+        for yo in (-19000,19000):
+            p.append((box(9000,9000,26000,(xo,yo,13000)), CAST_ST))     # corner towers
+            p.append((pyramid(9500,9500,26000,7000,xo,yo), CAST_RF))    # pavilion roofs
+    p.append((pyramid(60000,45000,18000,9000,0,0), CAST_RF))            # main roof
+    p.append((box(50000,8000,1500,(0,24000,750)), EMB_ST))             # river terrace
+    return "d","60000 x 45000 x 30000mm (D-IT)",p
+
+def d_it_03():  # arcaded embankment 30x8x8
+    p=[]
+    p.append((box(30000,8000,4000,(0,0,2000)), EMB_ST))         # lower mass
+    for i in range(6):
+        x=-12500+i*5000
+        arch=(cq.Workplane("XZ").moveTo(x-1600,0).lineTo(x-1600,2200)
+              .threePointArc((x,3200),(x+1600,2200)).lineTo(x+1600,0).close()
+              .extrude(-3000).translate((0,4000+1500,0)))
+        # cut arcade into lower walk
+    walk=cq.Workplane("XY").box(30000,8000,4000).translate((0,0,2000))
+    for i in range(6):
+        x=-12500+i*5000
+        arch=(cq.Workplane("XZ").moveTo(x-1400,300).lineTo(x-1400,2200)
+              .threePointArc((x,3000),(x+1400,2200)).lineTo(x+1400,300).close()
+              .extrude(8200).translate((0,-4100,0)))
+        walk=walk.cut(arch)
+    p=[(walk, EMB_ST)]
+    p.append((box(30000,8000,3000,(0,0,5500)), EMB_ST))         # upper promenade
+    p.append((box(30000,400,900,(0,3800,7500)), EMB_BAL))       # balustrade
+    for xo in range(-13000,13001,3000):                          # stairs to water
+        p.append((box(2000,1500,300,(xo,4200,300)), EMB_ST))
+    return "d","30000 x 8000 x 8000mm (D-IT)",p
+
+
+# ============================================================
+# TIER E - vegetation (stylized low-poly; flat colour)
+# Trunk + crown as separate coloured parts (boolean-free).
+# ============================================================
+def _trunk(h, r0, r1, bark, cx=0, cy=0):
+    return (cone(r0, r1, h, (cx, cy, 0)), bark)
+
+def e01():  # london plane 22m
+    p=[_trunk(9000,450,320,BARK_PLANE)]
+    p.append((ellipsoid(6500,6500,5000,(0,0,15500)), PLANE_FOL))
+    p.append((ellipsoid(4000,4000,3200,(2500,1500,12500)), PLANE_FOL))
+    p.append((ellipsoid(4000,4000,3200,(-2500,-1200,13000)), PLANE_FOL))
+    return "e","H 22000mm (London plane)",p
+
+def e02():  # weeping willow 14m
+    p=[_trunk(3500,600,450,WIL_BARK)]
+    p.append((ellipsoid(6000,6000,3800,(0,0,7500)), WIL_FOL))       # broad crown
+    p.append((ellipsoid(6800,6800,1600,(0,0,4200)), WIL_FOL))       # drooping skirt
+    return "e","H 14000mm (weeping willow)",p
+
+def e03():  # lombardy poplar 26m
+    p=[_trunk(4000,400,250,POP_BARK)]
+    p.append((ellipsoid(2400,2400,11500,(0,0,14000)), POP_FOL))     # narrow column
+    return "e","H 26000mm (Lombardy poplar)",p
+
+def e04():  # english oak 20m
+    p=[_trunk(5000,800,600,OAK_BARK)]
+    p.append((ellipsoid(6500,6500,4500,(0,0,13000)), OAK_FOL))
+    p.append((ellipsoid(4200,4200,3200,(3500,2000,10500)), OAK_FOL))
+    p.append((ellipsoid(4200,4200,3200,(-3200,-2500,11000)), OAK_FOL))
+    return "e","H 20000mm (English oak)",p
+
+def e05():  # red maple 18m
+    p=[_trunk(5000,500,360,MAP_BARK)]
+    p.append((ellipsoid(4200,4200,5500,(0,0,11500)), MAP_FOL))
+    return "e","H 18000mm (red maple)",p
+
+def e06():  # white birch 16m (clump of 3)
+    p=[]
+    for cx,cy,r in [(0,0,220),(-700,400,180),(600,-300,170)]:
+        p.append(_trunk(16000,r,120,BIR_BARK,cx,cy))
+        p.append((ellipsoid(2200,2200,3000,(cx,cy,12500)), BIR_FOL))
+    return "e","H 16000mm (white birch)",p
+
+def e07():  # eastern white pine 28m (tiered whorls)
+    p=[_trunk(6000,600,300,EWP_BARK)]
+    z=6000
+    for r in (5200,4300,3400,2500,1500):
+        p.append((cone(r,0,4500,(0,0,z)), EWP_NDL))
+        z+=4400
+    return "e","H 28000mm (eastern white pine)",p
+
+def e08():  # scots pine 20m (bare trunk, flat crown)
+    p=[_trunk(13000,500,320,SCP_BARK)]
+    p.append((ellipsoid(5000,5000,2200,(0,0,15500)), SCP_NDL))
+    p.append((ellipsoid(3200,3200,1600,(1500,0,17500)), SCP_NDL))
+    return "e","H 20000mm (Scots pine)",p
+
+def e09():  # alder scrub 6m (multi-stem shrub)
+    p=[]; random.seed(4)
+    for i in range(5):
+        a=math.radians(i*72); x=400*math.cos(a); y=400*math.sin(a)
+        p.append(_trunk(4000,150,90,ALD_BARK,x,y))
+    p.append((ellipsoid(2600,2600,2400,(0,0,4200)), ALD_FOL))
+    p.append((ellipsoid(1800,1800,1600,(1200,600,3000)), ALD_FOL))
+    return "e","H 6000mm (alder scrub)",p
+
+def e10():  # italian cypress 15m
+    p=[(cone(1300,200,15000,(0,0,0)), CYP)]                         # tight dark column
+    return "e","H 15000mm (Italian cypress)",p
+
+def e11():  # reed bed clump 2.5m
+    p=[]; random.seed(7); stems=None
+    for i in range(16):
+        x=random.uniform(-500,500); y=random.uniform(-500,500)
+        r=cq.Workplane("XY").rect(20,20).extrude(random.uniform(2000,2500)).translate((x,y,0))
+        stems=r if stems is None else stems.union(r)
+    p.append((stems, NL_REED))
+    heads=None; random.seed(7)
+    for i in range(16):
+        x=random.uniform(-500,500); y=random.uniform(-500,500)
+        h=random.uniform(2000,2500)
+        hd=cq.Workplane("XY").rect(45,45).workplane(offset=350).rect(8,8).loft().translate((x,y,h))
+        heads=hd if heads is None else heads.union(hd)
+    p.append((heads, REED_HEAD))
+    return "e","H 2500mm (reed bed clump)",p
+
+def e12():  # pollarded willow 5m
+    p=[(cone(600,500,2500,(0,0,0)), POLL_TR)]                      # stumpy trunk
+    random.seed(8)
+    for i in range(14):
+        a=math.radians(i*26); r=random.uniform(200,500)
+        x=r*math.cos(a); y=r*math.sin(a)
+        whip=box(60,60,random.uniform(1800,2500),(x,y,2500))
+        whip=whip.rotate((x,y,2500),(1,0,0),random.uniform(-30,30))
+        p.append((whip, POLL_WH))
+    return "e","H 5000mm (pollarded willow)",p
+
+def e13():  # mown bank grass patch (tile 8m)
+    p=[(box(8000,2000,120,(0,0,60)), GRASS)]
+    p.append((box(8000,120,180,(0,-1000,90)), GRASS_DRY))         # mown edge
+    return "e","8000 x 2000 x 150mm (mown grass, tiles)",p
+
+def e14():  # autumn leaf litter scatter
+    p=[]; random.seed(11)
+    for i in range(28):
+        x=random.uniform(-1400,1400); y=random.uniform(-1400,1400)
+        col=LEAF1 if i%2 else LEAF2
+        leaf=box(random.uniform(120,220),random.uniform(120,220),12,(x,y,6))
+        p.append((leaf, col))
+    return "e","3000 x 3000mm scatter (autumn leaves)",p
+
+
+MODELS.update({
+    "d-us-01-clapboard-house": d_us_01, "d-us-02-brick-mill": d_us_02,
+    "d-us-03-collegiate-dome": d_us_03, "d-us-04-collegiate-tower": d_us_04,
+    "d-us-05-water-tower": d_us_05, "d-us-06-highway-sign-gantry": d_us_06,
+    "d-gb-01-terrace-brick": d_gb_01, "d-gb-02-church-square-tower": d_gb_02,
+    "d-gb-03-riverside-pub": d_gb_03, "d-gb-04-stone-cottage": d_gb_04,
+    "d-gb-05-stone-barn": d_gb_05, "d-gb-06-regatta-marquee": d_gb_06,
+    "d-nl-01-gabled-canal-house": d_nl_01, "d-nl-02-polder-windmill": d_nl_02,
+    "d-nl-03-polder-farmhouse": d_nl_03, "d-nl-04-canal-lock": d_nl_04,
+    "d-nl-05-wind-turbine": d_nl_05, "d-nl-06-reed-bank-edge": d_nl_06,
+    "d-ce-01-baroque-church-onion": d_ce_01, "d-ce-02-panelak-block": d_ce_02,
+    "d-ce-03-riverside-villa": d_ce_03, "d-ce-04-hydro-weir-house": d_ce_04,
+    "d-it-01-po-palazzo": d_it_01, "d-it-02-castello-valentino": d_it_02,
+    "d-it-03-arcaded-embankment": d_it_03,
+    "e01-london-plane": e01, "e02-weeping-willow": e02,
+    "e03-lombardy-poplar": e03, "e04-english-oak": e04,
+    "e05-red-maple": e05, "e06-white-birch": e06,
+    "e07-eastern-white-pine": e07, "e08-scots-pine": e08,
+    "e09-alder-scrub": e09, "e10-italian-cypress": e10,
+    "e11-reed-bed-clump": e11, "e12-pollarded-willow": e12,
+    "e13-mown-bank-grass": e13, "e14-autumn-leaf-litter": e14,
+})
 
 if __name__ == "__main__":
     ok=fail=0

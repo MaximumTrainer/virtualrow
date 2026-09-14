@@ -4,9 +4,9 @@
 [issue #216](https://github.com/MaximumTrainer/virtualrow/issues/216) using
 [llm-cad](https://github.com/MaximumTrainer/llm-cad).
 
-**27 of 114 models** — the full "build first" slice (steps 1–5 of the issue's
-build order): all of Tier A, the three boathouse types, the two commonest
-bridges, the four commonest bank edges, and the priority ground scatter.
+**66 of 114 models** — Tier A (12), Tier B (3), Tier C (2), Tier F (10), and now
+the full **Tier D regional kits (25)** and **Tier E vegetation (14)**. Remaining:
+additional Tier C crossings and Tier F infrastructure, plus the hero landmarks.
 
 ## Directory layout
 
@@ -15,8 +15,8 @@ scenery/
   tier-a/   Universal rowing furniture (12) — every venue
   tier-b/   Water-edge structures (3) — boathouses / clubhouses
   tier-c/   Crossings (2) — bridges
-  tier-d/   Regional architecture kits (future batches)
-  tier-e/   Vegetation (future batches)
+  tier-d/   Regional architecture kits (25) — US / GB / NL / CE / IT
+  tier-e/   Vegetation (14) — stylized low-poly trees, reeds, ground
   tier-f/   Generic biome kit (10) — bank edges, scatter, infrastructure
   renders/  Multi-view coloured PNG previews of each model
 ```
@@ -65,6 +65,22 @@ Colours and proportions were checked against real references, not guessed:
 
 ### Tier C — crossings (2)
 `c01` masonry arch bridge · `c02` concrete beam bridge
+
+### Tier D — regional architecture kits (25)
+- **US** (6): clapboard house, brick mill, collegiate dome, collegiate tower, water tower, highway sign gantry
+- **GB** (6): brick terrace, parish church, riverside pub, stone cottage, stone barn, regatta marquee
+- **NL** (6): gabled canal house, polder windmill, stolp farmhouse, canal lock, wind turbine, reed bank edge
+- **CE** (4): baroque onion church, panelák block, riverside villa, hydro weir house
+- **IT** (3): Po palazzo, Castello del Valentino, arcaded embankment
+
+### Tier E — vegetation (14)
+`e01` London plane · `e02` weeping willow · `e03` Lombardy poplar · `e04` English oak ·
+`e05` red maple · `e06` white birch · `e07` eastern white pine · `e08` Scots pine ·
+`e09` alder scrub · `e10` Italian cypress · `e11` reed bed · `e12` pollarded willow ·
+`e13` mown bank grass · `e14` autumn leaf litter
+
+Trees are stylized low-poly (tapered trunk + coloured crown blobs), sized to the
+species heights in #216 and kept boolean-free so they stay light for instancing.
 
 ### Tier F — generic biome kit (10)
 `f01` earth-cut bank · `f02` shingle shelf · `f03` reed margin · `f04` masonry wall ·
