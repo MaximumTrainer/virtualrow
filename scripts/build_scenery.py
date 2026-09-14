@@ -1202,6 +1202,497 @@ MODELS.update({
     "e13-mown-bank-grass": e13, "e14-autumn-leaf-litter": e14,
 })
 
+# ============================================================
+# Remaining TIER C crossings (c03-c08) and TIER F (F1-F6)
+# ============================================================
+def strut(p1, p2, r=180):
+    v = np.array(p2, float) - np.array(p1, float)
+    L = float(np.linalg.norm(v))
+    if L < 1e-6:
+        return cyl(r, r, p1)
+    d = cq.Vector(float(v[0]/L), float(v[1]/L), float(v[2]/L))
+    return cq.Solid.makeCylinder(r, L, cq.Vector(float(p1[0]), float(p1[1]), float(p1[2])), d)
+
+# Tier C palette
+TRUSS_GRN="#4A5A50"; BASC_STEEL="#C4622D"; BASC_HOUSE="#D8D4CC"
+SUSP_TOWER="#E8E4DA"; SUSP_CABLE="#5A5F66"; SUSP_DECK="#8B7355"
+LIFT_WHITE="#F2F2F0"; LIFT_RED="#C8102E"; CANT_STEEL="#4A5058"
+# Tier F palette
+SHEET_STEEL="#6E6156"; RUST="#8A4A2E"; CAP="#B0ACA4"
+SAND="#D8C89E"; WETSAND="#A89876"; MARRAM="#8A9A5E"
+LICHEN="#B8B49E"; WEED="#3E4A32"
+BOARDS="#8B7355"; JOINTS="#8E8A82"
+HEDGE="#3E6B32"; CANOPY="#3A5E3A"; SHADOW="#26402A"
+BLUFF="#8A8072"; STRATA="#6E6458"; SCREE="#A09684"
+CLIFF="#7A756C"; GUANO="#D8D4C6"
+FIELD="#6E8A4E"; DITCH="#4A5240"
+GRAVEL="#A89E8E"; SCRUBG="#5E7A46"
+ISLBASE="#6B5540"; ISLCAN="#3A5E3A"
+MUD="#5E5445"; MUDWET="#453E32"; STRAND="#8A8272"
+FLW_Y="#E8D46E"; FLW_P="#D86E8A"; FLW_W="#F2F2F0"
+PEBBLE2="#8A8278"
+DRIFT="#B0A894"; SPLIT="#8A8272"; DEADFALL="#6E5F4A"; FERN="#3E6B32"
+LILY="#4A7A3E"; LILY_U="#8A6E4A"; LILY_FL="#F2E8E8"
+WEEDMAT="#5E7A3A"; STREAMER="#3A5E3A"; FOAM="#EDEAE0"
+DINGHY_GUN="#1E3A5F"; DINGHY_INT="#8B7355"
+CRUISER_CAN="#1E3A2E"; CRUISER_TRIM="#8B7355"
+WIRE="#8A8A85"; HEDGEROW="#3E6B32"; VERGE="#5E8A46"
+LAMP_COL="#3E4348"; LANTERN="#D8D4CC"; BIN="#3E4348"
+PYLON="#8A9096"; TELE="#6E5F4A"; INSUL="#D8D4CC"
+STAIN="#6E6254"; GRILLE="#4A4E52"; BOLLARD="#3A3A38"
+TREELINE="#3A5238"; HILLFAR="#7A8894"; SKYLINE="#8A8E96"
+
+
+# --- Tier C ---
+def c03():  # steel through-truss 70x8x12 (rower passes inside)
+    p=[]; L=70000; ys=(-4000,4000); panels=10; step=L/panels
+    p.append((box(L,8000,400,(0,0,2000)), CANT_STEEL))              # deck
+    for y in ys:
+        p.append((strut((-L/2,y,2000),(L/2,y,2000),250), TRUSS_GRN))     # bottom chord
+        p.append((strut((-L/2,y,10000),(L/2,y,10000),250), TRUSS_GRN))   # top chord
+        for i in range(panels+1):
+            x=-L/2+i*step
+            p.append((strut((x,y,2000),(x,y,10000),180), TRUSS_GRN))     # verticals
+        for i in range(panels):
+            x=-L/2+i*step
+            p.append((strut((x,y,2000),(x+step,y,10000),150), TRUSS_GRN)) # diagonals
+    for x in (-L/2,L/2):                                             # portal bracing
+        p.append((strut((x,-4000,10000),(x,4000,10000),250), TRUSS_GRN))
+    return "c","70000 x 8000 x 12000mm",p
+
+def c04():  # twin plate-girder rail bridge 45x9x8
+    p=[]; L=45000
+    for x in (-L/2+2500,L/2-2500):
+        p.append((box(5000,10000,6000,(x,0,3000)), ABUT_STONE))     # stone abutments
+    for y in (-4000,4000):
+        p.append((box(L,700,3000,(0,y,5000)), GIRDER))              # plate girders
+    p.append((box(L,8000,700,(0,0,6500)), GIRDER))                  # ballasted deck
+    p.append((box(L,600,500,(0,4600,6000)), GIRDER))               # cable trough
+    return "c","45000 x 9000 x 8000mm",p
+
+def c05():  # single-leaf bascule 30x10x14
+    p=[]
+    p.append((box(13000,9000,600,(-8500,0,7000)), BASC_STEEL))     # fixed approach deck
+    p.append((box(2500,9000,7000,(-2000,0,3500)), BASC_HOUSE))     # pivot pier
+    leaf=box(14000,8000,500,(7000,0,0))
+    leaf=leaf.rotate((0,0,0),(0,1,0),44).translate((-1500,0,7000)) # raised leaf
+    p.append((leaf, BASC_STEEL))
+    p.append((box(3000,8000,3000,(-3500,0,4500)), BASC_STEEL))     # counterweight
+    p.append((box(4000,3000,4500,(-1500,6000,9500)), BASC_HOUSE))  # machinery house
+    p.append((ellipsoid(300,300,300,(8000,0,14000)), LIFT_RED))    # warning light
+    return "c","30000 x 10000 x 14000mm",p
+
+def c06():  # foot suspension 55x3x9
+    p=[]; L=55000
+    p.append((box(L,3000,300,(0,0,6000)), SUSP_DECK))              # deck
+    for x in (-18000,18000):                                       # A-frame towers
+        for y in (-1400,1400):
+            p.append((strut((x,y,6000),(x,0,12000),300), SUSP_TOWER))
+    # catenary main cable (sagging polyline)
+    for y in (-1400,1400):
+        pts=[];
+        for i in range(13):
+            t=i/12.0; x=-27500+t*L
+            sag=1.0-abs(2*t-1); z=12000-4600*sag if abs(x)<18000 else 12000-4600*(1-abs(abs(x)-18000)/9500)
+            pts.append((x,y,max(6300,z)))
+        for a,b in zip(pts,pts[1:]):
+            p.append((strut(a,b,90), SUSP_CABLE))
+    p.append((box(L,120,900,(0,1450,6600)), SUSP_TOWER))           # mesh balustrade
+    p.append((box(L,120,900,(0,-1450,6600)), SUSP_TOWER))
+    return "c","55000 x 3000 x 9000mm",p
+
+def c07():  # dutch lift bridge (ophaalbrug) 12x5x9
+    p=[]
+    for y in (-2000,2000):                                         # tall A-frame
+        p.append((strut((-3000,y,0),(-1000,y,9000),250), LIFT_WHITE))
+        p.append((strut((1000,y,0),(-1000,y,9000),250), LIFT_WHITE))
+    p.append((strut((-1000,-2000,9000),(-1000,2000,9000),250), LIFT_WHITE)) # apex beam
+    for y in (-2100,2100):                                         # balance beams
+        p.append((box(9000,300,300,(2500,y,8600)), LIFT_WHITE))
+    p.append((box(7000,4600,400,(3000,0,4000)), LIFT_WHITE))       # deck leaf
+    for x in (500,6000):                                           # hanging rods
+        for y in (-2100,2100):
+            p.append((strut((x,y,8600),(x,y,4200),60), LIFT_RED))
+    p.append((box(300,4600,700,(-1000,0,4400)), LIFT_RED))         # red trim counterweight box
+    return "c","12000 x 5000 x 9000mm",p
+
+def c08():  # steel cantilever 120x12x25
+    p=[]; L=120000
+    p.append((box(L,12000,1200,(0,0,10000)), CANT_STEEL))          # deck
+    for x in (-30000,30000):                                       # towers
+        for y in (-5000,5000):
+            p.append((strut((x,y,10000),(x,y,25000),600), CANT_STEEL))
+        p.append((strut((x,-5000,25000),(x,5000,25000),600), CANT_STEEL))
+    for y in (-5000,5000):                                         # tapering top chords
+        p.append((strut((-60000,y,11000),(-30000,y,25000),500), CANT_STEEL))
+        p.append((strut((-30000,y,25000),(0,y,16000),500), CANT_STEEL))
+        p.append((strut((0,y,16000),(30000,y,25000),500), CANT_STEEL))
+        p.append((strut((30000,y,25000),(60000,y,11000),500), CANT_STEEL))
+    return "c","120000 x 12000 x 25000mm",p
+
+# --- Tier F1 bank edges ---
+def f05():  # steel sheet piling 8x0.5x3
+    p=[]
+    for i in range(17):                                            # corrugated ribs
+        x=-4000+i*500
+        d=250 if i%2 else 400
+        p.append((box(480,d,3000,(x,0,1500)), SHEET_STEEL))
+    p.append((box(8000,600,300,(0,0,3050)), CAP))                  # capping beam
+    p.append((box(8000,500,400,(0,0,300)), RUST))                  # rust bloom waterline
+    return "f","8000 x 500 x 3000mm (tiles)",p
+
+def f06():  # sandy foreshore 8x8x1.2
+    p=[]
+    wedge=(cq.Workplane("YZ").polyline([(0,0),(0,400),(8000,1200),(8000,0),(0,0)]).close()
+           .extrude(8000).translate((-4000,-4000,0)))
+    p.append((wedge, SAND))
+    p.append((box(8000,1600,120,(0,-3200,240)), WETSAND))          # wet sand
+    random.seed(21)
+    tufts=None
+    for i in range(14):
+        x=random.uniform(-3800,3800); y=random.uniform(2500,3800)
+        t=cq.Workplane("XY").rect(30,30).extrude(random.uniform(300,500)).translate((x,y,1000))
+        tufts=t if tufts is None else tufts.union(t)
+    p.append((tufts, MARRAM))                                      # marram on dune lip
+    return "f","8000 x 8000 x 1200mm (tiles)",p
+
+def f07():  # boulder shore 8x4x2
+    p=[]; random.seed(22)
+    for i in range(9):
+        x=random.uniform(-3600,3600); y=random.uniform(-1600,1600)
+        r=random.uniform(400,800)
+        p.append((ellipsoid(r,r*0.8,r*0.7,(x,y,r*0.5)), ROCK))
+    p.append((box(8000,3800,300,(0,-1000,250)), WEED))             # weed below water
+    p.append((box(8000,1200,120,(0,1400,900)), LICHEN))            # lichen above water
+    return "f","8000 x 4000 x 2000mm (tiles)",p
+
+def f08():  # timber pile revetment 8x1x1.8
+    p=[]
+    for x in range(-3800,3801,600):
+        p.append((box(180,180,1800,(x,-300,900)), NL_PILE))        # piles
+    for z in (600,1200,1700):
+        p.append((box(8000,120,300,(0,0,z)), BOARDS))              # horizontal boards
+    p.append((box(8000,1000,150,(0,0,1800)), GRASS))               # grass over top
+    return "f","8000 x 1000 x 1800mm (tiles)",p
+
+def f09():  # stepped concrete embankment 8x3x2.5
+    p=[]
+    for i in range(3):
+        p.append((box(8000,3000-i*900,800,(0,-i*450,400+i*800)), CONCRETE))  # treads
+    for x in range(-3500,3501,1000):
+        p.append((box(150,60,700,(x,1400,2600)), JOINTS))          # expansion joints / handrail sockets
+    return "f","8000 x 3000 x 2500mm (tiles)",p
+
+# --- Tier F2 landform masses ---
+def f10():  # rolling meadow ridge 60x40x12
+    p=[]
+    p.append((ellipsoid(20000,22000,12000,(-14000,0,-4000)), GRASS))
+    p.append((ellipsoid(18000,20000,11000,(16000,0,-3000)), GRASS))
+    p.append((box(60000,1500,2500,(0,0,10500)), HEDGE))            # hedge line on crest
+    return "f","60000 x 40000 x 12000mm (tiles)",p
+
+def f11():  # wooded hillside 80x50x30
+    p=[]; random.seed(31)
+    for i in range(9):
+        x=random.uniform(-35000,35000); y=random.uniform(-20000,20000)
+        r=random.uniform(9000,15000)
+        col=CANOPY if (x<10000 or y<8000) else SHADOW   # two clearings implied by gaps
+        p.append((ellipsoid(r,r,r*0.75,(x,y,r*0.4)), col))
+    p.append((ellipsoid(42000,26000,6000,(0,0,-2000)), SHADOW))    # base slope mass
+    return "f","80000 x 50000 x 30000mm (tiles)",p
+
+def f12():  # steep bluff 60x25x25
+    p=[]
+    mass=(cq.Workplane("YZ").polyline([(0,0),(0,25000),(12000,25000),(25000,3000),(25000,0),(0,0)]).close()
+          .extrude(60000).translate((-30000,-12500,0)))
+    p.append((mass, BLUFF))
+    for z in (8000,14000,20000):
+        p.append((box(60000,600,800,(0,-9000,z)), STRATA))         # strata bands
+    p.append((ellipsoid(30000,6000,3000,(0,8000,1500)), SCREE))    # scree at toe
+    return "f","60000 x 25000 x 25000mm",p
+
+def f13():  # cliff face 40x15x40
+    p=[]
+    p.append((box(40000,15000,40000,(0,0,20000)), CLIFF))
+    for x in range(-18000,18001,4000):                             # columnar jointing
+        p.append((box(400,15200,40000,(x,0,20000)), STRATA))
+    for x in range(-16000,16001,7000):                             # guano streaks upper third
+        p.append((box(1500,200,12000,(x,7600,32000)), GUANO))
+    return "f","40000 x 15000 x 40000mm",p
+
+def f14():  # polder flat 100x60x1.5
+    p=[]
+    p.append((box(100000,60000,1500,(0,0,750)), FIELD))
+    p.append((box(100000,2000,1400,(0,-28000,350)), DITCH))        # drainage ditch
+    for x in range(-48000,48001,6000):                             # fence line
+        p.append((box(150,150,1200,(x,26000,2100)), NL_PILE))
+    return "f","100000 x 60000 x 1500mm (tiles)",p
+
+def f15():  # mid-channel sandbank 30x8x1.2
+    p=[]
+    p.append((ellipsoid(15000,4000,1200,(0,0,300)), GRAVEL))
+    p.append((ellipsoid(3000,2500,2500,(11000,0,1200)), SCRUBG))   # willow scrub at one end
+    return "f","30000 x 8000 x 1200mm (sits in water)",p
+
+def f16():  # wooded river island 45x20x18
+    p=[]
+    p.append((ellipsoid(22000,10000,4000,(0,0,0)), ISLBASE))       # earth base
+    random.seed(33)
+    for i in range(6):
+        x=random.uniform(-16000,16000); y=random.uniform(-6000,6000)
+        r=random.uniform(5000,8000)
+        p.append((ellipsoid(r,r,r*0.8,(x,y,r*0.5+2000)), ISLCAN))
+    p.append((strut((18000,3000,1500),(24000,6000,800),400), DRIFT))  # fallen tree upstream tip
+    return "f","45000 x 20000 x 18000mm (sits in water)",p
+
+def f17():  # tidal mudflat 30x12x0.8
+    p=[]
+    p.append((box(30000,12000,600,(0,0,300)), MUD))
+    for x in range(-12000,12001,6000):                             # drainage channels
+        p.append((box(400,12000,300,(x,0,500)), MUDWET))
+    p.append((box(30000,600,200,(0,5000,650)), STRAND))            # strand line of debris
+    return "f","30000 x 12000 x 800mm (tiles)",p
+
+# --- Tier F3 ground scatter ---
+def f19():  # flower meadow patch 0.8x0.8x0.5
+    p=[]; random.seed(41); base=None
+    for i in range(12):
+        x=random.uniform(-350,350); y=random.uniform(-350,350)
+        s=cq.Workplane("XY").rect(14,14).extrude(random.uniform(350,480)).translate((x,y,0))
+        base=s if base is None else base.union(s)
+    p.append((base, GRASS))
+    random.seed(41)
+    cols=[FLW_Y,FLW_P,FLW_W]
+    for i in range(12):
+        x=random.uniform(-350,350); y=random.uniform(-350,350)
+        h=random.uniform(350,480)
+        p.append((ellipsoid(45,45,35,(x,y,h)), cols[i%3]))         # flower heads
+    return "f","800 x 800 x 500mm",p
+
+def f22():  # shingle scatter 2x2x0.12
+    p=[]; random.seed(42); a=None; b=None
+    for i in range(40):
+        x=random.uniform(-950,950); y=random.uniform(-950,950)
+        r=random.uniform(40,90)
+        peb=ellipsoid(r,r*0.8,r*0.4,(x,y,r*0.2))
+        if i%2: a=peb if a is None else a.fuse(peb)
+        else:   b=peb if b is None else b.fuse(peb)
+    p.append((a, SHINGLE)); p.append((b, PEBBLE2))
+    return "f","2000 x 2000 x 120mm",p
+
+def f23():  # driftwood log 3.5x0.5x0.5
+    p=[(strut((-1750,0,250),(1750,0,300),250), DRIFT)]             # main log
+    p.append((strut((200,0,300),(900,600,600),90), DRIFT))         # stub branches
+    p.append((strut((-400,0,280),(-700,-500,520),80), DRIFT))
+    p.append((ellipsoid(260,260,260,(1750,0,300)), SPLIT))         # split end
+    return "f","3500 x 500 x 500mm",p
+
+def f24():  # deadfall branch pile 2.5x1.5x0.8
+    p=[]; random.seed(43)
+    for i in range(10):
+        x1=random.uniform(-1000,1000); y1=random.uniform(-600,600)
+        x2=x1+random.uniform(-800,800); y2=y1+random.uniform(-500,500)
+        z1=random.uniform(0,200); z2=random.uniform(200,700)
+        p.append((strut((x1,y1,z1),(x2,y2,z2),random.uniform(50,90)), DEADFALL))
+    return "f","2500 x 1500 x 800mm",p
+
+def f26():  # fern clump 0.9x0.9x0.7
+    p=[]
+    for i in range(8):
+        a=math.radians(i*45); x=math.cos(a)*120; y=math.sin(a)*120
+        frond=box(70,25,650,(x,y,0)).rotate((x,y,0),(math.cos(a+1.57),math.sin(a+1.57),0),35)
+        p.append((frond, FERN))
+    return "f","900 x 900 x 700mm",p
+
+# --- Tier F4 water-surface dressing ---
+def f27():  # lily-pad raft 3x2.5x0.15
+    p=[]; random.seed(51); pads=None
+    for i in range(14):
+        x=random.uniform(-1400,1400); y=random.uniform(-1150,1150)
+        r=random.uniform(250,450)
+        pad=cyl(r,80,(x,y,0))
+        pads=pad if pads is None else pads.fuse(pad)
+    p.append((pads, LILY))
+    for (x,y) in [(300,200),(-500,-300)]:
+        p.append((ellipsoid(120,120,200,(x,y,180)), LILY_FL))      # flower buds
+    return "f","3000 x 2500 x 150mm (on water)",p
+
+def f28():  # floating weed mat 4x3x0.08
+    p=[]; random.seed(52); mat=None
+    for i in range(10):
+        x=random.uniform(-1600,1600); y=random.uniform(-1200,1200)
+        r=random.uniform(500,900)
+        blob=cyl(r,60,(x,y,0))
+        mat=blob if mat is None else mat.fuse(blob)
+    p.append((mat, WEEDMAT))
+    return "f","4000 x 3000 x 80mm (on water)",p
+
+def f29():  # weed streamer 1.5x0.4x1.2
+    p=[(box(200,400,1200,(0,0,600)).rotate((0,0,0),(0,1,0),28), STREAMER)]
+    return "f","1500 x 400 x 1200mm (submerged)",p
+
+def f30():  # foam line 6x0.6x0.03 (near-white; scene sets opacity)
+    p=[]
+    arc=(cq.Workplane("XY").moveTo(-3000,-200).threePointArc((0,200),(3000,-200))
+         .threePointArc((0,140),(-3000,-200)).close().extrude(30))
+    p.append((arc, FOAM))
+    return "f","6000 x 600 x 30mm (on water)",p
+
+def f31():  # moored dinghy 3.6x1.4x0.9
+    p=[]
+    hull=(cq.Workplane("XY").box(3600,1400,900).edges("|Z").fillet(500)
+          .edges(">Z").fillet(150).translate((0,0,450)))
+    hull=hull.cut(cq.Workplane("XY").box(2800,900,700).translate((0,0,650)))
+    p.append((hull, HULL_WHITE))
+    gun=cq.Workplane("XY").box(3600,1400,120).edges("|Z").fillet(500).translate((0,0,780))
+    p.append((gun, DINGHY_GUN))                                    # gunwale
+    p.append((box(2400,700,120,(0,0,300)), DINGHY_INT))            # interior sole
+    p.append((strut((-1000,0,850),(1400,300,850),50), DINGHY_INT)) # shipped oar
+    p.append((ellipsoid(200,200,180,(2400,0,150)), BUOY_YEL))      # mooring buoy
+    return "f","3600 x 1400 x 900mm (on water)",p
+
+def f32():  # moored cabin cruiser 8x2.6x2.8
+    p=[]
+    hull=(cq.Workplane("XY").box(8000,2600,1400).edges("|Z").fillet(700)
+          .edges(">Z").fillet(250).translate((0,0,700)))
+    p.append((hull, HULL_WHITE))
+    p.append((box(4000,2200,1000,(-500,0,1900)), HULL_WHITE))      # cabin
+    p.append((box(3600,2000,600,(-500,0,2500)), CRUISER_CAN))      # canopy
+    for x in (-3000,-1000,1000,3000):                              # fenders
+        p.append((ellipsoid(200,150,300,(x,1350,900)), CRUISER_TRIM))
+    return "f","8000 x 2600 x 2800mm (on water)",p
+
+# --- Tier F5 universal infrastructure ---
+def f34():  # wire stock fence 3x0.05x1.1
+    p=[]
+    for x in (-1500,0,1500):
+        p.append((box(90,90,1100,(x,0,550)), NL_PILE))             # split posts
+    for z in (300,600,900):
+        p.append((strut((-1500,0,z),(1500,0,z),25), WIRE))         # wire strands
+    p.append((strut((-1500,0,1080),(1500,0,1080),20), WIRE))       # barbed top
+    return "f","3000 x 50 x 1100mm (tiles)",p
+
+def f35():  # hedgerow section 6x1.2x1.8
+    p=[]
+    body=cq.Workplane("XY").box(6000,1200,1800).edges("|X").fillet(300).translate((0,0,900))
+    body=body.cut(cq.Workplane("XY").box(1000,1400,2000).translate((2200,0,900)))  # stile gap
+    p.append((body, HEDGEROW))
+    return "f","6000 x 1200 x 1800mm (tiles)",p
+
+def f36():  # towpath section 8x2.5x0.1
+    p=[]
+    p.append((box(8000,1500,100,(0,0,50)), GRAVEL))
+    for yo in (-1150,1150):
+        p.append((box(8000,700,120,(0,yo,60)), VERGE))             # mown verge either side
+    return "f","8000 x 2500 x 100mm (tiles)",p
+
+def f38():  # lamp post 0.25x1x6
+    p=[(cone(140,90,5200,(0,0,0)), LAMP_COL)]                      # tapered column
+    p.append((strut((0,0,5200),(0,700,5600),80), LAMP_COL))        # curved arm
+    p.append((box(400,300,180,(0,700,5550)), LANTERN))             # shallow lantern
+    return "f","250 x 1000 x 6000mm",p
+
+def f39():  # litter bin dia0.4x1
+    p=[(cyl(200,800,(0,0,150)), BIN)]
+    p.append((ellipsoid(220,220,120,(0,0,950)), BIN))              # domed lid
+    p.append((cyl(60,180,(0,0,0)), BIN))                           # post
+    return "f","dia 400 x 1000mm",p
+
+def f40():  # lattice electricity pylon 8x8x40
+    p=[]; H=40000
+    legs=[(-4000,-4000),(4000,-4000),(4000,4000),(-4000,4000)]
+    top=[(-1000,-1000),(1000,-1000),(1000,1000),(-1000,1000)]
+    for (lx,ly),(tx,ty) in zip(legs,top):
+        p.append((strut((lx,ly,0),(tx,ty,H),200), PYLON))          # legs taper in
+    for z in range(4000,H,6000):                                   # bracing rings + X-braces
+        f=1-z/H
+        c=[(x*(1+3*f)/4*4,y*(1+3*f)/4*4) for (x,y) in top]
+        c=[(x*(0.25+0.75*f)*4,y*(0.25+0.75*f)*4) for (x,y) in [(-1000,-1000),(1000,-1000),(1000,1000),(-1000,1000)]]
+        for a,b in zip(c,c[1:]+c[:1]):
+            p.append((strut((a[0],a[1],z),(b[0],b[1],z),120), PYLON))
+    for z,arm in ((30000,7000),(36000,5500)):                      # crossarms
+        p.append((box(arm*2,600,600,(0,0,z)), PYLON))
+        for xo in (-arm,arm):
+            p.append((strut((xo,0,z),(xo,0,z-1500),80), INSUL))    # insulator strings
+    return "f","8000 x 8000 x 40000mm",p
+
+def f41():  # telegraph pole dia0.3x9
+    p=[(cyl(150,9000,(0,0,0)), TELE)]
+    p.append((box(2400,150,150,(0,0,8200)), TELE))                 # crossarm
+    for xo in range(-1000,1001,400):
+        p.append((cyl(70,180,(xo,0,8350)), INSUL))                 # 6 insulators
+    return "f","dia 300 x 9000mm",p
+
+def f42():  # culvert outfall 2x1.5x1.5
+    p=[]
+    head=cq.Workplane("XY").box(2000,600,1500).translate((0,0,750))
+    head=head.cut(cq.Workplane("XY").box(700,700,700).translate((0,300,600)))
+    p.append((head, CONCRETE))
+    p.append((cyl(350,600,(0,0,600)).rotate((0,0,600),(1,0,0),90).translate((0,0,0)), GRILLE))  # pipe/grille
+    p.append((box(700,60,700,(0,320,600)), GRILLE))                # grille face
+    p.append((box(1400,300,700,(0,500,150)), STAIN))              # staining below
+    return "f","2000 x 1500 x 1500mm",p
+
+def f43():  # mooring bollard dia0.3x0.7
+    p=[(cyl(150,600,(0,0,300)), BOLLARD)]
+    p.append((ellipsoid(220,220,120,(0,0,700)), BOLLARD))          # flared cast top
+    return "f","dia 300 x 700mm",p
+
+def f44():  # navigation marker 0.6x0.08x2
+    p=[(box(80,80,2000,(0,0,1000)), POST_GREY)]
+    p.append((box(600,40,600,(0,20,1900)), WHITE))                 # board
+    p.append((box(400,60,120,(0,0,1900)), FLAG_RED))               # arrow bar
+    return "f","600 x 80 x 2000mm",p
+
+# --- Tier F6 distant backdrop ---
+def f45():  # distant treeline strip 100x6x18
+    p=[]; random.seed(61); strip=None
+    for i in range(20):
+        x=-48000+i*5000; r=random.uniform(7000,10000)
+        blob=ellipsoid(3000,3000,r,(x,0,r*0.5))
+        strip=blob if strip is None else strip.fuse(blob)
+    p.append((strip, TREELINE))
+    return "f","100000 x 6000 x 18000mm (backdrop, tiles)",p
+
+def f46():  # far hill ridge 200x60x45
+    p=[]
+    p.append((ellipsoid(70000,30000,45000,(-50000,0,-15000)), HILLFAR))
+    p.append((ellipsoid(80000,30000,38000,(60000,0,-12000)), HILLFAR))
+    return "f","200000 x 60000 x 45000mm (backdrop, tiles)",p
+
+def f47():  # distant town skyline 100x20x35
+    p=[]; random.seed(62)
+    for i in range(16):
+        x=-46000+i*6000; h=random.uniform(12000,35000); w=random.uniform(3500,5500)
+        p.append((box(w,8000,h,(x,0,h/2)), SKYLINE))
+    return "f","100000 x 20000 x 35000mm (backdrop, tiles)",p
+
+
+MODELS.update({
+    "c03-bridge-truss-steel": c03, "c04-bridge-rail-girder": c04,
+    "c05-bridge-bascule": c05, "c06-bridge-foot-suspension": c06,
+    "c07-bridge-dutch-lift": c07, "c08-bridge-cantilever": c08,
+    "f05-bank-sheet-piling": f05, "f06-bank-sand-shelf": f06,
+    "f07-bank-boulder-shore": f07, "f08-bank-pile-revetment": f08,
+    "f09-bank-concrete-step": f09, "f10-ridge-rolling-meadow": f10,
+    "f11-hillside-wooded": f11, "f12-bluff-steep": f12,
+    "f13-cliff-face": f13, "f14-polder-flat": f14,
+    "f15-sandbank-midchannel": f15, "f16-island-wooded": f16,
+    "f17-mudflat-tidal": f17, "f19-flower-meadow-patch": f19,
+    "f22-shingle-scatter": f22, "f23-driftwood-log": f23,
+    "f24-deadfall-branch-pile": f24, "f26-fern-clump": f26,
+    "f27-lily-pad-raft": f27, "f28-floating-weed-mat": f28,
+    "f29-weed-streamer": f29, "f30-foam-line": f30,
+    "f31-moored-dinghy": f31, "f32-moored-cruiser": f32,
+    "f34-wire-stock-fence": f34, "f35-hedgerow-section": f35,
+    "f36-towpath-section": f36, "f38-lamp-post": f38,
+    "f39-litter-bin": f39, "f40-pylon-lattice": f40,
+    "f41-telegraph-pole": f41, "f42-culvert-outfall": f42,
+    "f43-mooring-bollard": f43, "f44-navigation-marker": f44,
+    "f45-treeline-strip": f45, "f46-hill-ridge-far": f46,
+    "f47-skyline-strip": f47,
+})
+
 if __name__ == "__main__":
     ok=fail=0
     for name, fn in MODELS.items():

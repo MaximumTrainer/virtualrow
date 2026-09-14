@@ -4,17 +4,17 @@
 [issue #216](https://github.com/MaximumTrainer/virtualrow/issues/216) using
 [llm-cad](https://github.com/MaximumTrainer/llm-cad).
 
-**66 of 114 models** — Tier A (12), Tier B (3), Tier C (2), Tier F (10), and now
-the full **Tier D regional kits (25)** and **Tier E vegetation (14)**. Remaining:
-additional Tier C crossings and Tier F infrastructure, plus the hero landmarks.
+**109 of 114 models.** Complete tiers: **A** (12), **C** (8), **D** (25),
+**E** (14), **F** (47). Remaining: Tier B `b04`–`b08` (boat rack, quay wall,
+wharf warehouse, quay crane, marina pontoon) plus the hero landmark register.
 
 ## Directory layout
 
 ```
 scenery/
   tier-a/   Universal rowing furniture (12) — every venue
-  tier-b/   Water-edge structures (3) — boathouses / clubhouses
-  tier-c/   Crossings (2) — bridges
+  tier-b/   Water-edge structures (3 of 8) — boathouses / clubhouse
+  tier-c/   Crossings (8) — arch, concrete, truss, girder, bascule, suspension, lift, cantilever
   tier-d/   Regional architecture kits (25) — US / GB / NL / CE / IT
   tier-e/   Vegetation (14) — stylized low-poly trees, reeds, ground
   tier-f/   Generic biome kit (10) — bank edges, scatter, infrastructure
@@ -63,8 +63,10 @@ Colours and proportions were checked against real references, not guessed:
 ### Tier B — water-edge structures (3)
 `b01` New England boathouse · `b02` UK Victorian boathouse · `b03` modern clubhouse
 
-### Tier C — crossings (2)
-`c01` masonry arch bridge · `c02` concrete beam bridge
+### Tier C — crossings (8)
+`c01` masonry arch · `c02` concrete beam · `c03` steel through-truss ·
+`c04` plate-girder rail · `c05` bascule · `c06` foot suspension ·
+`c07` Dutch lift (ophaalbrug) · `c08` steel cantilever
 
 ### Tier D — regional architecture kits (25)
 - **US** (6): clapboard house, brick mill, collegiate dome, collegiate tower, water tower, highway sign gantry
@@ -82,10 +84,13 @@ Colours and proportions were checked against real references, not guessed:
 Trees are stylized low-poly (tapered trunk + coloured crown blobs), sized to the
 species heights in #216 and kept boolean-free so they stay light for instancing.
 
-### Tier F — generic biome kit (10)
-`f01` earth-cut bank · `f02` shingle shelf · `f03` reed margin · `f04` masonry wall ·
-`f18` grass tuft · `f20` reed stand · `f21` boulder cluster · `f25` bramble scrub ·
-`f33` post-rail fence · `f37` park bench
+### Tier F — generic biome kit (47)
+- **F1 bank edges** (9): `f01` earth-cut · `f02` shingle shelf · `f03` reed margin · `f04` masonry wall · `f05` sheet piling · `f06` sand shelf · `f07` boulder shore · `f08` pile revetment · `f09` concrete step
+- **F2 landform** (8): `f10` rolling meadow · `f11` wooded hillside · `f12` steep bluff · `f13` cliff face · `f14` polder flat · `f15` mid-channel sandbank · `f16` wooded island · `f17` tidal mudflat
+- **F3 ground scatter** (9): `f18` grass tuft · `f19` flower patch · `f20` reed stand · `f21` boulder cluster · `f22` shingle scatter · `f23` driftwood log · `f24` deadfall pile · `f25` bramble scrub · `f26` fern clump
+- **F4 water surface** (6): `f27` lily-pad raft · `f28` weed mat · `f29` weed streamer · `f30` foam line · `f31` moored dinghy · `f32` moored cruiser
+- **F5 infrastructure** (12): `f33` post-rail fence · `f34` wire stock fence · `f35` hedgerow · `f36` towpath · `f37` park bench · `f38` lamp post · `f39` litter bin · `f40` pylon · `f41` telegraph pole · `f42` culvert outfall · `f43` mooring bollard · `f44` navigation marker
+- **F6 distant backdrop** (3): `f45` treeline strip · `f46` far hill ridge · `f47` town skyline
 
 ## Regenerating
 
