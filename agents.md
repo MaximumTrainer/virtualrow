@@ -42,7 +42,7 @@ A `Services` aggregate interface gathers all nine ports. The `ServicesProvider` 
 | Heart rate BLE | `heartRateBluetoothService` | HR Service 0x180D; ring buffer of 1200 samples; exposes `simulateSample()` for test injection |
 | Route catalogue | `routeService` | In-memory `WaterRoute[]`; imports from GPX/GeoJSON/KML/rownative; calculates polyline distance |
 | Route enrichment | `routeEnrichmentService` | Fetches elevations (OpenTopoData) and land-use (Overpass); builds 50m segment profiles; caches in localStorage with 7-day TTL |
-| Rownative courses | `rownativeService` + `rownativeGeometry` | Fetches from GitHub mirror; resolves geometry via precedence chain (track → polygon-path → gate-chain); validates against gate centroids |
+| Rownative courses | `rownativeService` + `rownativeGeometry` | Fetches from GitHub mirror; resolves geometry via precedence chain (track → polygon-path → gate-chain); validates against gate centroids. The `track` slot takes an upstream `path` field (proposed in rownative/courses#23, not yet in the mirror) or a rower-attached track |
 | Workout sessions | `workoutService` + `activitySampler` | Session lifecycle, PM5 data accumulation, 500m splits, HR samples, the 1 Hz activity stream, CSV/JSON export |
 | FIT encoding | `fitEncoderService` | Hand-written binary FIT Activity encoder; pure `encodeSession(session)`, reached by dynamic `import()` so it stays out of the main chunk |
 | Activity upload | `intervalsIcuActivityService` | Multipart `POST` of the encoded FIT to intervals.icu via the CORS proxy; 401-refresh-retry, duplicate suppression |
