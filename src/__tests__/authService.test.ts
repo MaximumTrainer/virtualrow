@@ -223,6 +223,19 @@ describe('AuthService', () => {
       expect(result?.name).toBe('Test Rower');
     });
 
+    it('maps the profile sex field to the user gender (drives the rower model)', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTokenResponse) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ ...mockUser, sex: 'F' }),
+        }),
+      );
+
+      const result = await service.handleCallback('auth-code', 'valid-state');
+      expect(result?.gender).toBe('female');
+    });
+
     it('requests the athlete-specific profile endpoint when the token response includes athlete id', async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce({

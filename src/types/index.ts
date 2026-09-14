@@ -189,6 +189,8 @@ export interface AuthUser {
   name: string;
   email: string;
   avatarUrl?: string;
+  /** Athlete gender from the intervals.icu profile `sex` field; undefined if unset. */
+  gender?: 'male' | 'female';
 }
 
 /** OAuth token pair. Access token is memory-only; refresh token in sessionStorage. */
