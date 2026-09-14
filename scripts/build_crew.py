@@ -201,7 +201,13 @@ def render_glb(glb_path, name):
 
 def export_and_validate(assembly, filename, name):
     glb = OUT_BOAT / filename
-    assembly.export(str(glb), tolerance=0.006, angularTolerance=0.15)
+    # The GLTF exporter bakes a -90deg X-rotation (CadQuery Z-up -> glTF Y-up).
+    # We author in the scene's own frame (up +Y, length +Z, beam +X), so wrap the
+    # assembly in a +90deg X-rotation that cancels the exporter's, leaving our
+    # authored coordinates intact in the GLB (hull horizontal, deck up).
+    root = cq.Assembly(name="scull_root")
+    root.add(assembly, loc=cq.Location(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), 90))
+    root.export(str(glb), tolerance=0.006, angularTolerance=0.15)
     # node names present in the GLB
     import trimesh
     scene = trimesh.load(str(glb))
@@ -225,8 +231,15 @@ def export_and_validate(assembly, filename, name):
     ext = hm.bounds[1] - hm.bounds[0]
     Wx, Hy, Lz = float(ext[0]), float(ext[1]), float(ext[2])
     ok_len = 8.0 <= Lz <= 8.4; ok_beam = 0.25 <= Wx <= 0.35; ok_h = 0.15 <= Hy <= 0.25
+    # orientation check on the EXPORTED GLB: hull must lie horizontal (length
+    # along scene Z, up along Y), not stand on end.
+    scene2 = _tm.load(str(glb))
+    gb = scene2.bounds  # world-space
+    gext = gb[1] - gb[0]
+    orient_ok = gext[2] > 3.0 and gext[1] < 2.0   # Z (length) large, Y (up) small
     print(f"  GLB:  {glb}")
     print(f"  hull L={Lz:.2f} beam={Wx:.3f} height={Hy:.3f}  bounds ok: L={ok_len} beam={ok_beam} h={ok_h}")
+    print(f"  GLB extent X={gext[0]:.2f} Y(up)={gext[1]:.2f} Z(len)={gext[2]:.2f}  orient ok: {orient_ok}")
     print(f"  required nodes present: {not missing}" + (f"  MISSING={missing}" if missing else ""))
     render_glb(glb, name)
     return not missing and ok_len and ok_beam and ok_h
