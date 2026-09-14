@@ -20,7 +20,18 @@ npx vitest run           # Unit tests (945 tests, jsdom)
 npx vitest run --coverage # Unit tests with v8 coverage
 npm run test:e2e         # Playwright E2E (local, needs dev server)
 npm run test:e2e:ci      # Playwright E2E (CI, retries=2)
+npm run verify           # Lint + type-check + full unit suite (what pre-push runs)
+npm run verify:staged    # TDD guard alone, against the current git index
+npm run hooks:install    # Point git at .githooks (also runs on npm install)
 ```
+
+### Verification gates
+
+`pre-commit` blocks a commit that stages production code without a test, a focused
+spec (`it.only`), or a lowered coverage threshold — then runs lint, `tsc` and the
+related unit tests. `pre-push` runs the full CI set. Both live in [.githooks/](.githooks/);
+see [agents.md](agents.md) §1 and §6 for the rules and the escape hatches
+(`VERIFY_FULL=1`, `TDD_GUARD=off`, `SKIP_HOOKS=1`).
 
 ### Project structure
 

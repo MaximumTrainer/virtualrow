@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# Pre-push verification — the same gate CI runs (.github/workflows/npm-preflight.yml),
+# so a red branch is caught here rather than three minutes into a PR.
+#
+#   lint → build → full unit suite → coverage thresholds
+#
+# Skip with SKIP_HOOKS=1 git push, or git push --no-verify.
+#
+set -e
+
+if [ "$SKIP_HOOKS" = "1" ]; then
+  echo "pre-push: skipped (SKIP_HOOKS=1)"
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+echo ""
+echo "── lint"
+npm run lint
+
+echo ""
+echo "── build"
+npm run build
+
+echo ""
+echo "── unit tests + coverage gate"
+# Thresholds live in vitest.config.ts; vitest exits non-zero when one is missed.
+npm run coverage
+
+echo ""
+echo "pre-push: green"

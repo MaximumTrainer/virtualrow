@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { afterEach } from 'vitest';
 import {
   sceneryAssetPath,
   resolveSceneryModels,
   collectSceneryPaths,
+  isGlbSceneryEnabled,
   SCENERY_PROFILE_MODELS,
   WATER_BODY_MODELS,
   TREE_SPECIES_MODELS,
@@ -99,6 +101,28 @@ describe('resolveSceneryModels', () => {
         expect(collectSceneryPaths(r).every((path) => path.endsWith('.glb'))).toBe(true);
       }
     }
+  });
+});
+
+describe('isGlbSceneryEnabled', () => {
+  const w = window as unknown as { __VIRTUALROW_SCENERY_MODELS?: boolean };
+  afterEach(() => {
+    delete w.__VIRTUALROW_SCENERY_MODELS;
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('is off by default', () => {
+    expect(isGlbSceneryEnabled()).toBe(false);
+  });
+
+  it('is on with the window flag', () => {
+    w.__VIRTUALROW_SCENERY_MODELS = true;
+    expect(isGlbSceneryEnabled()).toBe(true);
+  });
+
+  it('is on with the ?glb=1 query param', () => {
+    window.history.replaceState({}, '', '/?glb=1');
+    expect(isGlbSceneryEnabled()).toBe(true);
   });
 });
 
