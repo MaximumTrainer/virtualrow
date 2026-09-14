@@ -1774,6 +1774,184 @@ MODELS.update({
     "b08-marina-pontoon-cluster": b08,
 })
 
+# ============================================================
+# TIER G - additional generic archetypes (issue #229)
+# ============================================================
+GLASS="#3A4E5A"; MULLION="#8A8E96"; CROWN="#B0B4B8"
+DD_STEEL="#5A5F66"; DD_DECK="#B0ACA4"
+PIPE="#8A8272"; TRESTLE="#5A6068"
+TRAM_CONC="#B0ACA4"; TRAM_MAST="#4A4E52"
+FOOT_TIMBER="#8B7355"; FOOT_RAIL="#B8AFA0"
+DAM_CONC="#B5B0A6"; DAM_WET="#6E6E68"; DAM_GATE="#3A4048"
+LH_TOWER="#F2F2F0"; LH_LANT="#C8102E"; LH_BASE="#5A5F66"
+WM_STEEL="#8A9096"; WM_VANE="#C8102E"
+PS_CLAD="#7A6E60"; PS_STACK="#B0ACA4"; PS_BAND="#8A4A2E"
+OT_CONC="#B5B0A6"; OT_RAIL="#3E4348"
+WT_BRK="#8B4A3A"; WT_TANKM="#A89E8C"; WT_ROOF="#3E4A52"
+ISLET_SAND="#D8C89E"; ISLET_SCRUB="#5E7A46"; ISLET_RIM="#A89E8E"
+PALM_TR="#9A8464"; PALM_FR="#3E6B32"
+
+def g01():  # near-field downtown high-rise ~90m
+    p=[]; H=90000
+    p.append((box(24000,24000,H,(0,0,H/2)), GLASS))
+    for z in range(4000,int(H),4000):                          # mullion floor bands
+        p.append((box(24200,24200,300,(0,0,z)), MULLION))
+    for xo in (-12100,12100):                                  # corner mullions
+        p.append((box(200,24200,H,(xo,0,H/2)), MULLION))
+    p.append((box(20000,20000,3000,(0,0,H+1500)), CROWN))      # plant deck / setback crown
+    p.append((box(8000,8000,4000,(0,0,H+5000)), CROWN))
+    return "g","24 x 24 x 90m",p
+
+def g02():  # double-decker road-over-rail bridge
+    p=[]; L=120000; ys=(-6000,6000)
+    p.append((box(L,14000,1200,(0,0,20000)), DD_DECK))         # upper (road) deck
+    p.append((box(L,12000,1000,(0,0,11000)), DD_DECK))         # lower (rail) deck
+    for x in (-40000,0,40000):                                 # pylons
+        for y in ys:
+            p.append((strut((x,y,0),(x,y,21000),700), DD_STEEL))
+    for x in (-40000,0,40000):                                 # portal + lattice between decks
+        p.append((strut((x,-6000,20500),(x,6000,20500),600), DD_STEEL))
+        for y in ys:
+            p.append((strut((x,y,11000),(x,y,20000),300), DD_STEEL))
+    return "g","120 x 14 x 22m",p
+
+def g03():  # utility pipeline bridge on a trestle
+    p=[]; L=45000
+    for x in range(-18000,18001,6000):                         # trestle bents
+        for y in (-1000,1000):
+            p.append((strut((x,y,0),(x,y,4000),200), TRESTLE))
+        p.append((strut((x,-1000,4000),(x,1000,4000),200), TRESTLE))
+    p.append((cyl(500,L,(0,0,0)).rotate((0,0,0),(0,1,0),90).translate((-L/2,0,4600)), PIPE))  # insulated pipe run
+    p.append((box(L,1400,120,(0,0,4200)), TRESTLE))            # walkway
+    for x in range(-20000,20001,3000):
+        p.append((box(60,60,900,(x,900,4600)), FOOT_RAIL))     # walkway rail
+    return "g","45 x 3 x 6m",p
+
+def g04():  # light-rail tram viaduct
+    p=[]; L=60000
+    p.append((box(L,8000,1400,(0,0,9000)), TRAM_CONC))         # deck
+    for x in range(-24000,24001,12000):
+        p.append((box(2000,3000,8000,(x,0,4000)), TRAM_CONC))  # piers
+    for x in range(-26000,26001,13000):                        # catenary masts + wire
+        p.append((strut((x,0,9700),(x,0,15000),150), TRAM_MAST))
+    p.append((strut((-28000,0,14500),(28000,0,14500),60), TRAM_MAST))
+    return "g","60 x 8 x 10m",p
+
+def g05():  # timber footbridge
+    p=[]; L=24000
+    p.append((box(L,2400,300,(0,0,3600)), FOOT_TIMBER))        # deck
+    for x in (-11000,0,11000):                                 # piers/abutments
+        p.append((box(1200,2400,3600,(x,0,1800)), FOOT_TIMBER))
+    for x in range(-11000,11001,2000):                         # balusters both sides
+        for y in (-1150,1150):
+            p.append((box(80,80,900,(x,y,4200)), FOOT_RAIL))
+    for y in (-1150,1150):
+        p.append((box(L,80,80,(0,y,4650)), FOOT_RAIL))         # top rail
+    return "g","24 x 2.4 x 4m",p
+
+def g06():  # concrete gravity dam
+    p=[]; L=120000
+    face=(cq.Workplane("YZ").polyline([(0,0),(0,24000),(6000,24000),(20000,2000),(20000,0),(0,0)]).close()
+          .extrude(L).translate((-L/2,-10000,0)))
+    p.append((face, DAM_CONC))
+    for x in range(-50000,50001,12000):                        # stepped spillway face + sluice gates
+        p.append((box(9000,400,16000,(x,-9000,10000)), DAM_GATE))
+    p.append((box(L,2000,24000,(0,-6000,12000)), DAM_WET))     # wet spill band
+    p.append((box(L,3000,600,(0,5500,24000)), OT_RAIL))        # crest walkway rail
+    p.append((box(L+4000,40000,1500,(0,15000,750)), DAM_WET))  # stilling basin water
+    return "g","120 x 20 x 24m",p
+
+def g07():  # harbour lighthouse
+    p=[]
+    p.append((box(9000,9000,2500,(0,0,1250)), LH_BASE))        # pier base
+    p.append((cone(2000,1400,9000,(0,0,2500)), LH_TOWER))      # tapered tower
+    p.append((cyl(1700,600,(0,0,11500)), OT_RAIL))             # gallery
+    p.append((cyl(1200,1600,(0,0,12100)), LH_LANT))            # lantern housing
+    p.append((cone(1300,120,900,(0,0,13700)), LH_BASE))        # cap
+    return "g","dia 4 x 12m",p
+
+def g08():  # Dutch steel wind pump (windmotor)
+    p=[]; H=14000
+    legs=[(-2000,-2000),(2000,-2000),(2000,2000),(-2000,2000)]
+    top=[(-500,-500),(500,-500),(500,500),(-500,500)]
+    for (lx,ly),(tx,ty) in zip(legs,top):
+        p.append((strut((lx,ly,0),(tx,ty,H),150), WM_STEEL))
+    for z in range(3000,H,3500):                               # bracing rings
+        f=1-z/H; s=2000*(0.25+0.75*f)
+        c=[(-s,-s),(s,-s),(s,s),(-s,s)]
+        for a,b in zip(c,c[1:]+c[:1]):
+            p.append((strut((a[0],a[1],z),(b[0],b[1],z),80), WM_STEEL))
+    hubz=H+300
+    for i in range(18):                                        # many-bladed fan wheel (faces +Y)
+        ang=i*20
+        bl=box(180,80,2400,(0,0,1300)).rotate((0,0,0),(0,1,0),ang).translate((0,-600,hubz))
+        p.append((bl, WM_STEEL))
+    p.append((cyl(400,600,(0,0,hubz)).rotate((0,0,hubz),(1,0,0),90).translate((0,0,0)), WM_STEEL))
+    p.append((box(300,3000,1600,(0,1600,hubz)), WM_VANE))      # tail vane
+    return "g","dia 5 x 14m, wheel dia 5m",p
+
+def g09():  # riverside power-station with flue stack
+    p=[]
+    p.append((box(40000,24000,20000,(0,0,10000)), PS_CLAD))    # plant hall
+    p.append((gable(40000,24000,20000,23000,0,0,0), DD_STEEL))
+    for z in (6000,11000,16000):                               # banked louvres
+        p.append((box(40200,60,2500,(0,12020,z)), TRAM_MAST))
+    p.append((cyl(2000,45000,(15000,-8000,0)), PS_STACK))      # tall round flue stack
+    p.append((cyl(2100,2500,(15000,-8000,40000)), PS_BAND))    # stack band
+    return "g","40 x 24 x 20m, stack 45m",p
+
+def g10():  # observation / heritage tower
+    p=[]; H=28000
+    p.append((cone(3200,2200,H,(0,0,0)), OT_CONC))             # tapered shaft
+    p.append((cyl(5000,800,(0,0,H-2000)), OT_CONC))            # cantilevered viewing deck
+    p.append((cyl(5100,900,(0,0,H-1100)), OT_RAIL))            # deck rail band
+    p.append((cyl(4600,700,(0,0,H-1200)), GLASS))              # glazing under deck
+    p.append((cyl(180,6000,(0,0,H)), OT_RAIL))                 # mast
+    return "g","dia 6 x 28m",p
+
+def g11():  # European masonry water tower
+    p=[]; H=32000
+    p.append((cone(2500,3600,24000,(0,0,0)), WT_BRK))          # tapered shaft (flares to tank)
+    p.append((cyl(5000,6000,(0,0,24000)), WT_TANKM))           # corbelled tank drum
+    p.append((cyl(5200,600,(0,0,24000)), WT_BRK))              # corbel course
+    p.append((cone(5200,300,4000,(0,0,30000)), WT_ROOF))       # conical roof
+    for i in range(8):                                         # small tank windows
+        ang=math.radians(i*45); x=5000*math.cos(ang); y=5000*math.sin(ang)
+        p.append((box(500,300,1200,(x,y,27000)).rotate((x,y,0),(x,y,1),math.degrees(ang)), OT_RAIL))
+    return "g","dia 10 x 32m",p
+
+def g12():  # low sandy lagoon islet
+    p=[]
+    p.append((ellipsoid(15000,7500,1400,(0,0,0)), ISLET_SAND))
+    p.append((ellipsoid(15400,7900,400,(0,0,-200)), ISLET_RIM))   # rock rim at waterline
+    import random as _r; _r.seed(91)
+    for i in range(7):                                           # low scrub clumps, no tall canopy
+        x=_r.uniform(-11000,11000); y=_r.uniform(-4500,4500)
+        p.append((ellipsoid(_r.uniform(1500,2600),_r.uniform(1200,2000),_r.uniform(900,1500),(x,y,1200)), ISLET_SCRUB))
+    return "g","30 x 15 x 3m (sits in water)",p
+
+def e15():  # palm tree ~12m
+    p=[(cone(350,220,11000,(0,0,0)), PALM_TR)]                 # ringed trunk
+    for i in range(9):                                          # radiating drooping fronds
+        deg=i*40
+        frond=box(5000,140,250,(2500,0,0))                      # frond along +X from crown
+        frond=frond.rotate((0,0,0),(0,1,0),28)                  # droop down about +Y axis
+        frond=frond.rotate((0,0,0),(0,0,1),deg)                 # fan around the trunk (+Z axis)
+        frond=frond.translate((0,0,11000))                      # lift to the crown
+        p.append((frond, PALM_FR))
+    return "e","H 12000mm (palm)",p
+
+
+MODELS.update({
+    "g01-skyscraper-tower": g01, "g02-bridge-double-decker": g02,
+    "g03-bridge-pipeline": g03, "g04-bridge-tram": g04,
+    "g05-footbridge-timber": g05, "g06-dam-gravity-concrete": g06,
+    "g07-lighthouse-harbour": g07, "g08-windmotor-steel": g08,
+    "g09-power-station-stack": g09, "g10-observation-tower": g10,
+    "g11-water-tower-masonry": g11, "g12-islet-sandy-scrub": g12,
+    "e15-palm": e15,
+})
+
 if __name__ == "__main__":
     ok=fail=0
     for name, fn in MODELS.items():
