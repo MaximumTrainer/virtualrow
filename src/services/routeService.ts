@@ -1,4 +1,5 @@
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
+import { WILLOWBROOK_ROUTE_ID } from '../components/rower3d/sceneryTrack';
 import {
   willowbrookRiverCoordinates,
 } from '../data/seedRouteCoordinates';
@@ -101,7 +102,8 @@ export class RouteService {
     // are still added dynamically via importRouteFromRownative().
     this.routes = [
       {
-        id: '1',
+        // Shared with the authored scenery track, which keys off this id (#232).
+        id: WILLOWBROOK_ROUTE_ID,
         name: 'Willowbrook River',
         description: 'A scenic 5km journey down the meandering Willowbrook River. Begin in the forested highlands, glide through open wildflower meadows, navigate the rocky narrows, pass the quaint village waterfront, and finish where the river opens into a tranquil lake delta. The landscape transforms dramatically as you progress downstream.',
         distance: 5.0,

@@ -42,6 +42,7 @@ import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChanne
 import { PineTrees, GroundCover } from './rower3d/vegetationComponents';
 import { SceneryModels } from './rower3d/sceneryModels';
 import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
+import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
 import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController } from './rower3d/boatComponents';
@@ -161,6 +162,9 @@ const RowerScene: React.FC<Rower3DProps> = ({
   const [frameStats] = useState(createFrameStatsRecorder);
 
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
+  // A route that states its own progression dresses from that, not from a
+  // land-use query over its coordinates (#232).
+  const sceneryTrack = useMemo(() => getRouteSceneryTrack(route.id), [route.id]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
   const landmarkConfig = useMemo(
     () => getRouteLandmarkConfig(route.name, route.tags),
@@ -367,8 +371,8 @@ const RowerScene: React.FC<Rower3DProps> = ({
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             {!IS_TEST_MODE && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
               <Suspense fallback={null}>
-                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
-                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
+                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} />
+                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} />
               </Suspense>
             )}
           </>
@@ -472,6 +476,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
           theme={routeTheme}
           boatProgress={boatProgress}
           enrichment={enrichment}
+          track={sceneryTrack}
         />
       ) : (
         renderThemedLandscape()
@@ -485,6 +490,7 @@ const RowerScene: React.FC<Rower3DProps> = ({
             theme={routeTheme}
             enrichment={enrichment}
             performanceMode={performanceMode}
+            track={sceneryTrack}
           />
         </Suspense>
       )}

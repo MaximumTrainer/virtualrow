@@ -6,12 +6,21 @@ import type {
   RouteEnrichmentData,
   SceneryProfile,
 } from '../../services/routeEnrichmentService';
+import { trackProfileAt, type SceneryTrack } from './sceneryTrack';
 
-/** Returns the scenery profile of the nearest segment for the given progress (0–1). */
+/**
+ * Returns the scenery profile of the nearest segment for the given progress (0–1).
+ *
+ * An authored track wins over enrichment: a route that states its own
+ * progression is describing itself better than a land-use query over its
+ * coordinates can (issue #232).
+ */
 export const getSegmentSceneryProfile = (
   enrichment: RouteEnrichmentData | null | undefined,
   progress: number,
+  track?: SceneryTrack | null,
 ): SceneryProfile => {
+  if (track) return trackProfileAt(track, progress);
   const segmentProfiles = enrichment?.segmentProfiles;
   if (!segmentProfiles || segmentProfiles.length === 0) return 'fallback';
   const safeProgress = Number.isFinite(progress) ? progress : 0;

@@ -35,6 +35,7 @@ import {
   type ResolvedScenery,
   type SceneryModelId,
 } from './sceneryAssets';
+import { trackWaterForProfile, type SceneryTrack } from './sceneryTrack';
 import {
   budgetFor,
   distinctProfiles,
@@ -52,6 +53,8 @@ interface SceneryModelsProps {
   performanceMode?: PerformanceMode;
   /** When provided, place along this route curve (real routes). */
   curve?: THREE.Curve<THREE.Vector3> | null;
+  /** Authored dressing for a route that states its own progression (#232). */
+  track?: SceneryTrack | null;
 }
 
 /**
@@ -66,6 +69,7 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   terrainY = 0,
   performanceMode = 'high',
   curve = null,
+  track = null,
 }) => {
   const waterType = enrichment?.waterBodyType ?? 'unknown';
 
@@ -73,11 +77,14 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   // per-segment profile can pick from an already-loaded set.
   const resolvedByProfile = useMemo(() => {
     const map = new Map<SceneryProfile, ResolvedScenery>();
-    for (const p of distinctProfiles(enrichment)) {
-      map.set(p, resolveSceneryModels(p, waterType, SCENERY_PROFILES[p]?.trees.species ?? []));
+    for (const p of distinctProfiles(enrichment, track)) {
+      // An authored band carries its own water body, so the delta resolves as a
+      // lake while the rest of the same route stays a river.
+      const water = track ? trackWaterForProfile(track, p) : waterType;
+      map.set(p, resolveSceneryModels(p, water, SCENERY_PROFILES[p]?.trees.species ?? []));
     }
     return map;
-  }, [enrichment, waterType]);
+  }, [enrichment, waterType, track]);
 
   // Union of every GLB the route can show — loaded once, shared across instances.
   const paths = useMemo(() => {
@@ -100,8 +107,8 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   const budget = budgetFor(performanceMode);
 
   const placements = useMemo<Placement[]>(
-    () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side }),
-    [curve, enrichment, resolvedByProfile, budget, side],
+    () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side, track }),
+    [curve, enrichment, resolvedByProfile, budget, side, track],
   );
 
   const instances = useMemo(

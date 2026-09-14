@@ -49,6 +49,10 @@ export default defineConfig({
         'src/components/rower3d/vegetationComponents.tsx',
         'src/components/rower3d/skyComponents.tsx',
         'src/components/rower3d/boatComponents.tsx',
+        // Same class as its siblings above: an R3F component that loads GLBs and
+        // suspends. Its logic lives in sceneryPlacement.ts and sceneryAssets.ts,
+        // both unit-tested; the component itself is covered by Playwright.
+        'src/components/rower3d/sceneryModels.tsx',
         'src/components/rower3d/themes/**',
         // 3D scene asset packs — large, mostly geometry/material constants.
         'src/components/routeLandmarks/**',
@@ -68,9 +72,11 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-03: 87.92 / 82.65 / 83.02 (issue #67).
-        lines: 87,
-        statements: 87,
+        // Last measured 2026-09-14: 88.37 / 82.96 / 83.65 (issue #232 phase 2a,
+        // which added the scenery-track tests and excluded the R3F
+        // sceneryModels component alongside its siblings).
+        lines: 88,
+        statements: 88,
         branches: 82,
         functions: 83,
       },

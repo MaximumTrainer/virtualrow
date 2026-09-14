@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
 import { getSegmentSceneryProfile } from './segmentScenery';
+import { trackProfiles, type SceneryTrack } from './sceneryTrack';
 import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
@@ -63,7 +64,11 @@ export const budgetFor = (mode: PerformanceMode): number =>
   mode === 'high' ? 1 : mode === 'low' ? 0.4 : 0.7;
 
 /** Distinct scenery profiles present on the route (fallback when none). */
-export const distinctProfiles = (enrichment?: RouteEnrichmentData | null): SceneryProfile[] => {
+export const distinctProfiles = (
+  enrichment?: RouteEnrichmentData | null,
+  track?: SceneryTrack | null,
+): SceneryProfile[] => {
+  if (track) return trackProfiles(track);
   const set = new Set<SceneryProfile>();
   for (const s of enrichment?.segmentProfiles ?? []) set.add(s.sceneryProfile);
   if (set.size === 0) set.add('fallback');
@@ -76,6 +81,8 @@ export interface PlacementInput {
   resolvedByProfile: Map<SceneryProfile, ResolvedScenery>;
   budget: number;
   side: 'left' | 'right';
+  /** Authored dressing, preferred over enrichment when the route has one (#232). */
+  track?: SceneryTrack | null;
 }
 
 /**
@@ -84,7 +91,7 @@ export interface PlacementInput {
  * bank. Pure — no R3F, no GLB loading.
  */
 export const computePlacements = (input: PlacementInput): Placement[] => {
-  const { curve, enrichment, resolvedByProfile, budget, side } = input;
+  const { curve, enrichment, resolvedByProfile, budget, side, track = null } = input;
   const out: Placement[] = [];
   const firstResolved = resolvedByProfile.values().next().value as ResolvedScenery | undefined;
   const fallback = resolvedByProfile.get('fallback') ?? firstResolved;
@@ -121,7 +128,7 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
       const point = curve.getPointAt(Math.min(0.999, t));
       const tangent = curve.getTangentAt(Math.min(0.999, t)).normalize();
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
-      const profile = getSegmentSceneryProfile(enrichment, t);
+      const profile = getSegmentSceneryProfile(enrichment, t, track);
       const resolved = resolvedByProfile.get(profile) ?? fallback;
       if (!resolved) continue;
       const y = getTerrainReliefForProgress(terrain, t);
