@@ -17,6 +17,26 @@ fi
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
+# git feeds us "<local ref> <local sha> <remote ref> <remote sha>" per ref. A
+# deletion carries the all-zero local sha and ships no code, so verifying one
+# is three minutes spent to prove nothing: `git push --delete` would otherwise
+# run the whole suite before removing a merged branch.
+saw_ref=0
+pushing_code=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  saw_ref=1
+  case "$local_sha" in
+    '' | *[!0]*) pushing_code=1 ;;
+  esac
+done
+
+# No refs on stdin means we are not being driven by git (a manual run, say):
+# verify rather than assume, so the gate never opens by accident.
+if [ "$saw_ref" = "1" ] && [ "$pushing_code" = "0" ]; then
+  echo "pre-push: deletions only — nothing to verify"
+  exit 0
+fi
+
 echo ""
 echo "── lint"
 npm run lint
