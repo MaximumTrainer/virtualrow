@@ -4,49 +4,78 @@
 [issue #216](https://github.com/MaximumTrainer/virtualrow/issues/216) using
 [llm-cad](https://github.com/MaximumTrainer/llm-cad).
 
+**27 of 114 models** — the full "build first" slice (steps 1–5 of the issue's
+build order): all of Tier A, the three boathouse types, the two commonest
+bridges, the four commonest bank edges, and the priority ground scatter.
+
 ## Directory layout
 
 ```
 scenery/
-  tier-a/   Universal rowing furniture (buoys, docks, towers, markers)
-  tier-b/   Water-edge structures (boathouses, quay walls)
-  tier-c/   Crossings (bridges)
-  tier-d/   Regional architecture kits (empty — future batches)
-  tier-e/   Vegetation (empty — future batches)
-  tier-f/   Generic biome kit (bank edges, scatter, infrastructure)
-  renders/  Multi-view PNG previews of each model
+  tier-a/   Universal rowing furniture (12) — every venue
+  tier-b/   Water-edge structures (3) — boathouses / clubhouses
+  tier-c/   Crossings (2) — bridges
+  tier-d/   Regional architecture kits (future batches)
+  tier-e/   Vegetation (future batches)
+  tier-f/   Generic biome kit (10) — bank edges, scatter, infrastructure
+  renders/  Multi-view coloured PNG previews of each model
 ```
 
-## Conventions
+## Conventions (per issue #216)
 
 | Rule | Value |
 |---|---|
 | Units | mm in CadQuery; the importer scales mm → scene metres |
 | Origin | Centred on X/Y, Z = 0 at waterline contact |
 | Orientation | +Y faces the water |
-| Export | STEP master + GLB for the scene |
+| Colour | Per-face hex from the issue palette; **flat colour, no textures** — the scene lights it |
+| Export | STEP master (colour-tagged) + GLB (colour-tagged, scene-ready) |
 | Naming | `<tier><nn>-<slug>.{step,glb}` |
 
-## Models in this batch (14 of 114 total)
+Each `.glb` carries the palette as glTF PBR `baseColorFactor` per part, so the
+model drops into the Three.js scene (`useGLTF`) already coloured. No texture
+maps: the issue specifies flat regional-material colours, lit by the scene.
 
-### Tier A — rowing furniture
-- `a01-buoy-lane-sphere` — Spherical lane buoy, dia 300mm
-- `a02-buoy-turn-cylinder` — Cylindrical turn marker, dia 600 × 900mm
-- `a03-pontoon-floating-dock` — Modular floating dock, 6000 × 2400 × 450mm
-- `a05-stakeboat-platform` — Start pontoon with bow-catcher, 3500 × 1400 × 800mm
-- `a06-finish-tower` — Two-storey timing tower, 3000 × 3000 × 6500mm
-- `a07-distance-marker-post` — Bank marker board, 900 × 60 × 2400mm
-- `a11-bank-railing` — Tubular railing bay, 2400 × 60 × 1100mm
-- `a12-regatta-flagpole` — Tapered flagpole with pennant, dia 120 × 8000mm
+## Real-world verification
 
-### Tier B — water-edge structures
-- `b01-boathouse-new-england` — Two-storey shingled boathouse, 30000 × 14000 × 11000mm
+Colours and proportions were checked against real references, not guessed:
 
-### Tier C — crossings
-- `c02-bridge-road-concrete` — Concrete beam bridge, 80000 × 14000 × 10000mm
+- **Lane buoys** — Albano system: red at the start/finish zones, white through
+  the middle. `a01` ships in the start/finish red (`#E8452B`); the scene swaps
+  the same model to white for mid-course instances.
+- **Umpire launch** — white hull is the real-world default; `a08` matches.
+- **New England boathouse** — vernacular 2-storey clapboard club with river-
+  facing balcony, wide boat-bay doors, and a ridge cupola (Riverside/BU type),
+  in muted clapboard rather than the grand masonry (Newell/Weld) tradition.
+- **Concrete beam bridge** — aged mid-grey with a plain parapet, not clean
+  white; `c02` uses the issue's `#B0ACA4`.
+- **Hexagonal gazebo, finish tower, stake boat** — proportions and muted/
+  functional colours confirmed against regatta references.
 
-### Tier F — generic biome kit
-- `f18-grass-tuft-clump` — Grass tuft, 500 × 500 × 600mm
-- `f21-boulder-cluster` — Three angular boulders, 1800 × 1400 × 900mm
-- `f33-post-rail-fence` — Timber fence bay, 3000 × 100 × 1200mm
-- `f37-park-bench` — Slatted bench, 1800 × 600 × 900mm
+## Models in this batch
+
+### Tier A — rowing furniture (12)
+`a01` lane buoy · `a02` turn buoy · `a03` floating dock · `a04` fixed launch dock ·
+`a05` stakeboat platform · `a06` finish tower · `a07` distance marker ·
+`a08` umpire launch · `a09` hexagonal gazebo · `a10` slipway ramp ·
+`a11` bank railing · `a12` regatta flagpole
+
+### Tier B — water-edge structures (3)
+`b01` New England boathouse · `b02` UK Victorian boathouse · `b03` modern clubhouse
+
+### Tier C — crossings (2)
+`c01` masonry arch bridge · `c02` concrete beam bridge
+
+### Tier F — generic biome kit (10)
+`f01` earth-cut bank · `f02` shingle shelf · `f03` reed margin · `f04` masonry wall ·
+`f18` grass tuft · `f20` reed stand · `f21` boulder cluster · `f25` bramble scrub ·
+`f33` post-rail fence · `f37` park bench
+
+## Regenerating
+
+Models are generated from `scripts/build_scenery.py` (CadQuery via llm-cad).
+Run against the local llm-cad environment:
+
+```
+uv run python scripts/build_scenery.py public/assets/scenery
+```
