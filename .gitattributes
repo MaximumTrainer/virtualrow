@@ -1,0 +1,11 @@
+# Normalise line endings for code so Windows checkouts match Linux/CI.
+# A CRLF checkout of a .mjs broke its import under node:vm on windows-latest;
+# pinning LF keeps parsing deterministic across platforms.
+*.mjs  text eol=lf
+*.mts  text eol=lf
+*.cjs  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf

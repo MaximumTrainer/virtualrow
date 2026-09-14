@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Outside-in TDD guard — the static half of the pre-commit gate.
  *
