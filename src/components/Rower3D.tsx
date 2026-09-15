@@ -52,7 +52,7 @@ import {
 } from './rower3d/glContext';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
-import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
+import { PhotorealisticWater, WaterReflectionPlane, CurvedWaterChannel } from './rower3d/waterComponents';
 import { PineTrees, GroundCover } from './rower3d/vegetationComponents';
 import { SceneryModels } from './rower3d/sceneryModels';
 import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
@@ -419,7 +419,6 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
 
   return (
     <AnimationProvider>
-      <fogExp2 attach="fog" args={[themeConfig.fog.color, themeConfig.fog.density]} />
       
       <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
       
@@ -486,8 +485,6 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       {routeCurve && (
         <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
       )}
-      
-      <MistLayer boatZ={boatZ} theme={routeTheme} />
       
       {!routeCurve && (
         <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
