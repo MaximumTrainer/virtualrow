@@ -23,7 +23,7 @@ import {
   getCurveDistances,
   distanceToProgress,
 } from './rower3d/curve';
-import { getThemeConfig } from './rower3d/themeConfig';
+import { getThemeConfig, themeUsesGlbScenery } from './rower3d/themeConfig';
 import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
@@ -392,7 +392,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
             <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
             <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-            {!IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+            {!IS_TEST_MODE && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
               <Suspense fallback={null}>
                 <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
                 <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} />
@@ -501,7 +501,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         renderThemedLandscape()
       )}
 
-      {routeCurve && routeTheme === 'willowbrook' && !IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+      {routeCurve && themeUsesGlbScenery(routeTheme) && !IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}

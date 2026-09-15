@@ -173,7 +173,21 @@ export interface HorizonConfig {
   height: number;
 }
 
+/**
+ * Where a theme's landscape comes from.
+ *
+ * `glb-kit` themes are dressed from the shared scenery catalogue, so any route
+ * wearing one can show the models. `bespoke` themes ship their own scene
+ * (CrystalBledScene and friends) and must not have the kit layered on top.
+ *
+ * This replaces the old `routeTheme === 'willowbrook'` test, which admitted a
+ * single theme by name and silently excluded every real course whose name
+ * matched a stylised theme (issue #232).
+ */
+export type LandscapeSource = 'glb-kit' | 'bespoke';
+
 export interface ThemeConfig {
+  landscapeSource: LandscapeSource;
   water: WaterConfig;
   bank: BankConfig;
   landscapeColors: LandscapeColors;
@@ -194,6 +208,7 @@ export interface ThemeConfig {
 
 export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   'crystal-bled': {
+    landscapeSource: 'bespoke',
     water: {
       color: '#3a9db8', transmission: 0.65, roughness: 0.04, thickness: 3.5,
       emissive: '#00e5ff', emissiveIntensity: 0.06, attenuationColor: '#00a8cc',
@@ -257,6 +272,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   },
 
   'gothic-venice': {
+    landscapeSource: 'bespoke',
     water: {
       color: '#1e3a3a', transmission: 0.22, roughness: 0.18, thickness: 1.5,
       emissive: '#0a3d62', emissiveIntensity: 0.015, attenuationColor: '#1a2f2f',
@@ -319,6 +335,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   },
 
   'steampunk-henley': {
+    landscapeSource: 'bespoke',
     water: {
       color: '#3a4a38', transmission: 0.28, roughness: 0.15, thickness: 2.0,
       emissive: '#4a6741', emissiveIntensity: 0.008, attenuationColor: '#3a4a38',
@@ -382,6 +399,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   },
 
   'dystopian-thames': {
+    landscapeSource: 'bespoke',
     water: {
       color: '#0a1a2a', transmission: 0.15, roughness: 0.22, thickness: 1.0,
       emissive: '#1a2a4a', emissiveIntensity: 0.025, attenuationColor: '#0a1520',
@@ -444,6 +462,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   },
 
   'scifi-boston': {
+    landscapeSource: 'bespoke',
     water: {
       color: '#0a3a4a', transmission: 0.45, roughness: 0.06, thickness: 2.5,
       emissive: '#00ced1', emissiveIntensity: 0.12, attenuationColor: '#006080',
@@ -507,6 +526,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
   },
 
   'willowbrook': {
+    landscapeSource: 'glb-kit',
     water: {
       color: '#3a5a55', transmission: 0.38, roughness: 0.10, thickness: 2.5,
       emissive: '#2a4a40', emissiveIntensity: 0.008, attenuationColor: '#2a4a45',
@@ -574,3 +594,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
 export function getThemeConfig(theme: RouteTheme): ThemeConfig {
   return THEME_CONFIG[theme] ?? THEME_CONFIG['willowbrook'];
 }
+
+/** Whether this theme is dressed from the shared GLB scenery catalogue. */
+export const themeUsesGlbScenery = (theme: RouteTheme): boolean =>
+  getThemeConfig(theme).landscapeSource === 'glb-kit';
