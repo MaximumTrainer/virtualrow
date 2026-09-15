@@ -83,9 +83,16 @@ def oar_assembly(name, sign):
     shaft_end = OAR_OUTBOARD - BLADE_LENGTH * 0.55   # the loom runs into the blade throat
     shaft = strut((sign*-OAR_INBOARD, 0, 0), (sign*shaft_end, 0, 0), 0.018)
     a.add(shaft, name=f"{name}_Shaft", color=col(OAR_SHAFT))
-    # spoon/hatchet blade, its tip at the oar's outboard length
-    blade = box(BLADE_THICKNESS, BLADE_WIDTH, BLADE_LENGTH,
-                (sign*(OAR_OUTBOARD - BLADE_THICKNESS / 2), 0, 0))
+    # Spoon, squared — the working position, and the only one this model can
+    # hold: the scene sweeps each oar about Y and never rolls it, so whatever
+    # the blade is built at is what a rower sees through the whole drive.
+    #
+    # Length runs along the oar (X), width is the vertical measure (Y), and the
+    # spoon is thin fore-aft (Z). These arrived as (thickness, width, length),
+    # which gave a blade 5 cm along the oar and 46 cm fore-aft: a fin lying
+    # along the boat, which is what read as the wrong angle (#232).
+    blade = box(BLADE_LENGTH, BLADE_WIDTH, BLADE_THICKNESS,
+                (sign*(OAR_OUTBOARD - BLADE_LENGTH / 2), 0, 0))
     a.add(blade, name=f"{name}_Blade", color=col(OAR_BLADE))
     # collar/button at the gate
     a.add(cyl(0.028, 0.04, (sign*-0.02, 0, -0.02)), name=f"{name}_Collar", color=col(GATE))
