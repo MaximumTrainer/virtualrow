@@ -14,6 +14,9 @@
 // caller's and nothing here proposes changing it.
 // ============================================================================
 
+import { describeUnmaskedRenderer } from '../../utils/gpuUtils';
+import type { RenderCapabilities } from './sceneQuality';
+
 export type PowerPreference = 'high-performance' | 'low-power' | 'default';
 
 export interface AttemptResult {
@@ -183,4 +186,31 @@ export const scheduleContextRestore = (
     }, RESTORE_DELAYS_MS[index]);
   };
   attempt(0);
+};
+
+/* --------------------------------------------------------- capabilities --- */
+
+/**
+ * What the GPU can do, read from a throwaway context.
+ *
+ * The scene used to learn this only after the canvas existed, which was too
+ * late to decide what kind of canvas to build (see sceneQuality.ts).
+ */
+export const probeRenderCapabilities = (): RenderCapabilities | null => {
+  if (typeof document === 'undefined') return null;
+
+  const canvas = document.createElement('canvas');
+  try {
+    const context = canvas.getContext('webgl2') as WebGL2RenderingContext | null;
+    if (!context) return null;
+
+    const capabilities: RenderCapabilities = {
+      maxTextureSize: context.getParameter(context.MAX_TEXTURE_SIZE) as number,
+      renderer: describeUnmaskedRenderer(context),
+    };
+    context.getExtension('WEBGL_lose_context')?.loseContext();
+    return capabilities;
+  } catch {
+    return null;
+  }
 };

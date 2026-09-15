@@ -356,6 +356,7 @@ declare global {
     };
     /** Per-frame render cost, sampled before the effect composer runs (#232). */
     __ROWER3D_RENDER_STATS?: {
+      drawing: string;
       drawCalls: number;
       triangles: number;
       backend: string;

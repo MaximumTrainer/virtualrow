@@ -38,9 +38,11 @@ import {
 import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
+import { resolveSceneQuality } from './rower3d/sceneQuality';
 import {
   selectGlOptions,
   browserContextAttempt,
+  probeRenderCapabilities,
   recordContextCreated,
   recordContextLost,
   recordContextRestored,
@@ -734,8 +736,24 @@ const showContextMessage = (message: string | null): void => {
 // MAIN COMPONENT - Canvas wrapper with GPU detection
 // ============================================================================
 const Rower3D: React.FC<Rower3DProps> = (props) => {
-  const isHighQuality = props.performanceMode !== 'low';
   const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
+
+  // Decide the quality before building the canvas, not after. 'auto' used to
+  // count as high here — shadows, MSAA, dpr 2, discrete adapter — while the
+  // scene inside resolved the same 'auto' against the real GPU and often chose
+  // low. Integrated hardware paid for a surface it could not drive (#232).
+  const capabilities = useMemo(() => probeRenderCapabilities(), []);
+  const quality = useMemo(
+    () =>
+      resolveSceneQuality({
+        requested: props.performanceMode ?? 'auto',
+        capabilities,
+        explicit: hasExplicitPerformanceMode(),
+      }),
+    [props.performanceMode, capabilities],
+  );
+  const isHighQuality = quality !== 'low';
+
   // Probed once, before the canvas is built: a configuration the driver will
   // refuse leaves R3F with nothing to draw into and no error to report (#232).
   const glSelection = useMemo(
@@ -849,7 +867,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           }}
         >
           <CameraAspectFix />
-          <RowerScene {...props} gpuBackend={gpuBackend} />
+          <RowerScene {...props} performanceMode={quality} gpuBackend={gpuBackend} />
         </Canvas>
       </GPUErrorBoundary>
     </div>
