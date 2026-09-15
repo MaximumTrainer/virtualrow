@@ -1398,7 +1398,8 @@ function App() {
                     <tr><td>Triangles:</td><td>{renderStats.stats.triangles.toLocaleString()}</td></tr>
                     <tr><td>FPS:</td><td>{renderStats.stats.fps?.toFixed(1) ?? 'N/A'}</td></tr>
                     <tr><td>Frame p95 (ms):</td><td>{renderStats.stats.p95Ms?.toFixed(1) ?? 'N/A'}</td></tr>
-                    <tr><td>Renderer:</td><td>{renderStats.stats.backend}</td></tr>
+                    <tr><td>Drawing with:</td><td>{renderStats.stats.drawing}</td></tr>
+                    <tr><td>Backend detected:</td><td>{renderStats.stats.backend}</td></tr>
                     <tr><td>Quality:</td><td>{renderStats.stats.performanceMode}</td></tr>
                     <tr>
                       <td>Drawing:</td>

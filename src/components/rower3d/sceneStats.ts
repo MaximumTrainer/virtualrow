@@ -20,6 +20,9 @@ import type { GPUBackend, PerformanceMode } from './constants';
 
 /** The subset of `THREE.WebGLRenderer` this needs, so a stub satisfies it. */
 export interface RenderStatsSource {
+  /** three sets this on WebGLRenderer; its absence means we cannot tell. */
+  isWebGLRenderer?: boolean;
+  isWebGPURenderer?: boolean;
   info?: {
     autoReset?: boolean;
     render?: { calls?: number; triangles?: number };
@@ -35,6 +38,14 @@ export interface RenderStatsContext {
 }
 
 export interface RenderStats extends RenderStatsContext {
+  /**
+   * The renderer doing the drawing.
+   *
+   * `backend` is only what GPU detection preferred; R3F builds a WebGL
+   * renderer regardless, and a panel reporting "webgpu" sends a reader looking
+   * in the wrong place (#232).
+   */
+  drawing: 'webgl' | 'webgpu' | 'unknown';
   /** Draw calls issued for the previous frame, all passes included. */
   drawCalls: number;
   /** Triangles submitted for the previous frame. */
@@ -64,6 +75,7 @@ export const recordRenderStats = (
 
   latest = {
     ...context,
+    drawing: renderer.isWebGPURenderer ? 'webgpu' : renderer.isWebGLRenderer ? 'webgl' : 'unknown',
     drawCalls: render.calls ?? 0,
     triangles: render.triangles ?? 0,
     sampledAt: Date.now(),

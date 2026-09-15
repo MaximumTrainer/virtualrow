@@ -91,3 +91,24 @@ describe('recordRenderStats', () => {
     expect(readRenderStats()).toBeNull();
   });
 });
+
+describe('the renderer actually in use', () => {
+  beforeEach(() => clearRenderStats());
+
+  it('reports what is drawing, not what detection preferred', () => {
+    // gpuBackend records what the browser said it supports; R3F builds a
+    // WebGL renderer regardless, and a panel that says "webgpu" sends whoever
+    // reads it looking in the wrong place (#232).
+    const gl = { ...renderer(10, 20), isWebGLRenderer: true };
+
+    recordRenderStats(gl, { backend: 'webgpu', performanceMode: 'low' });
+
+    expect(readRenderStats()).toMatchObject({ backend: 'webgpu', drawing: 'webgl' });
+  });
+
+  it('says so when it cannot tell', () => {
+    recordRenderStats(renderer(10, 20), { backend: 'webgl', performanceMode: 'low' });
+
+    expect(readRenderStats()?.drawing).toBe('unknown');
+  });
+});
