@@ -159,6 +159,36 @@ test('reports frame telemetry while rowing a 5,000-point winding route', async (
   expect(problems).toEqual([]);
 });
 
+test('keeps the demo route inside its draw-call budget', async ({ page }) => {
+  await page.addInitScript({ content: fs.readFileSync(mockBluetoothPath, 'utf8') });
+  await page.goto('./');
+  await expect(page.locator('.route-info-overlay h2')).toContainText('Willowbrook River');
+  await connectHardwareAndStart(page);
+
+  await expect
+    .poll(async () => page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0), {
+      timeout: 60_000,
+      intervals: [1000],
+    })
+    .toBeGreaterThan(0);
+
+  const stats = await page.evaluate(() => window.__ROWER3D_RENDER_STATS!);
+  console.log(
+    `draw calls ${stats.drawCalls}, triangles ${stats.triangles}, ` +
+      `quality ${stats.performanceMode}, renderer ${stats.backend}`,
+  );
+
+  // Unlike frame rate, draw calls do not depend on the GPU underneath, so this
+  // is the part of the #224 frame budget CI can honestly hold.
+  //
+  // It holds the *test-mode* scene, which is a good deal lighter than the one a
+  // rower gets: IS_TEST_MODE drops the effect stack, so this path measured 186
+  // draw calls where the same route outside test mode measured 1114. Read this
+  // as a regression guard on the geometry the scene builds, not as the cost of
+  // a real session.
+  expect(stats.drawCalls).toBeLessThanOrEqual(400);
+});
+
 test('keeps a 20 km route inside its geometry memory budget', async ({ page }) => {
   await rowGeneratedCourse(page, 'Twenty Kilometre Course', windingCourse(4000, 20_000, 16));
 
