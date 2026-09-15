@@ -107,3 +107,36 @@ describe('every asset URL the app can build is a file that ships', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('no source builds an asset URL that ignores the base', () => {
+  it('routes every /assets/ literal through assetUrl', () => {
+    // The E2E spec cannot catch a regression here: dev and CI both serve from
+    // `/`, where the broken form and the correct form are the same string. The
+    // bug only exists under a non-root base, which only the deploy uses — so a
+    // static check is what stands between a regression and another silent
+    // production outage (issue #251).
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) return walk(full);
+        return /\.(ts|tsx)$/.test(entry.name) && !/__tests__/.test(full) ? [full] : [];
+      });
+
+    const offenders: string[] = [];
+    for (const file of walk(path.join(process.cwd(), 'src'))) {
+      const text = fs.readFileSync(file, 'utf8');
+      text.split('\n').forEach((line, i) => {
+        // A quoted or templated path starting /assets/ that is not an argument
+        // to assetUrl(...) on the same line.
+        const trimmed = line.trim();
+        // Prose, not code: this very rule is described in a comment or two.
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (!/['"`]\/assets\//.test(line)) return;
+        if (/assetUrl\(\s*['"`]\/assets\//.test(line)) return;
+        offenders.push(`${path.relative(process.cwd(), file)}:${i + 1}  ${line.trim()}`);
+      });
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});
