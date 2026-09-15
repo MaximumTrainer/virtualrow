@@ -46,19 +46,19 @@ export interface GlSelection {
  */
 export const selectGlOptions = (
   attempt: ContextAttempt,
-  { preferHighPerformance }: { preferHighPerformance: boolean },
+  { preferred }: { preferred: { powerPreference: PowerPreference; antialias: boolean } },
 ): GlSelection => {
-  const ladder: Array<{ powerPreference: PowerPreference; antialias: boolean }> =
-    preferHighPerformance
-      ? [
-          { powerPreference: 'high-performance', antialias: true },
-          { powerPreference: 'default', antialias: true },
-          { powerPreference: 'default', antialias: false },
-        ]
-      : [
-          { powerPreference: 'low-power', antialias: false },
-          { powerPreference: 'default', antialias: false },
-        ];
+  // Each rung gives up one thing: first the adapter the tier asked for, then
+  // multisampling. Never the resolution, and never the models.
+  const rungs: Array<{ powerPreference: PowerPreference; antialias: boolean }> = [
+    preferred,
+    { powerPreference: 'default' as const, antialias: preferred.antialias },
+    { powerPreference: 'default' as const, antialias: false },
+  ];
+  const ladder = rungs.filter(
+    (rung, index, all) =>
+      index === all.findIndex((r) => r.powerPreference === rung.powerPreference && r.antialias === rung.antialias),
+  );
 
   let firstFailure: string | undefined;
 

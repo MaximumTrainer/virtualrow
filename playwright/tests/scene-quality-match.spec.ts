@@ -75,6 +75,8 @@ async function rowTheDemoRoute(page: Page, mode?: 'low' | 'auto' | 'high') {
  * context reports no attributes; the app's own decision is the thing under test
  * and is there either way.
  */
+const ADAPTER_RANK = { 'low-power': 0, default: 1, 'high-performance': 2 } as const;
+
 const canvasSurface = (page: Page) =>
   page.evaluate(() => {
     const canvas = document.querySelector('.rower3d-canvas-container canvas') as HTMLCanvasElement;
@@ -85,29 +87,63 @@ const canvasSurface = (page: Page) =>
       chosenPowerPreference: window.__ROWER3D_CONTEXT_STATE?.powerPreference ?? null,
       liveAntialias: attributes?.antialias ?? null,
       quality: window.__ROWER3D_RENDER_STATS?.performanceMode ?? null,
+      maxDpr: (window.devicePixelRatio && canvas)
+        ? Math.round((canvas.width / canvas.getBoundingClientRect().width) * 100) / 100
+        : null,
     };
   });
 
-test('a low-quality scene is given a low-quality surface', async ({ page }) => {
-  await rowTheDemoRoute(page, 'low');
+/** What each tier is allowed to ask the browser for. Mirrors canvasSurface.ts. */
+const EXPECTED = {
+  low: { antialias: false, adapter: 'low-power', maxDpr: 1 },
+  auto: { antialias: true, adapter: 'default', maxDpr: 1.5 },
+  high: { antialias: true, adapter: 'high-performance', maxDpr: 2 },
+} as const;
 
-  const surface = await canvasSurface(page);
+for (const tier of ['low', 'auto', 'high'] as const) {
+  test(`the ${tier} tier gets the surface the ${tier} tier is allowed`, async ({ page }) => {
+    await rowTheDemoRoute(page, tier);
 
-  expect(surface.quality).toBe('low');
-  // The mismatch this guards: multisampling, and a request for the discrete
-  // adapter, on a surface whose scene has already decided it cannot afford it.
-  expect(surface.chosenAntialias).toBe(false);
-  expect(surface.chosenPowerPreference).not.toBe('high-performance');
-  if (surface.liveAntialias !== null) expect(surface.liveAntialias).toBe(false);
-});
+    const surface = await canvasSurface(page);
 
-test('a high-quality scene keeps its multisampling', async ({ page }) => {
-  await rowTheDemoRoute(page, 'high');
+    expect(surface.quality).toBe(tier);
+    expect(surface.chosenAntialias).toBe(EXPECTED[tier].antialias);
+    // The probe may drop down a rung if the driver refuses, but it must never
+    // climb above what the tier asked for.
+    expect(ADAPTER_RANK[surface.chosenPowerPreference as keyof typeof ADAPTER_RANK]).toBeLessThanOrEqual(
+      ADAPTER_RANK[EXPECTED[tier].adapter],
+    );
+    if (surface.liveAntialias !== null && !EXPECTED[tier].antialias) {
+      expect(surface.liveAntialias).toBe(false);
+    }
+    expect(surface.maxDpr).toBeLessThanOrEqual(EXPECTED[tier].maxDpr);
+  });
+}
 
-  const surface = await canvasSurface(page);
+test('no tier draws at a higher pixel ratio or richer adapter than the one above it', async ({
+  page,
+}) => {
+  const readings: Array<{ tier: string; adapter: number; dpr: number; antialias: number }> = [];
 
-  expect(surface.quality).toBe('high');
-  expect(surface.chosenAntialias).toBe(true);
+  for (const tier of ['low', 'auto', 'high'] as const) {
+    const context = await page.context().newPage();
+    await rowTheDemoRoute(context, tier);
+    const surface = await canvasSurface(context);
+    readings.push({
+      tier,
+      adapter: ADAPTER_RANK[surface.chosenPowerPreference as keyof typeof ADAPTER_RANK] ?? 0,
+      dpr: surface.maxDpr ?? 0,
+      antialias: surface.chosenAntialias ? 1 : 0,
+    });
+    await context.close();
+  }
+
+  for (const key of ['adapter', 'dpr', 'antialias'] as const) {
+    const values = readings.map((r) => r[key]);
+    expect(values, `${key} across ${readings.map((r) => r.tier).join(' → ')}`).toEqual(
+      [...values].sort((a, b) => a - b),
+    );
+  }
 });
 
 test('the scene reports which renderer is drawing, not which was detected', async ({ page }) => {
