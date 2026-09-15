@@ -111,8 +111,8 @@ describe('isGlbSceneryEnabled', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('is off by default', () => {
-    expect(isGlbSceneryEnabled()).toBe(false);
+  it('is on for a rower once the cost is validated (#232 phase 3)', () => {
+    expect(isGlbSceneryEnabled()).toBe(true);
   });
 
   it('is on with the window flag', () => {
@@ -123,6 +123,28 @@ describe('isGlbSceneryEnabled', () => {
   it('is on with the ?glb=1 query param', () => {
     window.history.replaceState({}, '', '/?glb=1');
     expect(isGlbSceneryEnabled()).toBe(true);
+  });
+
+  it('can be switched off again without a deploy', () => {
+    window.history.replaceState({}, '', '/?glb=0');
+    expect(isGlbSceneryEnabled()).toBe(false);
+  });
+
+  it('lets the window flag turn it off too', () => {
+    w.__VIRTUALROW_SCENERY_MODELS = false;
+    expect(isGlbSceneryEnabled()).toBe(false);
+  });
+
+  it('is off under automation unless a spec asks for it, so suites stay fast', () => {
+    const win = window as unknown as { __PLAYWRIGHT_TESTING?: boolean };
+    win.__PLAYWRIGHT_TESTING = true;
+    try {
+      expect(isGlbSceneryEnabled()).toBe(false);
+      w.__VIRTUALROW_SCENERY_MODELS = true;
+      expect(isGlbSceneryEnabled()).toBe(true);
+    } finally {
+      delete win.__PLAYWRIGHT_TESTING;
+    }
   });
 });
 

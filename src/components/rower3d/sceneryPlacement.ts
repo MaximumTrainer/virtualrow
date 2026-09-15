@@ -56,6 +56,33 @@ export interface Placement {
   progress: number;
 }
 
+/**
+ * Most instances a single bank may contribute.
+ *
+ * A 20 km course samples far more points than a 2 km one, so without a ceiling
+ * the cost of the kit scales with route length and the #224 budgets (p95 frame
+ * 18 ms, 80 MB of geometry) are a matter of luck. Dressing density past this
+ * point is not visible anyway: the scene only renders a window around the boat.
+ */
+export const MAX_INSTANCES_PER_SIDE = 900;
+
+/**
+ * Thin a set of placements to the ceiling by stride rather than truncation, so
+ * the whole route stays dressed instead of the last kilometres running bare.
+ */
+export const thinToCeiling = (
+  placements: Placement[],
+  ceiling: number = MAX_INSTANCES_PER_SIDE,
+): Placement[] => {
+  if (placements.length <= ceiling) return placements;
+  const stride = placements.length / ceiling;
+  const kept: Placement[] = [];
+  for (let i = 0; kept.length < ceiling && Math.floor(i * stride) < placements.length; i += 1) {
+    kept.push(placements[Math.floor(i * stride)]);
+  }
+  return kept;
+};
+
 /** Pick a model id from a category list deterministically, or null if empty. */
 export const pick = (ids: SceneryModelId[], seed: number): SceneryModelId | null =>
   ids.length === 0 ? null : ids[Math.floor(seededRandom(seed) * ids.length)];
@@ -166,5 +193,5 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
       }
     }
   }
-  return out;
+  return thinToCeiling(out);
 };

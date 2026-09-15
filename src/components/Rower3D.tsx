@@ -403,7 +403,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
             <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
             <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-            {!IS_TEST_MODE && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+            {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
               <Suspense fallback={null}>
                 <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
                 <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
@@ -513,7 +513,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         renderThemedLandscape()
       )}
 
-      {routeCurve && themeUsesGlbScenery(routeTheme) && !IS_TEST_MODE && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+      {routeCurve && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}

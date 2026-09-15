@@ -272,20 +272,36 @@ export const resolveSceneryModels = (
 };
 
 /**
- * The GLB scenery kit is opt-in while it is tuned for cost: these models are
- * un-decimated and add draw calls to an already heavy scene.  Enable with
- * `?glb=1` in the URL or `window.__VIRTUALROW_SCENERY_MODELS = true`.  Once LOD
- * variants land and the cost is validated this can default to on.
+ * Whether the GLB scenery kit renders.
+ *
+ * It was opt-in while its cost was unvalidated. That gate also carried
+ * `!IS_TEST_MODE` at both call sites, which made the kit exempt from automation
+ * by construction — the same trap #197 fixed for postprocessing, where the test
+ * flag decided both "are we in a test" and "which effects run". The two
+ * questions are separated here: an explicit answer always wins, in either
+ * direction, and only the default differs between a rower and a spec.
+ *
+ * `?glb=0` turns it off again without a deploy.
  */
 export const isGlbSceneryEnabled = (): boolean => {
   if (typeof window === 'undefined') return false;
-  const w = window as unknown as { __VIRTUALROW_SCENERY_MODELS?: boolean };
-  if (w.__VIRTUALROW_SCENERY_MODELS === true) return true;
+  const w = window as unknown as {
+    __VIRTUALROW_SCENERY_MODELS?: boolean;
+    __PLAYWRIGHT_TESTING?: boolean;
+  };
+  if (typeof w.__VIRTUALROW_SCENERY_MODELS === 'boolean') return w.__VIRTUALROW_SCENERY_MODELS;
+
   try {
-    return new URLSearchParams(window.location.search).get('glb') === '1';
+    const requested = new URLSearchParams(window.location.search).get('glb');
+    if (requested === '1') return true;
+    if (requested === '0') return false;
   } catch {
-    return false;
+    // No usable location; fall through to the default.
   }
+
+  // Automation opts in per spec, so suites that do not measure the kit do not
+  // pay for it.
+  return !w.__PLAYWRIGHT_TESTING;
 };
 
 /** Flat, de-duplicated list of every GLB a resolved set needs — for preloading. */
