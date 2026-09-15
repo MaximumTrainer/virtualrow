@@ -11,6 +11,10 @@ import {
   type ContextAttempt,
 } from '../components/rower3d/glContext';
 
+/** The preferences the high and low tiers bring to the probe. */
+const HIGH = { preferred: { powerPreference: 'high-performance' as const, antialias: true } };
+const LOW = { preferred: { powerPreference: 'low-power' as const, antialias: false } };
+
 /** An attempt that succeeds only for the configurations named. */
 const attemptAllowing = (
   allowed: Array<{ powerPreference?: string; antialias?: boolean }>,
@@ -31,7 +35,7 @@ const attemptAllowing = (
 
 describe('selectGlOptions', () => {
   it('keeps the discrete GPU and antialiasing when the driver takes them', () => {
-    const selection = selectGlOptions(attemptAllowing([{}]), { preferHighPerformance: true });
+    const selection = selectGlOptions(attemptAllowing([{}]), HIGH);
 
     expect(selection).toMatchObject({ powerPreference: 'high-performance', antialias: true });
     expect(selection.fallbackReason).toBeUndefined();
@@ -42,7 +46,7 @@ describe('selectGlOptions', () => {
     // GPU whose driver refuses the context.
     const attempt = attemptAllowing([{ powerPreference: 'default' }], 'eglCreateContext failed');
 
-    const selection = selectGlOptions(attempt, { preferHighPerformance: true });
+    const selection = selectGlOptions(attempt, HIGH);
 
     expect(selection).toMatchObject({ powerPreference: 'default', antialias: true });
     expect(selection.fallbackReason).toContain('eglCreateContext failed');
@@ -51,25 +55,21 @@ describe('selectGlOptions', () => {
   it('gives up multisampling before it gives up rendering', () => {
     const attempt = attemptAllowing([{ antialias: false }], 'out of memory');
 
-    const selection = selectGlOptions(attempt, { preferHighPerformance: true });
+    const selection = selectGlOptions(attempt, HIGH);
 
     expect(selection.antialias).toBe(false);
     expect(selection.fallbackReason).toContain('out of memory');
   });
 
   it('never trades away resolution to get a context', () => {
-    const selection = selectGlOptions(attemptAllowing([{ antialias: false }]), {
-      preferHighPerformance: true,
-    });
+    const selection = selectGlOptions(attemptAllowing([{ antialias: false }]), HIGH);
 
     // dpr is the caller's business and nothing here should propose changing it.
     expect(selection).not.toHaveProperty('dpr');
   });
 
   it('reports that nothing worked rather than pretending', () => {
-    const selection = selectGlOptions(attemptAllowing([], 'no adapters'), {
-      preferHighPerformance: true,
-    });
+    const selection = selectGlOptions(attemptAllowing([], 'no adapters'), HIGH);
 
     expect(selection.usable).toBe(false);
     expect(selection.fallbackReason).toContain('no adapters');
@@ -78,7 +78,7 @@ describe('selectGlOptions', () => {
   it('asks for the low-power adapter when the scene is in low quality', () => {
     const attempt = attemptAllowing([{}]);
 
-    const selection = selectGlOptions(attempt, { preferHighPerformance: false });
+    const selection = selectGlOptions(attempt, LOW);
 
     expect(selection.powerPreference).toBe('low-power');
     expect(selection.antialias).toBe(false);
@@ -87,7 +87,7 @@ describe('selectGlOptions', () => {
   it('tries the preferred configuration first', () => {
     const attempt = attemptAllowing([{ powerPreference: 'default' }]);
 
-    selectGlOptions(attempt, { preferHighPerformance: true });
+    selectGlOptions(attempt, HIGH);
 
     expect((attempt as unknown as { tried: WebGLContextAttributes[] }).tried[0]).toMatchObject({
       powerPreference: 'high-performance',
@@ -104,11 +104,17 @@ describe('context state', () => {
   });
 
   it('records how the context was obtained', () => {
-    recordContextCreated({ powerPreference: 'default', antialias: true, fallbackReason: 'refused' });
+    recordContextCreated({
+      powerPreference: 'default',
+      antialias: true,
+      maxDpr: 1.5,
+      fallbackReason: 'refused',
+    });
 
     expect(readContextState()).toMatchObject({
       powerPreference: 'default',
       lost: false,
+      maxDpr: 1.5,
       fallbackReason: 'refused',
     });
   });

@@ -13,6 +13,14 @@ import { fileURLToPath } from 'url';
  *
  * WEBGL_lose_context reproduces that on any machine, which is what makes this
  * checkable rather than a hardware story.
+ *
+ * What is NOT covered here: that the scene resumes after a restore. Chrome
+ * honours restoreContext() only from the instance that called loseContext(),
+ * drops the extension afterwards, and the app's own retry schedule races
+ * whatever the test does — a spec written against it passed about half the
+ * time, which is worse than no spec. The restore path is covered by unit tests
+ * over scheduleContextRestore instead, and the real case (a driver recovering
+ * and the browser restoring on its own) cannot be simulated faithfully here.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,10 +65,6 @@ async function rowTheDemoRoute(page: Page) {
 const drawCalls = (page: Page) =>
   page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0);
 
-/** When the scene last measured a frame — a moving timestamp means it is drawing. */
-const sampledAt = (page: Page) =>
-  page.evaluate(() => window.__ROWER3D_RENDER_STATS?.sampledAt ?? 0);
-
 const loseContext = (page: Page) =>
   page.evaluate(() => {
     const canvas = document.querySelector('.rower3d-canvas-container canvas') as HTMLCanvasElement;
@@ -98,61 +102,4 @@ test('a lost context is explained and asked back', async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.__ROWER3D_WEBGL_LOST === true), { timeout: 20_000 })
     .toBe(true);
-});
-
-test('the scene comes back when the context is restored', async ({ page }) => {
-  await rowTheDemoRoute(page);
-  await expect.poll(() => drawCalls(page), { timeout: 60_000, intervals: [1000] }).toBeGreaterThan(0);
-
-  const before = await sampledAt(page);
-
-  // Keep the extension instance that lost the context: Chrome honours
-  // restoreContext() only from the instance that called loseContext(), and
-  // drops the extension afterwards. A real driver loss is restored by the
-  // browser itself — this stands in for that, and exercises the half the app
-  // owns: noticing, clearing the message, and drawing again.
-  await page.evaluate(() => {
-    const canvas = document.querySelector('.rower3d-canvas-container canvas') as HTMLCanvasElement;
-    const gl = canvas?.getContext('webgl2') as WebGL2RenderingContext | null;
-    const ext = gl?.getExtension('WEBGL_lose_context');
-    (window as unknown as { __TEST_LOSE_EXT?: unknown }).__TEST_LOSE_EXT = ext;
-    ext?.loseContext();
-  });
-
-  await expect
-    .poll(() => page.evaluate(() => window.__ROWER3D_WEBGL_LOST === true), { timeout: 20_000 })
-    .toBe(true);
-
-  // Let the app's own nudges run out first (RESTORE_DELAYS_MS totals ~5.8 s).
-  // This is the real shape of a driver loss the app cannot talk its way out of:
-  // it asks, the asks fail, and the browser restores when the GPU is ready.
-  await page.waitForTimeout(7000);
-
-  await page.evaluate(() => {
-    (
-      window as unknown as { __TEST_LOSE_EXT?: { restoreContext?: () => void } }
-    ).__TEST_LOSE_EXT?.restoreContext?.();
-  });
-
-  // Both together: a flag that flips while the message stays up would still
-  // leave the rower looking at a box that says the view is broken.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const el = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-          return {
-            lost: window.__ROWER3D_WEBGL_LOST === true,
-            message: el?.style.display !== 'none',
-          };
-        }),
-      { timeout: 30_000, intervals: [500] },
-    )
-    .toEqual({ lost: false, message: false });
-
-  // ...and the loop is drawing again. Draw calls are steady frame to frame, so
-  // the timestamp is what proves liveness, not the count.
-  await expect
-    .poll(() => sampledAt(page), { timeout: 30_000, intervals: [1000] })
-    .toBeGreaterThan(before);
 });

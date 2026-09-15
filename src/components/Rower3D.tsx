@@ -39,6 +39,7 @@ import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
+import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
   selectGlOptions,
   browserContextAttempt,
@@ -752,13 +753,18 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       }),
     [props.performanceMode, capabilities],
   );
-  const isHighQuality = quality !== 'low';
+  // One table decides every surface setting for the tier, so a tier cannot
+  // quietly acquire one it has no business asking for (#232).
+  const surface = useMemo(() => canvasSurfaceFor(quality), [quality]);
 
   // Probed once, before the canvas is built: a configuration the driver will
   // refuse leaves R3F with nothing to draw into and no error to report (#232).
   const glSelection = useMemo(
-    () => selectGlOptions(browserContextAttempt, { preferHighPerformance: isHighQuality }),
-    [isHighQuality],
+    () =>
+      selectGlOptions(browserContextAttempt, {
+        preferred: { powerPreference: surface.powerPreference, antialias: surface.antialias },
+      }),
+    [surface],
   );
   
   useEffect(() => {
@@ -816,8 +822,8 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       <GPUErrorBoundary>
         <Canvas
           camera={{ position: [0, 2.5, 6], fov: 60 }}
-          shadows={isHighQuality}
-          dpr={isHighQuality ? [1, 2] : 1}
+          shadows={surface.shadows}
+          dpr={surface.dpr}
           gl={{
             antialias: glSelection.antialias,
             alpha: true,
@@ -836,7 +842,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
             
-            recordContextCreated(glSelection);
+            recordContextCreated({ ...glSelection, maxDpr: maxDpr(surface.dpr) });
 
             const canvas = gl.domElement;
             canvas.addEventListener('webglcontextlost', (ev) => {

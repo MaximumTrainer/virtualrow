@@ -46,19 +46,19 @@ export interface GlSelection {
  */
 export const selectGlOptions = (
   attempt: ContextAttempt,
-  { preferHighPerformance }: { preferHighPerformance: boolean },
+  { preferred }: { preferred: { powerPreference: PowerPreference; antialias: boolean } },
 ): GlSelection => {
-  const ladder: Array<{ powerPreference: PowerPreference; antialias: boolean }> =
-    preferHighPerformance
-      ? [
-          { powerPreference: 'high-performance', antialias: true },
-          { powerPreference: 'default', antialias: true },
-          { powerPreference: 'default', antialias: false },
-        ]
-      : [
-          { powerPreference: 'low-power', antialias: false },
-          { powerPreference: 'default', antialias: false },
-        ];
+  // Each rung gives up one thing: first the adapter the tier asked for, then
+  // multisampling. Never the resolution, and never the models.
+  const rungs: Array<{ powerPreference: PowerPreference; antialias: boolean }> = [
+    preferred,
+    { powerPreference: 'default' as const, antialias: preferred.antialias },
+    { powerPreference: 'default' as const, antialias: false },
+  ];
+  const ladder = rungs.filter(
+    (rung, index, all) =>
+      index === all.findIndex((r) => r.powerPreference === rung.powerPreference && r.antialias === rung.antialias),
+  );
 
   let firstFailure: string | undefined;
 
@@ -117,6 +117,8 @@ export const browserContextAttempt: ContextAttempt = (options) => {
 export interface ContextState {
   powerPreference: PowerPreference;
   antialias: boolean;
+  /** Largest device pixel ratio the surface will draw at. */
+  maxDpr?: number;
   /** True while the context is gone and the scene is not drawing. */
   lost: boolean;
   /** How many times it has been lost this session. */
@@ -130,6 +132,7 @@ let state: ContextState | null = null;
 export const recordContextCreated = (selection: {
   powerPreference: PowerPreference;
   antialias: boolean;
+  maxDpr?: number;
   fallbackReason?: string;
 }): void => {
   state = { ...selection, lost: false, losses: 0 };
