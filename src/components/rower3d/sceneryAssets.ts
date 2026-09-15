@@ -20,6 +20,7 @@ import type {
   SceneryProfile,
   WaterBodyType,
 } from '../../services/routeEnrichmentService';
+import type { SceneryRegion } from './sceneryRegion';
 
 /** A scenery model id, e.g. `f01-bank-earth-cut` or `e04-english-oak`. */
 export type SceneryModelId = string;
@@ -157,6 +158,64 @@ export const UNIVERSAL_FURNITURE: SceneryModelId[] = [
   'a12-regatta-flagpole',
 ];
 
+// ---------------------------------------------------------------------------
+// Tier D — regional building kits, keyed to the route's region.
+//
+// These 25 models shipped with #216 but nothing could reach them: selection had
+// no geography to go on. `builtUp` dresses towns and industry, `rural` dresses
+// farmland, and a region may add its own bank edge (issue #232).
+// ---------------------------------------------------------------------------
+export interface RegionalModelSet {
+  /** Town and industrial buildings, for residential and commercial stretches. */
+  builtUp: SceneryModelId[];
+  /** Farm and water-management buildings, for farmland stretches. */
+  rural: SceneryModelId[];
+  /** Bank treatment characteristic of the region. */
+  bankEdge: SceneryModelId[];
+}
+
+export const REGIONAL_MODELS: Record<SceneryRegion, RegionalModelSet> = {
+  gb: {
+    builtUp: ['d-gb-01-terrace-brick', 'd-gb-02-church-square-tower', 'd-gb-03-riverside-pub'],
+    rural: ['d-gb-04-stone-cottage', 'd-gb-05-stone-barn', 'd-gb-06-regatta-marquee'],
+    bankEdge: [],
+  },
+  ce: {
+    builtUp: ['d-ce-01-baroque-church-onion', 'd-ce-02-panelak-block', 'd-ce-03-riverside-villa'],
+    rural: ['d-ce-04-hydro-weir-house'],
+    bankEdge: [],
+  },
+  it: {
+    builtUp: ['d-it-01-po-palazzo', 'd-it-02-castello-valentino'],
+    rural: [],
+    bankEdge: ['d-it-03-arcaded-embankment'],
+  },
+  nl: {
+    builtUp: ['d-nl-01-gabled-canal-house', 'd-nl-04-canal-lock'],
+    rural: ['d-nl-02-polder-windmill', 'd-nl-03-polder-farmhouse', 'd-nl-05-wind-turbine'],
+    bankEdge: ['d-nl-06-reed-bank-edge'],
+  },
+  us: {
+    builtUp: [
+      'd-us-01-clapboard-house',
+      'd-us-02-brick-mill',
+      'd-us-03-collegiate-dome',
+      'd-us-04-collegiate-tower',
+      'd-us-05-water-tower',
+      'd-us-06-highway-sign-gantry',
+    ],
+    rural: [],
+    bankEdge: [],
+  },
+};
+
+/** Which regional kit, if any, dresses a profile. Wild stretches stay unbuilt. */
+const REGIONAL_KIT_FOR_PROFILE: Partial<Record<SceneryProfile, keyof RegionalModelSet>> = {
+  residential: 'builtUp',
+  commercial: 'builtUp',
+  farmland: 'rural',
+};
+
 export interface ResolvedScenery {
   /** Bank-edge strip models (both profile- and water-derived), de-duplicated. */
   bankEdge: SceneryModelId[];
@@ -174,6 +233,8 @@ export interface ResolvedScenery {
   trees: SceneryModelId[];
   /** Universal Tier A rowing furniture. */
   furniture: SceneryModelId[];
+  /** Tier D regional buildings; empty off-kit or on a wild stretch. */
+  buildings: SceneryModelId[];
 }
 
 const uniq = (ids: SceneryModelId[]): SceneryModelId[] => Array.from(new Set(ids));
@@ -188,14 +249,17 @@ export const resolveSceneryModels = (
   profile: SceneryProfile,
   waterType: WaterBodyType,
   treeSpecies: string[] = [],
+  region?: SceneryRegion | null,
 ): ResolvedScenery => {
   const p = SCENERY_PROFILE_MODELS[profile] ?? SCENERY_PROFILE_MODELS.fallback;
   const w = WATER_BODY_MODELS[waterType] ?? WATER_BODY_MODELS.unknown;
   const trees = uniq(
     treeSpecies.flatMap((sp) => TREE_SPECIES_MODELS[sp] ?? []),
   );
+  const regional = region ? REGIONAL_MODELS[region] : undefined;
+  const kit = REGIONAL_KIT_FOR_PROFILE[profile];
   return {
-    bankEdge: uniq([...p.bankEdge, ...w.bankEdge]),
+    bankEdge: uniq([...p.bankEdge, ...w.bankEdge, ...(regional?.bankEdge ?? [])]),
     landform: uniq(p.landform),
     scatter: uniq(p.scatter),
     backdrop: uniq(p.backdrop),
@@ -203,6 +267,7 @@ export const resolveSceneryModels = (
     surface: uniq(w.surface),
     trees,
     furniture: UNIVERSAL_FURNITURE,
+    buildings: regional && kit ? uniq(regional[kit]) : [],
   };
 };
 
@@ -234,4 +299,5 @@ export const collectSceneryPaths = (resolved: ResolvedScenery): string[] =>
     ...resolved.surface,
     ...resolved.trees,
     ...resolved.furniture,
+    ...resolved.buildings,
   ]).map(sceneryAssetPath);
