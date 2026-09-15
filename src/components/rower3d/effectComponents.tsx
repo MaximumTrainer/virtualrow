@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO, GodRays, HueSaturation, BrightnessContrast } from '@react-three/postprocessing';
 import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
+import { effectPlanFor, type EffectName } from './effectPlan';
 import { IS_TEST_MODE } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
@@ -413,46 +414,66 @@ export const DynamicPostFx: React.FC<{
   // Every hook above runs unconditionally; only the render bails out.
   if (!canPostProcess) return null;
 
-  if (performanceMode === 'auto') {
-    return (
-      <EffectComposer enableNormalPass>
-        <SSAO samples={16} rings={3} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={10} bias={0.5} intensity={0.8} />
-        <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-        <primitive object={caEffect} />
-        <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
-        <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
-        <Vignette eskil={false} offset={0.3} darkness={0.5} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      </EffectComposer>
-    );
-  }
+  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMeshRef });
+  if (!plan.composer) return null;
 
-  if (sunMeshRef) {
-    return (
-      <EffectComposer enableNormalPass>
-        <SSAO samples={24} rings={4} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={15} bias={0.5} intensity={1.0} />
-        <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-        <primitive object={caEffect} />
-        <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
-        <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
-        <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
-        <GodRays sun={sunMeshRef} exposure={0.34} decay={0.85} density={0.85} weight={0.4} samples={60} />
-        <Vignette eskil={false} offset={0.3} darkness={0.5} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      </EffectComposer>
-    );
-  }
+  const has = (effect: EffectName) => plan.effects.includes(effect);
 
   return (
-    <EffectComposer enableNormalPass>
-      <SSAO samples={24} rings={4} distanceThreshold={1.0} distanceFalloff={0.1} rangeThreshold={0.5} rangeFalloff={0.1} luminanceInfluence={0.9} radius={15} bias={0.5} intensity={1.0} />
-      <Bloom intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
-      <primitive object={caEffect} />
-      <DepthOfField worldFocusDistance={10} worldFocusRange={25} bokehScale={2} height={480} />
-      <HueSaturation hue={colorGrading.hue} saturation={colorGrading.saturation} />
-      <BrightnessContrast brightness={colorGrading.brightness} contrast={colorGrading.contrast} />
-      <Vignette eskil={false} offset={0.3} darkness={0.5} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+    <EffectComposer enableNormalPass={plan.normalPass}>
+      {[
+        has('ssao') ? (
+          <SSAO
+            key="ssao"
+            samples={plan.ssaoSamples ?? 16}
+            rings={4}
+            distanceThreshold={1.0}
+            distanceFalloff={0.1}
+            rangeThreshold={0.5}
+            rangeFalloff={0.1}
+            luminanceInfluence={0.9}
+            radius={15}
+            bias={0.5}
+            intensity={1.0}
+          />
+        ) : null,
+        has('bloom') ? (
+          <Bloom key="bloom" intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+        ) : null,
+        has('chromaticAberration') ? <primitive key="ca" object={caEffect} /> : null,
+        has('depthOfField') ? (
+          <DepthOfField
+            key="dof"
+            worldFocusDistance={10}
+            worldFocusRange={25}
+            bokehScale={2}
+            height={480}
+          />
+        ) : null,
+        has('hueSaturation') ? (
+          <HueSaturation key="hue" hue={colorGrading.hue} saturation={colorGrading.saturation} />
+        ) : null,
+        has('brightnessContrast') ? (
+          <BrightnessContrast
+            key="bc"
+            brightness={colorGrading.brightness}
+            contrast={colorGrading.contrast}
+          />
+        ) : null,
+        has('godRays') && sunMeshRef ? (
+          <GodRays
+            key="godrays"
+            sun={sunMeshRef}
+            exposure={0.34}
+            decay={0.85}
+            density={0.85}
+            weight={0.4}
+            samples={60}
+          />
+        ) : null,
+        has('vignette') ? <Vignette key="vignette" eskil={false} offset={0.3} darkness={0.5} /> : null,
+        has('toneMapping') ? <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} /> : null,
+      ].filter((effect): effect is React.ReactElement => effect !== null)}
     </EffectComposer>
   );
 };

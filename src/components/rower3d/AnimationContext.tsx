@@ -1,7 +1,7 @@
 // ============================================================================
 // AnimationContext — single shared useFrame tick for all scenery components.
 //
-// Instead of each scenery component (MistLayer, clouds, water surfaces) calling
+// Instead of each scenery component (clouds, water surfaces) calling
 // useFrame independently, they subscribe through useAnimationFrame. This reduces
 // R3F internal callback list churn when many scenery components mount/unmount
 // and avoids redundant clock reads per component per frame.
