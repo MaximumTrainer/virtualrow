@@ -11,6 +11,7 @@ import {
   computeStructurePlacements,
 } from '../components/rower3d/sceneryStructures';
 import type { Crossing } from '../utils/bridgeCrossings';
+import { buildTerrainProfile } from '../services/routeEnrichmentService';
 
 const curve = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0, 0, -200),
@@ -135,5 +136,115 @@ describe('computeStructurePlacements', () => {
 
   it('places nothing without a curve', () => {
     expect(computeStructurePlacements(null, [{ id: 'a06-finish-tower', progress: 0, kind: 'furniture' }])).toEqual([]);
+  });
+});
+
+
+describe('structures that span the water (review of #232)', () => {
+  // Every Tier L landmark is a bridge, and each is authored the way the Tier C
+  // bridges are: the span runs along the model's X. They were given the
+  // "everything else faces the water" quarter turn, which laid Ponte Isabella
+  // along the rowed line instead of across it.
+  it('orients a liveried landmark across the water, like the bridge it is', () => {
+    // Routed through landmarkStructures, because that is what decides the kind:
+    // Ponte Isabella is authored like the Tier C arch (span along X), so it has
+    // to be laid across the rowed line, not turned a quarter along it.
+    const route = [
+      { lat: 45.0447, lng: 7.6858 },
+      { lat: 45.0457, lng: 7.6868 },
+    ];
+    const requests = landmarkStructures(route);
+    const isabella = requests.find((r) => r.id === 'l-ponte-isabella');
+    expect(isabella).toBeDefined();
+
+    const [landmark] = computeStructurePlacements(curve, [{ ...isabella!, progress: 0.5 }]);
+    const [bridge] = computeStructurePlacements(curve, [
+      { id: 'c01-bridge-arch-masonry', progress: 0.5, kind: 'bridge' },
+    ]);
+
+    expect(landmark.rotationY).toBeCloseTo(bridge.rotationY, 6);
+  });
+
+  it('stands a non-spanning hero on the bank, facing the water', () => {
+    // The 'landmark' kind now means exactly this, so a lighthouse added to the
+    // table later does not inherit a bridge's place on the rowed line.
+    const [hero] = computeStructurePlacements(curve, [
+      { id: 'l-ponte-isabella', progress: 0.5, kind: 'landmark' },
+    ]);
+    const [bridge] = computeStructurePlacements(curve, [
+      { id: 'c01-bridge-arch-masonry', progress: 0.5, kind: 'bridge' },
+    ]);
+
+    expect(Math.abs(hero.rotationY - bridge.rotationY)).toBeCloseTo(Math.PI / 2, 6);
+    expect(Math.hypot(hero.position[0] - bridge.position[0], hero.position[2] - bridge.position[2]))
+      .toBeGreaterThan(1);
+  });
+
+  it('still turns bank furniture to face the water', () => {
+    const at = 0.5;
+    const [bridge] = computeStructurePlacements(curve, [
+      { id: 'c01-bridge-arch-masonry', progress: at, kind: 'bridge' },
+    ]);
+    const [furniture] = computeStructurePlacements(curve, [
+      { id: 'a06-finish-tower', progress: at, kind: 'furniture' },
+    ]);
+
+    expect(Math.abs(furniture.rotationY - bridge.rotationY)).toBeCloseTo(Math.PI / 2, 6);
+  });
+
+  it('asks for a spanning landmark as the bridge it is', () => {
+    // Whether a hero spans the water is a property of the structure, not
+    // something the renderer should infer from the tier it came from.
+    const route = [
+      { lat: 51.4739, lng: -0.2463 },
+      { lat: 51.4749, lng: -0.2453 },
+    ];
+
+    const [barnes] = landmarkStructures(route);
+
+    expect(LIVERIED_LANDMARKS.every((l) => typeof l.spansWater === 'boolean')).toBe(true);
+    expect(barnes.kind).toBe('bridge');
+  });
+});
+
+describe('structures sit on the ground (review of #232)', () => {
+  // Scatter in the same [0,0,0] group is lifted by getTerrainReliefForProgress;
+  // structures were pinned to y = 0, so bank furniture was buried or floating
+  // on any route with relief.
+  const hilly = buildTerrainProfile([0, 12, 30, 18, 4]);
+
+  it('lifts bank furniture onto the terrain', () => {
+    const [flat] = computeStructurePlacements(curve, [
+      { id: 'a06-finish-tower', progress: 0.5, kind: 'furniture' },
+    ]);
+    const [lifted] = computeStructurePlacements(
+      curve,
+      [{ id: 'a06-finish-tower', progress: 0.5, kind: 'furniture' }],
+      hilly,
+    );
+
+    expect(flat.position[1]).toBe(0);
+    expect(lifted.position[1]).toBeGreaterThan(0);
+  });
+
+  it('leaves structures on flat water at zero', () => {
+    const [p] = computeStructurePlacements(
+      curve,
+      [{ id: 'a06-finish-tower', progress: 0.5, kind: 'furniture' }],
+      buildTerrainProfile([]),
+    );
+
+    expect(p.position[1]).toBe(0);
+  });
+
+  it('keeps a bridge on the water line, whatever the banks do', () => {
+    // A bridge deck is placed relative to the water it spans, not the hillside.
+    const [p] = computeStructurePlacements(
+      curve,
+      [{ id: 'c01-bridge-arch-masonry', progress: 0.5, kind: 'bridge' }],
+      hilly,
+    );
+
+    expect(p.position[1]).toBe(0);
   });
 });
