@@ -234,3 +234,89 @@ describe('instance ceiling (#232 phase 3)', () => {
     expect(thinToCeiling(many)).toEqual(thinToCeiling(many));
   });
 });
+
+describe('each bank is placed once (review of #232)', () => {
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -200),
+    new THREE.Vector3(10, 0, -100),
+    new THREE.Vector3(-10, 0, 0),
+    new THREE.Vector3(10, 0, 100),
+    new THREE.Vector3(0, 0, 200),
+  ]);
+
+  const forSide = (side: 'left' | 'right') =>
+    computePlacements({ curve, resolvedByProfile: byProfile(), budget: 1, side });
+
+  it('gives the two banks different instances', () => {
+    // In curve mode the loop ran `for (const sign of [-1, 1])` and ignored the
+    // `side` it was given, so both <SceneryModels side=...> components computed
+    // the identical array. Every object was drawn twice at the same transform:
+    // double the draw calls, and z-fighting between the copies.
+    const left = forSide('left');
+    const right = forSide('right');
+
+    expect(left.length).toBeGreaterThan(0);
+    expect(JSON.stringify(left)).not.toEqual(JSON.stringify(right));
+  });
+
+  it('puts each side on its own bank', () => {
+    // The offset is applied along the curve's perpendicular, so "which bank"
+    // is the sign of the offset, not of the world x.
+    const centreAt = (t: number) => curve.getPointAt(Math.min(0.999, t));
+    const sideOf = (p: { position: [number, number, number]; progress: number }) => {
+      const c = centreAt(p.progress);
+      const tangent = curve.getTangentAt(Math.min(0.999, p.progress)).normalize();
+      const perp = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+      return Math.sign((p.position[0] - c.x) * perp.x + (p.position[2] - c.z) * perp.z);
+    };
+
+    expect(new Set(forSide('left').map(sideOf))).toEqual(new Set([-1]));
+    expect(new Set(forSide('right').map(sideOf))).toEqual(new Set([1]));
+  });
+
+  it('dresses both banks between them, as densely as before', () => {
+    // The fix must not halve the scene: the two calls together should still
+    // place what one call used to place for both banks.
+    const total = forSide('left').length + forSide('right').length;
+
+    expect(total).toBeGreaterThan(60);
+  });
+});
+
+describe('what actually bounds the cost of a bank (review of #232)', () => {
+  const longCurve = new THREE.CatmullRomCurve3(
+    Array.from({ length: 40 }, (_, i) => new THREE.Vector3((i % 2 ? 30 : -30), 0, -8000 + i * 400)),
+  );
+  const shortCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -200),
+    new THREE.Vector3(10, 0, 0),
+    new THREE.Vector3(0, 0, 200),
+  ]);
+
+  it('samples a long route no more densely than a short one', () => {
+    // MAX_INSTANCES_PER_SIDE was documented as the protection against cost
+    // scaling with route length. It is not: the band count does not depend on
+    // length, so the ceiling is never approached and never was.
+    const long = computePlacements({ curve: longCurve, resolvedByProfile: byProfile(), budget: 1, side: 'left' });
+    const short = computePlacements({ curve: shortCurve, resolvedByProfile: byProfile(), budget: 1, side: 'left' });
+
+    expect(long.length).toBe(short.length);
+    expect(long.length).toBeLessThan(MAX_INSTANCES_PER_SIDE);
+  });
+
+  it('keeps the ceiling working as a backstop if the band count is ever raised', () => {
+    const many: Placement[] = Array.from({ length: MAX_INSTANCES_PER_SIDE * 3 }, (_, i) => ({
+      id: 'e01-london-plane',
+      position: [0, 0, i],
+      rotationY: 0,
+      scale: 1,
+      progress: i / (MAX_INSTANCES_PER_SIDE * 3),
+    })) as Placement[];
+
+    const thinned = thinToCeiling(many);
+
+    expect(thinned).toHaveLength(MAX_INSTANCES_PER_SIDE);
+    // Thinned by stride, so the end of the route is still dressed.
+    expect(thinned[thinned.length - 1].progress).toBeGreaterThan(0.6);
+  });
+});

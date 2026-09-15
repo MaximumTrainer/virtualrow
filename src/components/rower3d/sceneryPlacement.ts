@@ -59,12 +59,22 @@ export interface Placement {
 /**
  * Most instances a single bank may contribute.
  *
- * A 20 km course samples far more points than a 2 km one, so without a ceiling
- * the cost of the kit scales with route length and the #224 budgets (p95 frame
- * 18 ms, 80 MB of geometry) are a matter of luck. Dressing density past this
- * point is not visible anyway: the scene only renders a window around the boat.
+ * The comment here used to say this stopped cost scaling with route length. It
+ * never did: the sample count is `Math.max(6, Math.round(22 * budget))`,
+ * independent of how long the route is, so a 20 km course is sampled at the
+ * same 23 bands as a 2 km one and simply dressed more thinly on the ground.
+ * What actually bounds a bank is that band count — a few hundred instances at
+ * the very most — and this ceiling has never been reached (review of #232).
+ *
+ * It is kept as a backstop, because the band count is the kind of number that
+ * gets raised, and the #224 budgets (p95 frame 18 ms, 80 MB of geometry) should
+ * not depend on nobody having done so. The name is accurate now that each call
+ * returns one bank rather than both.
  */
 export const MAX_INSTANCES_PER_SIDE = 900;
+
+/** Bands sampled along the route at full budget; the real bound on a bank. */
+export const MAX_SAMPLE_BANDS = 22;
 
 /**
  * Thin a set of placements to the ceiling by stride rather than truncation, so
@@ -124,6 +134,9 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
   const firstResolved = resolvedByProfile.values().next().value as ResolvedScenery | undefined;
   const fallback = resolvedByProfile.get('fallback') ?? firstResolved;
 
+  /** Same shape as `place`, and deliberately does nothing. */
+  const noPlace = (..._args: Parameters<typeof place>) => {};
+
   const place = (
     cat: Category, sign: number, t: number,
     px: number, pz: number, perpX: number, perpZ: number, py: number,
@@ -148,8 +161,9 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
     // Kept deliberately sparse: these GLBs are un-decimated and sit on top of an
     // already heavy scene, so over-placing them can exhaust the WebGL context.
     const terrain = buildTerrainProfile(enrichment?.elevations);
+    const wantSign = side === 'left' ? -1 : 1;
     const up = new THREE.Vector3(0, 1, 0);
-    const stepCount = Math.max(6, Math.round(22 * budget));
+    const stepCount = Math.max(6, Math.round(MAX_SAMPLE_BANDS * budget));
     let seed = 100;
     for (let i = 0; i <= stepCount; i++) {
       const t = i / stepCount;
@@ -162,17 +176,23 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
       const y = getTerrainReliefForProgress(terrain, t);
       const baseRot = Math.atan2(tangent.x, tangent.z);
       for (const sign of [-1, 1]) {
+        // Both signs are walked so the seed stream is unchanged and each bank
+        // keeps the exact dressing it had, but only the bank this call was
+        // asked for is emitted. The loop used to ignore `side` entirely, so the
+        // left and right components each returned both banks and every object
+        // was drawn twice at the same transform (review of #232).
+        const put = sign === wantSign ? place : noPlace;
         seed += 5;
         const cat = SCHEDULE[(i + (sign < 0 ? 0 : 4)) % SCHEDULE.length];
-        place(cat, sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved);
-        if (i % 3 === 0) { seed += 5; place('trees', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
-        if (i % 6 === 0) { seed += 5; place('surface', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
-        if (i % 8 === 0 && sign < 0) { seed += 5; place('landform', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
-        if (i % 12 === 0 && sign > 0) { seed += 5; place('backdrop', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
-        if (i % 5 === 0) { seed += 5; place('furniture', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        put(cat, sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved);
+        if (i % 3 === 0) { seed += 5; put('trees', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        if (i % 6 === 0) { seed += 5; put('surface', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        if (i % 8 === 0 && sign < 0) { seed += 5; put('landform', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        if (i % 12 === 0 && sign > 0) { seed += 5; put('backdrop', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        if (i % 5 === 0) { seed += 5; put('furniture', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         // Buildings only appear where the profile is built-up and the region has
         // a kit; pick() returns null otherwise, so wild stretches cost nothing.
-        if (i % 4 === 0) { seed += 5; place('buildings', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        if (i % 4 === 0) { seed += 5; put('buildings', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
       }
     }
   } else if (fallback) {
