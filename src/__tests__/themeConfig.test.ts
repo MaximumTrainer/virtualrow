@@ -25,13 +25,11 @@ describe('THEME_CONFIG', () => {
     for (const theme of ALL_THEMES) {
       const cfg = THEME_CONFIG[theme];
       expect(cfg).toHaveProperty('water');
-      expect(cfg).toHaveProperty('mist');
       expect(cfg).toHaveProperty('bank');
       expect(cfg).toHaveProperty('landscapeColors');
       expect(cfg).toHaveProperty('atmosphere');
       expect(cfg).toHaveProperty('sky');
       expect(cfg).toHaveProperty('clouds');
-      expect(cfg).toHaveProperty('fog');
       expect(cfg).toHaveProperty('lighting');
       expect(cfg).toHaveProperty('colorGrading');
       expect(cfg).toHaveProperty('trees');
@@ -66,18 +64,6 @@ describe('THEME_CONFIG', () => {
       expect(w.foamIntensity).toBeGreaterThanOrEqual(0);
       expect(w.foamIntensity).toBeLessThanOrEqual(1);
       expect(typeof w.underwaterFog).toBe('string');
-    }
-  });
-
-  it('mist configs have all required fields', () => {
-    for (const theme of ALL_THEMES) {
-      const m = THEME_CONFIG[theme].mist;
-      expect(typeof m.baseOpacity).toBe('number');
-      expect(typeof m.color1).toBe('string');
-      expect(typeof m.color2).toBe('string');
-      expect(typeof m.height1).toBe('number');
-      expect(typeof m.height2).toBe('number');
-      expect(typeof m.density).toBe('number');
     }
   });
 
@@ -156,15 +142,6 @@ describe('THEME_CONFIG', () => {
     }
   });
 
-  it('fog configs have color and positive density (#108)', () => {
-    for (const theme of ALL_THEMES) {
-      const fog = THEME_CONFIG[theme].fog;
-      expect(typeof fog.color).toBe('string');
-      expect(typeof fog.density).toBe('number');
-      expect(fog.density).toBeGreaterThan(0);
-    }
-  });
-
   it('lighting configs have all required fields with valid ranges (#108)', () => {
     for (const theme of ALL_THEMES) {
       const l = THEME_CONFIG[theme].lighting;
@@ -203,15 +180,6 @@ describe('THEME_CONFIG', () => {
       expect(cg.contrast).toBeGreaterThanOrEqual(-1);
       expect(cg.contrast).toBeLessThanOrEqual(1);
     }
-  });
-
-  it('dark themes have denser fog than bright themes', () => {
-    expect(THEME_CONFIG['dystopian-thames'].fog.density).toBeGreaterThan(
-      THEME_CONFIG['crystal-bled'].fog.density,
-    );
-    expect(THEME_CONFIG['gothic-venice'].fog.density).toBeGreaterThan(
-      THEME_CONFIG['willowbrook'].fog.density,
-    );
   });
 
   it('themes are visually distinct (water colors differ)', () => {
@@ -269,10 +237,6 @@ describe('getThemeConfig', () => {
 
   it('dystopian-thames has negative saturation (desaturated dystopia)', () => {
     expect(getThemeConfig('dystopian-thames').colorGrading.saturation).toBeLessThan(0);
-  });
-
-  it('dystopian-thames has dense mist', () => {
-    expect(getThemeConfig('dystopian-thames').mist.density).toBeGreaterThan(1);
   });
 
   it('gothic-venice has darker atmosphere than crystal-bled', () => {
