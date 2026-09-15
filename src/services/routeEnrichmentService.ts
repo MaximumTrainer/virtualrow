@@ -10,6 +10,8 @@ export const OPEN_TOPO_DATA_BATCH_LIMIT = 100;
 export const ROUTE_SEGMENT_LENGTH_METERS = 50;
 export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
+import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
+
 export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
 const ROUTE_ENRICHMENT_CACHE_PREFIX = 'virtualrow:route-enrichment:';
 const SCENE_SCALE = 0.1;
@@ -51,6 +53,8 @@ export interface RouteEnrichmentData {
   elevations: number[];
   segmentProfiles: RouteSegmentEnrichment[];
   waterBodyType: WaterBodyType;
+  /** Bridges over the route, in route order (#232). Absent on cached data written before it existed. */
+  crossings?: Crossing[];
   waterWidthMeters: number;
   waterColor: string;
   waveIntensity: number;
@@ -392,6 +396,8 @@ export const buildOverpassQuery = (coordinates: Coordinate[]) => {
   way["natural"](${bbox});
   way["waterway"](${bbox});
   way["building"](${bbox});
+  // Bridges over the route, for Tier C placement (#232).
+  way["bridge"](${bbox});
   way["leisure"](${bbox});
   relation["landuse"](${bbox});
   relation["natural"](${bbox});
@@ -931,6 +937,7 @@ export class RouteEnrichmentService {
           routeId: route.id,
           elevations,
           segmentProfiles,
+          crossings: findCrossings(route.coordinates, elements),
           waterBodyType: resolvedWaterBodyType,
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),

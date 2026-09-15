@@ -37,6 +37,14 @@ import {
 } from './sceneryAssets';
 import { trackWaterForProfile, type SceneryTrack } from './sceneryTrack';
 import type { SceneryRegion } from './sceneryRegion';
+import type { Coordinate } from '../../types/index';
+import {
+  courseStructures,
+  crossingStructures,
+  landmarkStructures,
+  computeStructurePlacements,
+  type StructureRequest,
+} from './sceneryStructures';
 import {
   budgetFor,
   distinctProfiles,
@@ -58,6 +66,8 @@ interface SceneryModelsProps {
   track?: SceneryTrack | null;
   /** Regional building kit for the route's geography (#232). */
   region?: SceneryRegion | null;
+  /** Route coordinates, for pinning liveried landmarks to their real water (#232). */
+  coordinates?: Coordinate[] | null;
 }
 
 /**
@@ -74,6 +84,7 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   curve = null,
   track = null,
   region = null,
+  coordinates = null,
 }) => {
   const waterType = enrichment?.waterBodyType ?? 'unknown';
 
@@ -90,12 +101,30 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     return map;
   }, [enrichment, waterType, track, region]);
 
+  // One-off structures: the bridges the route passes under, the furniture at
+  // each end, and any liveried landmark this water actually owns. Placed once
+  // per route rather than per bank, so only one side renders them (#232).
+  const structures = useMemo<StructureRequest[]>(
+    () =>
+      side === 'left'
+        ? [
+            ...crossingStructures(enrichment?.crossings),
+            ...courseStructures(),
+            ...landmarkStructures(coordinates),
+          ]
+        : [],
+    [enrichment?.crossings, coordinates, side],
+  );
+
   // Union of every GLB the route can show — loaded once, shared across instances.
   const paths = useMemo(() => {
     const all = new Set<string>();
     for (const r of resolvedByProfile.values()) collectSceneryPaths(r).forEach((p) => all.add(p));
+    // Structures are chosen per route, not per profile, so their models are not
+    // in any resolved set.
+    for (const s of structures) all.add(sceneryAssetPath(s.id));
     return Array.from(all);
-  }, [resolvedByProfile]);
+  }, [resolvedByProfile, structures]);
 
   const gltfs = useGLTF(paths) as unknown as Array<{ scene: THREE.Group }>;
   const sceneById = useMemo(() => {
@@ -115,16 +144,21 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     [curve, enrichment, resolvedByProfile, budget, side, track],
   );
 
+  const structurePlacements = useMemo<Placement[]>(
+    () => computeStructurePlacements(curve, structures),
+    [curve, structures],
+  );
+
   const instances = useMemo(
     () =>
-      placements
+      [...placements, ...structurePlacements]
         .map((p, i) => {
           const src = sceneById.get(p.id);
           if (!src) return null;
           return { key: `${i}-${p.id}`, obj: src.clone(true), p };
         })
         .filter((v): v is { key: string; obj: THREE.Group; p: Placement } => v !== null),
-    [placements, sceneById],
+    [placements, structurePlacements, sceneById],
   );
 
   // In curve mode, only render instances near the boat (cheap per-frame filter,
@@ -145,9 +179,6 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     </group>
   );
 };
-
-// Keep the unused import referenced for future direct-path use.
-void sceneryAssetPath;
 
 // Warm the cache for the common default so the first route does not pop in —
 // only when the kit is actually enabled, so it costs nothing when off.

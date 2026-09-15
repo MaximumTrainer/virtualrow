@@ -270,6 +270,12 @@ describe('route enrichment helpers', () => {
     expect(query).toContain('relation["building"]');
     expect(query).toContain('node["natural"]');
   });
+
+  it('asks for the bridges over the route, so Tier C can be placed (#232)', () => {
+    const query = buildOverpassQuery(routeFixture.coordinates);
+
+    expect(query).toContain('way["bridge"]');
+  });
 });
 
 describe('terrain relief (#202)', () => {
