@@ -74,10 +74,31 @@ describe('the rig matches how a single is set up', () => {
   it.each(ALL)('%s carries sculling blades, not sweep blades', (file) => {
     const blade = worldBounds(file, (name) => name === 'RightOar_Blade');
 
-    expect(blade?.z, 'blade length').toBeGreaterThanOrEqual(0.44);
-    expect(blade?.z, 'blade length').toBeLessThanOrEqual(0.48);
-    expect(blade?.y, 'blade width').toBeGreaterThanOrEqual(0.16);
-    expect(blade?.y, 'blade width').toBeLessThanOrEqual(0.2);
+    // Axes matter as much as sizes, and this test used to check the wrong ones:
+    // it read the blade's length along the boat rather than along the oar, so
+    // it passed a spoon lying fore-aft like a fin. World x runs across the beam,
+    // which is the oar's own direction while it sits square to the boat (#232).
+    expect(blade?.x, 'length, along the oar').toBeGreaterThanOrEqual(0.44);
+    expect(blade?.x, 'length, along the oar').toBeLessThanOrEqual(0.48);
+    expect(blade?.y, 'width, standing up').toBeGreaterThanOrEqual(0.16);
+    expect(blade?.y, 'width, standing up').toBeLessThanOrEqual(0.2);
+    expect(blade?.z, 'thickness, fore and aft').toBeLessThanOrEqual(0.08);
+  });
+
+  it.each(ALL)('%s squares its blades, since nothing feathers them', (file) => {
+    const blade = worldBounds(file, (name) => name === 'RightOar_Blade');
+
+    // The scene sweeps each oar about Y and never rolls it, so the blade holds
+    // whatever roll it was built with for the whole drive. Squared means the
+    // face stands up across the direction of travel: taller than it is thick.
+    expect(blade!.y).toBeGreaterThan(blade!.z * 2);
+  });
+
+  it.each(ALL)('%s puts the blade at the end of the oar, not past it', (file) => {
+    const blade = worldBounds(file, (name) => name === 'RightOar_Blade');
+    const oar = worldBounds(file, (name) => name.startsWith('RightOar'));
+
+    expect(blade!.max[0]).toBeCloseTo(oar!.max[0], 2);
   });
 });
 
