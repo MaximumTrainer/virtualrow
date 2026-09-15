@@ -87,9 +87,9 @@ const canvasSurface = (page: Page) =>
       chosenPowerPreference: window.__ROWER3D_CONTEXT_STATE?.powerPreference ?? null,
       liveAntialias: attributes?.antialias ?? null,
       quality: window.__ROWER3D_RENDER_STATS?.performanceMode ?? null,
-      maxDpr: (window.devicePixelRatio && canvas)
-        ? Math.round((canvas.width / canvas.getBoundingClientRect().width) * 100) / 100
-        : null,
+      // The app's decision, not the live canvas geometry: layout lags under
+      // load, and a ratio measured mid-resize is noise, not a fault.
+      maxDpr: window.__ROWER3D_CONTEXT_STATE?.maxDpr ?? null,
     };
   });
 

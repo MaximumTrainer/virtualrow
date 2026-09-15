@@ -104,11 +104,17 @@ describe('context state', () => {
   });
 
   it('records how the context was obtained', () => {
-    recordContextCreated({ powerPreference: 'default', antialias: true, fallbackReason: 'refused' });
+    recordContextCreated({
+      powerPreference: 'default',
+      antialias: true,
+      maxDpr: 1.5,
+      fallbackReason: 'refused',
+    });
 
     expect(readContextState()).toMatchObject({
       powerPreference: 'default',
       lost: false,
+      maxDpr: 1.5,
       fallbackReason: 'refused',
     });
   });

@@ -349,6 +349,7 @@ declare global {
     __ROWER3D_CONTEXT_STATE?: {
       powerPreference: string;
       antialias: boolean;
+      maxDpr?: number;
       lost: boolean;
       losses: number;
       lostReason?: string;

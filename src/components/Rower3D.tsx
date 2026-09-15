@@ -39,7 +39,7 @@ import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
-import { canvasSurfaceFor } from './rower3d/canvasSurface';
+import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
   selectGlOptions,
   browserContextAttempt,
@@ -842,7 +842,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
             
-            recordContextCreated(glSelection);
+            recordContextCreated({ ...glSelection, maxDpr: maxDpr(surface.dpr) });
 
             const canvas = gl.domElement;
             canvas.addEventListener('webglcontextlost', (ev) => {

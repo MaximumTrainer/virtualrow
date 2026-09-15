@@ -117,6 +117,8 @@ export const browserContextAttempt: ContextAttempt = (options) => {
 export interface ContextState {
   powerPreference: PowerPreference;
   antialias: boolean;
+  /** Largest device pixel ratio the surface will draw at. */
+  maxDpr?: number;
   /** True while the context is gone and the scene is not drawing. */
   lost: boolean;
   /** How many times it has been lost this session. */
@@ -130,6 +132,7 @@ let state: ContextState | null = null;
 export const recordContextCreated = (selection: {
   powerPreference: PowerPreference;
   antialias: boolean;
+  maxDpr?: number;
   fallbackReason?: string;
 }): void => {
   state = { ...selection, lost: false, losses: 0 };
