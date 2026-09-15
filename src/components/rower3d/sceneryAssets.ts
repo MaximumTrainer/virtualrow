@@ -16,6 +16,7 @@
 // data-only so it can be unit-tested and reused by any renderer.
 // ============================================================================
 
+import { assetUrl } from '../../utils/assetUrl';
 import type {
   SceneryProfile,
   WaterBodyType,
@@ -31,7 +32,7 @@ export type SceneryModelId = string;
  * scripts/build_scenery.py.
  */
 export const sceneryAssetPath = (id: SceneryModelId): string =>
-  `/assets/scenery/tier-${id[0]}/${id}.glb`;
+  assetUrl(`/assets/scenery/tier-${id[0]}/${id}.glb`);
 
 // ---------------------------------------------------------------------------
 // Tier F — generic biome kit, keyed to SceneryProfile (F1 bank edge, F2
