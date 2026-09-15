@@ -36,9 +36,22 @@ import {
 } from './rower3d/sceneTiming';
 import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
+import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
+import { resolveSceneQuality } from './rower3d/sceneQuality';
+import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
+import {
+  selectGlOptions,
+  browserContextAttempt,
+  probeRenderCapabilities,
+  recordContextCreated,
+  recordContextLost,
+  recordContextRestored,
+  scheduleContextRestore,
+  readContextState,
+} from './rower3d/glContext';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
-import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
+import { PhotorealisticWater, WaterReflectionPlane, CurvedWaterChannel } from './rower3d/waterComponents';
 import { PineTrees, GroundCover } from './rower3d/vegetationComponents';
 import { SceneryModels } from './rower3d/sceneryModels';
 import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
@@ -144,7 +157,7 @@ const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode
   }, [gl, requested]);
 };
 
-const RowerScene: React.FC<Rower3DProps> = ({ 
+const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({ 
   route, 
   enrichment,
   paceSPer500, 
@@ -154,12 +167,15 @@ const RowerScene: React.FC<Rower3DProps> = ({
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
   crew = 'male',
+  gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
   const performanceMode = useHardwarePerformanceMode(requestedPerformanceMode);
   // useState, not useRef: the recorder is a stable instance that the render
   // pass legitimately reads, and a ref may not be touched during render.
   const [frameStats] = useState(createFrameStatsRecorder);
+
+  useEffect(() => clearRenderStats, []);
 
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   // A route that states its own progression dresses from that, not from a
@@ -294,8 +310,19 @@ const RowerScene: React.FC<Rower3DProps> = ({
       boatPositionRef.current.z
     );
     
+    // Before the composer renders: the counters still describe the frame just
+    // drawn, and after it they describe its last fullscreen pass (#232).
+    recordRenderStats(gl, {
+      backend: gpuBackend,
+      performanceMode,
+      fps: frameStats.read()?.fps,
+      p95Ms: frameStats.read()?.p95Ms,
+    });
+
     try {
       if (IS_TEST_MODE) {
+        window.__ROWER3D_RENDER_STATS = readRenderStats() ?? undefined;
+        window.__ROWER3D_CONTEXT_STATE = readContextState() ?? undefined;
         window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
@@ -396,7 +423,6 @@ const RowerScene: React.FC<Rower3DProps> = ({
 
   return (
     <AnimationProvider>
-      <fogExp2 attach="fog" args={[themeConfig.fog.color, themeConfig.fog.density]} />
       
       <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
       
@@ -463,8 +489,6 @@ const RowerScene: React.FC<Rower3DProps> = ({
       {routeCurve && (
         <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
       )}
-      
-      <MistLayer boatZ={boatZ} theme={routeTheme} />
       
       {!routeCurve && (
         <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
@@ -692,12 +716,59 @@ class GPUErrorBoundary extends React.Component<
   }
 }
 
+/**
+ * Put words in the fallback marker.
+ *
+ * The marker is an empty div, and the context-lost handler only set it to
+ * `display: block` — so a lost context showed an invisible box over the
+ * container's background, which is exactly what a rower reported as "the app
+ * does not display the rowing screen" (#232).
+ */
+const showContextMessage = (message: string | null): void => {
+  const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
+  if (!marker) return;
+  marker.textContent = message ?? '';
+  marker.style.display = message ? 'flex' : 'none';
+  marker.style.alignItems = 'center';
+  marker.style.justifyContent = 'center';
+  marker.style.height = '100%';
+  marker.style.color = '#c8d4dc';
+  marker.style.fontSize = '13px';
+};
+
 // ============================================================================
 // MAIN COMPONENT - Canvas wrapper with GPU detection
 // ============================================================================
 const Rower3D: React.FC<Rower3DProps> = (props) => {
-  const isHighQuality = props.performanceMode !== 'low';
   const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
+
+  // Decide the quality before building the canvas, not after. 'auto' used to
+  // count as high here — shadows, MSAA, dpr 2, discrete adapter — while the
+  // scene inside resolved the same 'auto' against the real GPU and often chose
+  // low. Integrated hardware paid for a surface it could not drive (#232).
+  const capabilities = useMemo(() => probeRenderCapabilities(), []);
+  const quality = useMemo(
+    () =>
+      resolveSceneQuality({
+        requested: props.performanceMode ?? 'auto',
+        capabilities,
+        explicit: hasExplicitPerformanceMode(),
+      }),
+    [props.performanceMode, capabilities],
+  );
+  // One table decides every surface setting for the tier, so a tier cannot
+  // quietly acquire one it has no business asking for (#232).
+  const surface = useMemo(() => canvasSurfaceFor(quality), [quality]);
+
+  // Probed once, before the canvas is built: a configuration the driver will
+  // refuse leaves R3F with nothing to draw into and no error to report (#232).
+  const glSelection = useMemo(
+    () =>
+      selectGlOptions(browserContextAttempt, {
+        preferred: { powerPreference: surface.powerPreference, antialias: surface.antialias },
+      }),
+    [surface],
+  );
   
   useEffect(() => {
     let mounted = true;
@@ -725,7 +796,9 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
     return () => { mounted = false; };
   }, []);
   
-  if (gpuBackend === 'none') {
+  // No configuration the driver would grant: say so, rather than mounting a
+  // canvas that can never draw and leaving the rower with a blank box (#232).
+  if (gpuBackend === 'none' || !glSelection.usable) {
     return (
       <div className="rower3d-canvas-container">
         <div className="rower3d-fallback-marker" data-loaded="true" style={{
@@ -735,7 +808,11 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           height: '100%',
           color: '#888'
         }}>
-          3D view unavailable - GPU rendering not supported
+          {glSelection.usable
+            ? '3D view unavailable - GPU rendering not supported'
+            : `3D view unavailable - the graphics driver refused a context${
+                glSelection.fallbackReason ? ` (${glSelection.fallbackReason})` : ''
+              }`}
         </div>
       </div>
     );
@@ -748,12 +825,12 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       <GPUErrorBoundary>
         <Canvas
           camera={{ position: [0, 2.5, 6], fov: 60 }}
-          shadows={isHighQuality}
-          dpr={isHighQuality ? [1, 2] : 1}
+          shadows={surface.shadows}
+          dpr={surface.dpr}
           gl={{
-            antialias: isHighQuality,
+            antialias: glSelection.antialias,
             alpha: true,
-            powerPreference: isHighQuality ? 'high-performance' : 'low-power',
+            powerPreference: glSelection.powerPreference,
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
             toneMapping: THREE.ACESFilmicToneMapping,
@@ -768,26 +845,38 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
             
+            recordContextCreated({ ...glSelection, maxDpr: maxDpr(surface.dpr) });
+
             const canvas = gl.domElement;
             canvas.addEventListener('webglcontextlost', (ev) => {
               try {
+                // preventDefault is what makes the context restorable at all;
+                // asking for the restore is the half that was missing, and
+                // without it the scene stopped for good (#232).
                 ev.preventDefault?.();
-                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-                if (marker) marker.style.display = 'block';
+                const reason = (ev as Event & { statusMessage?: string }).statusMessage;
+                recordContextLost(reason);
+                showContextMessage('The 3D view lost the graphics context — restoring…');
                 window.__ROWER3D_WEBGL_LOST = true;
+                // Deferred, and retried: the spec lets the browser ignore a
+                // restore asked for from inside this handler.
+                scheduleContextRestore(
+                  () => gl.forceContextRestore?.(),
+                  () => window.__ROWER3D_WEBGL_LOST === true,
+                );
               } catch { /* intentional */ }
             }, false);
             canvas.addEventListener('webglcontextrestored', () => {
               try {
-                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-                if (marker) marker.style.display = 'none';
+                recordContextRestored();
+                showContextMessage(null);
                 window.__ROWER3D_WEBGL_LOST = false;
               } catch { /* intentional */ }
             }, false);
           }}
         >
           <CameraAspectFix />
-          <RowerScene {...props} />
+          <RowerScene {...props} performanceMode={quality} gpuBackend={gpuBackend} />
         </Canvas>
       </GPUErrorBoundary>
     </div>

@@ -17,7 +17,7 @@ import { useProgressiveChunks } from '../../hooks/useProgressiveChunks';
 //
 // The pieces the boat starts on are built before the first frame; the rest
 // arrive during idle time. Each frame, pieces the camera cannot see through
-// the fog are switched off, so a 20 km course costs the same draw calls as a
+// view distance are switched off, so a 20 km course costs the same draw calls as a
 // 2 km one.
 // ============================================================================
 
