@@ -59,7 +59,8 @@ import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { resolveRegion } from './rower3d/sceneryRegion';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
 import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './rower3d/bankComponents';
-import { RowingScull, BoatKinematicController } from './rower3d/boatComponents';
+import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
+import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
 import { CrystalBledLandscape } from './rower3d/themes/CrystalBledScene';
 import { GothicVeniceLandscape } from './rower3d/themes/GothicVeniceScene';
@@ -181,6 +182,8 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   // A route that states its own progression dresses from that, not from a
   // land-use query over its coordinates (#232).
+  // Only the crew in the boat is worth downloading.
+  useEffect(() => preloadCrew(crew), [crew]);
   const sceneryTrack = useMemo(() => getRouteSceneryTrack(route.id), [route.id]);
   // Which regional building kit dresses the banks, from the route's own
   // coordinates — no extra network call (#232).
@@ -537,8 +540,12 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         </group>
       ) : (
         <PhysicsErrorBoundary fallback={
+          // Physics failing is no reason to lose the boat: keep the GLB scull,
+          // with the procedural one covering the load (issue #232).
           <group ref={boatGroupRef}>
-            <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
+            <Suspense fallback={<RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />}>
+              <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} />
+            </Suspense>
           </group>
         }>
           <Physics gravity={[0, -9.81, 0]}>

@@ -15,12 +15,20 @@ export const CREW_URL: Record<Crew, string> = {
 };
 
 /**
- * Resolve which crew model to show from an athlete's gender.
- * Defaults to `male` when gender is unknown (guest sessions, older profiles),
- * matching the previous single-model behaviour.
+ * Resolve which crew model to show.
+ *
+ * A stated preference wins: a guest, a demo row, or an athlete whose profile
+ * has no `sex` field should not be given a rower by default with no way to
+ * change it (issue #232). Without a preference the profile decides, and with
+ * neither the model falls back to `male` as it always has.
  */
-export const resolveCrew = (gender?: 'male' | 'female' | null): Crew =>
-  gender === 'female' ? 'female' : 'male';
+export const resolveCrew = (
+  gender?: 'male' | 'female' | null,
+  preference: 'auto' | Crew = 'auto',
+): Crew => {
+  if (preference !== 'auto') return preference;
+  return gender === 'female' ? 'female' : 'male';
+};
 
 /** The GLB URL for an athlete's gender. */
 export const crewModelUrl = (gender?: 'male' | 'female' | null): string =>

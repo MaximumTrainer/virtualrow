@@ -32,6 +32,8 @@ import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { resolvePerformanceMode } from './components/rower3d/constants';
 import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
+import { CrewPicker } from './components/CrewPicker';
+import { useCrewPreference } from './hooks/useCrewPreference';
 import { useRenderStats } from './hooks/useRenderStats';
 import { useStructuredWorkout } from './hooks/useStructuredWorkout';
 import { WorkoutLibrary } from './components/WorkoutLibrary';
@@ -124,6 +126,7 @@ function App() {
   // The rower's own call on graphics quality, overruling hardware detection
   // when they know better than the heuristic does (#224).
   const graphics = useGraphicsQuality();
+  const crew = useCrewPreference();
 
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -1023,6 +1026,11 @@ function App() {
                     quality={graphics.quality}
                     onChange={graphics.setQuality}
                   />
+
+                  <CrewPicker
+                    preference={crew.preference}
+                    onChange={crew.setPreference}
+                  />
                 </div>
               </div>
             </div>
@@ -1254,7 +1262,7 @@ function App() {
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
                       intensityFactor={structuredWorkout.speedFactor}
                       debugMode={debugMode}
-                      crew={resolveCrew(user?.gender)}
+                      crew={resolveCrew(user?.gender, crew.preference)}
                     />
                   </Suspense>
 
