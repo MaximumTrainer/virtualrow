@@ -57,12 +57,19 @@ export const chunkSegmentCount = (
 ): number => Math.max(1, Math.round(routeSegments * (to - from)));
 
 /**
- * Scene units past which a strip chunk is lost in fog.
+ * Scene units past which a strip chunk stops being drawn.
  *
- * The thinnest fog any theme uses is `fogExp2` at density 0.0025, which leaves
- * about a tenth of a surface visible at 700 units; the water is near-horizontal
- * and near-edge-on by then. Real-world that is 7 km of route at
- * {@link SCENE_SCALE}, so nothing shorter than a head race culls at all.
+ * The figure was chosen when the scene had fog: `fogExp2` at density 0.0025
+ * left about a tenth of a surface visible at 700 units, so the cut was hidden.
+ * The fog is gone, and this distance is now justified by geometry alone — the
+ * water is near-horizontal and near-edge-on by 700 units, and that is 7 km of
+ * route at {@link SCENE_SCALE}, so nothing shorter than a head race culls at
+ * all.
+ *
+ * On a course long enough to reach it, the strip now ends without anything
+ * softening the edge. The horizon silhouette is 300 units wide against a 60°
+ * field of view, so it covers most of the view ahead but not its margins
+ * (issue #232).
  */
 export const CHUNK_VIEW_DISTANCE_SCENE_UNITS = 700;
 

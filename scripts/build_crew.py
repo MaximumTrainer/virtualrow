@@ -55,6 +55,24 @@ SUIT="#1E3A5F"; STRIPE="#F2F2F0"; SKIN="#C9A184"; HAIR="#2A2320"
 
 OARLOCK = (0.30, 0.15, 0.50)   # pivot offset from hull centre (right side; mirror X for left)
 
+# --- sculling geometry, from the real thing (issue #232) ---
+# A single scull is rigged to a span of 158-162 cm between the pin centres;
+# 160 cm is the common setting, so each gate sits 80 cm off the centreline.
+# The model had them at 85 cm, a 170 cm span, which is wider than the rig is
+# ever set.
+GATE_OFFSET = 0.80
+# A sculling oar measures 284-290 cm overall with the inboard set at 87-89 cm,
+# leaving about 198 cm outboard of the pin. The model's inboard was right at
+# 88 cm, but its outboard reached 257 cm — a 345 cm oar, 20% longer than any
+# scull is rowed with, and the blades swept correspondingly wide.
+OAR_INBOARD = 0.88
+OAR_OUTBOARD = 1.98
+# Cleaver blades for sculling are about 46 cm long and 17-18 cm across; 25 cm
+# is a sweep blade, which is a different oar entirely.
+BLADE_LENGTH = 0.46
+BLADE_WIDTH = 0.18
+BLADE_THICKNESS = 0.05
+
 
 def oar_assembly(name, sign):
     """One sculling oar in its own local frame; pivot (gate) at the origin.
@@ -62,10 +80,19 @@ def oar_assembly(name, sign):
     the scene rotates it about Y."""
     a = cq.Assembly(name=name)
     # loom: handle inboard (-X) to blade outboard (+X), through the gate at x=0
-    shaft = strut((sign*-0.88, 0, 0), (sign*2.30, 0, 0), 0.018)
+    shaft_end = OAR_OUTBOARD - BLADE_LENGTH * 0.55   # the loom runs into the blade throat
+    shaft = strut((sign*-OAR_INBOARD, 0, 0), (sign*shaft_end, 0, 0), 0.018)
     a.add(shaft, name=f"{name}_Shaft", color=col(OAR_SHAFT))
-    # spoon/hatchet blade at the outboard end
-    blade = box(0.05, 0.25, 0.46, (sign*2.55, 0, 0))
+    # Spoon, squared — the working position, and the only one this model can
+    # hold: the scene sweeps each oar about Y and never rolls it, so whatever
+    # the blade is built at is what a rower sees through the whole drive.
+    #
+    # Length runs along the oar (X), width is the vertical measure (Y), and the
+    # spoon is thin fore-aft (Z). These arrived as (thickness, width, length),
+    # which gave a blade 5 cm along the oar and 46 cm fore-aft: a fin lying
+    # along the boat, which is what read as the wrong angle (#232).
+    blade = box(BLADE_LENGTH, BLADE_WIDTH, BLADE_THICKNESS,
+                (sign*(OAR_OUTBOARD - BLADE_LENGTH / 2), 0, 0))
     a.add(blade, name=f"{name}_Blade", color=col(OAR_BLADE))
     # collar/button at the gate
     a.add(cyl(0.028, 0.04, (sign*-0.02, 0, -0.02)), name=f"{name}_Collar", color=col(GATE))
@@ -136,18 +163,18 @@ def scull_hull():
     seat.add(box(0.30, 0.02, 0.02, (0, 0.15, 0.12)), name="Seat_RailF", color=col(RAIL))
     seat.add(box(0.30, 0.02, 0.02, (0, 0.15, -0.12)), name="Seat_RailB", color=col(RAIL))
     a.add(seat)
-    # riggers: from the hull side out to the gate at ±0.85 m
+    # riggers: from the hull side out to the gate, which is where the oar pivots
     ox, oy, oz = OARLOCK
     for side, s in (("Left", -1), ("Right", 1)):
         rig = cq.Assembly(name=f"{side}Rigger")
-        rig.add(strut((s*0.13, 0.08, oz), (s*0.85, oy, oz), 0.02), name=f"{side}Rig_Stay1", color=col(RAIL))
-        rig.add(strut((s*0.13, 0.14, oz-0.22), (s*0.85, oy, oz), 0.02), name=f"{side}Rig_Stay2", color=col(RAIL))
-        rig.add(cyl(0.03, 0.10, (s*0.85, oy-0.05, oz)), name=f"{side}Gate", color=col(GATE))
+        rig.add(strut((s*0.13, 0.08, oz), (s*GATE_OFFSET, oy, oz), 0.02), name=f"{side}Rig_Stay1", color=col(RAIL))
+        rig.add(strut((s*0.13, 0.14, oz-0.22), (s*GATE_OFFSET, oy, oz), 0.02), name=f"{side}Rig_Stay2", color=col(RAIL))
+        rig.add(cyl(0.03, 0.10, (s*GATE_OFFSET, oy-0.05, oz)), name=f"{side}Gate", color=col(GATE))
         a.add(rig)
     # oars, each placed at its gate
     for side, s in (("Left", -1), ("Right", 1)):
         oar = oar_assembly(f"{side}Oar", s)
-        oar.loc = cq.Location(cq.Vector(s*0.85, oy, oz))
+        oar.loc = cq.Location(cq.Vector(s*GATE_OFFSET, oy, oz))
         a.add(oar)
     return a
 
