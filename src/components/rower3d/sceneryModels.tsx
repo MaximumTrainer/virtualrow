@@ -23,6 +23,7 @@ import { useGLTF } from '@react-three/drei';
 import type { RouteTheme } from './themeConfig';
 import type { PerformanceMode } from './constants';
 import {
+  buildTerrainProfile,
   type RouteEnrichmentData,
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
@@ -144,9 +145,16 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     [curve, enrichment, resolvedByProfile, budget, side, track],
   );
 
+  // Same terrain profile the scatter is lifted by, so bank furniture stands on
+  // the ground instead of inside it (review of #232).
+  const structureTerrain = useMemo(
+    () => buildTerrainProfile(enrichment?.elevations),
+    [enrichment?.elevations],
+  );
+
   const structurePlacements = useMemo<Placement[]>(
-    () => computeStructurePlacements(curve, structures),
-    [curve, structures],
+    () => computeStructurePlacements(curve, structures, structureTerrain),
+    [curve, structures, structureTerrain],
   );
 
   const instances = useMemo(
