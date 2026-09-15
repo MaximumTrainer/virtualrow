@@ -38,6 +38,15 @@ import {
 import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
+import {
+  selectGlOptions,
+  browserContextAttempt,
+  recordContextCreated,
+  recordContextLost,
+  recordContextRestored,
+  scheduleContextRestore,
+  readContextState,
+} from './rower3d/glContext';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
 import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
@@ -306,6 +315,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
     try {
       if (IS_TEST_MODE) {
         window.__ROWER3D_RENDER_STATS = readRenderStats() ?? undefined;
+        window.__ROWER3D_CONTEXT_STATE = readContextState() ?? undefined;
         window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
@@ -700,12 +710,38 @@ class GPUErrorBoundary extends React.Component<
   }
 }
 
+/**
+ * Put words in the fallback marker.
+ *
+ * The marker is an empty div, and the context-lost handler only set it to
+ * `display: block` — so a lost context showed an invisible box over the
+ * container's background, which is exactly what a rower reported as "the app
+ * does not display the rowing screen" (#232).
+ */
+const showContextMessage = (message: string | null): void => {
+  const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
+  if (!marker) return;
+  marker.textContent = message ?? '';
+  marker.style.display = message ? 'flex' : 'none';
+  marker.style.alignItems = 'center';
+  marker.style.justifyContent = 'center';
+  marker.style.height = '100%';
+  marker.style.color = '#c8d4dc';
+  marker.style.fontSize = '13px';
+};
+
 // ============================================================================
 // MAIN COMPONENT - Canvas wrapper with GPU detection
 // ============================================================================
 const Rower3D: React.FC<Rower3DProps> = (props) => {
   const isHighQuality = props.performanceMode !== 'low';
   const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
+  // Probed once, before the canvas is built: a configuration the driver will
+  // refuse leaves R3F with nothing to draw into and no error to report (#232).
+  const glSelection = useMemo(
+    () => selectGlOptions(browserContextAttempt, { preferHighPerformance: isHighQuality }),
+    [isHighQuality],
+  );
   
   useEffect(() => {
     let mounted = true;
@@ -733,7 +769,9 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
     return () => { mounted = false; };
   }, []);
   
-  if (gpuBackend === 'none') {
+  // No configuration the driver would grant: say so, rather than mounting a
+  // canvas that can never draw and leaving the rower with a blank box (#232).
+  if (gpuBackend === 'none' || !glSelection.usable) {
     return (
       <div className="rower3d-canvas-container">
         <div className="rower3d-fallback-marker" data-loaded="true" style={{
@@ -743,7 +781,11 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           height: '100%',
           color: '#888'
         }}>
-          3D view unavailable - GPU rendering not supported
+          {glSelection.usable
+            ? '3D view unavailable - GPU rendering not supported'
+            : `3D view unavailable - the graphics driver refused a context${
+                glSelection.fallbackReason ? ` (${glSelection.fallbackReason})` : ''
+              }`}
         </div>
       </div>
     );
@@ -759,9 +801,9 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           shadows={isHighQuality}
           dpr={isHighQuality ? [1, 2] : 1}
           gl={{
-            antialias: isHighQuality,
+            antialias: glSelection.antialias,
             alpha: true,
-            powerPreference: isHighQuality ? 'high-performance' : 'low-power',
+            powerPreference: glSelection.powerPreference,
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
             toneMapping: THREE.ACESFilmicToneMapping,
@@ -776,19 +818,31 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
             
+            recordContextCreated(glSelection);
+
             const canvas = gl.domElement;
             canvas.addEventListener('webglcontextlost', (ev) => {
               try {
+                // preventDefault is what makes the context restorable at all;
+                // asking for the restore is the half that was missing, and
+                // without it the scene stopped for good (#232).
                 ev.preventDefault?.();
-                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-                if (marker) marker.style.display = 'block';
+                const reason = (ev as Event & { statusMessage?: string }).statusMessage;
+                recordContextLost(reason);
+                showContextMessage('The 3D view lost the graphics context — restoring…');
                 window.__ROWER3D_WEBGL_LOST = true;
+                // Deferred, and retried: the spec lets the browser ignore a
+                // restore asked for from inside this handler.
+                scheduleContextRestore(
+                  () => gl.forceContextRestore?.(),
+                  () => window.__ROWER3D_WEBGL_LOST === true,
+                );
               } catch { /* intentional */ }
             }, false);
             canvas.addEventListener('webglcontextrestored', () => {
               try {
-                const marker = document.querySelector('.rower3d-fallback-marker') as HTMLElement | null;
-                if (marker) marker.style.display = 'none';
+                recordContextRestored();
+                showContextMessage(null);
                 window.__ROWER3D_WEBGL_LOST = false;
               } catch { /* intentional */ }
             }, false);
