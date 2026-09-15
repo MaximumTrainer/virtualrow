@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { afterEach } from 'vitest';
 import {
@@ -135,6 +137,27 @@ describe('isGlbSceneryEnabled', () => {
     expect(isGlbSceneryEnabled()).toBe(false);
   });
 
+  it('is off under automation that never loaded the BLE mock', () => {
+    // __PLAYWRIGHT_TESTING is set by mock-bluetooth.js alone, so specs that
+    // drive the real signed-out UI — signed-out-test-drive among them — were
+    // treated as a rower and paid for the whole kit while asserting no
+    // pageerror. Automation is a property of the browser, not of which
+    // fixture a spec happened to load (review of #232).
+    const nav = window.navigator as unknown as { webdriver?: boolean };
+    const had = Object.prototype.hasOwnProperty.call(nav, 'webdriver');
+    Object.defineProperty(nav, 'webdriver', { value: true, configurable: true });
+    try {
+      expect(isGlbSceneryEnabled()).toBe(false);
+
+      // ...and such a spec can still opt in explicitly.
+      w.__VIRTUALROW_SCENERY_MODELS = true;
+      expect(isGlbSceneryEnabled()).toBe(true);
+    } finally {
+      if (had) Object.defineProperty(nav, 'webdriver', { value: false, configurable: true });
+      else delete (nav as { webdriver?: boolean }).webdriver;
+    }
+  });
+
   it('is off under automation unless a spec asks for it, so suites stay fast', () => {
     const win = window as unknown as { __PLAYWRIGHT_TESTING?: boolean };
     win.__PLAYWRIGHT_TESTING = true;
@@ -153,5 +176,22 @@ describe('collectSceneryPaths', () => {
     const paths = collectSceneryPaths(resolveSceneryModels('farmland', 'canal', ['oak']));
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths.every((p) => p.startsWith('/assets/scenery/'))).toBe(true);
+  });
+});
+
+describe('scenery models are fetched for the route, not on import', () => {
+  it('does not preload a fixed model set when the module loads', () => {
+    // A module-scope useGLTF.preload of the fallback/unknown set was harmless
+    // while the kit was opt-in and the branch was dead. Turning the kit on by
+    // default made it fetch ~18 GLBs on every session, most of which the
+    // Willowbrook track's own profiles never use. The component's
+    // useGLTF(paths) already loads exactly the set the route needs, so there
+    // is nothing left for a preload to warm (review of #232).
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'src/components/rower3d/sceneryModels.tsx'),
+      'utf-8',
+    );
+
+    expect(source).not.toContain('useGLTF.preload');
   });
 });

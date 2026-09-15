@@ -14,7 +14,8 @@ Read [agents.md](agents.md) for the full architecture description and implementa
 npm run dev              # Start dev server (Vite)
 npm run build            # Production build
 npm run lint             # ESLint (flat config, zero warnings policy)
-npx tsc --noEmit         # Type-check app
+npx tsc --noEmit -p tsconfig.app.json  # Type-check app (bare `tsc --noEmit` checks nothing:
+                         #   the root tsconfig is solution-style, files: [])
 npx tsc -p tsconfig.playwright.json --noEmit  # Type-check E2E suite
 npx vitest run           # Unit tests (945 tests, jsdom)
 npx vitest run --coverage # Unit tests with v8 coverage

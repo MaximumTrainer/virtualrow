@@ -181,3 +181,36 @@ export const computeStructurePlacements = (
     };
   });
 };
+
+export interface RouteStructuresInput {
+  side: 'left' | 'right';
+  /**
+   * Whether the scene has a route curve. Without one there is nowhere to put a
+   * structure, and asking for them anyway put their GLBs in the component's
+   * useGLTF list — so a straight-mode route downloaded and suspended on eight
+   * models, two of them Tier B, to render none of them (review of #232).
+   */
+  hasCurve: boolean;
+  coordinates?: Coordinate[] | null;
+  crossings?: Crossing[] | null;
+}
+
+/**
+ * Every one-off structure this route carries: the bridges it passes under, the
+ * furniture at each end, and any liveried landmark this water owns.
+ *
+ * Placed once per route rather than per bank, so only one side asks for them.
+ */
+export const routeStructures = ({
+  side,
+  hasCurve,
+  coordinates,
+  crossings,
+}: RouteStructuresInput): StructureRequest[] => {
+  if (side !== 'left' || !hasCurve) return [];
+  return [
+    ...crossingStructures(crossings),
+    ...courseStructures(),
+    ...landmarkStructures(coordinates),
+  ];
+};
