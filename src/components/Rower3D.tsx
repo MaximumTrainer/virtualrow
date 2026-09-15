@@ -38,6 +38,7 @@ import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
+import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
   selectGlOptions,
@@ -539,15 +540,24 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
           <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
         </group>
       ) : (
-        <PhysicsErrorBoundary fallback={
-          // Physics failing is no reason to lose the boat: keep the GLB scull,
-          // with the procedural one covering the load (issue #232).
-          <group ref={boatGroupRef}>
-            <Suspense fallback={<RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />}>
-              <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} />
-            </Suspense>
-          </group>
-        }>
+        <SceneErrorBoundary
+          fallback={
+            // Physics failing is no reason to lose the boat: keep the GLB scull,
+            // with the procedural one covering the load (issue #232).
+            <group ref={boatGroupRef}>
+              <Suspense fallback={<RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />}>
+                <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} />
+              </Suspense>
+            </group>
+          }
+          bare={
+            // Loads nothing, so a rejected crew GLB cannot take this rung down
+            // the way it took the rich fallback down (review of #232).
+            <group ref={boatGroupRef}>
+              <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
+            </group>
+          }
+        >
           <Physics gravity={[0, -9.81, 0]}>
             <BoatKinematicController
               positionRef={boatPositionRef}
@@ -557,7 +567,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
               crew={crew}
             />
           </Physics>
-        </PhysicsErrorBoundary>
+        </SceneErrorBoundary>
       )}
 
       {!IS_TEST_MODE && (
@@ -618,33 +628,6 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
     </AnimationProvider>
   );
 };
-
-// ============================================================================
-// PHYSICS ERROR BOUNDARY — isolates Rapier WASM failures so they don't tear
-// down the whole Canvas. Falls back to an imperative group (same as Playwright mode).
-// ============================================================================
-class PhysicsErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.warn('PhysicsErrorBoundary: Rapier physics unavailable, using fallback', error, info);
-  }
-
-  render() {
-    if (this.state.hasError) return this.props.fallback;
-    return this.props.children;
-  }
-}
 
 // ============================================================================
 // GPU ERROR BOUNDARY
