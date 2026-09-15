@@ -12,7 +12,13 @@ import numpy as np
 OUTPUT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("./output")
 ONLY = set(sys.argv[2:]) if len(sys.argv) > 2 else None
 RENDERS_DIR = OUTPUT_DIR / "renders"
-for d in (OUTPUT_DIR, RENDERS_DIR):
+
+# STEP files are CAD provenance, not web assets: vite copies public/ into dist
+# verbatim, so a .step written beside the .glb is shipped to every browser that
+# cannot read it. Keep the sources outside the served tree (issue #232).
+CAD_OUTPUT_DIR = Path(os.environ.get("SCENERY_CAD_DIR", "./assets-src/scenery"))
+
+for d in (OUTPUT_DIR, RENDERS_DIR, CAD_OUTPUT_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 
@@ -145,9 +151,11 @@ def render_png(parts, name, dims_label=""):
 def export_all(parts, name, tier):
     tier_dir = OUTPUT_DIR / f"tier-{tier}"
     tier_dir.mkdir(parents=True, exist_ok=True)
+    cad_dir = CAD_OUTPUT_DIR / f"tier-{tier}"
+    cad_dir.mkdir(parents=True, exist_ok=True)
     a = build_assembly(parts)
     glb = tier_dir / f"{name}.glb"
-    step = tier_dir / f"{name}.step"
+    step = cad_dir / f"{name}.step"
     a.export(str(glb))
     a.export(str(step))
     print(f"  GLB:  {glb}")

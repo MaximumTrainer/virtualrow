@@ -1,6 +1,5 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { Physics } from '@react-three/rapier';
 import type { WaterRoute } from '../types/index';
@@ -67,8 +66,9 @@ import { DystopianThamesLandscape } from './rower3d/themes/DystopianThamesScene'
 import { SciFiBostonLandscape } from './rower3d/themes/SciFiBostonScene';
 import './Rower3D.css';
 
-// Preload the scull GLB at module load time so the asset is cached before first render
-useGLTF.preload('/models/scull.glb');
+// The crewed sculls are preloaded in boatComponents, beside the component that
+// draws them. The old uncrewed /models/scull.glb is no longer rendered, so
+// preloading it only cost a request (issue #232).
 
 // Detect route theme from route name and tags
 const detectRouteTheme = (route: WaterRoute): RouteTheme => {
