@@ -272,6 +272,17 @@ export const resolveSceneryModels = (
 };
 
 /**
+ * Whether a browser is being driven by a test runner.
+ *
+ * `navigator.webdriver` is set by the browser itself under automation, so it
+ * holds for every spec rather than only those that load a particular fixture.
+ */
+const isUnderAutomation = (w: { __PLAYWRIGHT_TESTING?: boolean }): boolean => {
+  if (w.__PLAYWRIGHT_TESTING === true) return true;
+  return typeof navigator !== 'undefined' && navigator.webdriver === true;
+};
+
+/**
  * Whether the GLB scenery kit renders.
  *
  * It was opt-in while its cost was unvalidated. That gate also carried
@@ -300,8 +311,11 @@ export const isGlbSceneryEnabled = (): boolean => {
   }
 
   // Automation opts in per spec, so suites that do not measure the kit do not
-  // pay for it.
-  return !w.__PLAYWRIGHT_TESTING;
+  // pay for it. Asking the browser rather than the BLE mock is the point:
+  // __PLAYWRIGHT_TESTING is set by mock-bluetooth.js alone, so a spec driving
+  // the real signed-out UI was treated as a rower and silently paid for the
+  // whole kit (review of #232).
+  return !isUnderAutomation(w);
 };
 
 /** Flat, de-duplicated list of every GLB a resolved set needs — for preloading. */

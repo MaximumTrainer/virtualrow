@@ -32,7 +32,6 @@ import {
   resolveSceneryModels,
   collectSceneryPaths,
   sceneryAssetPath,
-  isGlbSceneryEnabled,
   type ResolvedScenery,
   type SceneryModelId,
 } from './sceneryAssets';
@@ -40,10 +39,8 @@ import { trackWaterForProfile, type SceneryTrack } from './sceneryTrack';
 import type { SceneryRegion } from './sceneryRegion';
 import type { Coordinate } from '../../types/index';
 import {
-  courseStructures,
-  crossingStructures,
-  landmarkStructures,
   computeStructurePlacements,
+  routeStructures,
   type StructureRequest,
 } from './sceneryStructures';
 import {
@@ -107,14 +104,13 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
   // per route rather than per bank, so only one side renders them (#232).
   const structures = useMemo<StructureRequest[]>(
     () =>
-      side === 'left'
-        ? [
-            ...crossingStructures(enrichment?.crossings),
-            ...courseStructures(),
-            ...landmarkStructures(coordinates),
-          ]
-        : [],
-    [enrichment?.crossings, coordinates, side],
+      routeStructures({
+        side,
+        hasCurve: Boolean(curve),
+        coordinates,
+        crossings: enrichment?.crossings,
+      }),
+    [enrichment?.crossings, coordinates, side, curve],
   );
 
   // Union of every GLB the route can show — loaded once, shared across instances.
@@ -187,11 +183,3 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     </group>
   );
 };
-
-// Warm the cache for the common default so the first route does not pop in —
-// only when the kit is actually enabled, so it costs nothing when off.
-if (isGlbSceneryEnabled()) {
-  collectSceneryPaths(
-    resolveSceneryModels('fallback', 'unknown', ['pine', 'oak', 'willow']),
-  ).forEach((p) => useGLTF.preload(p));
-}

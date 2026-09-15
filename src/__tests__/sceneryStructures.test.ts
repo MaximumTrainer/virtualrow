@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import * as THREE from 'three';
 import {
+  routeStructures,
   COURSE_FURNITURE,
   LIVERIED_LANDMARKS,
   courseStructures,
@@ -246,5 +247,36 @@ describe('structures sit on the ground (review of #232)', () => {
     );
 
     expect(p.position[1]).toBe(0);
+  });
+});
+
+
+describe('routeStructures — what a route actually asks for (review of #232)', () => {
+  const coordinates = [
+    { lat: 51.4739, lng: -0.2463 },
+    { lat: 51.4749, lng: -0.2453 },
+  ];
+
+  it('places structures once per route, on one bank only', () => {
+    const left = routeStructures({ side: 'left', hasCurve: true, coordinates });
+    const right = routeStructures({ side: 'right', hasCurve: true, coordinates });
+
+    expect(left.length).toBeGreaterThan(0);
+    expect(right).toEqual([]);
+  });
+
+  it('asks for nothing when there is no curve to place them on', () => {
+    // computeStructurePlacements returns [] without a curve, but the models
+    // were still added to the useGLTF path list, so a straight-mode route
+    // downloaded and suspended on 8+ GLBs — two of them Tier B — to render
+    // none of them.
+    expect(routeStructures({ side: 'left', hasCurve: false, coordinates })).toEqual([]);
+  });
+
+  it('still carries the course furniture and any landmark the route earns', () => {
+    const ids = routeStructures({ side: 'left', hasCurve: true, coordinates }).map((s) => s.id);
+
+    expect(ids).toContain('a06-finish-tower');
+    expect(ids).toContain('l-barnes-railway-bridge');
   });
 });
