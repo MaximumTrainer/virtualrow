@@ -18,6 +18,7 @@ import { createBankGeometry } from './bankGeometry';
 import { RouteStripChunks } from './routeStripChunks';
 import type { ProgressRange } from './geometryChunks';
 import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
+import type { SceneryTrack } from './sceneryTrack';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -83,6 +84,8 @@ interface CurvedLandscapeProps {
   theme: RouteTheme;
   boatProgress: number;
   enrichment?: RouteEnrichmentData | null;
+  /** Authored dressing, preferred over enrichment when the route has one (#232). */
+  track?: SceneryTrack | null;
 }
 
 const getSegmentStyle = (
@@ -124,6 +127,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   theme,
   boatProgress,
   enrichment,
+  track = null,
 }) => {
   const landscapeElements = useMemo(() => {
     if (!curve) return { leftElements: [], rightElements: [] };
@@ -144,7 +148,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
       const up = new THREE.Vector3(0, 1, 0);
       const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
       const segmentStyle = getSegmentStyle(enrichment, t);
-      const sceneryProfile = getSegmentSceneryProfile(enrichment, t);
+      const sceneryProfile = getSegmentSceneryProfile(enrichment, t, track);
       
       const leftOffset =
         minOffset +
@@ -193,7 +197,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     }
     
     return { leftElements, rightElements };
-  }, [curve, enrichment]);
+  }, [curve, enrichment, track]);
   
   const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
   const archConfig = useMemo(() => getThemeConfig(theme).architecture, [theme]);

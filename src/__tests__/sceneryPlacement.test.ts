@@ -10,6 +10,11 @@ import {
   type Placement,
 } from '../components/rower3d/sceneryPlacement';
 import { resolveSceneryModels, type ResolvedScenery } from '../components/rower3d/sceneryAssets';
+import {
+  WILLOWBROOK_SCENERY_TRACK,
+  trackProfiles,
+  trackWaterForProfile,
+} from '../components/rower3d/sceneryTrack';
 import type { RouteEnrichmentData, SceneryProfile } from '../services/routeEnrichmentService';
 
 const fallbackResolved = resolveSceneryModels('fallback', 'unknown', ['pine', 'oak', 'willow']);
@@ -146,5 +151,48 @@ describe('placement constants', () => {
       expect(band[0]).toBeLessThanOrEqual(band[1]);
     }
     expect(ASSET_SCALE).toBeGreaterThan(0);
+  });
+});
+
+describe('an authored track dresses the route (#232)', () => {
+  const resolvedForTrack = () => {
+    const map = new Map<SceneryProfile, ResolvedScenery>();
+    for (const profile of trackProfiles(WILLOWBROOK_SCENERY_TRACK)) {
+      map.set(
+        profile,
+        resolveSceneryModels(profile, trackWaterForProfile(WILLOWBROOK_SCENERY_TRACK, profile), [
+          'pine',
+          'oak',
+        ]),
+      );
+    }
+    return map;
+  };
+
+  it('changes the models along the route instead of dressing all 5 km alike', () => {
+    const placements = computePlacements({
+      curve: new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 0, -200),
+        new THREE.Vector3(20, 0, -100),
+        new THREE.Vector3(-20, 0, 0),
+        new THREE.Vector3(20, 0, 100),
+        new THREE.Vector3(0, 0, 200),
+      ]),
+      // Enrichment that would flatten the whole route to one profile; the track
+      // is what the scene should follow.
+      enrichment: enrichment(['commercial', 'commercial', 'commercial']),
+      resolvedByProfile: resolvedForTrack(),
+      budget: 1,
+      side: 'left',
+      track: WILLOWBROOK_SCENERY_TRACK,
+    });
+
+    const early = new Set(placements.filter((p) => p.progress < 0.2).map((p) => p.id));
+    const late = new Set(placements.filter((p) => p.progress > 0.8).map((p) => p.id));
+
+    expect(early.size).toBeGreaterThan(0);
+    expect(late.size).toBeGreaterThan(0);
+    // The headwaters and the delta are different places.
+    expect([...late].some((id) => !early.has(id))).toBe(true);
   });
 });
