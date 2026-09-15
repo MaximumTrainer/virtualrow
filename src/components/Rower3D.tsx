@@ -37,6 +37,7 @@ import {
 } from './rower3d/sceneTiming';
 import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
+import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
 import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
 import { PhotorealisticWater, WaterReflectionPlane, MistLayer, CurvedWaterChannel } from './rower3d/waterComponents';
@@ -143,7 +144,7 @@ const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode
   }, [gl, requested]);
 };
 
-const RowerScene: React.FC<Rower3DProps> = ({ 
+const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({ 
   route, 
   enrichment,
   paceSPer500, 
@@ -153,12 +154,15 @@ const RowerScene: React.FC<Rower3DProps> = ({
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
   crew = 'male',
+  gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
   const performanceMode = useHardwarePerformanceMode(requestedPerformanceMode);
   // useState, not useRef: the recorder is a stable instance that the render
   // pass legitimately reads, and a ref may not be touched during render.
   const [frameStats] = useState(createFrameStatsRecorder);
+
+  useEffect(() => clearRenderStats, []);
 
   const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
@@ -290,8 +294,18 @@ const RowerScene: React.FC<Rower3DProps> = ({
       boatPositionRef.current.z
     );
     
+    // Before the composer renders: the counters still describe the frame just
+    // drawn, and after it they describe its last fullscreen pass (#232).
+    recordRenderStats(gl, {
+      backend: gpuBackend,
+      performanceMode,
+      fps: frameStats.read()?.fps,
+      p95Ms: frameStats.read()?.p95Ms,
+    });
+
     try {
       if (IS_TEST_MODE) {
+        window.__ROWER3D_RENDER_STATS = readRenderStats() ?? undefined;
         window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
           y: boatPositionRef.current.y,
@@ -781,7 +795,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           }}
         >
           <CameraAspectFix />
-          <RowerScene {...props} />
+          <RowerScene {...props} gpuBackend={gpuBackend} />
         </Canvas>
       </GPUErrorBoundary>
     </div>
