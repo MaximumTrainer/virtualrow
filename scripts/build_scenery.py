@@ -388,8 +388,11 @@ def a11():
     for xo in (-1200,1200):
         p=cq.Workplane("XY").circle(28).extrude(1100).translate((xo,0,0))
         posts=p if posts is None else posts.union(p)
-    top=cq.Workplane("XZ").circle(22).extrude(2400).translate((-1200,0,1100))
-    mid=cq.Workplane("XZ").circle(18).extrude(2400).translate((-1200,0,600))
+    # Rails span between the posts, which stand at x = ±1200. Workplane("XZ")
+    # extrudes along -Y, so these ran 2.4 m out from the bank instead of along
+    # it — the model measured 2.4 m deep as well as 2.4 m wide (issue #232).
+    top=cq.Workplane("YZ").circle(22).extrude(2400).translate((-1200,0,1100))
+    mid=cq.Workplane("YZ").circle(18).extrude(2400).translate((-1200,0,600))
     parts.append((posts.union(top).union(mid), RAIL_DARK))
     return "a", "2400 x 60 x 1100mm", parts
 
