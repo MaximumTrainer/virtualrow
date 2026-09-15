@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { readRenderStats, type RenderStats } from '../components/rower3d/sceneStats';
+import { readContextState, type ContextState } from '../components/rower3d/glContext';
 
 /** How stale a sample has to be before the render loop counts as stopped. */
 export const STALL_THRESHOLD_MS = 2000;
@@ -8,6 +9,8 @@ export interface RenderStatsReading {
   stats: RenderStats | null;
   /** True when the scene has drawn nothing recently — a stalled or dead loop. */
   stalled: boolean;
+  /** How the WebGL context was obtained, and whether it is still there. */
+  context: ContextState | null;
 }
 
 /**
@@ -18,7 +21,11 @@ export interface RenderStatsReading {
  * Only runs while something is actually showing the reading.
  */
 export const useRenderStats = (enabled: boolean, intervalMs = 500): RenderStatsReading => {
-  const [reading, setReading] = useState<RenderStatsReading>({ stats: null, stalled: false });
+  const [reading, setReading] = useState<RenderStatsReading>({
+    stats: null,
+    stalled: false,
+    context: null,
+  });
 
   useEffect(() => {
     if (!enabled) return;
@@ -30,6 +37,7 @@ export const useRenderStats = (enabled: boolean, intervalMs = 500): RenderStatsR
       setReading({
         stats,
         stalled: !!stats && Date.now() - stats.sampledAt > STALL_THRESHOLD_MS,
+        context: readContextState(),
       });
     };
     read();

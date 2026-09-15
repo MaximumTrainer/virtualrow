@@ -1408,6 +1408,23 @@ function App() {
                 ) : (
                   <tr><td>Drawing:</td><td>❌ the 3D scene has not drawn a frame</td></tr>
                 )}
+                {renderStats.context && (
+                  <>
+                    <tr><td>GPU adapter:</td><td>{renderStats.context.powerPreference}</td></tr>
+                    <tr><td>Antialias:</td><td>{renderStats.context.antialias ? 'on' : 'off'}</td></tr>
+                    <tr>
+                      <td>Context:</td>
+                      <td>
+                        {renderStats.context.lost
+                          ? `⚠️ lost${renderStats.context.lostReason ? ` — ${renderStats.context.lostReason}` : ''}`
+                          : `✅ live${renderStats.context.losses > 0 ? ` (recovered ${renderStats.context.losses}×)` : ''}`}
+                      </td>
+                    </tr>
+                    {renderStats.context.fallbackReason && (
+                      <tr><td>Fell back because:</td><td>{renderStats.context.fallbackReason}</td></tr>
+                    )}
+                  </>
+                )}
               </tbody>
             </table>
           </div>
