@@ -155,39 +155,6 @@ export const WaterReflectionPlane: React.FC<{ boatZ: number; theme: RouteTheme }
   );
 };
 
-// ============================================================================
-// HD MIST LAYER - Multi-layered volumetric fog for atmospheric depth
-// ============================================================================
-export const MistLayer: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
-  const layer1Ref = useRef<THREE.Mesh>(null);
-  const layer2Ref = useRef<THREE.Mesh>(null);
-
-  const mistConfig = useMemo(() => getThemeConfig(theme).mist, [theme]);
-
-  useAnimationFrame((time) => {
-    if (layer1Ref.current) {
-      layer1Ref.current.position.x = Math.sin(time * 0.05) * 3;
-      layer1Ref.current.position.z = boatZ + Math.cos(time * 0.03) * 2;
-    }
-    if (layer2Ref.current) {
-      layer2Ref.current.position.x = Math.sin(time * 0.04 + 1) * 5;
-      layer2Ref.current.position.z = boatZ + Math.cos(time * 0.025 + 0.5) * 3;
-    }
-  });
-
-  return (
-    <group>
-      <mesh ref={layer1Ref} position={[0, mistConfig.height1, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[900, 900]} />
-        <meshBasicMaterial color={mistConfig.color1} transparent opacity={mistConfig.baseOpacity * mistConfig.density} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh ref={layer2Ref} position={[0, mistConfig.height2, boatZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1200, 1200]} />
-        <meshBasicMaterial color={mistConfig.color2} transparent opacity={mistConfig.baseOpacity * 0.4} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
-    </group>
-  );
-};
 
 // ============================================================================
 // HD CURVED WATER CHANNEL - Follows GPS path with realistic water rendering

@@ -345,6 +345,27 @@ declare global {
       geometries: number;
       textures: number;
     };
+    /** How the WebGL context was obtained, and whether it is still live (#232). */
+    __ROWER3D_CONTEXT_STATE?: {
+      powerPreference: string;
+      antialias: boolean;
+      maxDpr?: number;
+      lost: boolean;
+      losses: number;
+      lostReason?: string;
+      fallbackReason?: string;
+    };
+    /** Per-frame render cost, sampled before the effect composer runs (#232). */
+    __ROWER3D_RENDER_STATS?: {
+      drawing: string;
+      drawCalls: number;
+      triangles: number;
+      backend: string;
+      performanceMode: string;
+      fps?: number;
+      p95Ms?: number;
+      sampledAt: number;
+    };
     /**
      * The selected route's headline numbers, for Playwright assertions.
      *
