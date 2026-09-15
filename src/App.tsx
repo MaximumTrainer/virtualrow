@@ -34,6 +34,7 @@ import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
 import { CrewPicker } from './components/CrewPicker';
 import { useCrewPreference } from './hooks/useCrewPreference';
+import { useRenderStats } from './hooks/useRenderStats';
 import { useStructuredWorkout } from './hooks/useStructuredWorkout';
 import { WorkoutLibrary } from './components/WorkoutLibrary';
 import { WorkoutOverlay } from './components/WorkoutOverlay';
@@ -119,6 +120,8 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // Only polled while the panel is open (#232).
+  const renderStats = useRenderStats(debugMode);
 
   // The rower's own call on graphics quality, overruling hardware detection
   // when they know better than the heuristic does (#224).
@@ -1393,6 +1396,48 @@ function App() {
             <HeartRateSimulator />
           </div>
           
+          <div className="debug-section">
+            <h5>Scene</h5>
+            <table className="debug-table">
+              <tbody>
+                {renderStats.stats ? (
+                  <>
+                    <tr><td>Draw calls:</td><td>{renderStats.stats.drawCalls}</td></tr>
+                    <tr><td>Triangles:</td><td>{renderStats.stats.triangles.toLocaleString()}</td></tr>
+                    <tr><td>FPS:</td><td>{renderStats.stats.fps?.toFixed(1) ?? 'N/A'}</td></tr>
+                    <tr><td>Frame p95 (ms):</td><td>{renderStats.stats.p95Ms?.toFixed(1) ?? 'N/A'}</td></tr>
+                    <tr><td>Drawing with:</td><td>{renderStats.stats.drawing}</td></tr>
+                    <tr><td>Backend detected:</td><td>{renderStats.stats.backend}</td></tr>
+                    <tr><td>Quality:</td><td>{renderStats.stats.performanceMode}</td></tr>
+                    <tr>
+                      <td>Drawing:</td>
+                      <td>{renderStats.stalled ? '⚠️ stalled — no recent frame' : '✅ yes'}</td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr><td>Drawing:</td><td>❌ the 3D scene has not drawn a frame</td></tr>
+                )}
+                {renderStats.context && (
+                  <>
+                    <tr><td>GPU adapter:</td><td>{renderStats.context.powerPreference}</td></tr>
+                    <tr><td>Antialias:</td><td>{renderStats.context.antialias ? 'on' : 'off'}</td></tr>
+                    <tr>
+                      <td>Context:</td>
+                      <td>
+                        {renderStats.context.lost
+                          ? `⚠️ lost${renderStats.context.lostReason ? ` — ${renderStats.context.lostReason}` : ''}`
+                          : `✅ live${renderStats.context.losses > 0 ? ` (recovered ${renderStats.context.losses}×)` : ''}`}
+                      </td>
+                    </tr>
+                    {renderStats.context.fallbackReason && (
+                      <tr><td>Fell back because:</td><td>{renderStats.context.fallbackReason}</td></tr>
+                    )}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+
           <div className="debug-section">
             <h5>PM5 Data (Live)</h5>
             <table className="debug-table">
