@@ -3,7 +3,7 @@
 // Eliminates 8+ parallel switch(theme) blocks scattered across Rower3D.tsx.
 //
 // Each RouteTheme key maps to a ThemeConfig object that covers:
-//   water · mist · bank · landscapeColors · atmosphere · sky · clouds
+//   water · bank · landscapeColors · atmosphere · sky · clouds
 //   trees · architecture · groundCover · horizon
 // ============================================================================
 
@@ -42,14 +42,6 @@ export interface WaterConfig {
   underwaterFog: string;
 }
 
-export interface MistConfig {
-  baseOpacity: number;
-  color1: string;
-  color2: string;
-  height1: number;
-  height2: number;
-  density: number;
-}
 
 /** PBR material properties used by CurvedRiverbanks */
 export interface BankConfig {
@@ -108,10 +100,6 @@ export interface CloudConfig {
   depth: number;
 }
 
-export interface FogConfig {
-  color: string;
-  density: number;
-}
 
 export interface LightingConfig {
   ambientColor: string;
@@ -187,13 +175,11 @@ export interface HorizonConfig {
 
 export interface ThemeConfig {
   water: WaterConfig;
-  mist: MistConfig;
   bank: BankConfig;
   landscapeColors: LandscapeColors;
   atmosphere: AtmosphereConfig;
   sky: SkyConfig;
   clouds: CloudConfig;
-  fog: FogConfig;
   lighting: LightingConfig;
   colorGrading: ColorGradingConfig;
   trees: TreesConfig;
@@ -214,10 +200,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       attenuationDistance: 8.0, specularIntensity: 1.2, sheenColor: '#80deea',
       turbidity: 0.1, waveAmplitude: 0.6, waveFrequency: 0.8,
       foamIntensity: 0.2, underwaterFog: '#00a8cc',
-    },
-    mist: {
-      baseOpacity: 0.06, color1: '#e8f4f8', color2: '#d0e8f0',
-      height1: 0.3, height2: 1.5, density: 0.5,
     },
     bank: {
       color: '#5a8a42', roughness: 0.88, metalness: 0.0,
@@ -243,7 +225,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 5, opacity: 0.42, speed: 0.18,
       color: '#ffffff', segments: 32, scale: 1.3, depth: 0.8,
     },
-    fog: { color: '#b0ddfa', density: 0.003 },
     lighting: {
       ambientColor: '#c0e0ff', ambientIntensity: 0.25,
       sunColor: '#fffaf0', sunIntensity: 1.2,
@@ -283,10 +264,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       turbidity: 0.7, waveAmplitude: 1.2, waveFrequency: 1.0,
       foamIntensity: 0.45, underwaterFog: '#1a2f2f',
     },
-    mist: {
-      baseOpacity: 0.22, color1: '#1e272e', color2: '#2a3a4a',
-      height1: 0.6, height2: 2.5, density: 1.4,
-    },
     bank: {
       color: '#2a3a2a', roughness: 0.95, metalness: 0.02,
       emissive: '#1a2a1a', emissiveIntensity: 0.005, sheen: 0.1, sheenColor: '#3a4a3a',
@@ -311,7 +288,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 14, opacity: 0.65, speed: 0.06,
       color: '#5a6268', segments: 38, scale: 1.5, depth: 1.2,
     },
-    fog: { color: '#2a3a4a', density: 0.008 },
     lighting: {
       ambientColor: '#4a5568', ambientIntensity: 0.12,
       sunColor: '#8fa4b8', sunIntensity: 0.5,
@@ -350,10 +326,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       turbidity: 0.5, waveAmplitude: 1.0, waveFrequency: 0.95,
       foamIntensity: 0.35, underwaterFog: '#3a4a38',
     },
-    mist: {
-      baseOpacity: 0.14, color1: '#8b7355', color2: '#a08565',
-      height1: 0.8, height2: 2.0, density: 0.9,
-    },
     bank: {
       color: '#6a7a48', roughness: 0.82, metalness: 0.0,
       emissive: '#4a5a30', emissiveIntensity: 0.008, sheen: 0.35, sheenColor: '#8a9a68',
@@ -378,7 +350,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 9, opacity: 0.48, speed: 0.12,
       color: '#f0e0c8', segments: 30, scale: 1.2, depth: 0.9,
     },
-    fog: { color: '#9a8365', density: 0.004 },
     lighting: {
       ambientColor: '#c9a227', ambientIntensity: 0.25,
       sunColor: '#ffd700', sunIntensity: 1.5,
@@ -418,10 +389,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       turbidity: 0.9, waveAmplitude: 1.5, waveFrequency: 1.3,
       foamIntensity: 0.55, underwaterFog: '#0a1520',
     },
-    mist: {
-      baseOpacity: 0.18, color1: '#1a1a2e', color2: '#2a2a3e',
-      height1: 0.5, height2: 3.0, density: 1.2,
-    },
     bank: {
       color: '#1a1a18', roughness: 0.96, metalness: 0.05,
       emissive: '#0a0a08', emissiveIntensity: 0.002, sheen: 0.05, sheenColor: '#2a2a28',
@@ -446,7 +413,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 16, opacity: 0.72, speed: 0.04,
       color: '#3a3a42', segments: 42, scale: 1.6, depth: 1.4,
     },
-    fog: { color: '#1a1a28', density: 0.007 },
     lighting: {
       ambientColor: '#2a1f1a', ambientIntensity: 0.1,
       sunColor: '#ff6b35', sunIntensity: 0.4,
@@ -485,10 +451,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       turbidity: 0.3, waveAmplitude: 0.8, waveFrequency: 0.9,
       foamIntensity: 0.3, underwaterFog: '#006080',
     },
-    mist: {
-      baseOpacity: 0.08, color1: '#162447', color2: '#1a3a5a',
-      height1: 0.4, height2: 2.0, density: 0.7,
-    },
     bank: {
       color: '#1a2a3a', roughness: 0.75, metalness: 0.15,
       emissive: '#0a1a2a', emissiveIntensity: 0.015, sheen: 0.2, sheenColor: '#2a4a5a',
@@ -513,7 +475,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 3, opacity: 0.22, speed: 0.28,
       color: '#2a4a6a', segments: 22, scale: 0.9, depth: 0.6,
     },
-    fog: { color: '#0a1428', density: 0.003 },
     lighting: {
       ambientColor: '#162447', ambientIntensity: 0.15,
       sunColor: '#a0d2ff', sunIntensity: 0.3,
@@ -553,10 +514,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       turbidity: 0.3, waveAmplitude: 1.0, waveFrequency: 1.0,
       foamIntensity: 0.35, underwaterFog: '#2a4a40',
     },
-    mist: {
-      baseOpacity: 0.10, color1: '#c8d4dc', color2: '#d8e4ec',
-      height1: 0.5, height2: 1.8, density: 0.8,
-    },
     bank: {
       color: '#4a7a32', roughness: 0.9, metalness: 0.0,
       emissive: '#2a4a18', emissiveIntensity: 0.006, sheen: 0.3, sheenColor: '#6a9a52',
@@ -581,7 +538,6 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       enabled: true, count: 8, opacity: 0.38, speed: 0.16,
       color: '#f8f8ff', segments: 28, scale: 1.1, depth: 0.85,
     },
-    fog: { color: '#a8d0f0', density: 0.0025 },
     lighting: {
       ambientColor: '#b0d0e0', ambientIntensity: 0.25,
       sunColor: '#fff8e8', sunIntensity: 1.2,
