@@ -123,9 +123,9 @@ for (const tier of ['low', 'auto', 'high'] as const) {
       expect(after.sampledAt, 'the render loop stopped').toBeGreaterThan(started);
     }
 
-    // Known exception: god rays throw every frame in high mode (#233), which is
-    // not this tier system's fault and is tracked separately.
-    const unexpected = errors.filter((message) => !/reading '(parent|alpha)'/.test(message));
-    expect(unexpected, 'the scene raised errors').toEqual([]);
+    // The god-rays exception that used to be filtered out here is gone: #233
+    // stopped the pass being built without a live light source, so high mode
+    // raises nothing to excuse.
+    expect(errors, 'the scene raised errors').toEqual([]);
   });
 }
