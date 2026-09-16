@@ -128,15 +128,10 @@ ${error.stack ?? ''}`));
     })
     .toBeGreaterThan(0);
 
-  // High mode turns on postprocessing, and GodRaysEffect throws every frame
-  // when its light source is momentarily null. Reproduced on main with no kit
-  // involved, so it is not this work's to fix — but it must not be swallowed
-  // either, hence the narrow filter rather than dropping the assertion.
-  const notPostFx = errors.filter(
-    (message) => !/reading '(parent|alpha)'/.test(message),
-  );
-
-  expect(notPostFx, 'the scenery kit raised errors while dressing the route').toEqual([]);
+  // The narrow filter that used to live here is gone: it excused the god-rays
+  // pass throwing every frame on a null light source, which #233 fixed at the
+  // source. Nothing is swallowed now.
+  expect(errors, 'the scenery kit raised errors while dressing the route').toEqual([]);
 });
 
 test('a 20 km route stays inside the geometry budget with the kit on', async ({ page }) => {

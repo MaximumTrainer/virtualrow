@@ -17,6 +17,7 @@
 // (issue #232).
 // ============================================================================
 
+import type * as THREE from 'three';
 import type { PerformanceMode } from './constants';
 
 export const EFFECT_NAMES = [
@@ -88,3 +89,21 @@ export const effectCost = (plan: EffectPlan): number =>
   (plan.effects.includes('ssao') ? 5 : 0) +
   (plan.effects.includes('depthOfField') ? 3 : 0) +
   (plan.effects.includes('godRays') ? 3 : 0);
+
+/**
+ * The mesh the god-rays pass should use, or null for no pass.
+ *
+ * GodRaysEffect.update dereferences `this.lightSource.parent` on every frame,
+ * so the pass must never be built without a live mesh. The caller used to
+ * compute `mode === 'high' ? sunMeshRef : undefined` and the composer guarded
+ * on `!!sunMeshRef` — both of which test the *ref object*, which useRef makes
+ * truthy from the first render. The mesh lives on `.current`, and that is null
+ * until it mounts and stays null forever in test mode, where the sun mesh is
+ * never rendered. High mode therefore threw a TypeError every frame (#233).
+ *
+ * Taking the mesh itself, so there is no ref to be fooled by, is the whole fix.
+ */
+export const godRaysSun = (
+  mode: PerformanceMode,
+  sunMesh: THREE.Mesh | null | undefined,
+): THREE.Mesh | null => (mode === 'high' && sunMesh ? sunMesh : null);

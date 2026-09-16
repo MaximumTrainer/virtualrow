@@ -189,6 +189,35 @@ test.describe('3D postprocessing', () => {
     await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
   });
 
+  test('high mode raises no god-rays errors (#233)', async ({ page }) => {
+    // High was the one tier this spec never booted, which is why #233 lived
+    // here unseen: GodRaysEffect.update dereferences its light source every
+    // frame, and the pass was handed a ref whose .current was null, so the
+    // scene threw continuously on exactly the hardware capable enough to
+    // resolve auto to high.
+    //
+    // Modelled on the auto test rather than added as a heavier one: the same
+    // single demo row, the same observation window.
+    await bootAt(page, 'high');
+    const errors = collectErrors(page);
+
+    await startDemoRow(page);
+    await page.waitForTimeout(6_000);
+
+    // The two faults the issue names, and which scenery-kit-budgets.spec.ts
+    // used to have to filter out by message.
+    expect(
+      errors.filter((e) => /reading '(parent|alpha)'/.test(e)),
+      'the god-rays pass was built without a live light source',
+    ).toEqual([]);
+
+    // And the scene is still there rather than having been torn down.
+    await expect(
+      page.locator('.activity-route-stage .rower3d-canvas-container canvas'),
+    ).toBeVisible();
+    await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
+  });
+
   test('low mode still skips the effect stack entirely', async ({ page }) => {
     await bootAt(page, 'low');
     const errors = collectErrors(page);
