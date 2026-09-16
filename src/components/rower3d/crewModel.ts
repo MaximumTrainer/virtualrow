@@ -6,12 +6,20 @@
 // unit-tested without the R3F scene.
 // ============================================================================
 
+import { assetUrl } from '../../utils/assetUrl';
+
 export type Crew = 'male' | 'female';
 
-/** Crewed sculling GLBs in public/assets/boat/ (issue #229). */
+/**
+ * Crewed sculling GLBs in public/assets/boat/ (issue #229).
+ *
+ * Resolved through assetUrl so they keep working under the deploy's
+ * `--base=/virtualrow/app/`; written from the domain root they 404'd in
+ * production while loading fine in dev (issue #251).
+ */
 export const CREW_URL: Record<Crew, string> = {
-  male: '/assets/boat/scull-male.glb',
-  female: '/assets/boat/scull-female.glb',
+  male: assetUrl('/assets/boat/scull-male.glb'),
+  female: assetUrl('/assets/boat/scull-female.glb'),
 };
 
 /**
