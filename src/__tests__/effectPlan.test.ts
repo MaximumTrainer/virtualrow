@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { effectPlanFor, effectCost, EFFECT_NAMES } from '../components/rower3d/effectPlan';
+import { effectPlanFor, godRaysSun, effectCost, EFFECT_NAMES } from '../components/rower3d/effectPlan';
 import { QUALITY_TIERS } from '../components/rower3d/canvasSurface';
 import type { PerformanceMode } from '../components/rower3d/constants';
 
@@ -94,5 +94,41 @@ describe('every tier has a plan of its own', () => {
     const unknown = effectPlanFor('nonsense' as PerformanceMode, withSun);
 
     expect(effectCost(unknown)).toBeLessThanOrEqual(effectCost(effectPlanFor('auto', withSun)));
+  });
+});
+
+describe('godRaysSun — the light source the pass is given (#233)', () => {
+  // GodRaysEffect.update dereferences this.lightSource.parent every frame, so
+  // the pass must never be constructed without a live mesh.
+  //
+  // The old caller computed `performanceMode === 'high' ? sunMeshRef : undefined`
+  // and the composer guarded on `!!sunMeshRef`. Both test the *ref object*,
+  // which useRef makes truthy from the first render — the mesh is on `.current`,
+  // and it is null until the mesh mounts, or forever in test mode where the mesh
+  // is never rendered at all. So high mode threw a TypeError on every frame.
+  const mesh = { isMesh: true } as unknown as import('three').Mesh;
+
+  it('gives the pass a real mesh only in high mode', () => {
+    expect(godRaysSun('high', mesh)).toBe(mesh);
+  });
+
+  it('gives nothing when the mesh has not mounted yet', () => {
+    // The case the ref hid: high mode, but no light source in the scene.
+    expect(godRaysSun('high', null)).toBeNull();
+  });
+
+  it('gives nothing below high mode, mesh or not', () => {
+    expect(godRaysSun('auto', mesh)).toBeNull();
+    expect(godRaysSun('low', mesh)).toBeNull();
+  });
+
+  it('keeps the plan and the light source in step', () => {
+    // hasSun must be derived from the same answer the composer renders with,
+    // or the plan can ask for a pass the composer has no sun for.
+    const sun = godRaysSun('high', null);
+    expect(effectPlanFor('high', { hasSun: !!sun }).effects).not.toContain('godRays');
+
+    const live = godRaysSun('high', mesh);
+    expect(effectPlanFor('high', { hasSun: !!live }).effects).toContain('godRays');
   });
 });

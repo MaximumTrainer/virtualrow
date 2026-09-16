@@ -38,6 +38,7 @@ import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
+import { godRaysSun } from './rower3d/effectPlan';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
@@ -426,8 +427,12 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
     ];
   }, [themeConfig.lighting.sunElevation, themeConfig.lighting.sunAzimuth]);
 
-  const sunMeshRef = useRef<THREE.Mesh>(null!);
-  const godRaysSunRef = performanceMode === 'high' ? sunMeshRef : undefined;
+  // State, not a ref: the god-rays pass dereferences the mesh every frame, and
+  // a ref object is truthy before its mesh exists. A callback ref re-renders
+  // when the mesh mounts, so the pass is built with a live light source or not
+  // at all (#233).
+  const [sunMesh, setSunMesh] = useState<THREE.Mesh | null>(null);
+  const godRaysSunMesh = godRaysSun(performanceMode, sunMesh);
 
   return (
     <AnimationProvider>
@@ -476,7 +481,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       />
 
       {!IS_TEST_MODE && performanceMode === 'high' && (
-        <mesh ref={sunMeshRef} position={sunLightPos} frustumCulled={false}>
+        <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
           <meshBasicMaterial color={themeConfig.lighting.sunColor} />
         </mesh>
@@ -610,7 +615,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
           velocityRef={velocityRef}
           performanceMode={performanceMode}
           theme={routeTheme}
-          sunMeshRef={godRaysSunRef}
+          sunMesh={godRaysSunMesh}
         />
       )}
 

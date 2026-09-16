@@ -366,8 +366,12 @@ export const DynamicPostFx: React.FC<{
   velocityRef: React.MutableRefObject<number>;
   performanceMode?: PerformanceMode;
   theme: RouteTheme;
-  sunMeshRef?: React.RefObject<THREE.Mesh>;
-}> = ({ velocityRef, performanceMode, theme, sunMeshRef }) => {
+  /**
+   * The sun mesh itself, not a ref to it: GodRaysEffect dereferences the light
+   * source every frame, and a ref is truthy before its mesh exists (#233).
+   */
+  sunMesh?: THREE.Mesh | null;
+}> = ({ velocityRef, performanceMode, theme, sunMesh }) => {
   const gl = useThree((state) => state.gl);
   const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
   useEffect(() => () => caEffect.dispose(), [caEffect]);
@@ -414,7 +418,7 @@ export const DynamicPostFx: React.FC<{
   // Every hook above runs unconditionally; only the render bails out.
   if (!canPostProcess) return null;
 
-  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMeshRef });
+  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
   if (!plan.composer) return null;
 
   const has = (effect: EffectName) => plan.effects.includes(effect);
@@ -460,10 +464,10 @@ export const DynamicPostFx: React.FC<{
             contrast={colorGrading.contrast}
           />
         ) : null,
-        has('godRays') && sunMeshRef ? (
+        has('godRays') && sunMesh ? (
           <GodRays
             key="godrays"
-            sun={sunMeshRef}
+            sun={sunMesh}
             exposure={0.34}
             decay={0.85}
             density={0.85}

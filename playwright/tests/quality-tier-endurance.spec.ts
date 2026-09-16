@@ -123,9 +123,12 @@ for (const tier of ['low', 'auto', 'high'] as const) {
       expect(after.sampledAt, 'the render loop stopped').toBeGreaterThan(started);
     }
 
-    // Known exception: god rays throw every frame in high mode (#233), which is
-    // not this tier system's fault and is tracked separately.
-    const unexpected = errors.filter((message) => !/reading '(parent|alpha)'/.test(message));
-    expect(unexpected, 'the scene raised errors').toEqual([]);
+    // Narrowed, not removed. `parent` came from the god-rays pass being built
+    // without a live light source and is fixed at the source by #233, so it is
+    // a real failure here now. `alpha` is the separate #197 EffectComposer
+    // fault, tracked as #257, and still fires at auto and high on a software
+    // rasteriser.
+    const notIssue257 = errors.filter((message) => !/reading 'alpha'/.test(message));
+    expect(notIssue257, 'the scene raised errors').toEqual([]);
   });
 }
