@@ -189,6 +189,54 @@ test.describe('3D postprocessing', () => {
     await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
   });
 
+  test('high mode raises no god-rays errors (#233)', async ({ page }) => {
+    // High was the one tier this spec never booted, which is why #233 lived
+    // here unseen: GodRaysEffect.update dereferences its light source every
+    // frame, and the pass was handed a ref whose .current was null, so the
+    // scene threw continuously on exactly the hardware capable enough to
+    // resolve auto to high.
+    //
+    // Modelled on the auto test rather than added as a heavier one: the same
+    // single demo row, the same observation window.
+    await bootAt(page, 'high');
+    const errors = collectErrors(page);
+
+    await startDemoRow(page);
+    await page.waitForTimeout(6_000);
+
+    // Only `parent` is this issue's. #233 named `alpha` as a second symptom of
+    // the god-rays pass, but it is not: it is the #197 EffectComposer fault,
+    // which fires at auto and high on a software rasteriser with no god rays
+    // involved and is tracked as #257. Asserting it here would make this test
+    // fail for a bug it does not cover.
+    expect(
+      errors.filter((e) => /reading 'parent'/.test(e)),
+      'the god-rays pass was built without a live light source',
+    ).toEqual([]);
+
+    // Whether the scene survives is a different question, and on a software
+    // rasteriser #257 answers it: the EffectComposer `alpha` fault trips the
+    // GPU error boundary at high, so the fallback replaces the scene for a
+    // reason that has nothing to do with god rays. Asserted where that fault
+    // does not fire; the `parent` check above is the #233 guard and holds
+    // everywhere.
+    const software = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+      if (!gl) return true;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      return /swiftshader|llvmpipe|software|angle \(google/i.test(name);
+    });
+
+    if (!software) {
+      await expect(
+        page.locator('.activity-route-stage .rower3d-canvas-container canvas'),
+      ).toBeVisible();
+      await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
+    }
+  });
+
   test('low mode still skips the effect stack entirely', async ({ page }) => {
     await bootAt(page, 'low');
     const errors = collectErrors(page);
