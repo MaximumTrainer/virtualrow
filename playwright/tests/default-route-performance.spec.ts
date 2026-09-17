@@ -147,6 +147,32 @@ async function readFrameStats(page: Page): Promise<FrameSample | null> {
   });
 }
 
+/**
+ * Time a run of frames the test asks for directly.
+ *
+ * The render loop idles between frames here, so waiting for it measures the
+ * wait rather than the work. Driving the renderer through the same hook the
+ * docs capture uses (#261) gives the per-frame cost itself: the scene is asked
+ * to draw, and the drawing is timed. That is a real measurement on any
+ * renderer, software included — it describes how long this scene takes to
+ * draw, which is the question #255 asks.
+ */
+async function measureFrameCostMs(page: Page, frames = 5): Promise<number | null> {
+  return page.evaluate(async (count) => {
+    const force = window.__ROWER3D_FORCE_RENDER;
+    if (!force) return null;
+    const samples: number[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const started = performance.now();
+      force();
+      samples.push(performance.now() - started);
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    }
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)];
+  }, frames);
+}
+
 /** When the renderer last recorded a frame; advances only if the loop is alive. */
 async function readSampledAt(page: Page): Promise<number> {
   return page.evaluate(() => window.__ROWER3D_RENDER_STATS?.sampledAt ?? 0);
@@ -162,6 +188,8 @@ interface PhaseResult {
   /** Whether the render loop advanced during the phase. */
   drew: boolean;
   delivered: boolean;
+  /** Median cost of a frame the test asked for, in ms. */
+  frameCostMs: number | null;
 }
 
 /**
@@ -204,7 +232,8 @@ async function rowPhase(
   }
 
   const after = await readSampledAt(page);
-  return { distance, seconds, drew: after > before, delivered };
+  const frameCostMs = await measureFrameCostMs(page);
+  return { distance, seconds, drew: after > before, delivered, frameCostMs };
 }
 
 for (const tier of ['low', 'auto', 'high'] as const) {
@@ -234,6 +263,7 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     await page.waitForTimeout(3_000);
 
     const report: string[] = [];
+    const costByPhase: Array<[string, number | null]> = [];
     const progressByPhase: number[] = [await readProgress(page)];
     let distance = 0;
     let seconds = 0;
@@ -247,8 +277,10 @@ for (const tier of ['low', 'auto', 'high'] as const) {
 
       const stats = await readFrameStats(page);
       progressByPhase.push(await readProgress(page));
+      costByPhase.push([phase.label, result.frameCostMs]);
       report.push(
         `${tier}/${phase.label} (${phase.paceSecondsPer500m}s/500m): ` +
+          `frameCost=${result.frameCostMs?.toFixed(1) ?? 'n/a'}ms ` +
           `drew=${result.drew} windowFrames=${stats?.frames ?? 'n/a'} ` +
           `fps=${stats?.fps.toFixed(1) ?? 'n/a'} ` +
           `p50=${stats?.p50Ms.toFixed(1) ?? 'n/a'}ms p95=${stats?.p95Ms.toFixed(1) ?? 'n/a'}ms ` +
@@ -306,9 +338,129 @@ for (const tier of ['low', 'auto', 'high'] as const) {
       console.log(`${tier}: simulator unreachable, speed sweep not delivered`);
     }
 
+    // The cost of a frame must not grow with how hard the rower is pulling.
+    // Speed changes where the boat is on the route, not how much scene there
+    // is to draw, so a sprint costing materially more than a paddle means
+    // something scales with progress that should not (#255).
+    //
+    // Measured on whatever renderer is present, because the frames are asked
+    // for rather than waited on — this is the scene's own drawing cost, not
+    // the rasteriser's frame rate.
+    const costs = costByPhase.filter((c): c is [string, number] => typeof c[1] === 'number');
+    if (costs.length === SPEED_PHASES.length) {
+      const cheapest = Math.min(...costs.map(([, ms]) => ms));
+      const dearest = Math.max(...costs.map(([, ms]) => ms));
+      console.log(
+        `${tier}: frame cost ${costs.map(([l, ms]) => `${l}=${ms.toFixed(1)}ms`).join(' ')}`,
+      );
+
+      // A generous multiple: this is meant to catch cost that scales with
+      // speed, not to pin down a number that varies with the machine.
+      expect(
+        dearest,
+        `${tier}: a frame costs ${dearest.toFixed(1)}ms at speed against ` +
+          `${cheapest.toFixed(1)}ms at a paddle — per-frame work is scaling with rower speed`,
+      ).toBeLessThanOrEqual(Math.max(cheapest * 3, cheapest + 40));
+    }
+
     // The context survived the whole sweep, and nothing threw.
     const context = await page.evaluate(() => window.__ROWER3D_CONTEXT_STATE ?? null);
     expect(context?.losses ?? 0, `${tier}: the WebGL context was lost`).toBe(0);
     expect(errors, `${tier}: the scene raised errors`).toEqual([]);
   });
 }
+
+/**
+ * The ends of the range, which the four ordinary phases do not reach: a rower
+ * who has stopped, and one going faster than anybody can (#255).
+ *
+ * One session, at the cheapest tier, because this is about arithmetic
+ * surviving extreme inputs rather than about how the scene looks.
+ *
+ * What this does and does not prove. Progress advances inside useFrame, and
+ * the render loop idles between frames here (#261) — asking the renderer to
+ * draw does not run the frame callbacks — so progress stays at 0 throughout
+ * and the travel half of the question is not answered here. It is covered in
+ * the sweep above, where the loop runs. What *is* answered, and is the part
+ * that breaks messily when it breaks: a pace of zero and a pace nobody can row
+ * leave progress, the boat and the camera finite, in range, and never going
+ * backwards. A divide-by-zero or a NaN camera would fail this.
+ */
+test('progress and the camera survive a stall and an absurd speed (#255)', async ({ page }) => {
+  test.slow();
+  expect(simulatorReady, 'the PM5 simulator is not reachable').toBe(true);
+
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await bootAt(page, 'low');
+  await page.goto('./');
+  await connectHardwareAndStart(page);
+  await page.waitForTimeout(3_000);
+
+  const readState = () =>
+    page.evaluate(() => ({
+      progress: window.__ROWER3D_POS?.progress ?? null,
+      x: window.__ROWER3D_POS?.x ?? null,
+      z: window.__ROWER3D_POS?.z ?? null,
+      camera: window.__ROWER3D_CAMERA?.position ?? null,
+    }));
+
+  const extremes: Array<{ label: string; pace: number; cadence: number }> = [
+    { label: 'stalled', pace: 0, cadence: 0 },
+    { label: 'absurd', pace: 20, cadence: 60 },
+    { label: 'stalled again', pace: 0, cadence: 0 },
+  ];
+
+  const seen: Array<{ label: string; progress: number }> = [];
+  let distance = 0;
+  let seconds = 0;
+
+  for (const extreme of extremes) {
+    const metresPerSecond = extreme.pace > 0 ? 500 / extreme.pace : 0;
+    for (let i = 0; i < 20; i += 1) {
+      seconds += 0.1;
+      distance += metresPerSecond / 10;
+      await emitPm5({
+        distance: Math.round(distance),
+        elapsedTime: Math.round(seconds * 1000),
+        pace: extreme.pace,
+        cadence: extreme.cadence,
+        power: 0,
+        heartRate: 130,
+      });
+      await page.waitForTimeout(100);
+    }
+    // Ask for frames so the state advances, rather than waiting on an idle loop.
+    await measureFrameCostMs(page, 3);
+
+    const state = await readState();
+    expect(Number.isFinite(state.progress), `${extreme.label}: progress is not finite`).toBe(true);
+    expect(Number.isFinite(state.x), `${extreme.label}: boat x is not finite`).toBe(true);
+    expect(Number.isFinite(state.z), `${extreme.label}: boat z is not finite`).toBe(true);
+    expect(state.progress!, `${extreme.label}: progress left 0..1`).toBeGreaterThanOrEqual(0);
+    expect(state.progress!, `${extreme.label}: progress left 0..1`).toBeLessThanOrEqual(1);
+    expect(state.camera, `${extreme.label}: no camera`).not.toBeNull();
+    expect(
+      state.camera!.every((n) => Number.isFinite(n)),
+      `${extreme.label}: camera is not finite — ${JSON.stringify(state.camera)}`,
+    ).toBe(true);
+
+    seen.push({ label: extreme.label, progress: state.progress! });
+  }
+
+  console.log(
+    `extremes: ${seen.map((s) => `${s.label}=${s.progress.toFixed(4)}`).join(' ')}` +
+      ' (all zero while the loop idles — see #261)',
+  );
+
+  // Never backwards, at any speed, including when the rower stops.
+  for (let i = 1; i < seen.length; i += 1) {
+    expect(
+      seen[i].progress,
+      `progress went backwards between ${seen[i - 1].label} and ${seen[i].label}`,
+    ).toBeGreaterThanOrEqual(seen[i - 1].progress);
+  }
+
+  expect(errors, 'the scene raised errors at the extremes').toEqual([]);
+});
