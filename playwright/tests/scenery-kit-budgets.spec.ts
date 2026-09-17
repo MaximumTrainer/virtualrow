@@ -163,3 +163,52 @@ test('a 20 km route stays inside the geometry budget with the kit on', async ({ 
   // inside the existing budget, not be given its own.
   expect(memory.geometryMb).toBeLessThanOrEqual(80);
 });
+
+/**
+ * The kit must not flood a static host.
+ *
+ * A demo row handed the loader all 58 models at once — 57 fetches in flight —
+ * and GitHub Pages answered one of them with 503:
+ *
+ *   Could not load .../tier-f/f12-bluff-steep.glb: ... responded with 503
+ *
+ * The file was fine; fetched on its own it returns 200 and 31,232 bytes. Only
+ * the volume was wrong, and it was only reachable at all once #251 fixed the
+ * asset URLs — before that every request 404'd instantly and cost nothing.
+ *
+ * The ceiling is well above the limit itself because several scenery components
+ * mount at once and each is entitled to its own chunk, and because this runs
+ * against the dev server, where StrictMode mounts everything twice. Measured:
+ * 15 on a production build, 27 here, against 57 before the kit was chunked. So
+ * the number catches a return to loading the whole kit in one breath without
+ * failing on StrictMode's doubling.
+ */
+test('the scenery kit does not open a flood of parallel fetches', async ({ page }) => {
+  let inFlight = 0;
+  let peak = 0;
+  page.on('request', (request) => {
+    if (/\.glb(\?|$)/.test(request.url())) {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+    }
+  });
+  page.on('requestfinished', (request) => {
+    if (/\.glb(\?|$)/.test(request.url())) inFlight -= 1;
+  });
+  page.on('requestfailed', (request) => {
+    if (/\.glb(\?|$)/.test(request.url())) inFlight -= 1;
+  });
+
+  await rowGeneratedCourse(page, 'Kit Concurrency Course', windingCourse(600, 3_000, 4));
+  await page.waitForTimeout(12_000);
+
+  console.log(`[kit] peak concurrent GLB fetches ${peak}`);
+
+  // Only meaningful if the kit actually loaded something.
+  if (peak > 0) {
+    expect(
+      peak,
+      `the kit put ${peak} GLB fetches in flight at once — a static host answers that with 503`,
+    ).toBeLessThanOrEqual(32);
+  }
+});
