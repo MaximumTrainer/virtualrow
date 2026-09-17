@@ -5,6 +5,8 @@ import { RigidBody } from '@react-three/rapier';
 import type { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { IS_TEST_MODE } from './constants';
+import { strokePose } from './strokePose';
+import { GLB_ROWER_NODES } from './crewRig';
 import { createBoatNormalMap } from './helpers';
 import { CREW_URL, type Crew } from './crewModel';
 
@@ -71,28 +73,9 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
     const time = state.clock.elapsedTime;
     const phase = strokeCycleTRef ? strokeCycleTRef.current : (time * freqHz % 1);
     
-    const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    
-    let legCompression: number;
-    let armPull: number;
-    let bodyLean: number;
-    let seatPosition: number;
-    
-    if (phase < 0.4) {
-      const t = easeInOut(phase / 0.4);
-      legCompression = 1 - t;
-      armPull = t;
-      bodyLean = -0.3 + t * 0.5;
-      seatPosition = -0.5 + t * 0.5;
-    } else {
-      const t = easeInOut((phase - 0.4) / 0.6);
-      legCompression = t;
-      armPull = 1 - t;
-      bodyLean = 0.2 - t * 0.5;
-      seatPosition = t * -0.5;
-    }
-    
-    const oarSweep = Math.sin(phase * Math.PI * 2) * 0.5;
+    // The same stroke the GLB scull uses, so the two cannot drift apart (#273).
+    const pose = strokePose(phase);
+    const { bodyLean, seatPosition, oarSweep } = pose;
     
     if (leftOarRef.current) leftOarRef.current.rotation.y = oarSweep;
     if (rightOarRef.current) rightOarRef.current.rotation.y = -oarSweep;
@@ -108,16 +91,14 @@ const RowingScullBase: React.FC<{ cadence: number; strokeCycleTRef?: React.Mutab
     if (headRef.current) headRef.current.rotation.x = -bodyLean * 0.3;
     if (seatRef.current) seatRef.current.position.z = seatPosition;
     
-    const thighAngle = -0.3 + legCompression * 1.0;
-    const shinAngle  = 0.2 + legCompression * 1.2;
+    const { thighAngle, shinAngle } = pose;
     
     if (leftThighRef.current)  leftThighRef.current.rotation.x  = thighAngle;
     if (rightThighRef.current) rightThighRef.current.rotation.x = thighAngle;
     if (leftShinRef.current)   leftShinRef.current.rotation.x   = shinAngle;
     if (rightShinRef.current)  rightShinRef.current.rotation.x  = shinAngle;
     
-    const upperArmAngle = -0.5 + armPull * 1.2;
-    const forearmAngle  = 0.3 + armPull * 0.8;
+    const { upperArmAngle, forearmAngle } = pose;
     
     if (leftUpperArmRef.current)  leftUpperArmRef.current.rotation.x  = upperArmAngle;
     if (rightUpperArmRef.current) rightUpperArmRef.current.rotation.x = upperArmAngle;
@@ -362,20 +343,47 @@ const GltfScullBase: React.FC<{
     };
   }, [model]);
 
+  // The rig authors these alongside the oars (scripts/build_crew.py), and they
+  // were never animated: the blades swept while the rower held still, so the
+  // boat looked as though it were rowing itself (#273).
+  const rowerRef = useRef<Record<string, THREE.Object3D | null>>({});
+
+  useEffect(() => {
+    rowerRef.current = Object.fromEntries(
+      GLB_ROWER_NODES.map((name) => [name, model.getObjectByName(name) ?? null]),
+    );
+  }, [model]);
+
   useFrame((state) => {
     const strokesPerMinute = Math.max(18, cadence || 24);
     const freqHz = strokesPerMinute / 60;
     const phase = strokeCycleTRef ? strokeCycleTRef.current : (state.clock.elapsedTime * freqHz % 1);
-    const oarSweep = Math.sin(phase * Math.PI * 2) * 0.5;
+    const pose = strokePose(phase);
+    const { oarSweep } = pose;
     // The GLB is authored in the scene frame (up +Y), so local Y is world up and
     // rotation.y sweeps the oar horizontally about its gate — as the rig intends.
     const oars = oarsRef.current;
     if (oars.left) oars.left.rotation.y = oarSweep;
     if (oars.right) oars.right.rotation.y = -oarSweep;
+
+    // Arms draw in through the drive and extend on the recovery, from the same
+    // pose that swept the oars — so they stay in step by construction.
+    const rower = rowerRef.current;
+    if (rower.Rower_LeftArm) rower.Rower_LeftArm.rotation.x = pose.upperArmAngle;
+    if (rower.Rower_RightArm) rower.Rower_RightArm.rotation.x = pose.upperArmAngle;
+    // The elbow, so the arm bends rather than swinging rigid from the shoulder.
+    if (rower.LeftArm_Fore) rower.LeftArm_Fore.rotation.x = pose.forearmAngle;
+    if (rower.RightArm_Fore) rower.RightArm_Fore.rotation.x = pose.forearmAngle;
+    if (rower.Rower_Torso) rower.Rower_Torso.rotation.x = pose.bodyLean;
     try {
-      if (IS_TEST_MODE) {
+      // Published under automation rather than only in test mode. The GLB scull
+      // renders only when IS_TEST_MODE is false, so gating its telemetry on that
+      // flag made the path real users see the one path automation could not
+      // observe — which is how the rower came to sit rigid unnoticed (#273).
+      if (IS_TEST_MODE || (typeof navigator !== 'undefined' && navigator.webdriver)) {
         window.__ROWER3D_OAR_ANGLE = oarSweep;
         window.__ROWER3D_STROKE_RATE = strokesPerMinute;
+        window.__ROWER3D_ARM_ANGLE = pose.upperArmAngle;
       }
     } catch { /* intentional: window access may fail in test environments */ }
   });

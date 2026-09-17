@@ -322,6 +322,8 @@ declare global {
     // Rower3D telemetry exposed for Playwright assertions
     __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
     __ROWER3D_CAMERA?: { position: [number, number, number] };
+    /** Upper-arm angle through the stroke, published under automation (#273). */
+    __ROWER3D_ARM_ANGLE?: number;
     /**
      * Draw the current frame immediately. Test mode only.
      *
