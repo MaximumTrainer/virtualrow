@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+  probeRenderCapabilities,
+  resetProbeCacheForTests,
   selectGlOptions,
   readContextState,
   recordContextCreated,
@@ -203,5 +205,50 @@ describe('scheduleContextRestore', () => {
     for (let i = 0; i < 10 && queued[i]; i += 1) queued[i].fn();
 
     expect(queued).toHaveLength(RESTORE_DELAYS_MS.length);
+  });
+});
+
+describe('device probes are asked once (#261)', () => {
+  /**
+   * Probing is a property of the machine, not of a component instance, and
+   * every probe opens a throwaway WebGL context. Measured on the demo row,
+   * probeRenderCapabilities ran four times and selectGlOptions four more —
+   * eleven contexts for one scene, against a browser that keeps only a handful
+   * alive. Caching the answer is what stops the churn.
+   */
+  beforeEach(() => {
+    resetProbeCacheForTests();
+  });
+
+  it('probes the device once however often it is asked', () => {
+    let contexts = 0;
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      if (tag !== 'canvas') return realCreate(tag);
+      contexts += 1;
+      return {
+        getContext: () => ({
+          getParameter: () => 4096,
+          getExtension: () => ({ loseContext: () => {} }),
+        }),
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+
+    try {
+      const first = probeRenderCapabilities();
+      const second = probeRenderCapabilities();
+      const third = probeRenderCapabilities();
+
+      expect(contexts, 'the device was probed more than once').toBe(1);
+      expect(second).toBe(first);
+      expect(third).toBe(first);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('can be reset, so a test is never answered from another test', () => {
+    resetProbeCacheForTests();
+    expect(typeof resetProbeCacheForTests).toBe('function');
   });
 });

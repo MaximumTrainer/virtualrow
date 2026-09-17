@@ -30,12 +30,36 @@ export function hasWebGPUAPI(): boolean {
 }
 
 /**
+ * Hand a probe context straight back to the browser.
+ *
+ * A browser keeps only a handful of WebGL contexts alive and evicts the oldest
+ * once that limit is passed. The probes below each opened a context and kept
+ * it, so a demo row requested seven and the browser discarded the one the
+ * scene was drawing into — nine `webglcontextlost` events inside 1.5 s, one
+ * restore, and a stage stuck behind "The 3D view lost the graphics context —
+ * restoring..." (#261).
+ *
+ * glContext.ts already did this for its own probes; these did not.
+ */
+const releaseProbeContext = (context: unknown): void => {
+  const gl = context as { getExtension?: (name: string) => { loseContext?: () => void } | null } | null;
+  try {
+    gl?.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+  } catch {
+    // Extension unavailable; the context is left to normal collection.
+  }
+};
+
+/**
  * Check if WebGL is available in the current browser.
  */
 export function isWebGLAvailable(): boolean {
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    // Released immediately: this only answers "is WebGL available", and a
+    // context kept for that answer costs the scene its own (#261).
+    releaseProbeContext(gl);
     return !!gl;
   } catch {
     return false;
@@ -81,8 +105,12 @@ export async function detectGPUCapabilities(): Promise<GPUCapabilities> {
   
   try {
     const canvas = document.createElement('canvas');
-    webgl2 = !!canvas.getContext('webgl2');
-    webgl = !!canvas.getContext('webgl') || !!canvas.getContext('experimental-webgl');
+    const gl2 = canvas.getContext('webgl2');
+    webgl2 = !!gl2;
+    releaseProbeContext(gl2);
+    const gl1 = canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl');
+    webgl = !!gl1;
+    releaseProbeContext(gl1);
   } catch {
     // Ignore errors
   }

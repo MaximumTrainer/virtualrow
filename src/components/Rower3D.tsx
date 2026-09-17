@@ -42,9 +42,8 @@ import { godRaysSun } from './rower3d/effectPlan';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
-  selectGlOptions,
-  browserContextAttempt,
   probeRenderCapabilities,
+  selectBrowserGlOptions,
   recordContextCreated,
   recordContextLost,
   recordContextRestored,
@@ -772,10 +771,14 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
 
   // Probed once, before the canvas is built: a configuration the driver will
   // refuse leaves R3F with nothing to draw into and no error to report (#232).
+  // Memoised across mounts, not just within one: every attempt opens a context
+  // to see whether the driver grants it, and React re-mounting this component
+  // asked four times over (#261).
   const glSelection = useMemo(
     () =>
-      selectGlOptions(browserContextAttempt, {
-        preferred: { powerPreference: surface.powerPreference, antialias: surface.antialias },
+      selectBrowserGlOptions({
+        powerPreference: surface.powerPreference,
+        antialias: surface.antialias,
       }),
     [surface],
   );
