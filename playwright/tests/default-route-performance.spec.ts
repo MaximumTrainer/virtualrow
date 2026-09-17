@@ -309,10 +309,6 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     // The context survived the whole sweep, and nothing threw.
     const context = await page.evaluate(() => window.__ROWER3D_CONTEXT_STATE ?? null);
     expect(context?.losses ?? 0, `${tier}: the WebGL context was lost`).toBe(0);
-    // `alpha` is the #197 EffectComposer fault, tracked as #257: it fires at
-    // auto and high on a software rasteriser and has nothing to do with route
-    // performance. Everything else is a real failure here.
-    const notIssue257 = errors.filter((message) => !/reading 'alpha'/.test(message));
-    expect(notIssue257, `${tier}: the scene raised errors`).toEqual([]);
+    expect(errors, `${tier}: the scene raised errors`).toEqual([]);
   });
 }
