@@ -17,7 +17,7 @@
 // node already rotates Z-up -> glTF Y-up, so here we only scale mm -> scene
 // units and yaw each instance to sit with the existing landscape.
 // ============================================================================
-import React, { useMemo } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import type { RouteTheme } from './themeConfig';
@@ -72,7 +72,11 @@ interface SceneryModelsProps {
  * Must be rendered inside a <Suspense> boundary: it loads GLBs and will suspend
  * until they arrive.
  */
-export const SceneryModels: React.FC<SceneryModelsProps> = ({
+const SceneryModelsChunk: React.FC<
+  SceneryModelsProps & { readyCount: number; onChunkLoaded: (total: number) => void }
+> = ({
+  readyCount,
+  onChunkLoaded,
   side = 'left',
   boatZ = 0,
   boatProgress = 0,
@@ -123,16 +127,26 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
     return Array.from(all);
   }, [resolvedByProfile, structures]);
 
-  const gltfs = useGLTF(paths) as unknown as Array<{ scene: THREE.Group }>;
+  // Only the models asked for so far. useGLTF suspends until every path it is
+  // handed has loaded, so slicing here is what caps the fetches in flight: a
+  // demo row asked a static host for all 58 at once and earned a 503.
+  const ready = useMemo(() => paths.slice(0, readyCount), [paths, readyCount]);
+
+  const gltfs = useGLTF(ready) as unknown as Array<{ scene: THREE.Group }>;
+
+  // Rendering means the chunk resolved, so the next one may start.
+  useEffect(() => {
+    onChunkLoaded(paths.length);
+  }, [onChunkLoaded, paths.length, gltfs]);
   const sceneById = useMemo(() => {
     const map = new Map<SceneryModelId, THREE.Group>();
-    paths.forEach((path, i) => {
+    ready.forEach((path, i) => {
       const id = path.split('/').pop()!.replace('.glb', '');
       const g = gltfs[i]?.scene;
       if (g) map.set(id, g);
     });
     return map;
-  }, [paths, gltfs]);
+  }, [ready, gltfs]);
 
   const budget = budgetFor(performanceMode);
 
@@ -181,5 +195,35 @@ export const SceneryModels: React.FC<SceneryModelsProps> = ({
         </group>
       ))}
     </group>
+  );
+};
+
+/** Fetches in flight at once — small enough that a static host stays friendly. */
+export const SCENERY_LOAD_CONCURRENCY = 3;
+
+/**
+ * Dress the banks, asking for the kit a few models at a time.
+ *
+ * A demo row at the auto tier handed the loader all 58 models at once — peak 57
+ * fetches in flight — and GitHub Pages answered one of them with a 503. The
+ * file was fine; the volume was not.
+ *
+ * The counter lives here rather than in the component below because that one
+ * suspends, and a suspended component loses the state it owns: keeping the
+ * count inside it restarted the first chunk forever.
+ */
+export const SceneryModels: React.FC<SceneryModelsProps> = (props) => {
+  const [readyCount, setReadyCount] = useState(SCENERY_LOAD_CONCURRENCY);
+
+  const handleChunkLoaded = React.useCallback((total: number) => {
+    setReadyCount((current) =>
+      current >= total ? current : Math.min(current + SCENERY_LOAD_CONCURRENCY, total),
+    );
+  }, []);
+
+  return (
+    <Suspense fallback={null}>
+      <SceneryModelsChunk {...props} readyCount={readyCount} onChunkLoaded={handleChunkLoaded} />
+    </Suspense>
   );
 };
