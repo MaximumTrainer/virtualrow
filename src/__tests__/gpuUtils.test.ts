@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isWebGLAvailable,
+  detectGPUCapabilities,
   hasWebGPUAPI,
   classifyGPUTier,
   describeUnmaskedRenderer,
@@ -158,5 +159,69 @@ describe('recommendPerformanceMode with an unknown texture budget', () => {
   it('does not downgrade a backend that exposes no capabilities', () => {
     expect(recommendPerformanceMode({ renderer: 'NVIDIA GeForce RTX 4070', webgpu: true }))
       .toBe('high');
+  });
+});
+
+describe('probe contexts are released (#261)', () => {
+  /**
+   * A browser keeps only a handful of WebGL contexts alive and evicts the
+   * oldest when that limit is passed. The capability probes here each created
+   * a context and kept it, so a demo row requested seven and the browser threw
+   * away the one the scene was drawing into: measured as 9 `webglcontextlost`
+   * events in the first 1.5 s, one restore, and a permanently blank stage
+   * behind "The 3D view lost the graphics context — restoring...".
+   *
+   * glContext.ts already released its probes this way; these did not.
+   */
+  const withStubbedCanvas = async (run: () => void | Promise<void>) => {
+    const released: string[] = [];
+    const created: string[] = [];
+    const realCreate = document.createElement.bind(document);
+
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      if (tag !== 'canvas') return realCreate(tag);
+      return {
+        getContext: (kind: string) => {
+          created.push(kind);
+          if (kind === 'experimental-webgl') return null;
+          return {
+            getExtension: (name: string) =>
+              name === 'WEBGL_lose_context'
+                ? { loseContext: () => released.push(kind) }
+                : null,
+            getParameter: () => 'stub',
+          };
+        },
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+
+    try {
+      await run();
+    } finally {
+      vi.restoreAllMocks();
+    }
+    return { created, released };
+  };
+
+  it('releases the context isWebGLAvailable opens', async () => {
+    const { created, released } = await withStubbedCanvas(() => {
+      expect(isWebGLAvailable()).toBe(true);
+    });
+
+    expect(created.length).toBeGreaterThan(0);
+    expect(released, 'isWebGLAvailable kept its probe context alive').toEqual(
+      created.filter((k) => k !== 'experimental-webgl'),
+    );
+  });
+
+  it('releases every context the capability probe opens', async () => {
+    const { created, released } = await withStubbedCanvas(async () => {
+      await detectGPUCapabilities();
+    });
+
+    expect(created.length).toBeGreaterThan(0);
+    expect(released.length, 'the capability probe kept contexts alive').toBe(
+      created.filter((k) => k !== 'experimental-webgl').length,
+    );
   });
 });

@@ -199,21 +199,69 @@ export const scheduleContextRestore = (
  * The scene used to learn this only after the canvas existed, which was too
  * late to decide what kind of canvas to build (see sceneQuality.ts).
  */
+/**
+ * Memoised {@link selectGlOptions} against the real browser.
+ *
+ * Each attempt opens a context to see whether the driver grants it, so asking
+ * repeatedly costs contexts for an answer that cannot change. selectGlOptions
+ * itself stays injectable and uncached, because tests drive it with fakes and
+ * must never be answered from another test's run (#261).
+ */
+const selectionCache = new Map<string, GlSelection>();
+
+export const selectBrowserGlOptions = (
+  preferred: { powerPreference: PowerPreference; antialias: boolean },
+): GlSelection => {
+  const key = `${preferred.powerPreference}:${preferred.antialias}`;
+  const cached = selectionCache.get(key);
+  if (cached) return cached;
+
+  const selection = selectGlOptions(browserContextAttempt, { preferred });
+  selectionCache.set(key, selection);
+  return selection;
+};
+
+/**
+ * Cached answer for {@link probeRenderCapabilities}.
+ *
+ * What the device can do does not change while the page is open, but every
+ * probe opens a throwaway WebGL context — and a browser keeps only a handful
+ * alive. Measured on the demo row before this cache existed: probeRender-
+ * Capabilities ran four times and selectGlOptions four more, eleven contexts
+ * for one scene, with the 3D view sitting behind "lost the graphics context —
+ * restoring..." (#261).
+ *
+ * `undefined` means "not asked yet"; `null` is a real answer meaning "could
+ * not probe", and must not cause a re-probe on every render.
+ */
+let cachedCapabilities: RenderCapabilities | null | undefined;
+
+/** Forget the cached probe. For tests, so one never answers another. */
+export const resetProbeCacheForTests = (): void => {
+  cachedCapabilities = undefined;
+  selectionCache.clear();
+};
+
 export const probeRenderCapabilities = (): RenderCapabilities | null => {
+  if (cachedCapabilities !== undefined) return cachedCapabilities;
   if (typeof document === 'undefined') return null;
 
   const canvas = document.createElement('canvas');
   try {
     const context = canvas.getContext('webgl2') as WebGL2RenderingContext | null;
-    if (!context) return null;
+    if (!context) {
+      cachedCapabilities = null;
+      return cachedCapabilities;
+    }
 
-    const capabilities: RenderCapabilities = {
+    cachedCapabilities = {
       maxTextureSize: context.getParameter(context.MAX_TEXTURE_SIZE) as number,
       renderer: describeUnmaskedRenderer(context),
     };
     context.getExtension('WEBGL_lose_context')?.loseContext();
-    return capabilities;
+    return cachedCapabilities;
   } catch {
-    return null;
+    cachedCapabilities = null;
+    return cachedCapabilities;
   }
 };
