@@ -1228,6 +1228,12 @@ test.describe('docs screenshots', () => {
     // by the Three.js animation loop on Ubuntu/Windows CI runners. This gives the same
     // cropped output without waiting for pixel-level stabilisation.
     const routeStageBbox = await routeStage.boundingBox({ timeout: 5000 }).catch(() => null);
+    // Draw a complete frame first. The renderer clears to a transparent buffer
+    // at the start of every render and a frame is slow here, so a screenshot
+    // taken on its own schedule usually lands in the gap between two frames —
+    // which is how an empty gradient shipped as the site's hero image while the
+    // scene was rendering sky, banks and water perfectly well (#261).
+    await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
     await page.screenshot({
       path: path.join(docsDir, 'screenshot-rower-3d.png'),
       ...(routeStageBbox ? { clip: routeStageBbox } : {}),
