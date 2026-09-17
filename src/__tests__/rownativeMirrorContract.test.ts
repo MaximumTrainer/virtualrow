@@ -11,6 +11,14 @@ import { RouteService } from '../services/routeService';
  */
 const enabled = process.env.ROWNATIVE_CONTRACT_CHECK === '1';
 
+/**
+ * A mirror course that ships a top-level `path` (issue #208).
+ *
+ * 277 is "9K Heerenveens Kanaal", the first course upstream published with the
+ * field after it was added to SCHEMA.md.
+ */
+const PATH_COURSE_ID = '277';
+
 describe.skipIf(!enabled)('rownative mirror contract (live network)', () => {
   it('index.json still carries the fields we read', async () => {
     const service = new RownativeService();
@@ -49,20 +57,43 @@ describe.skipIf(!enabled)('rownative mirror contract (live network)', () => {
     expect(route.tags).not.toContain('outline-only');
   }, 30_000);
 
-  it('accepts an optional top-level path field, if upstream ever adds one', async () => {
-    // Issue #194 R-13/R-14: the field is not in the schema yet. Assert its
-    // shape only when present, so the day it lands we read it rather than
-    // break on it.
+  it('reads the upstream path field on the course that ships one', async () => {
+    // Issue #208 AC-3. This test used to fetch course 1 — which has no path —
+    // and wrap its assertions in `if (course.path !== undefined)`, so it passed
+    // without testing anything. Upstream has since added the field (SCHEMA.md
+    // "Path (optional)") and course 277 carries a real one, so the guard is
+    // gone and the course is one that actually has the data.
     const service = new RownativeService();
-    const course = await service.fetchCourseGeometry('1') as { path?: unknown };
+    const course = (await service.fetchCourseGeometry(PATH_COURSE_ID)) as {
+      path?: { lat: unknown; lon: unknown }[];
+    };
 
-    if (course.path !== undefined) {
-      expect(Array.isArray(course.path)).toBe(true);
-      for (const point of course.path as { lat: unknown; lon: unknown }[]) {
-        expect(typeof point.lat).toBe('number');
-        expect(typeof point.lon).toBe('number');
-      }
+    expect(
+      course.path,
+      `course ${PATH_COURSE_ID} no longer ships a path; pick another that does`,
+    ).toBeDefined();
+    expect(Array.isArray(course.path)).toBe(true);
+    expect(course.path!.length).toBeGreaterThanOrEqual(2);
+    for (const point of course.path!) {
+      expect(typeof point.lat).toBe('number');
+      expect(typeof point.lon).toBe('number');
     }
+  }, 30_000);
+
+  it('imports a course with a path as traced geometry, not a gate chain', async () => {
+    // The point of the field: a consumer that draws the course gets the line
+    // the crew rows instead of straight gate-to-gate hops. Asserting the shape
+    // parses would not have caught the importer ignoring it.
+    const routes = new RouteService();
+    const service = new RownativeService(undefined, (d) => routes.importRouteFromRownative(d));
+
+    const route = await service.importCourseById(PATH_COURSE_ID);
+
+    expect(route.geometrySource).toBe('track');
+    expect(route.coordinates.length).toBeGreaterThanOrEqual(2);
+    expect(route.coordinates.every((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng))).toBe(
+      true,
+    );
   }, 30_000);
 
   it('reports a known-absent id as not found rather than crashing', async () => {

@@ -22,6 +22,7 @@ npx vitest run --coverage # Unit tests with v8 coverage
 npm run test:e2e         # Playwright E2E (local, needs dev server)
 npm run test:e2e:ci      # Playwright E2E (CI, retries=2)
 npm run verify           # Lint + type-check + full unit suite (what pre-push runs)
+npm run test:contract    # Live check against the rownative mirror (network, opt-in)
 npm run verify:staged    # TDD guard alone, against the current git index
 npm run hooks:install    # Point git at .githooks (also runs on npm install)
 ```
