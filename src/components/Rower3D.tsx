@@ -26,6 +26,7 @@ import {
 import { getThemeConfig, themeUsesGlbScenery } from './rower3d/themeConfig';
 import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
+import { RiverGuides } from './rower3d/RiverGuides';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import { IS_TEST_MODE, SCENE_SCALE, hasExplicitPerformanceMode } from './rower3d/constants';
 import {
@@ -170,6 +171,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
   crew = 'male',
+  debugMode = false,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -512,6 +514,13 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       
       {routeCurve && (
         <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
+      )}
+
+      {/* Yellow down the middle of the channel, red at each water edge. Only
+          with the debug toggle on: it answers whether the boat is actually off
+          centre, which the washed-out water makes impossible to judge. */}
+      {debugMode && routeCurve && (
+        <RiverGuides curve={routeCurve} enrichment={enrichment} />
       )}
       
       {!routeCurve && (
