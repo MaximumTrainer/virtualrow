@@ -341,6 +341,18 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         window.__ROWER3D_CAMERA = {
           position: [camera.position.x, camera.position.y, camera.position.z]
         };
+        // Draw this exact frame on demand.
+        //
+        // The renderer clears to a transparent buffer at the start of every
+        // render, and a frame takes long enough on a software rasteriser that
+        // the compositor is usually looking at the cleared buffer rather than a
+        // finished picture — which is why the docs hero shipped as an empty
+        // gradient while the scene itself was rendering sky, banks and water
+        // perfectly well (#261). A capture calls this first so it photographs a
+        // complete frame instead of the gap between two.
+        window.__ROWER3D_FORCE_RENDER = () => {
+          gl.render(scene, camera);
+        };
         window.__ROWER3D_ROUTE = {
           hasCurve: !!routeCurve,
           totalDistance,

@@ -322,6 +322,14 @@ declare global {
     // Rower3D telemetry exposed for Playwright assertions
     __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
     __ROWER3D_CAMERA?: { position: [number, number, number] };
+    /**
+     * Draw the current frame immediately. Test mode only.
+     *
+     * The renderer clears to a transparent buffer before each render, and a
+     * frame is slow enough on a software rasteriser that a screenshot usually
+     * lands in the gap rather than on a finished picture (#261).
+     */
+    __ROWER3D_FORCE_RENDER?: () => void;
     __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number; builds?: number };
     __ROWER3D_SPEED_MPS?: number;
     __ROWER3D_STROKE_PHASE?: string;
