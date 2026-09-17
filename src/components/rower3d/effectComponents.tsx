@@ -5,6 +5,7 @@ import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { effectPlanFor, type EffectName } from './effectPlan';
 import { IS_TEST_MODE } from './constants';
+import { canInitialisePostProcessing } from './postProcessingGuard';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
@@ -379,21 +380,14 @@ export const DynamicPostFx: React.FC<{
   /**
    * Whether postprocessing can initialise at all.
    *
-   * `EffectComposer.addPass` reads `renderer.getContext().getContextAttributes().alpha`,
-   * and `getContextAttributes()` returns null when the WebGL context is lost or
-   * was never validly created — software renderers and post-GPU-reset contexts
-   * both do this. Mounting the composer then throws into the GPU error boundary
-   * (issue #197). Checking up front lets us drop the effect stack deliberately
-   * and keep the scene, instead of throwing and relying on a catch.
+   * Asked on every render rather than memoised on the renderer. `postprocessing`
+   * dereferences `getContextAttributes().alpha` in both setRenderer and addPass,
+   * and the renderer object does not change identity when its context goes — so
+   * a verdict cached at mount stayed `true` after the attributes had gone, and
+   * the next effect-list change threw anyway (#257). The check is two property
+   * reads; caching it was never worth a stale answer.
    */
-  const canPostProcess = useMemo(() => {
-    try {
-      const context = gl.getContext();
-      return !!context && context.getContextAttributes() !== null;
-    } catch {
-      return false;
-    }
-  }, [gl]);
+  const canPostProcess = canInitialisePostProcessing(gl);
 
   useEffect(() => {
     if (!canPostProcess) {

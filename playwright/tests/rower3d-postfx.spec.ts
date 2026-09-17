@@ -204,14 +204,11 @@ test.describe('3D postprocessing', () => {
     await startDemoRow(page);
     await page.waitForTimeout(6_000);
 
-    // Only `parent` is this issue's. #233 named `alpha` as a second symptom of
-    // the god-rays pass, but it is not: it is the #197 EffectComposer fault,
-    // which fires at auto and high on a software rasteriser with no god rays
-    // involved and is tracked as #257. Asserting it here would make this test
-    // fail for a bug it does not cover.
+    // Both faults are fixed at the source now — `parent` by #233 here, and the
+    // EffectComposer `alpha` by #257 — so high mode is held to raising neither.
     expect(
-      errors.filter((e) => /reading 'parent'/.test(e)),
-      'the god-rays pass was built without a live light source',
+      errors.filter((e) => /reading '(parent|alpha)'/.test(e)),
+      'the effect stack threw on a null dereference',
     ).toEqual([]);
 
     // Whether the scene survives is a different question, and on a software

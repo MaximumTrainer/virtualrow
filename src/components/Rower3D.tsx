@@ -611,12 +611,21 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
           into the effect stack via __VIRTUALROW_PERFORMANCE_MODE — see #197.
           Automation still defaults to 'low', which excludes this. */}
       {performanceMode !== 'low' && (
-        <DynamicPostFx
-          velocityRef={velocityRef}
-          performanceMode={performanceMode}
-          theme={routeTheme}
-          sunMesh={godRaysSunMesh}
-        />
+        // Scoped so the effect stack cannot take the scene with it. The guard
+        // inside DynamicPostFx catches the context that reports no attributes,
+        // but `postprocessing` dereferences them again inside addPass, on a
+        // later frame and beyond our reach — and today that throw reaches the
+        // GPU boundary and replaces the whole 3D view with "3D rendering
+        // error" (#257). Losing the grade is a far smaller thing to lose than
+        // the river.
+        <SceneErrorBoundary fallback={null} bare={null}>
+          <DynamicPostFx
+            velocityRef={velocityRef}
+            performanceMode={performanceMode}
+            theme={routeTheme}
+            sunMesh={godRaysSunMesh}
+          />
+        </SceneErrorBoundary>
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (

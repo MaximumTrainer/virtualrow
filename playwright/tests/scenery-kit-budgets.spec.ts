@@ -128,15 +128,9 @@ ${error.stack ?? ''}`));
     })
     .toBeGreaterThan(0);
 
-  // The filter is narrowed, not removed. It used to excuse both `parent` and
-  // `alpha`; #233 fixed `parent` at the source, so that half is now a real
-  // failure if it ever returns. `alpha` is a different fault — the #197
-  // EffectComposer path, tracked as #257 — and still fires here, so it stays
-  // excused until that is fixed rather than turning this spec red for a bug it
-  // is not about.
-  const notIssue257 = errors.filter((message) => !/reading 'alpha'/.test(message));
-
-  expect(notIssue257, 'the scenery kit raised errors while dressing the route').toEqual([]);
+  // Nothing is excused here any more: `parent` was fixed by #233 and `alpha`
+  // by #257, so both are real failures if they return.
+  expect(errors, 'the scenery kit raised errors while dressing the route').toEqual([]);
 });
 
 test('a 20 km route stays inside the geometry budget with the kit on', async ({ page }) => {
