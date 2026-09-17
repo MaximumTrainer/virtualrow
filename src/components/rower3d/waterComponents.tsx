@@ -106,13 +106,13 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
           color={waterConfig.color}
           metalness={0.05}
           roughness={waterConfig.roughness}
-          transmission={waterConfig.transmission}
+          transmission={waterConfig.transmission * 0.3}
           thickness={waterConfig.thickness}
           ior={1.333}
-          reflectivity={0.95}
-          clearcoat={0.4}
-          clearcoatRoughness={0.25}
-          envMapIntensity={2.2}
+          reflectivity={0.35}
+          clearcoat={0.25}
+          clearcoatRoughness={0.35}
+          envMapIntensity={0.6}
           transparent
           opacity={0.94}
           emissive={waterConfig.emissive}
@@ -186,24 +186,23 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   // compiled once and the per-frame roughness is written once (#224).
   const material = useMemo(
     () =>
-      new THREE.MeshPhysicalMaterial({
+      new THREE.MeshStandardMaterial({
+        // Standard, not physical. The physical material rendered nothing at
+        // all here: a probe material on the same geometry drew 4.1% of the
+        // frame while the physical one drew none of it, so the river was
+        // simply absent and the sky showed through where the water should be
+        // (#269). Its realism came from transmission, which needs a scene
+        // behind the surface to refract and had none.
         color: waterConfig.color,
-        metalness: 0.05,
-        roughness: waterConfig.roughness,
-        transmission: waterConfig.transmission,
-        thickness: waterConfig.thickness,
-        ior: 1.333,
-        reflectivity: 0.95,
-        clearcoat: 0.4,
-        clearcoatRoughness: 0.25,
-        envMapIntensity: 1.8,
-        transparent: true,
-        opacity: 0.94,
-        emissive: waterConfig.emissive,
-        emissiveIntensity: waterConfig.emissiveIntensity,
-        attenuationColor: new THREE.Color(waterConfig.attenuationColor),
-        attenuationDistance: waterConfig.thickness * 1.5,
-        side: THREE.FrontSide,
+        // Rough and non-metallic: with no environment map to reflect, metalness
+        // renders the surface near-black, which reads as a hole rather than a
+        // river. The lift comes from the theme's own emissive instead.
+        roughness: 0.55,
+        metalness: 0.0,
+        envMapIntensity: 0.4,
+        emissive: new THREE.Color(waterConfig.color),
+        emissiveIntensity: 0.35,
+        side: THREE.DoubleSide,
       }),
     [waterConfig],
   );
