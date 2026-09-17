@@ -81,7 +81,10 @@ export function createCausticsTexture(): THREE.CanvasTexture {
  * @param cacheKey     Unique string so Three.js recompiles when theme changes.
  */
 export function attachGerstnerShader(
-  mat: THREE.MeshPhysicalMaterial,
+  // Standard rather than physical: the water uses a standard material now,
+  // because the physical one rendered nothing at all (#269). Physical extends
+  // standard, so both still fit.
+  mat: THREE.MeshStandardMaterial,
   timeUniform: { value: number },
   heightAxis: 'y' | 'z',
   cacheKey: string,

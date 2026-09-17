@@ -40,6 +40,7 @@ import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
 import { godRaysSun } from './rower3d/effectPlan';
+import { sceneExposure } from './rower3d/sceneExposure';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
@@ -237,6 +238,17 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
 
   const strokeCycleTRef = useRef(0);
   const velocityRef = useRef(0);
+
+  // The effect stack is not mounted at the low tier, and it is the only other
+  // writer of exposure — so without this the low tier keeps whatever the canvas
+  // was created with and the sky blows out there regardless (#269).
+  useEffect(() => {
+    // react-hooks/immutability: the renderer is a live handle, and exposure is
+    // a value written on it by design — the effect stack writes the same field
+    // every frame.
+    // eslint-disable-next-line react-hooks/immutability
+    gl.toneMappingExposure = sceneExposure(routeTheme, 0);
+  }, [gl, routeTheme]);
 
   useFrame((state, delta) => {
     markFirstFrame();
@@ -868,7 +880,9 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
             toneMapping: THREE.ACESFilmicToneMapping,
-            toneMappingExposure: 1.0,
+            // Set from the theme below; the initial value only covers the first
+            // frames before the effect runs.
+            toneMappingExposure: 0.55,
           }}
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;

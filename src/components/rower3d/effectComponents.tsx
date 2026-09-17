@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { effectPlanFor, type EffectName } from './effectPlan';
 import { IS_TEST_MODE } from './constants';
 import { canInitialisePostProcessing } from './postProcessingGuard';
+import { sceneExposure } from './sceneExposure';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
@@ -405,7 +406,9 @@ export const DynamicPostFx: React.FC<{
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
     caEffect.offset.set(aberration, aberration * 0.6);
 
-    const targetExposure = vel > 3 ? 0.85 : 1.0;
+    // Relative to the exposure the theme authored, not to a hardcoded 1.0 —
+    // which is what rendered the sky, and the water reflecting it, white (#269).
+    const targetExposure = sceneExposure(theme, vel);
     gl.toneMappingExposure = THREE.MathUtils.lerp(gl.toneMappingExposure, targetExposure, 0.015);
   });
 
