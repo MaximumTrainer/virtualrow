@@ -293,7 +293,10 @@ const isUnderAutomation = (w: { __PLAYWRIGHT_TESTING?: boolean }): boolean => {
  * questions are separated here: an explicit answer always wins, in either
  * direction, and only the default differs between a rower and a spec.
  *
- * `?glb=0` turns it off again without a deploy.
+ * The `?glb=` query parameter it used to read is gone: the kit is switched from
+ * the debug panel instead (#270), which is discoverable and does not require
+ * editing a URL. `__VIRTUALROW_SCENERY_MODELS` remains, because that is what
+ * the panel and the specs both set.
  */
 export const isGlbSceneryEnabled = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -302,14 +305,6 @@ export const isGlbSceneryEnabled = (): boolean => {
     __PLAYWRIGHT_TESTING?: boolean;
   };
   if (typeof w.__VIRTUALROW_SCENERY_MODELS === 'boolean') return w.__VIRTUALROW_SCENERY_MODELS;
-
-  try {
-    const requested = new URLSearchParams(window.location.search).get('glb');
-    if (requested === '1') return true;
-    if (requested === '0') return false;
-  } catch {
-    // No usable location; fall through to the default.
-  }
 
   // Automation opts in per spec, so suites that do not measure the kit do not
   // pay for it. Asking the browser rather than the BLE mock is the point:

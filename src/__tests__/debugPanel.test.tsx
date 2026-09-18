@@ -98,3 +98,31 @@ describe('the river guides toggle', () => {
       .toBe(false);
   });
 });
+
+describe('the scenery kit toggle', () => {
+  it('offers a control for the GLB scenery kit inside the debug window', async () => {
+    // It replaced ?glb=, which was the only way to switch the kit and required
+    // editing the URL to use (#270).
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /debug/i }));
+
+    expect(screen.getByRole('checkbox', { name: /scenery/i })).toBeTruthy();
+  });
+
+  it('switches the kit off and on again', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /debug/i }));
+    const kit = () => screen.getByRole('checkbox', { name: /scenery/i }) as HTMLInputElement;
+    const started = kit().checked;
+
+    await user.click(kit());
+    expect(kit().checked).toBe(!started);
+
+    await user.click(kit());
+    expect(kit().checked).toBe(started);
+  });
+});

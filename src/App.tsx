@@ -23,6 +23,7 @@ import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
 import { resolveCrew } from './components/rower3d/crewModel';
+import { isGlbSceneryEnabled } from './components/rower3d/sceneryAssets';
 import { useServices } from './context/useServices';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
@@ -124,6 +125,10 @@ function App() {
   // Given their own switch so they can be turned off without losing the rest of
   // the debug window (#270).
   const [showRiverGuides, setShowRiverGuides] = useState(true);
+  // Replaces the ?glb= query parameter (#270): switching the scenery kit should
+  // be a control, not a URL edit. Seeded from the same default the scene uses,
+  // so opening the panel changes nothing by itself.
+  const [sceneryEnabled, setSceneryEnabled] = useState(() => isGlbSceneryEnabled());
   // Only polled while the panel is open (#232).
   const renderStats = useRenderStats(debugMode);
 
@@ -1267,6 +1272,7 @@ function App() {
                       intensityFactor={structuredWorkout.speedFactor}
                       debugMode={debugMode}
                       showRiverGuides={showRiverGuides}
+                      sceneryEnabled={sceneryEnabled}
                       crew={resolveCrew(user?.gender, crew.preference)}
                     />
                   </Suspense>
@@ -1410,6 +1416,14 @@ function App() {
                 onChange={(e) => setShowRiverGuides(e.target.checked)}
               />
               <span>River guides</span>
+            </label>
+            <label className="debug-toggle-row">
+              <input
+                type="checkbox"
+                checked={sceneryEnabled}
+                onChange={(e) => setSceneryEnabled(e.target.checked)}
+              />
+              <span>GLB scenery kit</span>
             </label>
           </div>
 
