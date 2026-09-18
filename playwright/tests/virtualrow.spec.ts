@@ -673,13 +673,37 @@ test.describe('Simulated e2e route playback', () => {
       );
     }
 
-    const pos = await page.evaluate(() => window.__ROWER3D_POS);
-    const camera = await page.evaluate(() => window.__ROWER3D_CAMERA);
+    // Both in one call, so they describe the same frame.
+    //
+    // Read separately, the scene advances between the two round trips - a frame
+    // costs a second or more on a software rasteriser - and the boat and the
+    // camera come from different moments. On a route that is turning, that is
+    // enough to put the camera on the wrong side of the boat arithmetically
+    // while the picture is perfectly correct.
+    const { pos, camera } = await page.evaluate(() => ({
+      pos: window.__ROWER3D_POS,
+      camera: window.__ROWER3D_CAMERA,
+    }));
     if (pos && camera) {
       expect(camera.position[1]).toBeGreaterThan(pos.y);
-      expect(camera.position[2]).toBeGreaterThan(pos.z);
+
       const dx = camera.position[0] - pos.x;
       const dz = camera.position[2] - pos.z;
+
+      // Behind the boat along the way the boat is pointing - which is not the
+      // same thing as behind it in world z.
+      //
+      // The camera is placed at `position - tangent * distance`, so it only sits
+      // at a greater z while the route happens to run towards -z. Where the route
+      // turns across that axis the old assertion became a coin toss, and it lost
+      // by 0.19 of a scene unit in 442: camera.z -442.7679 against boat.z
+      // -442.5782, with the heading almost exactly perpendicular to z.
+      //
+      // `angle` is atan2(tangent.x, tangent.z), so the heading is
+      // (sin angle, cos angle) and a negative dot product means behind.
+      const behind = dx * Math.sin(pos.angle) + dz * Math.cos(pos.angle);
+      expect(behind, 'the camera is not behind the boat').toBeLessThan(0);
+
       const dist2 = dx * dx + dz * dz;
       expect(dist2).toBeGreaterThan(0.01);
     }

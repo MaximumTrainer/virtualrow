@@ -25,10 +25,19 @@ export const RESPONSIVE_VIEWPORTS = [
 
 export const RESPONSIVE_SPEC = '**/responsive.spec.ts';
 
+/**
+ * The long-running traverses (#272), which are not part of verifying a deploy.
+ *
+ * They row a route from one end to the other and take a couple of minutes each.
+ * That is a different question from 'does this build work', asked at a different
+ * cadence, so they run in their own job - see playwright.config.endurance.ts.
+ */
+export const ENDURANCE_SPEC = '**/route-endurance.spec.ts';
+
 /** The matrix as Playwright projects, plus a `default` project for every other spec. */
 export function responsiveProjects(): Project[] {
   return [
-    { name: 'default', testIgnore: RESPONSIVE_SPEC },
+    { name: 'default', testIgnore: [RESPONSIVE_SPEC, ENDURANCE_SPEC] },
     ...RESPONSIVE_VIEWPORTS.map((v) => ({
       name: v.name,
       testMatch: RESPONSIVE_SPEC,
