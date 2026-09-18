@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   probeRenderCapabilities,
+  selectBrowserGlOptions,
   resetProbeCacheForTests,
   selectGlOptions,
   readContextState,
@@ -12,6 +13,15 @@ import {
   RESTORE_DELAYS_MS,
   type ContextAttempt,
 } from '../components/rower3d/glContext';
+
+// Both caches here outlive a test: the probe answers and the configuration the
+// driver granted. Cleared before every test in the file rather than per
+// describe, because a test answered from another's cache opens no context and
+// then reports a count of zero for a reason that is not visible in the failure.
+beforeEach(() => {
+  resetProbeCacheForTests();
+  clearContextState();
+});
 
 /** The preferences the high and low tiers bring to the probe. */
 const HIGH = { preferred: { powerPreference: 'high-performance' as const, antialias: true } };
@@ -250,5 +260,71 @@ describe('device probes are asked once (#261)', () => {
   it('can be reset, so a test is never answered from another test', () => {
     resetProbeCacheForTests();
     expect(typeof resetProbeCacheForTests).toBe('function');
+  });
+});
+
+describe('a live scene context is never risked on another probe (#context-loss)', () => {
+  /**
+   * The selection cache is keyed on what was asked for, so a settings change
+   * mid-session asked the driver a *new* question — and every question opens a
+   * throwaway context. A browser keeps only a handful alive and evicts the
+   * oldest, which by then is the scene's own: measured on the demo row, the
+   * scene's context was created first at ~1.4s, a probe opened a new one at
+   * ~3.7s, and the scene lost its context at ~5.2s and showed 'The 3D view
+   * lost the graphics context - restoring...' over the river.
+   *
+   * Once a context is live the question is already answered for this page, so
+   * the granted selection is reused rather than re-probed.
+   */
+
+  const countingCanvas = () => {
+    let contexts = 0;
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      if (tag !== 'canvas') return realCreate(tag);
+      contexts += 1;
+      return {
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        getContext: () => ({
+          getParameter: () => 4096,
+          getExtension: () => ({ loseContext: () => {} }),
+        }),
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+    return () => contexts;
+  };
+
+  it('opens no new context for a different request while the scene is drawing', () => {
+    const contexts = countingCanvas();
+    try {
+      const granted = selectBrowserGlOptions({ powerPreference: 'high-performance', antialias: true });
+      expect(granted.usable).toBe(true);
+      const afterFirst = contexts();
+      expect(afterFirst).toBeGreaterThan(0);
+
+      // The scene is now drawing into a real context.
+      recordContextCreated({ powerPreference: granted.powerPreference, antialias: granted.antialias });
+
+      // A settings change asks a different question. It must not cost a context.
+      const later = selectBrowserGlOptions({ powerPreference: 'default', antialias: false });
+
+      expect(contexts(), 'a probe context was opened while the scene was drawing').toBe(afterFirst);
+      expect(later.usable, 'the reused selection must still be usable').toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('still probes a new request when no scene context is live', () => {
+    const contexts = countingCanvas();
+    try {
+      selectBrowserGlOptions({ powerPreference: 'high-performance', antialias: true });
+      const afterFirst = contexts();
+      selectBrowserGlOptions({ powerPreference: 'default', antialias: false });
+      expect(contexts(), 'with nothing drawing, a new request is worth a probe').toBeGreaterThan(afterFirst);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

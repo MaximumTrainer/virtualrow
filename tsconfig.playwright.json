@@ -14,5 +14,5 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["playwright", "src/types"]
+  "include": ["playwright", "src/types", "src/utils/sceneHealth.ts"]
 }

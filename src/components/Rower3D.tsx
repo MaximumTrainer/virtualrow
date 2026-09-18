@@ -932,7 +932,24 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           }}
         >
           <CameraAspectFix />
-          <RowerScene {...props} performanceMode={quality} gpuBackend={gpuBackend} />
+          {/* The scene's own boundary, and it must stay here.
+
+              Everything that dresses the river loads late - models, textures,
+              environments - and anything that suspends is caught by the
+              nearest boundary above it. Without this one that was the
+              boundary in App that owns this whole component, so a GLB
+              resolving a few seconds into a row hid the Canvas: React keeps
+              the DOM but destroys the effects, R3F disposes the renderer on
+              the way down, and the context goes with it. Measured on the demo
+              row: one scene context created at ~1.6s, a re-suspension at
+              ~4.2s, and the context lost at ~6.0s - leaving 'The 3D view lost
+              the graphics context - restoring...' across the river while the
+              rower was still rowing.
+
+              Suspending here costs a frame of scenery instead. */}
+          <Suspense fallback={null}>
+            <RowerScene {...props} performanceMode={quality} gpuBackend={gpuBackend} />
+          </Suspense>
         </Canvas>
       </GPUErrorBoundary>
     </div>

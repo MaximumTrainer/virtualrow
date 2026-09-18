@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #67 — following a structured workout on a route.
@@ -126,6 +127,7 @@ test('a row with no workout selected is exactly as it was', async ({ page }) => 
   await connectHardwareAndStart(page);
 
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the structured workout scene');
   await expect(page.locator('.workout-overlay')).toHaveCount(0);
 
   expect(

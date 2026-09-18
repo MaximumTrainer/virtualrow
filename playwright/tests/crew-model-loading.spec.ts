@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #251 — the crewed sculls are published with the site and both of them
@@ -80,6 +81,7 @@ async function startDemoRow(page: Page) {
   await expect(demo).toBeVisible({ timeout: 15_000 });
   await demo.click();
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the crew scene');
 }
 
 async function endWorkout(page: Page) {

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #224 — the scene has to come up quickly whatever route is loaded, and
@@ -131,6 +132,7 @@ async function rowGeneratedCourse(
   });
 
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the route performance scene');
   return errors;
 }
 

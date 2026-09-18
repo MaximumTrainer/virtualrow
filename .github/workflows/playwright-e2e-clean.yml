@@ -65,7 +65,11 @@ jobs:
 
       - name: Run E2E tests
         run: npm run test:e2e:ci
-        timeout-minutes: 30
+        # The scene keeps its WebGL context now, so every 3D spec draws for as
+        # long as it runs instead of going quiet a few seconds in. That is the
+        # point, and it costs real time on a software rasteriser: macOS ran to
+        # 29.3 minutes of test time and tripped the old 30 minute ceiling.
+        timeout-minutes: 40
 
       - name: Upload Playwright artifacts
         if: always()

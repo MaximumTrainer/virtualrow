@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #197 — coverage for the 3D postprocessing path.
@@ -186,6 +187,7 @@ test.describe('3D postprocessing', () => {
 
     // And the scene survives without its effect stack.
     await expect(page.locator('.activity-route-stage .rower3d-canvas-container canvas')).toBeVisible();
+    await expectSceneAlive(page, 'the postfx scene');
     await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
   });
 

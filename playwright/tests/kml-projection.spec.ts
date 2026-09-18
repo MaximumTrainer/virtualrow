@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * KV-2 (#191) — an imported KML route renders without artefacts.
@@ -130,6 +131,7 @@ test.describe('imported KML route rendering (KV-2)', () => {
     });
 
     await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 15_000 });
+    await expectSceneAlive(page, 'the imported KML route');
     await page.waitForFunction(() => window.__ROWER3D_POS !== undefined, { timeout: 15_000 });
 
     /** Every telemetry number the scene exposes, at one instant. */

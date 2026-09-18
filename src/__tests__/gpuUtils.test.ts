@@ -1,12 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isWebGLAvailable,
+  resetGpuProbeCacheForTests,
   detectGPUCapabilities,
   hasWebGPUAPI,
   classifyGPUTier,
   describeUnmaskedRenderer,
   recommendPerformanceMode,
 } from '../utils/gpuUtils';
+
+// Availability is cached, because each probe costs a WebGL context - see
+// isWebGLAvailable. Cleared before *every* test in this file, not per describe:
+// the tests below stub the canvas and count the contexts opened, so one left
+// holding a cached answer reports zero and the reason is not obvious. It passed
+// locally and failed in CI on ordering alone.
+beforeEach(() => {
+  resetGpuProbeCacheForTests();
+});
 
 describe('gpuUtils', () => {
   describe('isWebGLAvailable', () => {
@@ -223,5 +233,41 @@ describe('probe contexts are released (#261)', () => {
     expect(released.length, 'the capability probe kept contexts alive').toBe(
       created.filter((k) => k !== 'experimental-webgl').length,
     );
+  });
+});
+
+describe('WebGL availability is asked once (#context-loss)', () => {
+  /**
+   * Rower3D asks on every mount, and each ask opens a context. A browser keeps
+   * only a handful alive and evicts the oldest at the moment a new one is
+   * created - before the probe can hand its own back - and the oldest is the
+   * context the scene is drawing the river into. Measured on the demo row: a
+   * remount probed at ~4.4s and the scene lost its context at ~6.1s, putting
+   * 'The 3D view lost the graphics context - restoring...' over the river.
+   *
+   * Whether this browser has WebGL cannot change while the page is open.
+   */
+  it('opens one context however many times it is asked', () => {
+    let contexts = 0;
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      if (tag !== 'canvas') return realCreate(tag);
+      return {
+        getContext: (kind: string) => {
+          if (kind !== 'webgl2') return null;
+          contexts += 1;
+          return { getExtension: () => ({ loseContext: () => {} }) };
+        },
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+
+    try {
+      expect(isWebGLAvailable()).toBe(true);
+      expect(isWebGLAvailable()).toBe(true);
+      expect(isWebGLAvailable()).toBe(true);
+      expect(contexts, 'WebGL availability was probed more than once').toBe(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

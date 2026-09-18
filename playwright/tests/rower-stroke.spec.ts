@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #273 — the rower's arms move with the oars in the GLB scull.
@@ -37,6 +38,7 @@ test('the GLB scull drives the rower from the same stroke as the oars', async ({
   await page.goto('./');
   await page.locator('.btn-try-demo').click();
   await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
+  await expectSceneAlive(page, 'the stroke scene');
 
   await expect
     .poll(() => page.evaluate(() => window.__ROWER3D_ARM_ANGLE ?? null), {

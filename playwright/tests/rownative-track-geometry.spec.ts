@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
@@ -97,6 +98,7 @@ test.describe('rownative course geometry (issue #194)', () => {
     await expect(page.locator('.btn-start-workout')).toBeEnabled({ timeout: 15_000 });
     await page.evaluate(() => (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click());
     await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 20_000 });
+    await expectSceneAlive(page, 'the rownative course scene');
 
     await page.waitForFunction(() => (window.__ROWER3D_ROUTE?.totalDistance ?? 0) > 0, { timeout: 20_000 });
     const { engineTotal, cardKm } = await page.evaluate(() => ({

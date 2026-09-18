@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #195 — the layout clips instead of degrading outside ~1280x720.
@@ -102,6 +103,7 @@ async function startDemo(page: Page) {
   await expectHitTestable(page, '.btn-try-demo', 'Try a demo row');
   await page.locator('.btn-try-demo').click();
   await expect(page.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
+  await expectSceneAlive(page, 'the responsive workout scene');
 }
 
 test.describe('responsive layout', () => {

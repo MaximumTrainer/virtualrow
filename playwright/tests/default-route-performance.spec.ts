@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { useSimServer, releaseSimServer, emitPm5 } from '../utils/sim-server';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #255 — the default route renders and runs correctly at low, auto and
@@ -66,7 +67,23 @@ const SPEED_PHASES: SpeedPhase[] = [
 
 /** Rowing per phase: long enough to gather frames, short enough to afford. */
 const PHASE_SECONDS = 5;
-const EMIT_HZ = 10;
+
+/**
+ * How often PM5 frames are delivered, which depends on who is drawing.
+ *
+ * Every tick is a round trip into the page, and a round trip queues behind the
+ * frame in progress. On a software rasteriser at the high tier a frame costs
+ * seconds, so 10 Hz for four phases - 200 trips - ran past the 480s budget and
+ * timed out. It used to fit only because the scene lost its WebGL context a few
+ * seconds in and stopped drawing altogether; with the context surviving, the
+ * renderer is busy for the whole sweep and the cost is real.
+ *
+ * Dropping the rate there costs nothing that is measured: pacing is recorded
+ * rather than enforced on a software rasteriser, and distance and elapsed time
+ * are both derived from the rate, so they stay coherent at any of them.
+ */
+const EMIT_HZ_HARDWARE = 10;
+const EMIT_HZ_SOFTWARE = 2;
 
 /** Per-frame budget from #224, in milliseconds at the 95th percentile. */
 const P95_BUDGET_MS = 18;
@@ -119,6 +136,7 @@ async function connectHardwareAndStart(page: Page) {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the default route scene');
 }
 
 /**
@@ -204,6 +222,7 @@ async function rowPhase(
   phase: SpeedPhase,
   startDistance: number,
   startSeconds: number,
+  emitHz: number,
 ): Promise<PhaseResult> {
   const metresPerSecond = 500 / phase.paceSecondsPer500m;
   // Liveness comes from the render-stats timestamp, not from the frame count:
@@ -211,14 +230,14 @@ async function rowPhase(
   // it plateaus once the window is full and a delta of zero means the window is
   // saturated, not that the scene stopped.
   const before = await readSampledAt(page);
-  const ticks = PHASE_SECONDS * EMIT_HZ;
+  const ticks = PHASE_SECONDS * emitHz;
   let distance = startDistance;
   let seconds = startSeconds;
   let delivered = true;
 
   for (let i = 0; i < ticks; i += 1) {
-    seconds += 1 / EMIT_HZ;
-    distance += metresPerSecond / EMIT_HZ;
+    seconds += 1 / emitHz;
+    distance += metresPerSecond / emitHz;
     const ok = await emitPm5({
       distance: Math.round(distance),
       elapsedTime: Math.round(seconds * 1000),
@@ -228,7 +247,7 @@ async function rowPhase(
       heartRate: 120 + Math.round(metresPerSecond * 8),
     });
     if (!ok) delivered = false;
-    await page.waitForTimeout(1000 / EMIT_HZ);
+    await page.waitForTimeout(1000 / emitHz);
   }
 
   const after = await readSampledAt(page);
@@ -257,6 +276,18 @@ for (const tier of ['low', 'auto', 'high'] as const) {
 
     await connectHardwareAndStart(page);
     const software = await isSoftwareRenderer(page);
+    const emitHz = software ? EMIT_HZ_SOFTWARE : EMIT_HZ_HARDWARE;
+
+    // A budget that matches what the work now costs.
+    //
+    // The scene keeps its WebGL context for the whole sweep, so a software
+    // rasteriser draws every frame of it rather than dying a few seconds in and
+    // going quiet. At the high tier that is around 0.7 fps, and the sweep takes
+    // minutes rather than seconds. Measured locally on SwiftShader: low 45s,
+    // auto 1.7m, high 4.8m. The ceiling is generous because CI machines are
+    // slower again, and because a timeout here reports nothing useful about the
+    // scene - it is the one outcome that tells you least.
+    if (software) test.setTimeout(900_000);
 
     // Let the scene settle before measuring, so mount cost is not charged to
     // the first phase.
@@ -270,7 +301,7 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     let anyDelivered = false;
 
     for (const phase of SPEED_PHASES) {
-      const result = await rowPhase(page, phase, distance, seconds);
+      const result = await rowPhase(page, phase, distance, seconds, emitHz);
       distance = result.distance;
       seconds = result.seconds;
       anyDelivered = anyDelivered || result.delivered;

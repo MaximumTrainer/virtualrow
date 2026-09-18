@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -80,9 +81,15 @@ test('imports sample GeoJSON route and renders it in 3D workout view without err
 
   const canvasContainer = page.locator('.rower3d-canvas-container');
   await expect(canvasContainer).toBeVisible({ timeout: 15_000 });
-  await expect(
-    page.locator('.rower3d-canvas-container canvas:visible, .rower3d-fallback-marker:visible').first(),
-  ).toBeVisible({ timeout: 15_000 });
+
+  // A canvas, not "a canvas or the fallback marker". This accepted either, and
+  // the fallback marker is the element that shows "The 3D view lost the
+  // graphics context — restoring…" — so a spec named for rendering the route
+  // in 3D passed when the rendering had failed.
+  await expect(page.locator('.rower3d-canvas-container canvas').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expectSceneAlive(page, 'the imported route');
 
   const fatalRuntimeErrors = [...pageErrors, ...consoleErrors].filter((text) =>
     /typeerror|referenceerror|cannot read properties of undefined/i.test(text),

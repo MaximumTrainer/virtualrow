@@ -209,6 +209,15 @@ export const scheduleContextRestore = (
  */
 const selectionCache = new Map<string, GlSelection>();
 
+/**
+ * The last configuration this driver actually granted.
+ *
+ * Kept apart from {@link selectionCache}, which answers only the exact request
+ * it was asked. This answers the broader question - 'what does this machine
+ * give us?' - which is what a live scene needs when a setting changes under it.
+ */
+let lastGrantedSelection: GlSelection | null = null;
+
 export const selectBrowserGlOptions = (
   preferred: { powerPreference: PowerPreference; antialias: boolean },
 ): GlSelection => {
@@ -216,7 +225,23 @@ export const selectBrowserGlOptions = (
   const cached = selectionCache.get(key);
   if (cached) return cached;
 
+  // A context is already drawing the river, and every probe opens another one.
+  // The cache is keyed on what was asked for, so a settings change arriving
+  // mid-session asks the driver a question it has not been asked before - and
+  // a browser keeps only a handful of contexts alive, evicting the oldest,
+  // which by then is the scene's own. Measured on the demo row: the scene's
+  // context was created first at ~1.4s, a probe opened a new one at ~3.7s, and
+  // at ~5.2s the river was replaced by 'The 3D view lost the graphics context
+  // - restoring...'. The driver has already granted a configuration on this
+  // machine, so reuse it rather than gambling the scene on asking again.
+  const granted = lastGrantedSelection;
+  if (granted && state && !state.lost) {
+    selectionCache.set(key, granted);
+    return granted;
+  }
+
   const selection = selectGlOptions(browserContextAttempt, { preferred });
+  if (selection.usable) lastGrantedSelection = selection;
   selectionCache.set(key, selection);
   return selection;
 };
@@ -240,6 +265,7 @@ let cachedCapabilities: RenderCapabilities | null | undefined;
 export const resetProbeCacheForTests = (): void => {
   cachedCapabilities = undefined;
   selectionCache.clear();
+  lastGrantedSelection = null;
 };
 
 export const probeRenderCapabilities = (): RenderCapabilities | null => {
