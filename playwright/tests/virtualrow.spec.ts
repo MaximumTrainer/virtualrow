@@ -1651,19 +1651,47 @@ test.describe('activity distance integrity', () => {
 
     // Row steadily up to 1234 m.
     await push(1234, 240_000);
-    await expect(metersValue).toContainText('1234 m', { timeout: 2000 });
+
+    // A synchronisation point, not the subject of the test: the display has to
+    // have caught up before the blip is sent, or what follows proves nothing.
+    //
+    // It had two seconds, which was enough while the 3D scene lost its WebGL
+    // context a few seconds into every spec and then sat idle. The scene keeps
+    // its context now and draws continuously, so a React update competes with a
+    // software rasteriser for the main thread and the ubuntu runner missed the
+    // window - three attempts, 'Received string: 0 m' each time, while macOS and
+    // Windows passed. Waiting longer costs nothing when the display is prompt.
+    await expect(metersValue).toContainText('1234 m', { timeout: 20_000 });
 
     // Transient blip: a stale frame reports 0 m.
     await push(0, 241_000);
     // Then a real frame arrives just past the blip.
     await push(50, 242_000);
 
-    // Required behavior: the Meters card never displays a smaller value than
-    // 1234 m. Read the rendered text and convert to a number.
-    const displayedMeters = await metersValue.evaluate((el) => {
-      const match = (el.textContent ?? '').match(/(-?\d+)/);
-      return match ? Number(match[1]) : NaN;
-    });
-    expect(displayedMeters).toBeGreaterThanOrEqual(1234);
+    // Required behaviour: the Meters card never displays a smaller value than
+    // 1234 m.
+    //
+    // Watched rather than read once. A single read straight after the blip can
+    // happen before the blip has been rendered at all, in which case it sees the
+    // 1234 that was already there and passes without having tested anything. The
+    // lowest value shown across the window is what the rower would have seen.
+    const readMeters = async () =>
+      metersValue.evaluate((el) => {
+        const match = (el.textContent ?? '').match(/(-?\d+)/);
+        return match ? Number(match[1]) : NaN;
+      });
+
+    let lowestDisplayed = await readMeters();
+    const watchUntil = Date.now() + 3_000;
+    while (Date.now() < watchUntil) {
+      const shown = await readMeters();
+      if (!Number.isNaN(shown)) lowestDisplayed = Math.min(lowestDisplayed, shown);
+      await page.waitForTimeout(100);
+    }
+
+    expect(
+      lowestDisplayed,
+      'the Meters card dropped below the distance already rowed',
+    ).toBeGreaterThanOrEqual(1234);
   });
 });
