@@ -18,8 +18,9 @@
  * adapter is for. What must not differ is what comes out.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { FTMSBluetoothService } from '../services/ftmsBluetoothService';
+import { pm5Simulator } from '../services/pm5SimulatorService';
 
 /** A two-minute split: the pace most rowers know by feel. */
 const TWO_MINUTE_SPLIT_SECONDS = 120;
@@ -69,5 +70,30 @@ describe('pace means the same thing whichever rower is connected (#282)', () => 
     const speedMps = stopped > 0 ? 500 / stopped : 0;
 
     expect(speedMps).toBe(0);
+  });
+
+  it('the simulator reports the pace it was asked for, in the same unit', () => {
+    // The third producer of PM5Data, and it disagreed with the other two: it
+    // multiplied by 100 "because PM5 sends pace * 100", which was true of the
+    // wire and not of this field. Nothing parses the simulator's output, so
+    // only a test can hold it to the contract.
+    vi.useFakeTimers();
+    try {
+      pm5Simulator.updateSettings({ pace: TWO_MINUTE_SPLIT_SECONDS, isRowing: true });
+      pm5Simulator.start();
+      vi.advanceTimersByTime(1_000);
+
+      const pace = pm5Simulator.getData().pace ?? 0;
+
+      // Within the +/-2% wobble the simulator adds on purpose.
+      expect(pace, 'the simulator is not reporting seconds per 500m').toBeGreaterThan(
+        TWO_MINUTE_SPLIT_SECONDS * 0.95,
+      );
+      expect(pace).toBeLessThan(TWO_MINUTE_SPLIT_SECONDS * 1.05);
+      expect(500 / pace).toBeCloseTo(EXPECTED_MPS, 1);
+    } finally {
+      pm5Simulator.stop();
+      vi.useRealTimers();
+    }
   });
 });
