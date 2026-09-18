@@ -77,8 +77,20 @@ export const createBankGeometry = (
 
     if (i < segments) {
       const base = i * 2;
-      indices.push(base, base + 2, base + 1);
-      indices.push(base + 1, base + 2, base + 3);
+      // Wound to match the side it is on.
+      //
+      // The two banks are mirror images - `outward` is -1 on one and +1 on the
+      // other - and mirroring a triangle reverses which way it faces. Winding
+      // both the same way left the right bank pointing away from the world, so
+      // the material culled it and the whole right side of the river rendered
+      // as sky: exactly what the published hero showed (#269).
+      if (outward < 0) {
+        indices.push(base, base + 2, base + 1);
+        indices.push(base + 1, base + 2, base + 3);
+      } else {
+        indices.push(base, base + 1, base + 2);
+        indices.push(base + 1, base + 3, base + 2);
+      }
     }
   }
 

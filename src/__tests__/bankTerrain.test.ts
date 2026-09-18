@@ -150,3 +150,70 @@ describe('riverbank terrain relief (#202)', () => {
     sloped.dispose();
   });
 });
+
+describe('both banks face the sky (#269)', () => {
+  /**
+   * The right bank was invisible, and the published hero showed it: water blue,
+   * the left bank green, and the whole right side of the river the same near
+   * white as the sky.
+   *
+   * The two banks are mirror images - `outward` is -1 on the left and +1 on the
+   * right - but both were wound the same way round. Mirroring a triangle
+   * reverses which way it faces, so the right bank pointed away from the world
+   * and MeshPhysicalMaterial, which culls back faces by default, drew nothing.
+   * computeVertexNormals would have lit it from underneath in any case.
+   *
+   * Asserted on the winding rather than on a rendered frame: this is a property
+   * of the index buffer and needs no WebGL context to check.
+   */
+  const faceNormals = (geometry: THREE.BufferGeometry): THREE.Vector3[] => {
+    const position = geometry.getAttribute('position');
+    const index = geometry.getIndex();
+    if (!index) throw new Error('the bank geometry is expected to be indexed');
+
+    const normals: THREE.Vector3[] = [];
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    for (let i = 0; i < index.count; i += 3) {
+      a.fromBufferAttribute(position, index.getX(i));
+      b.fromBufferAttribute(position, index.getX(i + 1));
+      c.fromBufferAttribute(position, index.getX(i + 2));
+      // Three winds counter-clockwise, so (b-a) x (c-a) points out of the face.
+      normals.push(
+        new THREE.Vector3()
+          .subVectors(b, a)
+          .cross(new THREE.Vector3().subVectors(c, a))
+          .normalize(),
+      );
+    }
+    return normals;
+  };
+
+  for (const side of ['left', 'right'] as const) {
+    it(`points the ${side} bank upwards, so it is not culled away`, () => {
+      const normals = faceNormals(createBankGeometry(straightCurve(), side));
+
+      expect(normals.length, 'no triangles were built').toBeGreaterThan(0);
+      const downward = normals.filter((n) => n.y <= 0).length;
+      expect(
+        downward,
+        `${downward} of ${normals.length} ${side}-bank triangles face away from the sky`,
+      ).toBe(0);
+    });
+  }
+
+  it('winds the two banks in opposite directions, because they are mirrored', () => {
+    const left = createBankGeometry(straightCurve(), 'left').getIndex();
+    const right = createBankGeometry(straightCurve(), 'right').getIndex();
+
+    expect(left, 'the left bank is expected to be indexed').not.toBeNull();
+    expect(right, 'the right bank is expected to be indexed').not.toBeNull();
+    // Same vertices in the same places, opposite order: that is what mirroring
+    // a surface means, and it is the half that was missing.
+    expect(
+      [right!.getX(0), right!.getX(1), right!.getX(2)],
+      'the banks are wound the same way, so one of them faces backwards',
+    ).not.toEqual([left!.getX(0), left!.getX(1), left!.getX(2)]);
+  });
+});
