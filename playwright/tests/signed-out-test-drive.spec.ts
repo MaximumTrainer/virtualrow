@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #187 — a first-time visitor evaluating VirtualRow without an account.
@@ -80,6 +81,9 @@ test.describe('signed-out test drive', () => {
     await demo.click();
 
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 20_000 });
+    // The activity view can be up while the stage shows the context-lost
+    // banner, which is not a visitor rowing a demo.
+    await expectSceneAlive(page, 'the demo row');
 
     // TD-2.3 — the UI says the data is simulated.
     await expect(page.locator('.activity-demo-badge')).toContainText(/simulated data/i);
@@ -110,6 +114,9 @@ test.describe('signed-out test drive', () => {
     await page.goto('./');
     await page.locator('.btn-try-demo').click();
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 20_000 });
+    // The activity view can be up while the stage shows the context-lost
+    // banner, which is not a visitor rowing a demo.
+    await expectSceneAlive(page, 'the demo row');
 
     await endWorkout(page);
     await page.getByRole('button', { name: /row again/i }).click();

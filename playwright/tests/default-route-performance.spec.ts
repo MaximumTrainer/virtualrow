@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { useSimServer, releaseSimServer, emitPm5 } from '../utils/sim-server';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #255 — the default route renders and runs correctly at low, auto and
@@ -119,6 +120,7 @@ async function connectHardwareAndStart(page: Page) {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the default route scene');
 }
 
 /**

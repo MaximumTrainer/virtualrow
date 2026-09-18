@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #232 phase 3 — what the GLB scenery kit costs.
@@ -86,6 +87,7 @@ async function connectHardwareAndStart(page: Page) {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the scenery kit scene');
 }
 
 async function rowGeneratedCourse(page: Page, routeName: string, coordinates: number[][]) {

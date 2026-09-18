@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Every tier has to keep drawing, not just start drawing.
@@ -81,6 +82,7 @@ async function rowAt(page: Page, mode: 'low' | 'auto' | 'high') {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the tier scene');
   await expect
     .poll(() => page.evaluate(() => window.__ROWER3D_RENDER_STATS?.sampledAt ?? 0), {
       timeout: 60_000,

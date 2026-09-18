@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * The canvas and the scene must agree about quality.
@@ -59,6 +60,9 @@ async function rowTheDemoRoute(page: Page, mode?: 'low' | 'auto' | 'high') {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
   });
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  // A visible container is not a rendering scene: it holds the fallback
+  // marker too, which is what shows the context-lost banner.
+  await expectSceneAlive(page, 'the quality tier scene');
   await expect
     .poll(() => page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0), {
       timeout: 60_000,

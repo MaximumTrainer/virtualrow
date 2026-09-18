@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #269 — the ground either side of the waterway must look different from
@@ -61,6 +62,7 @@ async function rowAndClassify(page: Page) {
     (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click(),
   );
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
+  await expectSceneAlive(page, 'the contrast scene');
   await page.waitForTimeout(6_000);
 
   return page.evaluate(() => {

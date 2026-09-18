@@ -4,6 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations, captureGameplayCanvas } from '../utils/screenshot-helper';
+import { expectSceneAlive } from '../utils/scene-health';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.js');
@@ -620,14 +621,15 @@ test.describe('Simulated e2e route playback', () => {
       await captureTestEvidence(page, testInfo, '10-3d-canvas-visible');
       await clearAnnotations(page);
     } catch {
-      const hasPos = await page.evaluate(() => !!window.__ROWER3D_POS);
-      const hasMarker = !!(await page.$('.rower3d-fallback-marker'));
-      if (!hasPos && !hasMarker) {
-        await captureErrorEvidence(page, testInfo, '3D canvas not found', '.rower3d-canvas-container');
-      }
-      expect(hasPos || hasMarker).toBeTruthy();
+      // The fallback marker used to satisfy this: `hasPos || hasMarker` passed
+      // when the canvas was missing, and the marker is the element that shows
+      // "The 3D view lost the graphics context — restoring…". A 3D canvas check
+      // that accepts the error banner is not a 3D canvas check.
+      await captureErrorEvidence(page, testInfo, '3D canvas not found', '.rower3d-canvas-container');
+      throw new Error('the 3D canvas never attached');
     }
     void canvasHandle;
+    await expectSceneAlive(page, 'the workout scene');
     try {
       await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' });
     } catch {

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
@@ -174,6 +175,7 @@ test.describe('rownative.icu course import', () => {
 
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.activity-route-stage')).toBeVisible();
+    await expectSceneAlive(page, 'the imported rownative course');
     await page.waitForTimeout(2_000);
     expect(pageErrors).toEqual([]);
   });

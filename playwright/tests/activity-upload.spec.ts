@@ -2,6 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { expectSceneAlive } from '../utils/scene-health';
 
 /**
  * Issue #221 — a signed-in athlete finishes a row and saves it to intervals.icu.
@@ -145,6 +146,7 @@ function dispatchAdditionalStatus(
 async function rowAndEnd(page: Page, seconds = 8) {
   await page.locator('.btn-start-workout').click();
   await expect(page.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
+  await expectSceneAlive(page, 'the uploaded activity scene');
 
   for (let t = 0; t <= seconds; t++) {
     await dispatchGeneralStatus(page, t * 4, t);
