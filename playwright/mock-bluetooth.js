@@ -17,24 +17,50 @@
   function buildPM5GeneralDataView({ distance = 0, elapsedTime = 0 } = {}) {
     const buf = new ArrayBuffer(11);
     const v = new Uint8Array(buf);
-    const cs = Math.round(elapsedTime * 100);
+    const cs = mustFit(Math.round(elapsedTime * 100), 24, 'elapsedTime (centiseconds)');
     v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
-    const dm = Math.round(distance * 10);
+    const dm = mustFit(Math.round(distance * 10), 24, 'distance (decimetres)');
     v[3] = dm & 0xff; v[4] = (dm >> 8) & 0xff; v[5] = (dm >> 16) & 0xff;
     v[10] = 2; // strokeState = rowing
     return new DataView(buf);
   }
 
+  /**
+   * Refuse to encode a value the wire cannot carry.
+   *
+   * These fields are fixed width, and JavaScript will happily drop the high
+   * bits: a pace of 12000 was written as 20352 and the app read 203.52 s/500m,
+   * which is how a spec came to believe the scene's speed could not be
+   * controlled from a harness (#296). agents.md is explicit that a mock frame
+   * disagreeing with the parser makes tests pass for the wrong reasons - so
+   * this throws rather than wrapping, and the spec that asked for the
+   * impossible finds out.
+   */
+  function mustFit(value, bits, field) {
+    const max = Math.pow(2, bits) - 1;
+    if (!Number.isFinite(value) || value < 0 || value > max) {
+      throw new RangeError(
+        'mock PM5: ' + field + ' is ' + value + ', which does not fit in ' + bits +
+          ' bits (0..' + max + '). The wire would wrap and the app would read a' +
+          ' different number from the one this test asked for.',
+      );
+    }
+    return value;
+  }
   function buildPM5AdditionalDataView({ elapsedTime = 0, pace = 120, cadence = 0, heartRate = 0 } = {}) {
     const buf = new ArrayBuffer(11);
     const v = new Uint8Array(buf);
-    const cs = Math.round(elapsedTime * 100);
+    // elapsedTime is seconds, as PM5Data.elapsedTime is documented.
+    const cs = mustFit(Math.round(elapsedTime * 100), 24, 'elapsedTime (centiseconds)');
     v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
-    const speedMmS = pace > 0 ? Math.round(500000 / pace) : 0;
+    const speedMmS = pace > 0
+      ? mustFit(Math.round(500000 / pace), 16, 'speed (mm/s), from pace ' + pace)
+      : 0;
     v[3] = speedMmS & 0xff; v[4] = (speedMmS >> 8) & 0xff;
-    v[5] = Math.round(cadence);
-    v[6] = Math.round(heartRate);
-    const paceCs = Math.round(pace * 100);
+    v[5] = mustFit(Math.round(cadence), 8, 'cadence');
+    v[6] = mustFit(Math.round(heartRate), 8, 'heartRate');
+    // pace is seconds per 500 m; the wire carries centiseconds.
+    const paceCs = mustFit(Math.round(pace * 100), 16, 'pace (centiseconds), from pace ' + pace);
     v[7] = paceCs & 0xff; v[8] = (paceCs >> 8) & 0xff;
     v[9] = paceCs & 0xff; v[10] = (paceCs >> 8) & 0xff;
     return new DataView(buf);

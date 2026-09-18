@@ -40,12 +40,17 @@ const TRAVERSE_SECONDS = 60;
 const EMIT_HZ = 1;
 
 /**
- * A plausible pace to send while the traverse runs.
+ * A plausible pace to send while the traverse runs: two minutes per 500 m.
+ *
+ * Seconds, which is what PM5Data.pace means. This used to be 12_000, on the
+ * belief that the wire wanted centiseconds - the mock does that conversion
+ * itself, and 12_000 overflowed its 16-bit field to 20_352, so the app read
+ * 203.52 s/500m and nobody had chosen that (#296).
  *
  * It drives the stroke, the cadence and the numbers on the dashboard. It does
  * not drive where the boat is: see rowToTheEnd for what does, and why.
  */
-const ROWING_WIRE_PACE = 12_000;
+const ROWING_WIRE_PACE = 120;
 
 let simulatorReady = false;
 test.beforeAll(async () => {
@@ -236,7 +241,8 @@ async function rowToTheEnd(page: Page, label: string): Promise<Sample[]> {
     const along = Math.min(1.05, (i + 1) / ticks + 0.05);
     await emitPm5({
       distance: Math.round(totalDistance * along),
-      elapsedTime: Math.round(seconds * 1000),
+      // Seconds. The mock converts to the wire's centiseconds itself.
+      elapsedTime: Math.round(seconds),
       pace: ROWING_WIRE_PACE,
       cadence: 34,
       power: 320,

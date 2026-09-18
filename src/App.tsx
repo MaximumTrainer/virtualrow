@@ -1264,7 +1264,7 @@ function App() {
                     <Rower3D
                       route={selectedRoute!}
                       enrichment={selectedRouteEnrichment}
-                      paceSPer500={pm5Data?.pace ? (pm5Data.pace/100) : undefined}
+                      paceSPer500={pm5Data?.pace ? pm5Data.pace : undefined}
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}
                       cadence={pm5Data?.cadence}
@@ -1317,7 +1317,7 @@ function App() {
                     </div>
                     <div className="activity-stat-card">
                       <span className="activity-stat-label">Split (/500m)</span>
-                      <span className="activity-stat-value">{formatPace(pm5Data?.pace ? pm5Data.pace / 100 : null)}</span>
+                      <span className="activity-stat-value">{formatPace(pm5Data?.pace ?? null)}</span>
                     </div>
                     <div className="activity-stat-card">
                       <span className="activity-stat-label">SPM</span>
@@ -1474,9 +1474,9 @@ function App() {
             <table className="debug-table">
               <tbody>
                 <tr><td>Connected:</td><td>{pm5Connected ? '✅ Yes' : '❌ No'}</td></tr>
-                <tr><td>Pace (raw):</td><td>{pm5Data?.pace ?? 'N/A'}</td></tr>
-                <tr><td>Pace (s/500m):</td><td>{pm5Data?.pace ? (pm5Data.pace / 100).toFixed(2) : 'N/A'}</td></tr>
-                <tr><td>Speed (m/s):</td><td>{pm5Data?.pace ? (500 / (pm5Data.pace / 100)).toFixed(2) : 'N/A'}</td></tr>
+                <tr><td>Pace (s/500m):</td><td>{pm5Data?.pace ?? 'N/A'}</td></tr>
+                <tr><td>Speed (m/s):</td><td>{pm5Data?.pace ? (500 / pm5Data.pace).toFixed(2) : 'N/A'}</td></tr>
+                
                 <tr><td>Distance (m):</td><td>{pm5Data?.distance?.toFixed(1) ?? 'N/A'}</td></tr>
                 <tr><td>Elapsed (s):</td><td>{pm5Data?.elapsedTime ?? 'N/A'}</td></tr>
                 <tr><td>Cadence (spm):</td><td>{pm5Data?.cadence ?? 'N/A'}</td></tr>

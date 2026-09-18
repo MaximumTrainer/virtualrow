@@ -138,7 +138,10 @@ class PM5SimulatorService {
       const hrVariation = 1 + (Math.sin(elapsedSeconds * 0.1) * 0.02); // ±2% variation
       
       // Update PM5 data
-      this.pm5Data.pace = Math.round(this.settings.pace * paceVariation * 100); // PM5 sends pace * 100
+      // Seconds per 500 m, which is what PM5Data.pace means and what
+      // settings.pace already is. This used to multiply by 100 to suit a
+      // division App did on the way out; both are gone (#282).
+      this.pm5Data.pace = Math.round(this.settings.pace * paceVariation * 100) / 100;
       this.pm5Data.cadence = Math.round(this.settings.cadence * cadenceVariation);
       this.pm5Data.heartRate = Math.round(this.settings.heartRate * hrVariation);
       this.pm5Data.power = Math.round(this.settings.power * paceVariation);
