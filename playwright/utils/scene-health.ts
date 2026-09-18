@@ -27,10 +27,31 @@ const SCENE_READY_TIMEOUT_MS = 25_000;
 async function observe(page: Page) {
   return page.evaluate(() => {
     const marker = document.querySelector('.rower3d-fallback-marker');
+    const canvases = Array.from(
+      document.querySelectorAll('.rower3d-canvas-container canvas'),
+    ) as HTMLCanvasElement[];
+
+    // Ask the canvas on screen, not the global flag. The flag outlives the
+    // canvas that set it, and React mounts the Canvas twice under StrictMode —
+    // a discarded first canvas losing its context left it true for the rest of
+    // the session while the visible canvas was perfectly healthy.
+    const contextLost = canvases.some((canvas) => {
+      try {
+        const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as
+          | WebGLRenderingContext
+          | null;
+        return gl ? gl.isContextLost() : false;
+      } catch {
+        return false;
+      }
+    });
+
     return {
-      lost: (window as unknown as { __ROWER3D_WEBGL_LOST?: boolean }).__ROWER3D_WEBGL_LOST === true,
+      contextLost,
       markerText: marker?.textContent ?? '',
-      canvasCount: document.querySelectorAll('.rower3d-canvas-container canvas').length,
+      canvasCount: canvases.length,
+      flagSet:
+        (window as unknown as { __ROWER3D_WEBGL_LOST?: boolean }).__ROWER3D_WEBGL_LOST === true,
     };
   });
 }

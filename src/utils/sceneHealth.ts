@@ -15,12 +15,22 @@
 export const CONTEXT_LOST_TEXT = 'lost the graphics context';
 
 export interface SceneObservation {
-  /** `window.__ROWER3D_WEBGL_LOST` — set before the banner renders. */
-  lost: boolean;
+  /**
+   * Whether the canvas in the DOM right now reports a lost context.
+   *
+   * Asked of the live canvas rather than taken from
+   * `window.__ROWER3D_WEBGL_LOST`, which is global and outlives the canvas that
+   * set it: React mounts the Canvas twice under StrictMode, and a discarded
+   * first canvas losing its context left that flag true for the rest of the
+   * session even though the canvas on screen was fine.
+   */
+  contextLost: boolean;
   /** Text content of `.rower3d-fallback-marker`. */
   markerText: string;
   /** Canvases inside the 3D container. */
   canvasCount: number;
+  /** The global flag, kept for the failure message only. */
+  flagSet?: boolean;
 }
 
 export interface SceneHealth {
@@ -37,21 +47,25 @@ export interface SceneHealth {
  * scene-contrast.spec.ts.
  */
 export const describeSceneHealth = ({
-  lost,
+  contextLost,
   markerText,
   canvasCount,
+  flagSet,
 }: SceneObservation): SceneHealth => {
-  if (lost) {
-    return { alive: false, reason: 'the WebGL context is marked lost (__ROWER3D_WEBGL_LOST)' };
+  if (canvasCount < 1) {
+    return { alive: false, reason: 'there is no canvas in the 3D container' };
+  }
+  if (contextLost) {
+    return {
+      alive: false,
+      reason: `the canvas on screen reports a lost WebGL context${flagSet ? ' (and the global flag is set)' : ''}`,
+    };
   }
   if (markerText.toLowerCase().includes(CONTEXT_LOST_TEXT)) {
     return {
       alive: false,
       reason: `the stage is showing the context-lost banner: "${markerText.trim()}"`,
     };
-  }
-  if (canvasCount < 1) {
-    return { alive: false, reason: 'there is no canvas in the 3D container' };
   }
   return { alive: true, reason: 'scene is rendering' };
 };

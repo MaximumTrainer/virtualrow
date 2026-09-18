@@ -12,14 +12,14 @@ import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../utils/sceneHealth';
  */
 describe('describeSceneHealth', () => {
   it('calls a rendering scene alive', () => {
-    const health = describeSceneHealth({ lost: false, markerText: '', canvasCount: 1 });
+    const health = describeSceneHealth({ contextLost: false, markerText: '', canvasCount: 1 });
 
     expect(health.alive).toBe(true);
   });
 
   it('refuses a scene showing the context-lost banner', () => {
     const health = describeSceneHealth({
-      lost: false,
+      contextLost: false,
       markerText: 'The 3D view lost the graphics context — restoring…',
       canvasCount: 1,
     });
@@ -28,16 +28,29 @@ describe('describeSceneHealth', () => {
     expect(health.reason).toMatch(/graphics context/i);
   });
 
-  it('refuses a scene whose context flag says it is lost', () => {
-    // The banner may not have rendered yet; the flag is set first.
-    const health = describeSceneHealth({ lost: true, markerText: '', canvasCount: 1 });
+  it('refuses a scene whose live canvas reports a lost context', () => {
+    // Asked of the canvas on screen, not of a global flag: that flag outlives
+    // the canvas that set it, and React mounts the Canvas twice under
+    // StrictMode, so a discarded first canvas left it true for good.
+    const health = describeSceneHealth({ contextLost: true, markerText: '', canvasCount: 1 });
 
     expect(health.alive).toBe(false);
-    expect(health.reason).toMatch(/context/i);
+    expect(health.reason).toMatch(/lost WebGL context/i);
+  });
+
+  it('does not fail a healthy canvas because the global flag is stale', () => {
+    const health = describeSceneHealth({
+      contextLost: false,
+      markerText: '',
+      canvasCount: 1,
+      flagSet: true,
+    });
+
+    expect(health.alive).toBe(true);
   });
 
   it('refuses a stage with no canvas at all', () => {
-    const health = describeSceneHealth({ lost: false, markerText: '', canvasCount: 0 });
+    const health = describeSceneHealth({ contextLost: false, markerText: '', canvasCount: 0 });
 
     expect(health.alive).toBe(false);
     expect(health.reason).toMatch(/canvas/i);
@@ -51,7 +64,7 @@ describe('describeSceneHealth', () => {
       'The 3D view lost the graphics context - restoring...',
       'the 3d view LOST THE GRAPHICS CONTEXT',
     ]) {
-      expect(describeSceneHealth({ lost: false, markerText: text, canvasCount: 1 }).alive).toBe(
+      expect(describeSceneHealth({ contextLost: false, markerText: text, canvasCount: 1 }).alive).toBe(
         false,
       );
     }
@@ -61,7 +74,7 @@ describe('describeSceneHealth', () => {
     // The marker is also used for the deliberate no-WebGL fallback, which is a
     // different condition and not this defect.
     const health = describeSceneHealth({
-      lost: false,
+      contextLost: false,
       markerText: '3D unavailable on this device',
       canvasCount: 1,
     });
