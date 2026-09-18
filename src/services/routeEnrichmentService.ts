@@ -1,3 +1,4 @@
+import { navigableWaterWidthMeters } from '../components/rower3d/navigableWidth';
 import type { Coordinate, WaterRoute } from '../types/index';
 import {
   calculateBearing,
@@ -709,7 +710,7 @@ export const getWaterWidthSceneUnitsForProgress = (
   progress: number,
 ) => {
   if (!segmentProfiles || segmentProfiles.length === 0) {
-    return fallbackWidthMeters * SCENE_SCALE;
+    return navigableWaterWidthMeters(fallbackWidthMeters) * SCENE_SCALE;
   }
 
   const clampedProgress = Math.max(0, Math.min(1, progress));
@@ -724,7 +725,10 @@ export const getWaterWidthSceneUnitsForProgress = (
       segmentProfiles[lowerIndex].waterWidthMeters) *
       blend;
 
-  return widthMeters * SCENE_SCALE;
+  // Floored so the blades stay over water. The water channel and both banks
+  // read their width from here, so they widen together and the waterline stays
+  // where the bank meets it (#271).
+  return navigableWaterWidthMeters(widthMeters) * SCENE_SCALE;
 };
 
 const createSegmentProfilesFromFeatures = (
