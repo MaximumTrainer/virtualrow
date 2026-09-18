@@ -85,4 +85,20 @@ describe('describeSceneHealth', () => {
   it('names the text it looks for, so the app and the guard cannot drift', () => {
     expect(CONTEXT_LOST_TEXT).toMatch(/lost the graphics context/i);
   });
+
+  it('says which canvas was lost, so a failure can be read without a rerun', () => {
+    // Two canvases mean React mounted the Canvas twice and one was discarded.
+    // Which of them reports the loss is the difference between a stale mount
+    // and the scene the rower is looking at, and a CI failure gets one run.
+    const health = describeSceneHealth({
+      contextLost: true,
+      markerText: '',
+      canvasCount: 2,
+      lostPerCanvas: [false, true],
+    });
+
+    expect(health.alive).toBe(false);
+    expect(health.reason).toContain('canvases=2');
+    expect(health.reason).toContain('[false,true]');
+  });
 });

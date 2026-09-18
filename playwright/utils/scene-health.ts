@@ -35,7 +35,7 @@ async function observe(page: Page) {
     // canvas that set it, and React mounts the Canvas twice under StrictMode —
     // a discarded first canvas losing its context left it true for the rest of
     // the session while the visible canvas was perfectly healthy.
-    const contextLost = canvases.some((canvas) => {
+    const lostPerCanvas = canvases.map((canvas) => {
       try {
         const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as
           | WebGLRenderingContext
@@ -45,11 +45,13 @@ async function observe(page: Page) {
         return false;
       }
     });
+    const contextLost = lostPerCanvas.some(Boolean);
 
     return {
       contextLost,
       markerText: marker?.textContent ?? '',
       canvasCount: canvases.length,
+      lostPerCanvas,
       flagSet:
         (window as unknown as { __ROWER3D_WEBGL_LOST?: boolean }).__ROWER3D_WEBGL_LOST === true,
     };
@@ -80,3 +82,38 @@ export async function expectSceneAlive(page: Page, context = 'the 3D scene'): Pr
 }
 
 export { CONTEXT_LOST_TEXT };
+
+/**
+ * Watch the scene for a while, and fail at the first moment it drops out.
+ *
+ * {@link expectSceneAlive} asks once, which catches a scene that is broken when
+ * a spec looks at it. It cannot catch a scene that comes up, draws the river,
+ * and then loses its context part-way through a row - which is what rowers were
+ * reporting, and what every spec sailed past: the assertions all ran inside the
+ * first few seconds, and the fault arrived after them.
+ *
+ * Sampling, not one look at the end, because the context recovers: a check at
+ * the end alone would see a healthy scene and say nothing about the seconds the
+ * rower spent looking at the banner.
+ */
+export async function expectSceneAliveThroughout(
+  page: Page,
+  durationMs: number,
+  context = 'the 3D scene',
+): Promise<void> {
+  await expectSceneAlive(page, context);
+
+  const startedAt = Date.now();
+  const deadline = startedAt + durationMs;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(250);
+    const health = describeSceneHealth(await observe(page));
+    if (!health.alive) {
+      const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+      expect(
+        health.alive,
+        `${context}: the scene was lost ${elapsed}s into the row - ${health.reason}`,
+      ).toBe(true);
+    }
+  }
+}

@@ -31,6 +31,8 @@ export interface SceneObservation {
   canvasCount: number;
   /** The global flag, kept for the failure message only. */
   flagSet?: boolean;
+  /** Per-canvas loss, so a failure says whether a discarded mount is to blame. */
+  lostPerCanvas?: boolean[];
 }
 
 export interface SceneHealth {
@@ -51,6 +53,7 @@ export const describeSceneHealth = ({
   markerText,
   canvasCount,
   flagSet,
+  lostPerCanvas,
 }: SceneObservation): SceneHealth => {
   if (canvasCount < 1) {
     return { alive: false, reason: 'there is no canvas in the 3D container' };
@@ -58,7 +61,10 @@ export const describeSceneHealth = ({
   if (contextLost) {
     return {
       alive: false,
-      reason: `the canvas on screen reports a lost WebGL context${flagSet ? ' (and the global flag is set)' : ''}`,
+      reason:
+        `the canvas on screen reports a lost WebGL context` +
+        `${flagSet ? ' (and the global flag is set)' : ''}` +
+        `; canvases=${canvasCount} lost=${JSON.stringify(lostPerCanvas ?? [])}`,
     };
   }
   if (markerText.toLowerCase().includes(CONTEXT_LOST_TEXT)) {
