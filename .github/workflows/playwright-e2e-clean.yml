@@ -86,3 +86,78 @@ jobs:
       - name: Cleanup simulator
         if: always()
         run: node scripts/stop-sim.mjs
+
+  # The long-running route traverses (#272).
+  #
+  # Separate from the job above, which verifies a deploy. These row a route from
+  # one end to the other and answer a different question - not 'does this build
+  # work' but 'does it still work an entire route later'. Keeping them apart means
+  # a traverse that takes minutes cannot push the verification job towards its
+  # ceiling, and a failure names which of the two questions was answered no.
+  #
+  # One platform, because a traverse is about what happens over time rather than
+  # about how a particular operating system rasterises: the three-way matrix above
+  # is what covers that.
+  endurance:
+    needs: preflight
+    runs-on: ubuntu-latest
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      CI: true
+      VITE_INTERVALS_CLIENT_ID: "playwright-e2e-client"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npm run pretest:e2e
+
+      - name: Clean up simulator ports
+        run: node scripts/kill-ports.mjs 9001 9002
+
+      - name: Start simulator server
+        run: node scripts/start-sim-bg.mjs
+
+      - name: Wait for simulator to be ready
+        run: npx wait-on http://localhost:9002 --timeout 30000
+
+      - name: Row the routes end to end
+        run: npm run test:e2e:endurance
+        # Two traverses of about two minutes each, plus the build and the app
+        # coming up. Generous over that, because a timeout here reports nothing
+        # about the route.
+        timeout-minutes: 25
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-endurance-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+
+      - name: Cleanup simulator
+        if: always()
+        run: node scripts/stop-sim.mjs

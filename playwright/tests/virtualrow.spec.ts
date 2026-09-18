@@ -673,13 +673,37 @@ test.describe('Simulated e2e route playback', () => {
       );
     }
 
-    const pos = await page.evaluate(() => window.__ROWER3D_POS);
-    const camera = await page.evaluate(() => window.__ROWER3D_CAMERA);
+    // Both in one call, so they describe the same frame.
+    //
+    // Read separately, the scene advances between the two round trips - a frame
+    // costs a second or more on a software rasteriser - and the boat and the
+    // camera come from different moments. On a route that is turning, that is
+    // enough to put the camera on the wrong side of the boat arithmetically
+    // while the picture is perfectly correct.
+    const { pos, camera } = await page.evaluate(() => ({
+      pos: window.__ROWER3D_POS,
+      camera: window.__ROWER3D_CAMERA,
+    }));
     if (pos && camera) {
       expect(camera.position[1]).toBeGreaterThan(pos.y);
-      expect(camera.position[2]).toBeGreaterThan(pos.z);
+
       const dx = camera.position[0] - pos.x;
       const dz = camera.position[2] - pos.z;
+
+      // Behind the boat along the way the boat is pointing - which is not the
+      // same thing as behind it in world z.
+      //
+      // The camera is placed at `position - tangent * distance`, so it only sits
+      // at a greater z while the route happens to run towards -z. Where the route
+      // turns across that axis the old assertion became a coin toss, and it lost
+      // by 0.19 of a scene unit in 442: camera.z -442.7679 against boat.z
+      // -442.5782, with the heading almost exactly perpendicular to z.
+      //
+      // `angle` is atan2(tangent.x, tangent.z), so the heading is
+      // (sin angle, cos angle) and a negative dot product means behind.
+      const behind = dx * Math.sin(pos.angle) + dz * Math.cos(pos.angle);
+      expect(behind, 'the camera is not behind the boat').toBeLessThan(0);
+
       const dist2 = dx * dx + dz * dz;
       expect(dist2).toBeGreaterThan(0.01);
     }
@@ -1627,19 +1651,47 @@ test.describe('activity distance integrity', () => {
 
     // Row steadily up to 1234 m.
     await push(1234, 240_000);
-    await expect(metersValue).toContainText('1234 m', { timeout: 2000 });
+
+    // A synchronisation point, not the subject of the test: the display has to
+    // have caught up before the blip is sent, or what follows proves nothing.
+    //
+    // It had two seconds, which was enough while the 3D scene lost its WebGL
+    // context a few seconds into every spec and then sat idle. The scene keeps
+    // its context now and draws continuously, so a React update competes with a
+    // software rasteriser for the main thread and the ubuntu runner missed the
+    // window - three attempts, 'Received string: 0 m' each time, while macOS and
+    // Windows passed. Waiting longer costs nothing when the display is prompt.
+    await expect(metersValue).toContainText('1234 m', { timeout: 20_000 });
 
     // Transient blip: a stale frame reports 0 m.
     await push(0, 241_000);
     // Then a real frame arrives just past the blip.
     await push(50, 242_000);
 
-    // Required behavior: the Meters card never displays a smaller value than
-    // 1234 m. Read the rendered text and convert to a number.
-    const displayedMeters = await metersValue.evaluate((el) => {
-      const match = (el.textContent ?? '').match(/(-?\d+)/);
-      return match ? Number(match[1]) : NaN;
-    });
-    expect(displayedMeters).toBeGreaterThanOrEqual(1234);
+    // Required behaviour: the Meters card never displays a smaller value than
+    // 1234 m.
+    //
+    // Watched rather than read once. A single read straight after the blip can
+    // happen before the blip has been rendered at all, in which case it sees the
+    // 1234 that was already there and passes without having tested anything. The
+    // lowest value shown across the window is what the rower would have seen.
+    const readMeters = async () =>
+      metersValue.evaluate((el) => {
+        const match = (el.textContent ?? '').match(/(-?\d+)/);
+        return match ? Number(match[1]) : NaN;
+      });
+
+    let lowestDisplayed = await readMeters();
+    const watchUntil = Date.now() + 3_000;
+    while (Date.now() < watchUntil) {
+      const shown = await readMeters();
+      if (!Number.isNaN(shown)) lowestDisplayed = Math.min(lowestDisplayed, shown);
+      await page.waitForTimeout(100);
+    }
+
+    expect(
+      lowestDisplayed,
+      'the Meters card dropped below the distance already rowed',
+    ).toBeGreaterThanOrEqual(1234);
   });
 });
