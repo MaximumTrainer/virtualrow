@@ -109,6 +109,10 @@ interface Rower3DProps {
   performanceMode?: PerformanceMode;
   intensityFactor?: number;
   debugMode?: boolean;
+  /** Draw the channel centreline and water edges (#268), under debug (#270). */
+  showRiverGuides?: boolean;
+  /** Whether the GLB scenery kit renders. Switched from the debug panel (#270). */
+  sceneryEnabled?: boolean;
   /** Rower model to show, from the athlete's gender. Defaults to male. */
   crew?: Crew;
 }
@@ -173,6 +177,8 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   performanceMode: requestedPerformanceMode = 'auto',
   crew = 'male',
   debugMode = false,
+  showRiverGuides = true,
+  sceneryEnabled,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -188,6 +194,8 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   // land-use query over its coordinates (#232).
   // Only the crew in the boat is worth downloading.
   useEffect(() => preloadCrew(crew), [crew]);
+  // The panel's switch when there is one, otherwise the scene's own default.
+  const sceneryOn = sceneryEnabled ?? isGlbSceneryEnabled();
   const sceneryTrack = useMemo(() => getRouteSceneryTrack(route.id), [route.id]);
   // Which regional building kit dresses the banks, from the route's own
   // coordinates — no extra network call (#232).
@@ -430,7 +438,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
             <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
             <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
             <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-            {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+            {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
               <Suspense fallback={null}>
                 <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
                 <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
@@ -531,7 +539,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       {/* Yellow down the middle of the channel, red at each water edge. Only
           with the debug toggle on: it answers whether the boat is actually off
           centre, which the washed-out water makes impossible to judge. */}
-      {debugMode && routeCurve && (
+      {debugMode && showRiverGuides && routeCurve && (
         <RiverGuides curve={routeCurve} enrichment={enrichment} />
       )}
       
@@ -551,7 +559,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         renderThemedLandscape()
       )}
 
-      {routeCurve && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && isGlbSceneryEnabled() && (
+      {routeCurve && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}

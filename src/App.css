@@ -1543,6 +1543,73 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* A switch inside the debug window, for an overlay that should be turnable off
+   without closing the whole panel (#270). 44px tall so it passes the touch
+   target check responsive.spec.ts enforces on this panel. */
+.debug-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+/* The tap target is the input, not the label around it.
+
+   responsive.spec.ts measures every control in this panel and asks for 44px on
+   each one; it measures the input's own box, so a 44px row with an 18px
+   checkbox in it failed on phone portrait. The target is 44px square here and
+   the box the eye sees is drawn inside it at the size it was. */
+.debug-toggle-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.debug-toggle-row input[type='checkbox']::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-inset, 3px);
+  background: var(--color-bg-primary);
+}
+
+.debug-toggle-row input[type='checkbox']:checked::before {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+/* The tick, in the same grid cell as the box. */
+.debug-toggle-row input[type='checkbox']:checked::after {
+  content: '';
+  grid-area: 1 / 1;
+  width: 5px;
+  height: 9px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+/* Inset, because the outline of a 44px target around an 18px box otherwise
+   floats well clear of anything visible. */
+.debug-toggle-row input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -11px;
+}
+
 .debug-section p {
   margin: var(--space-2xs) 0;
   color: var(--color-text-muted);

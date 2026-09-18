@@ -122,14 +122,14 @@ describe('isGlbSceneryEnabled', () => {
     expect(isGlbSceneryEnabled()).toBe(true);
   });
 
-  it('is on with the ?glb=1 query param', () => {
+  it('ignores a glb query parameter', () => {
+    // The parameter is gone: the kit is switched from the debug panel now, so
+    // a stray ?glb= in a shared URL must not quietly change what renders (#270).
+    window.history.replaceState({}, '', '/?glb=0');
+    expect(isGlbSceneryEnabled()).toBe(true);
+
     window.history.replaceState({}, '', '/?glb=1');
     expect(isGlbSceneryEnabled()).toBe(true);
-  });
-
-  it('can be switched off again without a deploy', () => {
-    window.history.replaceState({}, '', '/?glb=0');
-    expect(isGlbSceneryEnabled()).toBe(false);
   });
 
   it('lets the window flag turn it off too', () => {
