@@ -109,6 +109,8 @@ interface Rower3DProps {
   performanceMode?: PerformanceMode;
   intensityFactor?: number;
   debugMode?: boolean;
+  /** Draw the channel centreline and water edges (#268), under debug (#270). */
+  showRiverGuides?: boolean;
   /** Rower model to show, from the athlete's gender. Defaults to male. */
   crew?: Crew;
 }
@@ -173,6 +175,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   performanceMode: requestedPerformanceMode = 'auto',
   crew = 'male',
   debugMode = false,
+  showRiverGuides = true,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -531,7 +534,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       {/* Yellow down the middle of the channel, red at each water edge. Only
           with the debug toggle on: it answers whether the boat is actually off
           centre, which the washed-out water makes impossible to judge. */}
-      {debugMode && routeCurve && (
+      {debugMode && showRiverGuides && routeCurve && (
         <RiverGuides curve={routeCurve} enrichment={enrichment} />
       )}
       

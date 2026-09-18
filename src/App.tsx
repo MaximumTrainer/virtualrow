@@ -120,6 +120,10 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // The river guides draw the channel centreline and its water edges (#268).
+  // Given their own switch so they can be turned off without losing the rest of
+  // the debug window (#270).
+  const [showRiverGuides, setShowRiverGuides] = useState(true);
   // Only polled while the panel is open (#232).
   const renderStats = useRenderStats(debugMode);
 
@@ -1262,6 +1266,7 @@ function App() {
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
                       intensityFactor={structuredWorkout.speedFactor}
                       debugMode={debugMode}
+                      showRiverGuides={showRiverGuides}
                       crew={resolveCrew(user?.gender, crew.preference)}
                     />
                   </Suspense>
@@ -1396,6 +1401,18 @@ function App() {
             <HeartRateSimulator />
           </div>
           
+          <div className="debug-section">
+            <h5>Overlays</h5>
+            <label className="debug-toggle-row">
+              <input
+                type="checkbox"
+                checked={showRiverGuides}
+                onChange={(e) => setShowRiverGuides(e.target.checked)}
+              />
+              <span>River guides</span>
+            </label>
+          </div>
+
           <div className="debug-section">
             <h5>Scene</h5>
             <table className="debug-table">

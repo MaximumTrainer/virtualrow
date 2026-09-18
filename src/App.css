@@ -1543,6 +1543,25 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* A switch inside the debug window, for an overlay that should be turnable off
+   without closing the whole panel (#270). 44px tall so it passes the touch
+   target check responsive.spec.ts enforces on this panel. */
+.debug-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.debug-toggle-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .debug-section p {
   margin: var(--space-2xs) 0;
   color: var(--color-text-muted);
