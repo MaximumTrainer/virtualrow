@@ -14,6 +14,15 @@ import {
   type ContextAttempt,
 } from '../components/rower3d/glContext';
 
+// Both caches here outlive a test: the probe answers and the configuration the
+// driver granted. Cleared before every test in the file rather than per
+// describe, because a test answered from another's cache opens no context and
+// then reports a count of zero for a reason that is not visible in the failure.
+beforeEach(() => {
+  resetProbeCacheForTests();
+  clearContextState();
+});
+
 /** The preferences the high and low tiers bring to the probe. */
 const HIGH = { preferred: { powerPreference: 'high-performance' as const, antialias: true } };
 const LOW = { preferred: { powerPreference: 'low-power' as const, antialias: false } };
@@ -267,10 +276,6 @@ describe('a live scene context is never risked on another probe (#context-loss)'
    * Once a context is live the question is already answered for this page, so
    * the granted selection is reused rather than re-probed.
    */
-  beforeEach(() => {
-    resetProbeCacheForTests();
-    clearContextState();
-  });
 
   const countingCanvas = () => {
     let contexts = 0;

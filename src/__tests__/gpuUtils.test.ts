@@ -9,13 +9,16 @@ import {
   recommendPerformanceMode,
 } from '../utils/gpuUtils';
 
-describe('gpuUtils', () => {
-  // Availability is cached, because each probe costs a WebGL context. Clearing
-  // it per test keeps one test from being answered by another's stub.
-  beforeEach(() => {
-    resetGpuProbeCacheForTests();
-  });
+// Availability is cached, because each probe costs a WebGL context - see
+// isWebGLAvailable. Cleared before *every* test in this file, not per describe:
+// the tests below stub the canvas and count the contexts opened, so one left
+// holding a cached answer reports zero and the reason is not obvious. It passed
+// locally and failed in CI on ordering alone.
+beforeEach(() => {
+  resetGpuProbeCacheForTests();
+});
 
+describe('gpuUtils', () => {
   describe('isWebGLAvailable', () => {
     let originalCreateElement: typeof document.createElement;
     
@@ -244,10 +247,6 @@ describe('WebGL availability is asked once (#context-loss)', () => {
    *
    * Whether this browser has WebGL cannot change while the page is open.
    */
-  beforeEach(() => {
-    resetGpuProbeCacheForTests();
-  });
-
   it('opens one context however many times it is asked', () => {
     let contexts = 0;
     const realCreate = document.createElement.bind(document);
