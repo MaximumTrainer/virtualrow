@@ -51,18 +51,43 @@ const releaseProbeContext = (context: unknown): void => {
 };
 
 /**
+ * Cached answer for {@link isWebGLAvailable}.
+ *
+ * Releasing a probe context was not enough. A browser evicts the oldest
+ * context at the moment a new one is *created*, which is before the probe can
+ * hand its own back - and the oldest is the one the scene is drawing the river
+ * into. Rower3D asks on every mount, so a remount cost the scene its context:
+ * measured on the demo row, a probe at ~4.4s and 'The 3D view lost the
+ * graphics context - restoring...' over the river at ~6.1s.
+ *
+ * Whether this browser has WebGL cannot change while the page is open, so the
+ * answer is kept and no second context is ever opened for it.
+ */
+let cachedWebGLAvailable: boolean | undefined;
+
+/** Forget the cached probes. For tests, so one never answers another. */
+export function resetGpuProbeCacheForTests(): void {
+  cachedWebGLAvailable = undefined;
+}
+
+/**
  * Check if WebGL is available in the current browser.
+ *
+ * Asked once per page; see {@link cachedWebGLAvailable} for why.
  */
 export function isWebGLAvailable(): boolean {
+  if (cachedWebGLAvailable !== undefined) return cachedWebGLAvailable;
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     // Released immediately: this only answers "is WebGL available", and a
     // context kept for that answer costs the scene its own (#261).
     releaseProbeContext(gl);
-    return !!gl;
+    cachedWebGLAvailable = !!gl;
+    return cachedWebGLAvailable;
   } catch {
-    return false;
+    cachedWebGLAvailable = false;
+    return cachedWebGLAvailable;
   }
 }
 
