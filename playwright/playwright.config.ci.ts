@@ -65,13 +65,21 @@ export default defineConfig({
     //
     // Vite dev serves every module separately and runs a development build of
     // React, where StrictMode mounts each component twice - so the scene was
-    // built, torn down and built again for every spec, and the suite paid for
-    // it. A production build ignores StrictMode's double invoke. Measured on
-    // three of the heavier 3D specs: 168s of test time on the dev server, 126s
-    // on the built app, with scene-contrast going from 30.6s to 13.6s.
+    // built, torn down and built again for every spec. Measured on three of
+    // the heavier 3D specs locally: 168s of test time on the dev server, 126s
+    // on the built app.
     //
-    // It is also the artifact a rower actually loads, which is the one worth
-    // asserting against.
+    // That did not translate to CI, and the comment here used to claim it had.
+    // Comparing the merge of #279 against its own parent - a diff of these two
+    // files and nothing else - the e2e jobs went ubuntu 18m to 18m, windows 39m
+    // to 38m, macos 26m to 27m. What actually relieved the Windows job was
+    // moving the route traverses into their own job.
+    //
+    // It is kept because the double mount is real work the suite need not do,
+    // and because a bundle is closer to what a rower loads than a dev server
+    // is - though not identical: the deploy builds with --base=/virtualrow/app/
+    // and this does not, which is the gap that let every GLB 404 in production
+    // while dev and Playwright both served happily from / (#251).
     // Both through npm, so they run at the package root: a bare `vite preview`
     // takes its cwd from this config's directory and looks for playwright/dist.
     command: 'npm run build && npm run preview -- --port 5173 --strictPort',
@@ -79,5 +87,10 @@ export default defineConfig({
     reuseExistingServer: false,
     // Long enough to build and then serve.
     timeout: 240 * 1000,
+    // `npm run build` is `tsc -b && vite build`, and tsc writes its diagnostics
+    // to stdout - which Playwright discards unless asked for it. Without this a
+    // type error surfaces only as "Process from config.webServer was not able
+    // to start. Exit code: 2", with no file and no line.
+    stdout: 'pipe',
   },
 });
