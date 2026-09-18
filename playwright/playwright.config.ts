@@ -44,15 +44,34 @@ export default defineConfig({
         '--disable-dev-shm-usage'
       ]
     },
-    // Capture screenshots as test evidence - both on failure and success
-    screenshot: 'on',
+    // Only when something went wrong.
+    //
+    // A screenshot of a passing test is a framebuffer readback and a PNG
+    // encode, per test, on a software rasteriser - paid about a hundred times a
+    // run for images nobody opens. Failures still capture one, which is the
+    // case where it earns its cost.
+    screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },
   webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run dev',
+    // The built app, not the dev server.
+    //
+    // Vite dev serves every module separately and runs a development build of
+    // React, where StrictMode mounts each component twice - so the scene was
+    // built, torn down and built again for every spec, and the suite paid for
+    // it. A production build ignores StrictMode's double invoke. Measured on
+    // three of the heavier 3D specs: 168s of test time on the dev server, 126s
+    // on the built app, with scene-contrast going from 30.6s to 13.6s.
+    //
+    // It is also the artifact a rower actually loads, which is the one worth
+    // asserting against.
+    // Both through npm, so they run at the package root: a bare `vite preview`
+    // takes its cwd from this config's directory and looks for playwright/dist.
+    command: 'npm run build && npm run preview -- --port 5173 --strictPort',
     url: 'http://localhost:5173',
     reuseExistingServer: false,
-    timeout: 60 * 1000,
+    // Long enough to build and then serve.
+    timeout: 240 * 1000,
   },
 });
