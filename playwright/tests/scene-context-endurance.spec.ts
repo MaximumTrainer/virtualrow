@@ -20,8 +20,15 @@ import { expectSceneAliveThroughout } from '../utils/scene-health';
  * This one keeps watching.
  */
 
-/** Long enough to cross the window the scene used to die in, several times over. */
-const WATCH_MS = 45_000;
+/**
+ * Long enough to cross the window the scene used to die in, twice over.
+ *
+ * Run against the code without the boundary, this failed at 13.4s and 15.1s on
+ * two attempts. 30s keeps a margin over that without charging the suite for
+ * time that proves nothing - it is one of about eighty specs sharing a 30 minute
+ * job.
+ */
+const WATCH_MS = 30_000;
 
 test('the scene keeps its graphics context for the whole row', async ({ page }) => {
   test.slow();
