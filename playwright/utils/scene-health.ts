@@ -12,8 +12,20 @@ import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../../src/utils/sceneHea
  * webgl-context-recovery.spec.ts, which causes the loss deliberately and
  * asserts the recovery.
  */
-export async function expectSceneAlive(page: Page, context = 'the 3D scene'): Promise<void> {
-  const observation = await page.evaluate(() => {
+
+/**
+ * How long the scene has to come up.
+ *
+ * The canvas mounts after the view around it — the 3D bundle is lazy, and the
+ * first frame follows the route geometry. Judged the instant `.activity-view`
+ * appeared, this reported "there is no canvas" 326 times across CI: an
+ * assertion racing the mount, not a defect. It waits now, and a context that is
+ * lost and never restored still fails, because the wait ends.
+ */
+const SCENE_READY_TIMEOUT_MS = 25_000;
+
+async function observe(page: Page) {
+  return page.evaluate(() => {
     const marker = document.querySelector('.rower3d-fallback-marker');
     return {
       lost: (window as unknown as { __ROWER3D_WEBGL_LOST?: boolean }).__ROWER3D_WEBGL_LOST === true,
@@ -21,14 +33,29 @@ export async function expectSceneAlive(page: Page, context = 'the 3D scene'): Pr
       canvasCount: document.querySelectorAll('.rower3d-canvas-container canvas').length,
     };
   });
+}
 
-  const health = describeSceneHealth(observation);
+export async function expectSceneAlive(page: Page, context = 'the 3D scene'): Promise<void> {
+  // Two separate questions, deliberately not merged.
+  //
+  // First: has the canvas mounted? That is a race — the 3D bundle is lazy and
+  // the first frame follows the route geometry — so it is waited for. Judged
+  // instantly this reported "there is no canvas" 326 times across CI, which was
+  // the assertion outrunning the mount rather than a defect.
+  await expect
+    .poll(async () => (await observe(page)).canvasCount, {
+      timeout: SCENE_READY_TIMEOUT_MS,
+      message: `${context}: no canvas ever mounted in the 3D container`,
+    })
+    .toBeGreaterThan(0);
+
+  // Second: is that canvas showing a scene or an error? Asked once, with no
+  // waiting. Polling here would quietly pass a context that was lost and later
+  // restored — the rower still saw the banner, and a spec that waits for it to
+  // go away is asserting that the fault is brief rather than that it is absent.
+  const health = describeSceneHealth(await observe(page));
 
   expect(health.alive, `${context}: ${health.reason}`).toBe(true);
 }
 
-/**
- * The banner text, for specs that want to assert its absence directly rather
- * than through the helper.
- */
 export { CONTEXT_LOST_TEXT };
