@@ -97,3 +97,7 @@ src/wasm-pkg/*.wasm
 # settings.json is tracked deliberately as shared permissions.
 .claude/*
 !.claude/settings.json
+# Reviewers and other agent definitions are shared, like the skills are: they
+# are how a review starts from what the last one learned rather than scratch.
+!.claude/agents/
+!.claude/agents/*.md
