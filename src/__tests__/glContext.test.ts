@@ -257,10 +257,6 @@ describe('device probes are asked once (#261)', () => {
     }
   });
 
-  it('can be reset, so a test is never answered from another test', () => {
-    resetProbeCacheForTests();
-    expect(typeof resetProbeCacheForTests).toBe('function');
-  });
 });
 
 describe('a live scene context is never risked on another probe (#context-loss)', () => {

@@ -490,27 +490,19 @@ test.describe('Simulated e2e route playback', () => {
     await captureTestEvidence(page, testInfo, '02-before-pm5-connect');
     await clearAnnotations(page);
     await page.click('button:has-text("Connect PM5")');
-    let pm5Connected = false;
-    try {
-      await waitForPM5Connected(page);
-      pm5Connected = true;
-      await highlightElement(page, '.device-status', 'green');
-      await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
-      await captureTestEvidence(page, testInfo, '03-pm5-connected');
-      await clearAnnotations(page);
-    } catch {
-      pm5Connected = false;
-      console.warn('PM5 did not connect within timeout; proceeding with fallback start');
-      await captureErrorEvidence(page, testInfo, 'PM5 connection timeout - using fallback', '.device-status');
-      await page.evaluate(() => {
-        const svc = window.__workoutService;
-        if (svc && svc.startSession) {
-          svc.startSession('sim-manual', 'Simulated Route');
-        }
-      });
-      // Return to the routes view — the HR monitor panel only renders there.
-      await page.click('button:has-text("Routes")');
-    }
+    // Waited for, not hoped for.
+    //
+    // A timeout here used to be caught, warned about, and worked around by
+    // starting a session by hand — so a run where the rowing machine never
+    // connected still passed, having exercised the workaround rather than the
+    // pipeline this test is named after. The mock connects in well under a
+    // second; if it has not, that is the finding rather than a detour.
+    await waitForPM5Connected(page);
+    const pm5Connected = true;
+    await highlightElement(page, '.device-status', 'green');
+    await annotateElement(page, '.device-status', 'PM5 Connected Successfully', 'right');
+    await captureTestEvidence(page, testInfo, '03-pm5-connected');
+    await clearAnnotations(page);
 
     // Connect HR Monitor.
     // Use evaluate to avoid Playwright retry-click hitting the "Disconnect" button
@@ -565,9 +557,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
-    }, { timeout: 5000 }).catch(() => {
-      console.warn('No active session found before startRoute; proceeding anyway');
-    });
+    }, { timeout: 10_000 });
 
     const started = await page.evaluate(async () => {
       try {
@@ -814,20 +804,15 @@ test.describe('Simulated e2e route playback', () => {
     // Connect PM5
     await page.waitForSelector('button:has-text("Connect PM5")');
     await page.click('button:has-text("Connect PM5")');
-    let pm5Connected = false;
-    try {
-      await waitForPM5Connected(page);
-      pm5Connected = true;
-    } catch {
-      pm5Connected = false;
-      console.warn('PM5 did not connect within timeout in multi-route test; proceeding with fallback');
-      await page.evaluate(() => {
-        const svc = window.__workoutService;
-        if (svc && svc.startSession) {
-          svc.startSession('sim-manual-multi', 'Simulated Multi-Route');
-        }
-      });
-    }
+    // Waited for, not hoped for.
+    //
+    // This used to catch the timeout, warn, and start a session by hand so the
+    // test could carry on — which meant a run where the rowing machine never
+    // connected still passed, having exercised the fallback rather than the
+    // thing the test is named after. The mock connects in well under a second;
+    // if it has not, that is the finding.
+    await waitForPM5Connected(page);
+    const pm5Connected = true;
 
     // Connect HR Monitor
     await page.waitForSelector('button:has-text("Connect HR Monitor")');
@@ -836,11 +821,7 @@ test.describe('Simulated e2e route playback', () => {
       const hrContainer = containers.find((c) => c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'));
       (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
     });
-    try {
-      await waitForHRConnected(page, 10_000);
-    } catch {
-      console.warn('HR Monitor did not connect within timeout in multi-route test');
-    }
+    await waitForHRConnected(page, 10_000);
     await captureTestEvidence(page, testInfo, '02-multi-route-devices-connecting');
 
     // Select first route and start
@@ -876,7 +857,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
-    }, { timeout: 5000 }).catch(() => console.warn('No active session before route1 data; proceeding anyway'));
+    }, { timeout: 10_000 });
 
     const started1 = await page.evaluate(async () => {
       try {

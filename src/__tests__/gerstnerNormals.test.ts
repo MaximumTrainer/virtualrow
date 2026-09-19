@@ -23,7 +23,11 @@ const compiledVertexShader = (axis: 'y' | 'z'): string => {
     vertexShader: '#include <beginnormal_vertex>\n#include <begin_vertex>\n',
     fragmentShader: '',
   };
-  material.onBeforeCompile?.(
+  // Asserted rather than optional-chained: whether the hook is installed at
+  // all used to be its own test in rower3d.helpers.test.ts, which this
+  // subsumes - calling it and reading what it produced covers both.
+  expect(typeof material.onBeforeCompile, 'no shader hook was installed').toBe('function');
+  material.onBeforeCompile!(
     shader as unknown as THREE.WebGLProgramParametersWithUniforms,
     {} as THREE.WebGLRenderer,
   );
