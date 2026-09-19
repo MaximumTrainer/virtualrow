@@ -8,17 +8,24 @@ import { expectSceneAlive } from '../utils/scene-health';
  * Issue #269 — the ground either side of the waterway must look different from
  * the water.
  *
- * It did not, because there was no water: the channel used a MeshPhysicalMaterial
- * whose realism came from `transmission`, which needs a scene behind the surface
- * to refract and had none. A probe material on the same geometry drew 4.1% of
- * the frame while the physical one drew none of it, so the sky showed straight
- * through the river and 79% of the frame came back near-white.
+ * It did not, twice over. First there was no water: the channel used a
+ * MeshPhysicalMaterial whose realism came from `transmission`, which needs a
+ * scene behind the surface to refract and had none, so the sky showed straight
+ * through the river. Then there was no right bank: the two banks are mirror
+ * images and both were wound the same way round, so one of them faced away from
+ * the world and the material culled it (#280).
  *
  * The frame is classified in the page rather than decoded here, and composited
  * over magenta first: the canvas clears to transparent, and a transparent pixel
  * reads as white once alpha is dropped — so without a marker colour "nothing
  * rendered" is indistinguishable from "white sky", which is how a blank frame
  * gets measured as if it were a scene.
+ *
+ * What it measures is the frame against itself. An earlier version classified
+ * pixels with hard-coded thresholds — `b - r > 55` for water, `g > r + 8` for
+ * ground — which happened to fit two of the six themes and misread the rest:
+ * on dystopian-thames both bank and water fell through as "other", and on
+ * steampunk-henley the river counted as bank (#291).
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,8 +47,12 @@ async function waitForDeviceConnected(page: Page, label: string) {
 
 /**
  * The harness is installed deliberately: it turns on preserveDrawingBuffer, and
- * without it the drawing buffer cannot be read back at all. Water and banks are
- * not gated on IS_TEST_MODE, so this is the same channel a rower sees.
+ * without it the drawing buffer cannot be read back at all.
+ *
+ * The banks and the channel geometry are not gated on IS_TEST_MODE, so this is
+ * the same ground and the same water a rower sees. The Gerstner wave shader and
+ * the reflection plane are gated, so the surface measured here is flatter than
+ * the one in a real session.
  */
 async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
   await page.addInitScript((m) => {
@@ -71,7 +82,9 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
 
   return page.evaluate(() => {
     window.__ROWER3D_FORCE_RENDER?.();
-    const canvas = document.querySelector('.rower3d-canvas-container canvas') as HTMLCanvasElement | null;
+    const canvas = document.querySelector(
+      '.rower3d-canvas-container canvas',
+    ) as HTMLCanvasElement | null;
     if (!canvas) return null;
 
     const flat = document.createElement('canvas');
@@ -86,86 +99,90 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
     const { data } = ctx.getImageData(0, 0, flat.width, flat.height);
     const W = flat.width;
     const H = flat.height;
-    let ground = 0;
-    let water = 0;
-    let empty = 0;
-    const total = W * H;
 
-    const classify = (x: number, y: number): 'empty' | 'ground' | 'water' | 'other' => {
+    const at = (x: number, y: number): [number, number, number] => {
       const i = (y * W + x) * 4;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      if (r > 200 && b > 200 && g < 60) return 'empty';
-      if (g > r + 8 && g > b + 8) return 'ground';
-      // Strongly blue, which the sky is not.
-      //
-      // The sky is faintly blue at the top of the frame and hazier lower down -
-      // around (225, 232, 236) and (103, 122, 140) - so 'more blue than red'
-      // called both of them water. The rightmost water in a row was then a sky
-      // pixel at the frame edge, with nothing outboard of it to find. The
-      // channel is around (13, 60, 95): far bluer than either.
-      if (b - r > 55 && b >= g && b < 210) return 'water';
-      return 'other';
+      return [data[i], data[i + 1], data[i + 2]];
     };
 
-    for (let y = 0; y < H; y += 1) {
-      for (let x = 0; x < W; x += 1) {
-        const kind = classify(x, y);
-        if (kind === 'empty') empty += 1;
-        else if (kind === 'ground') ground += 1;
-        else if (kind === 'water') water += 1;
+    const apart = (a: [number, number, number], b: [number, number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+    const median = (values: number[]) => {
+      if (!values.length) return 0;
+      values.sort((a, b) => a - b);
+      return values[Math.floor(values.length / 2)];
+    };
+
+    /** The sky, taken from the top of the frame where there is nothing else. */
+    const skyReds: number[] = [];
+    const skyGreens: number[] = [];
+    const skyBlues: number[] = [];
+    for (let y = 0; y < Math.floor(H * 0.06); y += 1) {
+      for (let x = Math.floor(W * 0.4); x < Math.floor(W * 0.6); x += 2) {
+        const [r, g, b] = at(x, y);
+        skyReds.push(r);
+        skyGreens.push(g);
+        skyBlues.push(b);
       }
     }
+    const sky: [number, number, number] = [
+      median(skyReds),
+      median(skyGreens),
+      median(skyBlues),
+    ];
 
-    // Is the channel flanked by ground on BOTH sides?
-    //
-    // Every row that has water in it is a row across the river, so those are the
-    // rows that can answer the question - and only those. The lower part of the
-    // frame is below the banks entirely, looking at the boat and open ground, so
-    // a fixed band there finds no water and measures nothing.
-    //
-    // For each such row, find the water and ask whether there is any ground
-    // outboard of it, left and right. A bank that is not drawn leaves sky out to
-    // the frame edge.
-    let rowsWithWater = 0;
-    let rowsGroundLeft = 0;
-    let rowsGroundRight = 0;
-    for (let y = 0; y < H; y += 2) {
-      let first = -1;
-      let last = -1;
-      for (let x = 0; x < W; x += 1) {
-        if (classify(x, y) === 'water') {
-          if (first < 0) first = x;
-          last = x;
+    /**
+     * What a vertical strip of the frame is made of, ignoring the sky.
+     *
+     * Strips with the sky filtered out, rather than a patch at coordinates
+     * chosen by eye. Where the banks appear depends on which way the route is
+     * bending and how far down the canvas the scene sits: a fixed band lands in
+     * the open foreground on one route and in the sky on another, and then it
+     * is measuring the framing instead of the ground. A strip that turns out to
+     * be nothing but sky reports no content at all, which is precisely the
+     * failure worth catching.
+     */
+    const contentOf = (xFrom: number, xTo: number) => {
+      const reds: number[] = [];
+      const greens: number[] = [];
+      const blues: number[] = [];
+      let looked = 0;
+      for (let y = 0; y < H; y += 2) {
+        for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
+          const [r, g, b] = at(x, y);
+          looked += 1;
+          if (apart([r, g, b], sky) <= 40) continue;
+          reds.push(r);
+          greens.push(g);
+          blues.push(b);
         }
       }
-      if (first < 0) continue;
-      // A row has to cross the bank to say anything about it. A row of pure sky
-      // has no ground in it at all, and reporting 'no ground to the right' of it
-      // would be true and meaningless. A row with a missing bank still has the
-      // other bank in it, so this excludes the sky without excluding the defect.
-      let hasGround = false;
-      for (let x = 0; x < W; x += 1) {
-        if (classify(x, y) === 'ground') { hasGround = true; break; }
-      }
-      if (!hasGround) continue;
-      rowsWithWater += 1;
-      for (let x = 0; x < first; x += 1) {
-        if (classify(x, y) === 'ground') { rowsGroundLeft += 1; break; }
-      }
-      for (let x = W - 1; x > last; x -= 1) {
-        if (classify(x, y) === 'ground') { rowsGroundRight += 1; break; }
-      }
+      return {
+        colour: [median(reds), median(greens), median(blues)] as [number, number, number],
+        share: looked ? reds.length / looked : 0,
+      };
+    };
+
+    const middle = contentOf(0.42, 0.58);
+    const left = contentOf(0.0, 0.12);
+    const right = contentOf(0.88, 1.0);
+
+    let empty = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 200 && data[i + 2] > 200 && data[i + 1] < 60) empty += 1;
     }
 
     return {
-      ground: ground / total,
-      water: water / total,
-      empty: empty / total,
-      rowsWithWater,
-      groundLeft: rowsWithWater ? rowsGroundLeft / rowsWithWater : 0,
-      groundRight: rowsWithWater ? rowsGroundRight / rowsWithWater : 0,
+      empty: empty / (W * H),
+      water: middle.colour,
+      leftGround: left.colour,
+      rightGround: right.colour,
+      sky,
+      leftShare: left.share,
+      rightShare: right.share,
+      waterToLeft: apart(middle.colour, left.colour),
+      waterToRight: apart(middle.colour, right.colour),
     };
   });
 }
@@ -175,39 +192,58 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
 // geometry, and a grade that washes the banks out would be invisible to a check
 // that only ever looked at low.
 for (const tier of ['low', 'auto', 'high'] as const) {
-test(`the waterway and the ground either side are told apart at ${tier}`, async ({ page }) => {
-  test.slow();
+  test(`the waterway and the ground either side are told apart at ${tier}`, async ({ page }) => {
+    test.slow();
 
-  const seen = await rowAndClassify(page, tier);
+    const seen = await rowAndClassify(page, tier);
 
-  expect(seen, 'no canvas to classify').not.toBeNull();
-  const { ground, water, empty, rowsWithWater, groundLeft, groundRight } = seen!;
-  console.log(
-    `[contrast ${tier}] ground=${(ground * 100).toFixed(1)}% water=${(water * 100).toFixed(1)}% ` +
-      `empty=${(empty * 100).toFixed(1)}% | rows=${rowsWithWater} ` +
-      `groundLeft=${(groundLeft * 100).toFixed(0)}% groundRight=${(groundRight * 100).toFixed(0)}%`,
-  );
+    expect(seen, 'no canvas to classify').not.toBeNull();
+    const { empty, water, leftGround, rightGround, sky, leftShare, rightShare, waterToLeft, waterToRight } =
+      seen!;
 
-  // Nothing rendered at all is a different failure, and worth naming separately.
-  expect(empty, 'the frame was largely unrendered').toBeLessThan(0.2);
+    const show = (c: [number, number, number]) => `rgb(${c.join(',')})`;
+    console.log(
+      `[contrast ${tier}] water=${show(water)} left=${show(leftGround)} ` +
+        `right=${show(rightGround)} sky=${show(sky)} | water-to-bank ` +
+        `${waterToLeft.toFixed(0)}/${waterToRight.toFixed(0)} | non-sky share ` +
+        `${(leftShare * 100).toFixed(0)}%/${(rightShare * 100).toFixed(0)}% ` +
+        `empty=${(empty * 100).toFixed(1)}%`,
+    );
 
-  // Both must be present. Water was 3.0% of the frame with the physical
-  // material and 9.0% once it actually drew; ground sits around 14%. The floors
-  // are well under both so this catches a surface disappearing, not a change of
-  // framing.
-  expect(water, 'no water is visible — the channel is not rendering').toBeGreaterThan(0.02);
-  expect(ground, 'no ground is visible either side of the water').toBeGreaterThan(0.04);
+    // Nothing rendered at all is a different failure, and worth naming separately.
+    expect(empty, 'the frame was largely unrendered').toBeLessThan(0.2);
 
-  // Either side means both sides.
-  //
-  // The total above was satisfied by one bank on its own, and for a long time
-  // that is all there was: the two banks are mirrored, both were wound the same
-  // way round, and the material culls back faces - so the right bank was never
-  // drawn. The published hero showed water, a green left bank, and sky where the
-  // right bank should have been, with this spec passing (#269).
-  expect(rowsWithWater, 'no water was found in the lower frame to measure against')
-    .toBeGreaterThan(10);
-  expect(groundLeft, 'no ground to the left of the channel').toBeGreaterThan(0.5);
-  expect(groundRight, 'no ground to the right of the channel').toBeGreaterThan(0.5);
-});
+    // There is something other than sky out there, on both sides.
+    //
+    // The right bank was missing for a long time and the frame simply showed
+    // sky in its place, with this spec passing because it only ever counted
+    // ground in total and one bank was enough to satisfy that (#269).
+    for (const [side, share] of [
+      ['left', leftShare],
+      ['right', rightShare],
+    ] as const) {
+      expect(
+        share,
+        `only ${(share * 100).toFixed(0)}% of the ${side} of the frame is anything other ` +
+          'than sky, so there is no ground on that side',
+      ).toBeGreaterThan(0.2);
+    }
+
+    // And it is visibly different from the water. Stated as a distance rather
+    // than as a list of hues, so it holds on every theme: 60 in RGB is a
+    // difference nobody would call subtle, and two shades of the same green are
+    // under 20.
+    const DISTINCT = 60;
+
+    for (const [side, distance] of [
+      ['left', waterToLeft],
+      ['right', waterToRight],
+    ] as const) {
+      expect(
+        distance,
+        `the ground on the ${side} is only ${distance.toFixed(0)} from the water in colour, ` +
+          'which is not a bank anyone could see',
+      ).toBeGreaterThan(DISTINCT);
+    }
+  });
 }
