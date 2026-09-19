@@ -43,6 +43,7 @@ import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
 import { easeProgressTowards } from './rower3d/progressEasing';
 import { CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
+import { recordTelemetry } from '../utils/sceneTelemetryLog';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
@@ -79,6 +80,9 @@ import './Rower3D.css';
 // preloading it only cost a request (issue #232).
 
 // Detect route theme from route name and tags
+/** How often the scene writes a line about itself, in seconds. */
+const TELEMETRY_SAMPLE_SECONDS = 5;
+
 const detectRouteTheme = (route: WaterRoute): RouteTheme => {
   const name = route.name?.toLowerCase() || '';
   const tags = route.tags || [];
@@ -238,6 +242,8 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
   const terrainY = getTerrainReliefForProgress(terrainProfile, boatProgress);
 
   const boatGroupRef = useRef<THREE.Group>(null);
+  /** Which five-second slot the last telemetry sample belonged to. */
+  const lastTelemetrySlotRef = useRef<number>(-1);
   const lastSceneryUpdateRef = useRef<number>(0);
   
   const totalDistance = useMemo(() => {
@@ -357,6 +363,32 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       fps: frameStats.read()?.fps,
       p95Ms: frameStats.read()?.p95Ms,
     });
+
+    // A line in the telemetry log every few seconds, for rowers as well as
+    // tests. It is what is left to read after a crash, so it is deliberately
+    // outside the IS_TEST_MODE block below - a crash on a rower's machine is
+    // the one we know least about.
+    //
+    // Every five seconds rather than every second: each record writes the log
+    // through to session storage, and doing that on the frame loop is a cost
+    // the scene should not pay for its own diagnostics. Events that matter -
+    // a lost context, the boundary - are written the moment they happen.
+    const sampleSlot = Math.floor(elapsedTime / TELEMETRY_SAMPLE_SECONDS);
+    if (sampleSlot !== lastTelemetrySlotRef.current) {
+      lastTelemetrySlotRef.current = sampleSlot;
+      const stats = readRenderStats();
+      const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      recordTelemetry('sample', {
+        progress: Number(boatProgressRef.current.toFixed(4)),
+        fps: stats?.fps != null ? Number(stats.fps.toFixed(1)) : undefined,
+        p95Ms: stats?.p95Ms != null ? Number(stats.p95Ms.toFixed(0)) : undefined,
+        drawCalls: stats?.drawCalls,
+        triangles: stats?.triangles,
+        geometries: gl.info?.memory?.geometries,
+        textures: gl.info?.memory?.textures,
+        heapMb: heap ? Number((heap.usedJSHeapSize / (1024 * 1024)).toFixed(1)) : undefined,
+      });
+    }
 
     try {
       if (IS_TEST_MODE) {
@@ -739,6 +771,12 @@ class GPUErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('GPU Error Boundary caught error:', error, info);
+    // The boundary replaces the whole stage, so what it caught is the single
+    // most useful thing the log can hold.
+    recordTelemetry('gpu-boundary', {
+      message: error?.message ?? String(error),
+      componentStack: info?.componentStack?.slice(0, 400),
+    });
   }
 
   render() {
@@ -911,6 +949,14 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             } catch { /* intentional */ }
             
             recordContextCreated({ ...glSelection, maxDpr: maxDpr(surface.dpr) });
+            recordTelemetry('context-created', {
+              antialias: glSelection.antialias,
+              powerPreference: glSelection.powerPreference,
+              maxDpr: maxDpr(surface.dpr),
+              quality,
+              backend: gpuBackend,
+              fallbackReason: glSelection.fallbackReason,
+            });
 
             const canvas = gl.domElement;
             canvas.addEventListener('webglcontextlost', (ev) => {
@@ -921,6 +967,13 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 ev.preventDefault?.();
                 const reason = (ev as Event & { statusMessage?: string }).statusMessage;
                 recordContextLost(reason);
+                recordTelemetry('context-lost', {
+                  // Empty as well as absent: a context lost on purpose, or
+                  // by eviction, carries no statusMessage at all.
+                  reason: reason || 'the driver gave none',
+                  losses: readContextState()?.losses,
+                  stats: readRenderStats() ?? undefined,
+                });
                 showContextMessage(CONTEXT_LOST_MESSAGE);
                 window.__ROWER3D_WEBGL_LOST = true;
                 // Deferred, and retried: the spec lets the browser ignore a
@@ -934,6 +987,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             canvas.addEventListener('webglcontextrestored', () => {
               try {
                 recordContextRestored();
+                recordTelemetry('context-restored');
                 showContextMessage(null);
                 window.__ROWER3D_WEBGL_LOST = false;
               } catch { /* intentional */ }

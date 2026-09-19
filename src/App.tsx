@@ -24,6 +24,7 @@ import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
 import { resolveCrew } from './components/rower3d/crewModel';
 import { isGlbSceneryEnabled } from './components/rower3d/sceneryAssets';
+import { readTelemetry, telemetryAsText, clearTelemetry } from './utils/sceneTelemetryLog';
 import { useServices } from './context/useServices';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
@@ -131,6 +132,27 @@ function App() {
   const [sceneryEnabled, setSceneryEnabled] = useState(() => isGlbSceneryEnabled());
   // Only polled while the panel is open (#232).
   const renderStats = useRenderStats(debugMode);
+  // The telemetry log is read the same way: only while someone is looking.
+  const [telemetryTick, setTelemetryTick] = useState(0);
+  const telemetryEvents = useMemo(
+    () => (debugMode ? readTelemetry() : []),
+    // renderStats ticks about once a second while the panel is open, which is
+    // a good enough clock to keep this fresh without a second timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [debugMode, telemetryTick, renderStats],
+  );
+  const telemetryCount = telemetryEvents.length;
+  const recentTelemetry = useMemo(
+    () =>
+      telemetryEvents
+        .slice(-12)
+        .map((e) => {
+          const seconds = (e.at / 1000).toFixed(1).padStart(7, ' ');
+          return `${seconds}s  ${e.kind}${e.detail ? ` ${JSON.stringify(e.detail)}` : ''}`;
+        })
+        .join(String.fromCharCode(10)),
+    [telemetryEvents],
+  );
 
   // The rower's own call on graphics quality, overruling hardware detection
   // when they know better than the heuristic does (#224).
@@ -1467,6 +1489,57 @@ function App() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="debug-section">
+            <h5>Scene telemetry</h5>
+            {/* What the scene has been doing, kept in session storage so it
+                survives the reload a killed renderer produces - which is the
+                one case where every other reading has already gone. */}
+            <p>
+              {telemetryCount} event{telemetryCount === 1 ? '' : 's'} recorded this tab.
+              {' '}Kept in session storage; cleared when the tab closes.
+            </p>
+            <div className="debug-telemetry-actions">
+              <button
+                type="button"
+                className="btn btn-debug-action"
+                onClick={() => {
+                  const text = telemetryAsText();
+                  navigator.clipboard?.writeText(text).catch(() => {
+                    // Clipboard refused. The download below still works.
+                  });
+                }}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="btn btn-debug-action"
+                onClick={() => {
+                  const blob = new Blob([telemetryAsText()], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `virtualrow-telemetry-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                Download
+              </button>
+              <button
+                type="button"
+                className="btn btn-debug-action"
+                onClick={() => {
+                  clearTelemetry();
+                  setTelemetryTick((n) => n + 1);
+                }}
+              >
+                Clear
+              </button>
+            </div>
+            <pre className="debug-telemetry-log">{recentTelemetry}</pre>
           </div>
 
           <div className="debug-section">

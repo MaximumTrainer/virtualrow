@@ -1610,6 +1610,50 @@ body {
   outline-offset: -11px;
 }
 
+/* The telemetry log's controls and its tail.
+
+   responsive.spec.ts holds every control in this panel to a 44px target, so
+   these are sized for a thumb rather than a mouse (#270). */
+.debug-telemetry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: var(--space-2xs) 0 var(--space-xs);
+}
+
+.btn-debug-action {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-inset);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.btn-debug-action:hover {
+  border-color: var(--color-primary);
+}
+
+.debug-telemetry-log {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-xs);
+  border-radius: var(--radius-inset);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  /* Wrapped rather than scrolled sideways: the panel is narrow and a detail
+     object is long, and a line you cannot see the end of is no use at a
+     glance. Copy and Download give the whole thing unwrapped. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .debug-section p {
   margin: var(--space-2xs) 0;
   color: var(--color-text-muted);
