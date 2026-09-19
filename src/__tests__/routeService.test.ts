@@ -42,7 +42,10 @@ describe('RouteService basic data', () => {
     expect(routes.length).toBe(1);
     expect(routes[0].id).toBe('1');
     expect(routes[0].name).toBe('Willowbrook River');
-    expect(routes[0].distance).toBeCloseTo(5.0, 1);
+    // 6.71 km, which is what its coordinates trace. It declared 5.0 for a long
+    // time, so the card a rower read before starting understated the row by a
+    // third — and these tests pinned the wrong number rather than catching it.
+    expect(routes[0].distance).toBeCloseTo(6.71, 1);
     expect(routes[0].difficulty).toBe('easy');
     expect(routes[0].coordinates.length).toBeGreaterThan(70);
     expect(routes[0].tags).toContain('river');
@@ -54,7 +57,7 @@ describe('RouteService basic data', () => {
     // Willowbrook River route (only route)
     const willowbrook = routes.find(r => r.id === '1');
     expect(willowbrook?.name).toBe('Willowbrook River');
-    expect(willowbrook?.distance).toBeCloseTo(5.0, 1);
+    expect(willowbrook?.distance).toBeCloseTo(6.71, 1);
     expect(willowbrook?.coordinates.length).toBeGreaterThan(70); // At least 70 coordinate points across 5 sections
     expect(willowbrook?.difficulty).toBe('easy');
     expect(willowbrook?.location).toBe('Willowbrook Valley');

@@ -11,6 +11,7 @@ import {
   resampleCoordinates,
 } from '../utils/coordinateUtils';
 import { parseGeoJsonTrack, parseGpxTrack } from '../utils/trackParsers';
+import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import type { GeometrySource } from '../types/index';
 
 /**
@@ -105,13 +106,19 @@ export class RouteService {
         // Shared with the authored scenery track, which keys off this id (#232).
         id: WILLOWBROOK_ROUTE_ID,
         name: 'Willowbrook River',
-        description: 'A scenic 5km journey down the meandering Willowbrook River. Begin in the forested highlands, glide through open wildflower meadows, navigate the rocky narrows, pass the quaint village waterfront, and finish where the river opens into a tranquil lake delta. The landscape transforms dramatically as you progress downstream.',
-        distance: 5.0,
+        description: 'A scenic journey down the meandering Willowbrook River. Begin in the forested highlands, glide through open wildflower meadows, navigate the rocky narrows, pass the quaint village waterfront, and finish where the river opens into a tranquil lake delta. The landscape transforms dramatically as you progress downstream.',
+        // Measured from the coordinates rather than stated. It said 5.0 while
+        // the 100 fixes below trace 6.71 km, so the card a rower reads before
+        // starting understated the row by a third and the time estimate
+        // derived from it was wrong by the same margin.
+        distance: Math.round(routeTotalDistanceMeters(willowbrookRiverCoordinates)) / 1000,
         difficulty: 'easy',
         location: 'Willowbrook Valley',
         coordinates: willowbrookRiverCoordinates,
         elevationGain: 15, // Gentle downhill flow
-        estimatedTime: Math.round((5.0 / 3.5) * 60), // ~86 minutes at average pace
+        estimatedTime: Math.round(
+          (routeTotalDistanceMeters(willowbrookRiverCoordinates) / 1000 / 3.5) * 60,
+        ),
         tags: ['river', 'scenic', 'nature', 'varied-terrain', 'beginner-friendly', 'forest', 'meadow', 'village', 'lake'],
         createdAt: new Date('2024-12-07'),
       },
