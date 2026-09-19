@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../utils/sceneHealth';
+import { describeSceneHealth, CONTEXT_LOST_TEXT, CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
 
 /**
  * Playwright specs were passing while the stage showed
@@ -100,5 +100,37 @@ describe('describeSceneHealth', () => {
     expect(health.alive).toBe(false);
     expect(health.reason).toContain('canvases=2');
     expect(health.reason).toContain('[false,true]');
+  });
+
+  it('recognises the exact sentence the app puts on screen', () => {
+    // The guard matches a fragment; the app shows a sentence. They are one
+    // constant now, and this is what holds them together - a reworded message
+    // that no longer contains the fragment fails here rather than in the field
+    // (#299).
+    expect(CONTEXT_LOST_MESSAGE.toLowerCase()).toContain(CONTEXT_LOST_TEXT);
+
+    const health = describeSceneHealth({
+      contextLost: false,
+      markerText: CONTEXT_LOST_MESSAGE,
+      canvasCount: 1,
+    });
+
+    expect(health.alive, 'the banner the app shows was not recognised').toBe(false);
+  });
+
+  it('judges the canvas on screen, not one React threw away', () => {
+    // The whole reason for asking a canvas instead of the global flag was that
+    // "a discarded first canvas losing its context left that flag true while
+    // the canvas on screen was fine". Reducing with `some` put that straight
+    // back: any stale canvas with a released context failed the assertion
+    // (#299). The live one is the one most recently mounted.
+    const health = describeSceneHealth({
+      contextLost: true,
+      markerText: '',
+      canvasCount: 2,
+      lostPerCanvas: [true, false],
+    });
+
+    expect(health.alive, 'a discarded canvas failed the live one').toBe(true);
   });
 });

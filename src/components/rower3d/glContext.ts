@@ -218,6 +218,10 @@ const selectionCache = new Map<string, GlSelection>();
  */
 let lastGrantedSelection: GlSelection | null = null;
 
+/** How much a driver is being asked for. Refusals come from the top. */
+const adapterRank = (preference: PowerPreference): number =>
+  preference === 'high-performance' ? 2 : preference === 'default' ? 1 : 0;
+
 export const selectBrowserGlOptions = (
   preferred: { powerPreference: PowerPreference; antialias: boolean },
 ): GlSelection => {
@@ -236,8 +240,32 @@ export const selectBrowserGlOptions = (
   // machine, so reuse it rather than gambling the scene on asking again.
   const granted = lastGrantedSelection;
   if (granted && state && !state.lost) {
-    selectionCache.set(key, granted);
-    return granted;
+    // Never richer than what was asked for, and never richer than what the
+    // driver has already granted.
+    //
+    // This used to hand back the granted selection verbatim, whichever tier
+    // had asked for it - so a low-power request with multisampling off
+    // received the high-performance adapter and MSAA, which is the one thing
+    // canvasSurface.ts exists to prevent, and Rower3D feeds these straight
+    // into <Canvas gl={...}> (#297).
+    //
+    // Capped in both directions, a request no more demanding than one the
+    // driver has already satisfied needs no probe: the answer is known.
+    const capped: GlSelection = {
+      powerPreference:
+        adapterRank(preferred.powerPreference) <= adapterRank(granted.powerPreference)
+          ? preferred.powerPreference
+          : granted.powerPreference,
+      antialias: preferred.antialias && granted.antialias,
+      usable: true,
+      fallbackReason:
+        preferred.antialias && !granted.antialias
+          ? 'reused a context the driver granted without multisampling'
+          : undefined,
+    };
+    // Deliberately not cached: it was never probed under this key, and once
+    // the context is gone the driver may grant more than this.
+    return capped;
   }
 
   const selection = selectGlOptions(browserContextAttempt, { preferred });
