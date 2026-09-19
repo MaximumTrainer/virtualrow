@@ -87,6 +87,15 @@ export class WorkoutService {
       this.currentSession.averagePace = Math.round(
         totalPace / this.currentSession.splits.length
       );
+    } else if (this.currentSession.distance > 0) {
+      // A split is cut every 500 m, so a shorter row produced none and the
+      // summary showed "--:--" for a piece the rower had just watched a live
+      // split for on every stroke. That is every warm-up, every short sprint,
+      // and everyone who stops early. The row's own distance and duration say
+      // the same thing the splits would have.
+      this.currentSession.averagePace = Math.round(
+        this.currentSession.duration / (this.currentSession.distance / 500),
+      );
     }
 
     // Persist heart rate aggregate metrics

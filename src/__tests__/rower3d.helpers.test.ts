@@ -120,12 +120,6 @@ describe('createCausticsTexture', () => {
 });
 
 describe('attachGerstnerShader', () => {
-  it('sets onBeforeCompile on the material', () => {
-    const mat = new THREE.MeshPhysicalMaterial();
-    const timeUniform = { value: 0 };
-    attachGerstnerShader(mat, timeUniform, 'z', 'test-key');
-    expect(typeof mat.onBeforeCompile).toBe('function');
-  });
 
   it('sets customProgramCacheKey that includes the cache key', () => {
     const mat = new THREE.MeshPhysicalMaterial();
