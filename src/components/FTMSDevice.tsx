@@ -113,7 +113,7 @@ export const FTMSDevice: React.FC = () => {
           <div className="metric">
             <span className="metric-label">Pace</span>
             <span className="metric-value">
-              {rowerData.pace ? (rowerData.pace / 100).toFixed(1) : '--'}
+              {rowerData.pace ? rowerData.pace.toFixed(1) : '--'}
             </span>
             <span className="metric-unit">s/500m</span>
           </div>

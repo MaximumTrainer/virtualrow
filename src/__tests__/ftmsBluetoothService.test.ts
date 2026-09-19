@@ -5,7 +5,11 @@
  * and verify that the resulting PM5Data values use the correct units.
  *
  * PM5Data unit conventions (must match what PM5 service emits):
- *   pace         – centiseconds per 500 m  (e.g. 12000 = 120.00 s/500m)
+ *   pace         – seconds per 500 m. The FTMS wire carries centiseconds and
+ *                  the adapter normalises them, because that is what
+ *                  PM5Data.pace means and what the PM5 adapter emits. These
+ *                  tests used to assert the raw wire value, which is how a
+ *                  real PM5 row came to move a hundred times too fast (#282).
  *   distance     – metres
  *   elapsedTime  – seconds
  *   cadence      – strokes per minute
@@ -111,13 +115,13 @@ describe('FTMSBluetoothService.parseRowerData – optional fields', () => {
 
   it('parses instantaneous pace in centiseconds (bit 3)', () => {
     // flags = 0x0001 | 0x0008 → no basic data, has instant pace
-    // pace = 12000 centiseconds/500m = 120 s/500m (2:00/500m)
+    // 12000 centiseconds on the wire is 120 s/500m (2:00/500m)
     const view = buildRowerData({
       flags: 0x0009,
       bytes: [...u16le(12000)],
     });
     const data = service.parseRowerData(view);
-    expect(data.pace).toBe(12000);
+    expect(data.pace).toBe(120);
   });
 
   it('parses instantaneous power in watts (bit 5)', () => {
@@ -182,7 +186,7 @@ describe('FTMSBluetoothService.parseRowerData – optional fields', () => {
     const data = service.parseRowerData(view);
     expect(data.cadence).toBe(20);
     expect(data.distance).toBe(1000);
-    expect(data.pace).toBe(11000);
+    expect(data.pace).toBe(110);
     expect(data.elapsedTime).toBe(600);
   });
 
@@ -208,7 +212,7 @@ describe('FTMSBluetoothService.parseRowerData – optional fields', () => {
     const data = service.parseRowerData(v2);
 
     expect(data.distance).toBe(500);  // retained from first packet
-    expect(data.pace).toBe(10500);    // updated from second packet
+    expect(data.pace).toBe(105);      // updated from second packet
   });
 
   it('handles all FTMS rower data flags in one packet', () => {
@@ -235,7 +239,7 @@ describe('FTMSBluetoothService.parseRowerData – optional fields', () => {
 
     const data = service.parseRowerData(view);
     expect(data.distance).toBe(4321);
-    expect(data.pace).toBe(12234);
+    expect(data.pace).toBe(122.34);
     expect(data.power).toBe(245);
     expect(data.heartRate).toBe(155);
     expect(data.calories).toBe(420);

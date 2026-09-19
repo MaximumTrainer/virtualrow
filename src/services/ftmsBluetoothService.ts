@@ -187,8 +187,14 @@ export class FTMSBluetoothService {
 
     if (hasInstPace) {
       if (offset + 2 > view.byteLength) return this.latestData;
-      // FTMS pace: uint16, unit = 1/100 second per 500 m (centiseconds) — same as PM5Data.pace
-      instantPace = view.getUint16(offset, true);
+      // FTMS pace: uint16, unit = 1/100 second per 500 m (centiseconds).
+      //
+      // Normalised to seconds here, because that is what PM5Data.pace means
+      // (src/types/index.ts) and what the PM5 adapter already emits. This used
+      // to hand the raw centiseconds on, with a comment claiming they were the
+      // same as the PM5's - and App divided by 100 to suit, which made a real
+      // PM5 row a hundred times too fast (#282).
+      instantPace = view.getUint16(offset, true) / 100;
       offset += 2;
     }
 

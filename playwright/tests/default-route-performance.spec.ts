@@ -240,7 +240,10 @@ async function rowPhase(
     distance += metresPerSecond / emitHz;
     const ok = await emitPm5({
       distance: Math.round(distance),
-      elapsedTime: Math.round(seconds * 1000),
+      // Seconds. The mock converts to the wire's centiseconds itself; sending
+      // milliseconds told the app the row had run a hundred times longer than
+      // it had (#296).
+      elapsedTime: Math.round(seconds),
       pace: phase.paceSecondsPer500m,
       cadence: phase.cadence,
       power: Math.round(2.8 * metresPerSecond ** 3),
@@ -454,7 +457,7 @@ test('progress and the camera survive a stall and an absurd speed (#255)', async
       distance += metresPerSecond / 10;
       await emitPm5({
         distance: Math.round(distance),
-        elapsedTime: Math.round(seconds * 1000),
+        elapsedTime: Math.round(seconds),
         pace: extreme.pace,
         cadence: extreme.cadence,
         power: 0,
