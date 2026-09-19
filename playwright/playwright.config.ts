@@ -80,7 +80,12 @@ export default defineConfig({
     url: 'http://localhost:5173',
     reuseExistingServer: false,
     // Long enough to build and then serve.
-    timeout: 240 * 1000,
+    //
+    // 240s was not: a local run hit "Timed out waiting 240000ms from
+    // config.webServer" on a cold tsbuildinfo, and a CI machine is slower
+    // again. A timeout here reports nothing about the app, so the budget is
+    // generous on purpose.
+    timeout: 360 * 1000,
     // `npm run build` is `tsc -b && vite build`, and tsc writes its diagnostics
     // to stdout - which Playwright discards unless asked for it. Without this a
     // type error surfaces only as "Process from config.webServer was not able

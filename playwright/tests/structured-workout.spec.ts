@@ -88,6 +88,8 @@ test('a selected workout runs over the row, with targets and a timeline', async 
   await page.getByRole('button', { name: /back to row/i }).click();
 
   await connectHardwareAndStart(page);
+  // The workout runs over a row, so the row has to be happening (#283).
+  await expectSceneAlive(page, 'the workout row');
 
   const overlay = page.locator('.workout-overlay');
   await expect(overlay).toBeVisible({ timeout: 30_000 });

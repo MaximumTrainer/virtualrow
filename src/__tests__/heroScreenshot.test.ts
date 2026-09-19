@@ -75,3 +75,52 @@ describe('measurement, for the record', () => {
     expect(PUBLISHED.length).toBeGreaterThan(0);
   });
 });
+
+describe('the hero shows a river with two banks (#290)', () => {
+  /**
+   * The committed hero went on showing the defect #269 described - a green
+   * bank on the left, sky-white where the right bank should be - for as long
+   * as it took to notice by eye, because `isBlankImage` passes a picture with
+   * a green half and a white half quite happily.
+   *
+   * This is what #269's third criterion asked for: the machinery in
+   * imageContent.ts pointed at a band either side of the channel. Run over the
+   * file that is actually published, so a stale or half-rendered hero cannot
+   * sit in the repository unremarked.
+   */
+  /** Mean green-minus-red over a vertical slice: high on vegetation, ~0 on sky. */
+  const greenness = (from: number, to: number): number => {
+    const image = load(HERO);
+    const x0 = Math.floor(from * image.width);
+    const x1 = Math.floor(to * image.width);
+    // The lower half only. Above the horizon is sky on both sides even when
+    // the banks are drawn perfectly.
+    const y0 = Math.floor(image.height * 0.5);
+
+    let total = 0;
+    let count = 0;
+    for (let y = y0; y < image.height; y += 1) {
+      for (let x = x0; x < x1; x += 1) {
+        const i = (y * image.width + x) * 3;
+        total += image.pixels[i + 1] - image.pixels[i];
+        count += 1;
+      }
+    }
+    return count ? total / count : 0;
+  };
+
+  it('has ground either side of the water, not sky on one side', () => {
+    // The outer fifth of each side, below the horizon: where a bank is, and
+    // where the channel is not.
+    const left = greenness(0, 0.2);
+    const right = greenness(0.8, 1);
+
+    for (const [side, value] of [['left', left], ['right', right]] as const) {
+      expect(
+        value,
+        `the ${side} of the hero reads as sky rather than ground ` +
+          `(green minus red is ${value.toFixed(1)}; vegetation is tens, sky is nothing)`,
+      ).toBeGreaterThan(10);
+    }
+  });
+});

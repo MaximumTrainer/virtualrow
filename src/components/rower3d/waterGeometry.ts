@@ -62,8 +62,20 @@ export const createWaterChannelGeometry = (
 
     if (i < segments) {
       const base = i * 2;
-      indices.push(base, base + 2, base + 1);
-      indices.push(base + 1, base + 2, base + 3);
+      // Wound to face the sky.
+      //
+      // The two vertices above run in the +perp direction, where the left bank
+      // runs -perp - and mirroring a strip reverses which way its triangles
+      // face. Sharing the bank's index order pointed every water triangle
+      // down: the same mistake #269 found in the banks, in the strip beside
+      // them (#284).
+      //
+      // It was invisible because the material is DoubleSide. That hides the
+      // culling and not the shading - under DOUBLE_SIDED three negates the
+      // normal for a back face, so the (0,1,0) written above was being flipped
+      // to (0,-1,0) at shading time and the river was lit from underneath.
+      indices.push(base, base + 1, base + 2);
+      indices.push(base + 1, base + 3, base + 2);
     }
   }
 

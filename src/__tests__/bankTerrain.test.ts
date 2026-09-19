@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { BANK_WATERLINE_Y, createBankGeometry } from '../components/rower3d/bankGeometry';
 import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
+import { facingAway } from './faceNormals';
+import { createRouteCurve } from '../components/rower3d/curve';
+import type { Coordinate } from '../types/index';
 import {
   MAX_TERRAIN_RELIEF_SCENE_UNITS,
   type RouteEnrichmentData,
@@ -215,5 +218,74 @@ describe('both banks face the sky (#269)', () => {
       [right!.getX(0), right!.getX(1), right!.getX(2)],
       'the banks are wound the same way, so one of them faces backwards',
     ).not.toEqual([left!.getX(0), left!.getX(1), left!.getX(2)]);
+  });
+});
+
+describe('banks survive a bend (#285)', () => {
+  /**
+   * The winding fix in #269 was proved on a straight, which is the one case
+   * that cannot fail. An offset curve inside a turn shrinks, and at an offset
+   * equal to the radius of curvature it turns inside out - so on a bend the
+   * inside bank was being culled away: 32 of 500 triangles over three bends in
+   * 3 km, and far more as the bends tighten.
+   *
+   * The builder now holds the bank short of that fold and smooths the reach
+   * along the route, because clamping each sample on its own made the outer
+   * edge jump and a quad with a step in it is folded whatever its winding says.
+   *
+   * What this does not claim is a guarantee at any curvature. A strip two
+   * vertices wide cannot be offset further than the radius without folding, and
+   * tightening the clamp makes it worse rather than better. Beyond a point the
+   * centreline itself is the limit - at twelve bends in 3 km the water channel
+   * folds too, which is a deeper question than the banks. The material is
+   * double-sided so the residue costs overdraw rather than showing sky through
+   * the ground; see the material in bankComponents.tsx.
+   */
+  const windingRiver = (meters: number, bends: number) => {
+    const points: Coordinate[] = [];
+    const samples = 60;
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      points.push({
+        lat: 51.45 + (t * meters) / 111_195,
+        lng: (Math.sin(t * bends * 2 * Math.PI) * 45) / 70_000,
+      });
+    }
+    return createRouteCurve(points, 0.1)!;
+  };
+
+  it('keeps every triangle facing the sky on a river-shaped bend', () => {
+    // Three bends in 3 km with a 45 m wander: a meander, not a slalom.
+    const curve = windingRiver(3000, 3);
+
+    for (const side of ['left', 'right'] as const) {
+      const away = facingAway(createBankGeometry(curve, side));
+      expect(away, `${away} ${side}-bank triangles face away from the sky`).toBe(0);
+    }
+  });
+
+  it('narrows the bank as the bend tightens, rather than reaching through it', () => {
+    // What the clamp does, stated as a measurement: the same river wound
+    // tighter must be given a narrower bank, because the fold is closer.
+    const widthOn = (bends: number) => {
+      const position = createBankGeometry(windingRiver(3000, bends), 'left').getAttribute(
+        'position',
+      );
+      let total = 0;
+      let samples = 0;
+      for (let i = 0; i < position.count; i += 2) {
+        total += Math.hypot(
+          position.getX(i + 1) - position.getX(i),
+          position.getZ(i + 1) - position.getZ(i),
+        );
+        samples += 1;
+      }
+      return total / samples;
+    };
+
+    const gentle = widthOn(3);
+    const tight = widthOn(12);
+
+    expect(tight, 'a tighter bend was given the same bank as a gentle one').toBeLessThan(gentle);
   });
 });

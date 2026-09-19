@@ -141,19 +141,25 @@ test.describe('3D postprocessing', () => {
 
     // Wait for the canvas to be up and the scene to have run frames on top of
     // it — #197 threw from EffectComposer.addPass, so the effect stack has to
-    // have had its turn before the verdict means anything. Context loss ends
-    // the window early; whatever was seen by then is what counts. The budget is
+    // have had its turn before the verdict means anything. The budget is
     // wall-clock and the main thread spends much of it blocked, so it buys far
     // less observation than its size suggests.
+    //
+    // This used to read `o.frozen || (...)`, and `frozen` is set precisely when
+    // the context is lost — so losing the graphics context made the test pass,
+    // in the one spec whose name promises the scene still renders (#283). That
+    // escape was a concession to a loss the scene no longer suffers.
     await expect
       .poll(
         async () => {
           const o = await readObservation(page);
-          return o.frozen || (o.best > 0 && o.frames >= 30);
+          return o.best > 0 && o.frames >= 30;
         },
         { timeout: 60_000, message: 'the 3D scene never mounted a canvas and rendered into it' },
       )
       .toBe(true);
+
+    await expectSceneAlive(page, 'the postfx scene at auto');
 
     const observed = await readObservation(page);
     expect(observed.best).toBeGreaterThan(0);
@@ -213,27 +219,16 @@ test.describe('3D postprocessing', () => {
       'the effect stack threw on a null dereference',
     ).toEqual([]);
 
-    // Whether the scene survives is a different question, and on a software
-    // rasteriser #257 answers it: the EffectComposer `alpha` fault trips the
-    // GPU error boundary at high, so the fallback replaces the scene for a
-    // reason that has nothing to do with god rays. Asserted where that fault
-    // does not fire; the `parent` check above is the #233 guard and holds
-    // everywhere.
-    const software = await page.evaluate(() => {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
-      if (!gl) return true;
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
-      return /swiftshader|llvmpipe|software|angle \(google/i.test(name);
-    });
-
-    if (!software) {
-      await expect(
-        page.locator('.activity-route-stage .rower3d-canvas-container canvas'),
-      ).toBeVisible();
-      await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
-    }
+    // Whether the scene survives used to be asked only off a software
+    // rasteriser, because #257's EffectComposer `alpha` fault tripped the GPU
+    // boundary at high there. That fault is fixed at source, and CI is a
+    // software rasteriser — so the gate meant this spec asserted nothing about
+    // rendering on the only machine that runs it (#283). Asked everywhere now.
+    await expect(
+      page.locator('.activity-route-stage .rower3d-canvas-container canvas'),
+    ).toBeVisible();
+    await expect(page.getByText(/3D rendering error/i)).toHaveCount(0);
+    await expectSceneAlive(page, 'the postfx scene at high');
   });
 
   test('low mode still skips the effect stack entirely', async ({ page }) => {
@@ -245,5 +240,6 @@ test.describe('3D postprocessing', () => {
 
     expect(errors.filter((e) => /reading 'alpha'/.test(e))).toEqual([]);
     await expect(page.locator('.activity-route-stage .rower3d-canvas-container canvas')).toBeVisible();
+    await expectSceneAlive(page, 'the postfx scene at low');
   });
 });

@@ -6,6 +6,7 @@ import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
 import { createWaterChannelGeometry, WATER_SURFACE_Y } from '../components/rower3d/waterGeometry';
 import { createBankGeometry, BANK_WATERLINE_Y } from '../components/rower3d/bankGeometry';
 import { chunkProgressRanges } from '../components/rower3d/geometryChunks';
+import { facingAway, faceNormals } from './faceNormals';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from '../components/rower3d/constants';
 import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
 
@@ -54,6 +55,40 @@ describe('createWaterChannelGeometry', () => {
     expect(vertexCount(geometry)).toBe((stripSegmentCount(curve) + 1) * 2);
   });
 
+  it('faces the sky, so a front-facing material draws it (#284)', () => {
+    /**
+     * The water strip walks its two vertices in the +perp direction while the
+     * left bank walks -perp, and both used the same index order. Mirroring a
+     * triangle reverses which way it faces, so every water triangle pointed
+     * down - the same mistake #269 found in the banks, in the strip next to
+     * them.
+     *
+     * It was invisible because waterComponents.tsx sets side: DoubleSide. That
+     * hides the culling and not the shading: under DOUBLE_SIDED three flips the
+     * normal for back faces, so the explicit (0,1,0) normal attribute was being
+     * negated at shading time and the river was lit from underneath.
+     */
+    const geometry = createWaterChannelGeometry(curveFor(3000));
+
+    const away = facingAway(geometry);
+    expect(away, `${away} water triangles face away from the sky`).toBe(0);
+  });
+
+  it('agrees with the banks about which way is up', () => {
+    // The three strips meet at the waterline and are lit by the same sun.
+    const curve = curveFor(3000);
+    const water = faceNormals(createWaterChannelGeometry(curve));
+    const left = faceNormals(createBankGeometry(curve, 'left'));
+    const right = faceNormals(createBankGeometry(curve, 'right'));
+
+    for (const [label, normals] of [['water', water], ['left', left], ['right', right]] as const) {
+      expect(normals.length, `${label} built no triangles`).toBeGreaterThan(0);
+      expect(
+        Math.min(...normals.map((n) => n.y)),
+        `the ${label} strip has a triangle pointing away from the sky`,
+      ).toBeGreaterThan(0);
+    }
+  });
   it('spends more geometry on a long route than a short one', () => {
     expect(vertexCount(createWaterChannelGeometry(curveFor(20_000)))).toBeGreaterThan(
       vertexCount(createWaterChannelGeometry(curveFor(1000))),
