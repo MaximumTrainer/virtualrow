@@ -28,29 +28,24 @@ import { describeSceneHealth } from '../../src/utils/sceneHealth';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
-/**
- * How long a full traverse is given, in seconds of wall clock.
- *
- * The speed is then chosen from the route's own length, so a 7 km route and a
- * 20 km one both take about this long.
- */
-const TRAVERSE_SECONDS = 60;
 
 /** PM5 frames per second. Each one is a round trip, and the renderer is busy. */
 const EMIT_HZ = 1;
 
 /**
- * A plausible pace to send while the traverse runs: two minutes per 500 m.
+ * The pace the traverse is rowed at, in seconds per 500 m.
  *
- * Seconds, which is what PM5Data.pace means. This used to be 12_000, on the
- * belief that the wire wanted centiseconds - the mock does that conversion
- * itself, and 12_000 overflowed its 16-bit field to 20_352, so the app read
- * 203.52 s/500m and nobody had chosen that (#296).
- *
- * It drives the stroke, the cadence and the numbers on the dashboard. It does
- * not drive where the boat is: see rowToTheEnd for what does, and why.
+ * Far faster than a person - the issue sanctions that, because rowing a route
+ * in real time is not affordable - but as fast as the wire can carry. The PM5
+ * frame holds speed in millimetres per second in sixteen bits, so anything
+ * quicker than 65.5 m/s cannot be expressed, and the mock now refuses to wrap
+ * it (#296). 8 s/500 m is 62.5 m/s, which crosses the bundled route in about
+ * 110 seconds and the 20 km one in about five minutes.
  */
-const ROWING_WIRE_PACE = 120;
+const TRAVERSE_PACE_SECONDS = 8;
+
+/** What that pace means, and what the scene should therefore do. */
+const TRAVERSE_MPS = 500 / TRAVERSE_PACE_SECONDS;
 
 let simulatorReady = false;
 test.beforeAll(async () => {
@@ -130,6 +125,8 @@ interface Sample {
   geometryMb: number;
   geometries: number;
   textures: number;
+  /** JS heap in megabytes, where the browser will say. 0 where it will not. */
+  heapMb: number;
 }
 
 /**
@@ -161,6 +158,13 @@ async function sampleAndObserve(page: Page) {
         geometryMb: window.__ROWER3D_MEMORY?.geometryMb ?? 0,
         geometries: window.__ROWER3D_MEMORY?.geometries ?? 0,
         textures: window.__ROWER3D_MEMORY?.textures ?? 0,
+        heapMb:
+          (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
+            ?.usedJSHeapSize != null
+            ? (performance as unknown as { memory: { usedJSHeapSize: number } }).memory
+                .usedJSHeapSize /
+              (1024 * 1024)
+            : 0,
       },
       observation: {
         contextLost: lostPerCanvas.some(Boolean),
@@ -188,35 +192,6 @@ async function rowToTheEnd(page: Page, label: string): Promise<Sample[]> {
   const route = await page.evaluate(() => window.__ROWER3D_ROUTE ?? null);
   const totalDistance = route!.totalDistance;
 
-  // Paused, and then driven by the distance the rower has covered.
-  //
-  // With the session running, where the boat is comes from the physics model
-  // integrating speed, and a harness cannot ask for a particular speed: the
-  // simulator derives pace from the distance and time it is given, the model
-  // smooths it, and the frame loop integrates that against its own delta. The
-  // three together put the boat across a 6.7 km route in about ten seconds
-  // however it was asked, which samples the route a dozen times and proves
-  // little about a long row.
-  //
-  // Paused, the scene follows the distance the PM5 reports instead, which is
-  // exactly the number this harness sends. The boat is then walked down the
-  // route on a schedule, with the same geometry, the same chunk streaming, the
-  // same scenery and the same camera as a row - only the line that decides how
-  // far along it is differs, and the speed the other line integrates is what
-  // #255 already sweeps.
-  await page.evaluate(() => {
-    const pause = Array.from(document.querySelectorAll('.btn-activity-control')).find((e) =>
-      (e.textContent ?? '').includes('Pause'),
-    ) as HTMLButtonElement | undefined;
-    pause?.click();
-  });
-  await page.waitForTimeout(500);
-
-  console.log(
-    `[endurance ${label}] ${(totalDistance / 1000).toFixed(2)} km, walked from end to ` +
-      `end over about ${TRAVERSE_SECONDS}s`,
-  );
-
   const samples: Sample[] = [];
   const read = async () => {
     const { sample, observation } = await sampleAndObserve(page);
@@ -226,28 +201,42 @@ async function rowToTheEnd(page: Page, label: string): Promise<Sample[]> {
 
   await read();
 
-  // A quarter longer than the traverse should need. The boat is driven by a
-  // simulated rower through a physics model that smooths velocity, so arrival is
-  // not to the second; running out of budget with progress short of the end is
-  // itself the finding, and the assertions below say so.
-  // A little past the end, so the scene's smoothing has somewhere to converge:
-  // progress eases towards the reported distance rather than snapping to it, and
-  // a schedule that stops exactly at the finish leaves it just short.
-  const ticks = TRAVERSE_SECONDS * EMIT_HZ;
+  // Rowed, not seeked.
+  //
+  // This used to pause the session and drive the boat from the distance the
+  // PM5 reported, on the belief that a harness could not ask the physics for a
+  // particular speed. It can: speed is 500 / pace, and what made that look
+  // otherwise was a pace field overflowing sixteen bits in the mock and a
+  // hundredfold unit error in App (#282, #296).
+  //
+  // Rowing it properly matters, because a paused session returns early from
+  // workoutService.updateSessionWithPM5Data - so the sampler never records, no
+  // splits are generated, and the session accumulates nothing. Those are the
+  // structures that grow over a long row, which is what this spec is for.
+  console.log(
+    `[endurance ${label}] ${(totalDistance / 1000).toFixed(2)} km at ` +
+      `${TRAVERSE_MPS} m/s, so about ${Math.round(totalDistance / TRAVERSE_MPS)}s`,
+  );
+
+  // Half as long again as the arithmetic says, because the boat accelerates
+  // from a standstill and the frame loop integrates against real time.
+  const deadline = Date.now() + (totalDistance / TRAVERSE_MPS) * 1500 + 30_000;
+  let distance = 0;
   let seconds = 0;
 
-  for (let i = 0; i < ticks; i += 1) {
+  while (Date.now() < deadline) {
     seconds += 1 / EMIT_HZ;
-    const along = Math.min(1.05, (i + 1) / ticks + 0.05);
-    await emitPm5({
-      distance: Math.round(totalDistance * along),
+    distance += TRAVERSE_MPS / EMIT_HZ;
+    const delivered = await emitPm5({
+      distance: Math.round(distance),
       // Seconds. The mock converts to the wire's centiseconds itself.
       elapsedTime: Math.round(seconds),
-      pace: ROWING_WIRE_PACE,
+      pace: TRAVERSE_PACE_SECONDS,
       cadence: 34,
       power: 320,
       heartRate: 165,
     });
+    expect(delivered, `${label}: the simulator stopped accepting frames`).toBe(true);
     await page.waitForTimeout(1000 / EMIT_HZ);
 
     const { sample, observation } = await read();
@@ -262,7 +251,6 @@ async function rowToTheEnd(page: Page, label: string): Promise<Sample[]> {
 
     if (sample.progress >= 0.999) break;
   }
-
   return samples;
 }
 
@@ -290,16 +278,57 @@ function expectACleanTraverse(label: string, samples: Sample[], errors: string[]
     ).toBeGreaterThanOrEqual(progress[i - 1] - 1e-6);
   }
 
-  // Bounded, not flat. Chunked strips are built as the boat reaches them and
-  // the buffers stay uploaded, so some growth along a route is the design; what
-  // this catches is growth that never stops.
+  // Bounded, and measured where it can actually grow.
+  //
+  // The geometry figure comes from walking the scene, and both the segment
+  // count and the chunk count are capped by constants - so it cannot grow
+  // without bound whatever happens, and a generous ceiling on it asserted
+  // almost nothing. The renderer's own counters are the ones that catch a
+  // geometry detached from the scene and never disposed, which scene.traverse
+  // cannot see at all, and the heap is what catches the row's own accumulation
+  // (#293).
+  const meanOf = (values: number[]) =>
+    values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
+  const quarter = Math.max(1, Math.floor(samples.length / 4));
+  const early = samples.slice(0, quarter);
+  const late = samples.slice(-quarter);
+
+  for (const [what, read] of [
+    ['uploaded geometries', (s: Sample) => s.geometries],
+    ['uploaded textures', (s: Sample) => s.textures],
+  ] as const) {
+    const first = meanOf(early.map(read));
+    const last = meanOf(late.map(read));
+    console.log(`[endurance ${label}] ${what}: ${first.toFixed(1)} -> ${last.toFixed(1)}`);
+
+    // Some growth is the design - the scenery for a stretch is built as the
+    // boat reaches it. What this catches is growth that never stops.
+    expect(
+      last,
+      `${label}: ${what} grew from ${first.toFixed(1)} to ${last.toFixed(1)} across the row`,
+    ).toBeLessThan(first * 1.5 + 8);
+  }
+
+  const heaps = samples.map((s) => s.heapMb).filter((mb) => mb > 0);
+  if (heaps.length >= 8) {
+    const first = meanOf(heaps.slice(0, Math.max(1, Math.floor(heaps.length / 4))));
+    const last = meanOf(heaps.slice(-Math.max(1, Math.floor(heaps.length / 4))));
+    console.log(`[endurance ${label}] heap: ${first.toFixed(1)} -> ${last.toFixed(1)} MB`);
+
+    expect(
+      last,
+      `${label}: the heap grew from ${first.toFixed(1)} to ${last.toFixed(1)} MB across the row`,
+    ).toBeLessThan(first * 2 + 64);
+  } else {
+    console.log(`[endurance ${label}] heap: not reported by this browser`);
+  }
+
   expect(geometry.length, `${label}: no geometry was ever measured`).toBeGreaterThan(3);
   expect(
     Math.max(...geometry),
-    `${label}: geometry grew to ${Math.max(...geometry).toFixed(2)} MB`,
-  ).toBeLessThan(Math.min(...geometry) * 4 + 8);
+    `${label}: geometry reached ${Math.max(...geometry).toFixed(2)} MB`,
+  ).toBeLessThan(4);
 }
-
 test('the default route is rowed from start to finish (#272)', async ({ page }) => {
   test.slow();
   expect(simulatorReady, 'the PM5 simulator is not reachable').toBe(true);
