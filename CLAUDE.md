@@ -17,10 +17,15 @@ npm run lint             # ESLint (flat config, zero warnings policy)
 npx tsc --noEmit -p tsconfig.app.json  # Type-check app (bare `tsc --noEmit` checks nothing:
                          #   the root tsconfig is solution-style, files: [])
 npx tsc -p tsconfig.playwright.json --noEmit  # Type-check E2E suite
-npx vitest run           # Unit tests (945 tests, jsdom)
+npx vitest run           # Unit tests (jsdom)
 npx vitest run --coverage # Unit tests with v8 coverage
-npm run test:e2e         # Playwright E2E (local, needs dev server)
-npm run test:e2e:ci      # Playwright E2E (CI, retries=2)
+npm run test:e2e         # Playwright E2E. Builds the app and serves it at the
+                         #   deploy's base path; it owns the server, so do not
+                         #   start `npm run dev` first. BASE_URL=... points it
+                         #   at a server you are already running instead.
+npm run test:e2e:ci      # The same, with CI settings and retries
+npm run test:e2e:endurance # The long route traverses (#272), their own CI job
+npm run test:e2e:stress  # The heavy stress traverse (#301), scheduled only
 npm run verify           # Lint + type-check + full unit suite (what pre-push runs)
 npm run test:contract    # Live check against the rownative mirror (network, opt-in)
 npm run verify:staged    # TDD guard alone, against the current git index

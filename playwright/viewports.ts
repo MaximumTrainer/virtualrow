@@ -34,10 +34,20 @@ export const RESPONSIVE_SPEC = '**/responsive.spec.ts';
  */
 export const ENDURANCE_SPEC = '**/route-endurance.spec.ts';
 
+/**
+ * The heavy stress traverse (#301), which runs on a schedule and nowhere else.
+ *
+ * It exists to answer a question - does a 20 km course of 2000 points really
+ * kill the tab under a harness making two round trips a tick - rather than to
+ * guard a behaviour. It is deliberately the expensive shape, so it is not worth
+ * a place on the push path until it has an answer.
+ */
+export const HEAVY_SPEC = '**/*.heavy.spec.ts';
+
 /** The matrix as Playwright projects, plus a `default` project for every other spec. */
 export function responsiveProjects(): Project[] {
   return [
-    { name: 'default', testIgnore: [RESPONSIVE_SPEC, ENDURANCE_SPEC] },
+    { name: 'default', testIgnore: [RESPONSIVE_SPEC, ENDURANCE_SPEC, HEAVY_SPEC] },
     ...RESPONSIVE_VIEWPORTS.map((v) => ({
       name: v.name,
       testMatch: RESPONSIVE_SPEC,

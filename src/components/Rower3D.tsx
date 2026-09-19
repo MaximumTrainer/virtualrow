@@ -41,6 +41,7 @@ import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/
 import { resolveSceneQuality } from './rower3d/sceneQuality';
 import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
+import { easeProgressTowards } from './rower3d/progressEasing';
 import { CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
@@ -298,7 +299,14 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         curveData.distances,
         curveData.length
       );
-      boatProgressRef.current += (targetProgress - boatProgressRef.current) * delta * 3;
+      // Eased rather than snapped, with the gain capped: the plain form
+      // diverges on a frame longer than two thirds of a second, which is a
+      // frame this project has measured more than once (#295).
+      boatProgressRef.current = easeProgressTowards(
+        boatProgressRef.current,
+        targetProgress,
+        delta,
+      );
     }
     
     const routePos = getRoutePositionAtProgress(

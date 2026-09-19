@@ -107,13 +107,24 @@ export function attachGerstnerShader(
     }
   `;
 
+  // The normal points up whichever axis the wave displaces.
+  //
+  // Both cases used the Z-up form, which is right for the rotated plane and
+  // wrong for the curved channel - where height is local Y, so the gradient
+  // belongs in X and Z. The river's wave normals pointed downstream rather than
+  // up, and it was lit as though the waves lay on their side. No spec saw it:
+  // the wave shader is skipped under automation (#298).
+  const normalFromGradient = heightAxis === 'z'
+    ? 'vec3(-wGrad.x, -wGrad.y, 1.0)'
+    : 'vec3(-wGrad.x, 1.0, -wGrad.y)';
+
   const normalChunk = `
     vec2 wXY = ${waveXY};
     vec2 wGrad = gWaveGrad(wXY, vec2( 1.0,  0.3), ${(0.15 * waveAmplitude).toFixed(4)}, ${(0.020 * waveFrequency).toFixed(4)}, 0.80)
                + gWaveGrad(wXY, vec2(-0.3,  1.0), ${(0.12 * waveAmplitude).toFixed(4)}, ${(0.025 * waveFrequency).toFixed(4)}, 0.60)
                + gWaveGrad(wXY, vec2( 0.7,  0.7), ${(0.08 * waveAmplitude).toFixed(4)}, ${(0.015 * waveFrequency).toFixed(4)}, 1.10)
                + gWaveGrad(wXY, vec2( 0.5, -0.5), ${(0.04 * waveAmplitude).toFixed(4)}, ${(0.050 * waveFrequency).toFixed(4)}, 1.50);
-    vec3 objectNormal = normalize(vec3(-wGrad.x, -wGrad.y, 1.0));
+    vec3 objectNormal = normalize(${normalFromGradient});
     #ifdef USE_TANGENT
       vec3 objectTangent = vec3(tangent.xyz);
     #endif
