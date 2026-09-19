@@ -897,14 +897,18 @@ test.describe('Simulated e2e route playback', () => {
     });
     void started1;
 
-    // Validate 3D view presence while session is still active
-    try {
-      await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 5000, state: 'attached' });
-    } catch {
-      const hasPos = await page.evaluate(() => !!window.__ROWER3D_POS);
-      const hasMarker = !!(await page.$('.rower3d-fallback-marker'));
-      expect(hasPos || hasMarker).toBeTruthy();
-    }
+    // Validate 3D view presence while session is still active.
+    //
+    // The catch here used to assert `hasPos || hasMarker`, which could not
+    // fail: the fallback marker is rendered unconditionally with display:none
+    // (Rower3D.tsx), so `page.$` matched it on a healthy scene and on a dead
+    // one alike. #278 fixed the copy of this in the single-route test and left
+    // this one (#283).
+    await page.waitForSelector('.rower3d-canvas-container canvas', {
+      timeout: 30_000,
+      state: 'attached',
+    });
+    await expectSceneAlive(page, 'the multi-route scene');
     // The overlays are optional here: the assertions below cover the case where
     // they never attach, so a timeout is not a failure.
     try { await page.waitForSelector('.overlay-mini-map', { timeout: 3000, state: 'attached' }); } catch { /* overlay is optional */ }
@@ -1102,6 +1106,9 @@ test.describe('Simulated e2e route playback', () => {
       await expectSessionDistanceAdvances(page);
     }
 
+    // This test's name promises graphics validation, so the scene is asserted
+    // before any of it is photographed (#283).
+    await expectSceneAlive(page, 'the gameplay scene');
     await captureGameplayCanvas(page, testInfo, 1, 'Gameplay start - session live');
 
     await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 5000, state: 'attached' })
@@ -1260,6 +1267,11 @@ test.describe('docs screenshots', () => {
     // which is how an empty gradient shipped as the site's hero image while the
     // scene was rendering sky, banks and water perfectly well (#261).
     await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
+    // Check before publishing. This writes the site's hero image, and with no
+    // assertion in front of it a run with a broken scene would publish a
+    // picture of the context-lost banner - or, as happened, a picture of a
+    // river with one bank (#283, #290).
+    await expectSceneAlive(page, 'the scene about to be published as the hero');
     await page.screenshot({
       path: path.join(docsDir, 'screenshot-rower-3d.png'),
       ...(routeStageBbox ? { clip: routeStageBbox } : {}),
@@ -1404,6 +1416,8 @@ test.describe('docs screenshots — other route heroes', () => {
 
       const stage = page.locator('.activity-route-stage');
       const stageBbox = await stage.boundingBox({ timeout: 5000 }).catch(() => null);
+      // Published to docs/, so checked before it is written (#283).
+      await expectSceneAlive(page, `the hero about to be published for "${route.name}"`);
       await page.screenshot({
         path: path.join(docsDir, route.file),
         ...(stageBbox ? { clip: stageBbox } : {}),

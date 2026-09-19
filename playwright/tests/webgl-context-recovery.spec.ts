@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { expectSceneAlive } from '../utils/scene-health';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -79,6 +80,12 @@ test('the scene draws a frame at all', async ({ page }) => {
   // The regression this guards: a canvas that mounts, never renders, and says
   // nothing about it.
   await expect.poll(() => drawCalls(page), { timeout: 60_000, intervals: [1000] }).toBeGreaterThan(0);
+
+  // This file is exempt from the scene-health sweep because the test below
+  // destroys the context deliberately. That exemption was taken per file, and
+  // this test destroys nothing: drawCalls is a recorded statistic, so frames
+  // drawn before a loss satisfy it just as well as a healthy scene does (#283).
+  await expectSceneAlive(page, 'the scene that drew a frame');
 });
 
 test('a lost context is explained and asked back', async ({ page }) => {

@@ -5,6 +5,7 @@ import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
+import { createBankTexture } from './bankTexture';
 import type { RouteTheme } from './themeConfig';
 import { makeSwayFoliageMaterial } from './foliageMaterial';
 import {
@@ -38,10 +39,18 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
 
   // Both banks and all their chunks share one material — they are the same
   // ground, and one upload is cheaper than thirty-two (#224).
+  // One mottle shared by both banks and every chunk, like the material is.
+  const surface = useMemo(() => createBankTexture(), []);
+  useEffect(() => () => surface.dispose(), [surface]);
+
   const material = useMemo(
     () =>
       new THREE.MeshPhysicalMaterial({
         color: bankConfig.color,
+        // Ground, rather than a field of one colour (#292). The map multiplies
+        // the theme's own bank colour, so each theme keeps its palette and
+        // gains a surface.
+        map: surface,
         roughness: bankConfig.roughness,
         metalness: bankConfig.metalness,
         emissive: new THREE.Color(bankConfig.emissive),
@@ -49,8 +58,23 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
         sheen: bankConfig.sheen,
         sheenColor: new THREE.Color(bankConfig.sheenColor),
         sheenRoughness: 0.8,
+        // Both faces, as the water already does.
+        //
+        // The banks are wound to face the sky and held short of the fold on a
+        // bend, which between them get an ordinary river right. Neither is a
+        // guarantee: a strip two vertices wide, offset further than the radius
+        // of curvature, folds whatever its winding says, and tightening the
+        // clamp to prevent that makes it worse rather than better - the fold
+        // then comes from the reach changing sharply instead of from the reach
+        // itself. Measured over three bends in 3 km: 32 triangles facing away
+        // before, 0 after; over six, 18 remain.
+        //
+        // Culling is what turns one of those into a hole you can see the sky
+        // through, which is what #269 was reported as. This makes the residue
+        // cost a little overdraw instead (#285).
+        side: THREE.DoubleSide,
       }),
-    [bankConfig],
+    [bankConfig, surface],
   );
 
   useEffect(() => () => material.dispose(), [material]);

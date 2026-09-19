@@ -25,7 +25,14 @@ export default defineConfig({
   // viewport in CI is what let the phone and short-landscape clipping through.
   projects: responsiveProjects(),
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    // The same path the deploy publishes under, not the domain root.
+    //
+    // deploy-pages.yml builds with --base=/virtualrow/app/ and this used to
+    // build without one, so an asset URL written from the root worked in dev,
+    // worked in the suite, and 404'd in production - which is exactly what
+    // happened to every crewed scull and all 130 scenery models (#251, #286).
+    // Specs navigate relatively, so they are unaffected by the prefix.
+    baseURL: process.env.BASE_URL || 'http://localhost:5173/virtualrow/app/',
     headless: true,
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10_000, // 10 seconds
@@ -57,8 +64,16 @@ export default defineConfig({
     // run for images nobody opens. Failures still capture one, which is the
     // case where it earns its cost.
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    trace: 'retain-on-failure',
+    // Only once something has already failed.
+    //
+    // `retain-on-failure` means record for every test and delete after a
+    // pass - so the suite was encoding video of a software-rasterised WebGL
+    // canvas, and capturing traces with DOM snapshots, for all ~212 tests,
+    // in a config whose stated purpose was to stop paying for captures on
+    // tests that pass. `on-first-retry` captures nothing until a test has
+    // failed once, and retries are 2 (#289).
+    video: 'on-first-retry',
+    trace: 'on-first-retry',
   },
   webServer: process.env.BASE_URL ? undefined : {
     // The built app, not the dev server.
@@ -82,11 +97,18 @@ export default defineConfig({
     // while dev and Playwright both served happily from / (#251).
     // Both through npm, so they run at the package root: a bare `vite preview`
     // takes its cwd from this config's directory and looks for playwright/dist.
-    command: 'npm run build && npm run preview -- --port 5173 --strictPort',
-    url: 'http://localhost:5173',
+    command:
+      'npm run build -- --base=/virtualrow/app/ && ' +
+      'npm run preview -- --base=/virtualrow/app/ --port 5173 --strictPort',
+    url: 'http://localhost:5173/virtualrow/app/',
     reuseExistingServer: false,
     // Long enough to build and then serve.
-    timeout: 240 * 1000,
+    //
+    // 240s was not: a local run hit "Timed out waiting 240000ms from
+    // config.webServer" on a cold tsbuildinfo, and a CI machine is slower
+    // again. A timeout here reports nothing about the app, so the budget is
+    // generous on purpose.
+    timeout: 360 * 1000,
     // `npm run build` is `tsc -b && vite build`, and tsc writes its diagnostics
     // to stdout - which Playwright discards unless asked for it. Without this a
     // type error surfaces only as "Process from config.webServer was not able

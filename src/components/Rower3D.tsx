@@ -41,6 +41,7 @@ import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/
 import { resolveSceneQuality } from './rower3d/sceneQuality';
 import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
+import { CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
 import {
@@ -912,7 +913,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 ev.preventDefault?.();
                 const reason = (ev as Event & { statusMessage?: string }).statusMessage;
                 recordContextLost(reason);
-                showContextMessage('The 3D view lost the graphics context — restoring…');
+                showContextMessage(CONTEXT_LOST_MESSAGE);
                 window.__ROWER3D_WEBGL_LOST = true;
                 // Deferred, and retried: the spec lets the browser ignore a
                 // restore asked for from inside this handler.

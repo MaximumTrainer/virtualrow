@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ServicesProvider } from '../context/ServicesContext';
 import { defaultServices } from '../context/useServices';
@@ -172,5 +173,77 @@ describe('useRownativeDeepLink', () => {
 
     await waitFor(() => expect(screen.getByTestId('status').textContent).toMatch(/course ID or a rownative\.icu course link/i));
     expect(onRouteLoaded).not.toHaveBeenCalled();
+  });
+});
+
+describe('under StrictMode, which is how the app actually runs (#288)', () => {
+  /**
+   * main.tsx wraps the app in <StrictMode>, and React double-invokes effects
+   * there in a development build. This hook is written for that - its own
+   * comments say "StrictMode's double-invoked initialiser, or any remount, sees
+   * the same answer" and "cancelling on a StrictMode cleanup would abandon the
+   * only import".
+   *
+   * Nothing tested it. The E2E suite runs the production build, where
+   * StrictMode is inert, so the double-invoke path had no coverage at all and a
+   * regression would have appeared only to whoever next ran `npm run dev`.
+   */
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState({}, '', '/');
+    resetDeepLinkForTests();
+  });
+
+  it('imports the course once, not twice, when effects are double-invoked', async () => {
+    const importCourseById = vi.fn().mockResolvedValue(makeRoute());
+    window.history.replaceState({}, '', '/?rownativeCourseId=5');
+    const onRouteLoaded = vi.fn();
+
+    render(
+      <StrictMode>
+        <ServicesProvider
+          services={{
+            ...defaultServices,
+            routeService: noExistingRoute,
+            rownativeService: { ...defaultServices.rownativeService, importCourseById },
+          }}
+        >
+          <Harness onRouteLoaded={onRouteLoaded} isReady />
+        </ServicesProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(onRouteLoaded).toHaveBeenCalled());
+
+    expect(
+      importCourseById.mock.calls.length,
+      'the double-invoked effect imported the course more than once',
+    ).toBe(1);
+  });
+
+  it('does not abandon the import when the first effect is torn down', async () => {
+    // The cleanup of the discarded first pass must not cancel the only import
+    // in flight, which is the failure the hook's own comment warns about.
+    const importCourseById = vi.fn().mockResolvedValue(makeRoute());
+    window.history.replaceState({}, '', '/?rownativeCourseId=5');
+    const onRouteLoaded = vi.fn();
+
+    render(
+      <StrictMode>
+        <ServicesProvider
+          services={{
+            ...defaultServices,
+            routeService: noExistingRoute,
+            rownativeService: { ...defaultServices.rownativeService, importCourseById },
+          }}
+        >
+          <Harness onRouteLoaded={onRouteLoaded} isReady />
+        </ServicesProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() =>
+      expect(onRouteLoaded, 'the import was abandoned by a StrictMode cleanup').toHaveBeenCalled(),
+    );
   });
 });

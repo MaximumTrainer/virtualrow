@@ -286,11 +286,16 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     // The scene keeps its WebGL context for the whole sweep, so a software
     // rasteriser draws every frame of it rather than dying a few seconds in and
     // going quiet. At the high tier that is around 0.7 fps, and the sweep takes
-    // minutes rather than seconds. Measured locally on SwiftShader: low 45s,
-    // auto 1.7m, high 4.8m. The ceiling is generous because CI machines are
-    // slower again, and because a timeout here reports nothing useful about the
-    // scene - it is the one outcome that tells you least.
-    if (software) test.setTimeout(900_000);
+    // minutes rather than seconds. Measured locally on SwiftShader after the
+    // emit rate was paced to the renderer: low 57s, auto 1.8m, high 3.7m.
+    //
+    // The budget has to fit inside the job step that contains it. Three tiers
+    // at fifteen minutes each came to 45 minutes of possible budget inside a
+    // 40 minute step - and a test that exhausts its own budget at least says
+    // so, where one that exhausts the step's takes every result after it down
+    // with it (#300). Ten minutes a tier leaves the three of them inside the
+    // step with room for the rest of the suite.
+    if (software) test.setTimeout(600_000);
 
     // Let the scene settle before measuring, so mount cost is not charged to
     // the first phase.

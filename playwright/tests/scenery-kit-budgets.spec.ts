@@ -178,12 +178,16 @@ test('a 20 km route stays inside the geometry budget with the kit on', async ({ 
  * the volume was wrong, and it was only reachable at all once #251 fixed the
  * asset URLs — before that every request 404'd instantly and cost nothing.
  *
- * The ceiling is well above the limit itself because several scenery components
- * mount at once and each is entitled to its own chunk, and because this runs
- * against the dev server, where StrictMode mounts everything twice. Measured:
- * 15 on a production build, 27 here, against 57 before the kit was chunked. So
- * the number catches a return to loading the whole kit in one breath without
- * failing on StrictMode's doubling.
+ * The ceiling is above the limit itself because several scenery components
+ * mount at once and each is entitled to its own chunk. It used to be 32,
+ * which was sized for the dev server: StrictMode mounted everything twice
+ * there, taking a production build's 15 up to 27. The suite runs the built app
+ * now, where CI measures a peak of 10 - so 32 was three times the observed
+ * value, and a regression tripling parallel fetches would have passed the test
+ * written to catch exactly that (#287).
+ *
+ * 20 leaves room for the components that legitimately mount together without
+ * leaving room for the flood.
  */
 test('the scenery kit does not open a flood of parallel fetches', async ({ page }) => {
   let inFlight = 0;
@@ -211,6 +215,6 @@ test('the scenery kit does not open a flood of parallel fetches', async ({ page 
     expect(
       peak,
       `the kit put ${peak} GLB fetches in flight at once — a static host answers that with 503`,
-    ).toBeLessThanOrEqual(32);
+    ).toBeLessThanOrEqual(20);
   }
 });

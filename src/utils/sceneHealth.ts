@@ -14,6 +14,17 @@
 /** The banner the scene shows when its WebGL context goes. */
 export const CONTEXT_LOST_TEXT = 'lost the graphics context';
 
+/**
+ * The words the rower actually sees, and the only place they are written.
+ *
+ * This module said it existed so "the app and the guard cannot drift apart on
+ * the wording", and then the app hard-coded the sentence anyway - so the drift
+ * it was meant to prevent was still entirely possible (#299). The guard matches
+ * on CONTEXT_LOST_TEXT, which is a fragment of this, so a reworded message
+ * cannot slip past it.
+ */
+export const CONTEXT_LOST_MESSAGE = 'The 3D view lost the graphics context — restoring…';
+
 export interface SceneObservation {
   /**
    * Whether the canvas in the DOM right now reports a lost context.
@@ -58,7 +69,17 @@ export const describeSceneHealth = ({
   if (canvasCount < 1) {
     return { alive: false, reason: 'there is no canvas in the 3D container' };
   }
-  if (contextLost) {
+  // The canvas on screen is the one most recently mounted; anything before it
+  // is a mount React discarded, and its released context says nothing about
+  // what the rower is looking at. Reducing the array with `some` put back the
+  // very fault that asking a canvas instead of the global flag was meant to fix
+  // (#299).
+  const liveLost =
+    lostPerCanvas && lostPerCanvas.length > 0
+      ? lostPerCanvas[lostPerCanvas.length - 1]
+      : contextLost;
+
+  if (liveLost) {
     return {
       alive: false,
       reason:

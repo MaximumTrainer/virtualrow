@@ -311,6 +311,22 @@ describe('a live scene context is never risked on another probe (#context-loss)'
 
       expect(contexts(), 'a probe context was opened while the scene was drawing').toBe(afterFirst);
       expect(later.usable, 'the reused selection must still be usable').toBe(true);
+
+      // And it must still be the surface that was asked for.
+      //
+      // Reuse used to hand back whatever the driver granted last, for whatever
+      // tier asked - so a low-power, no-antialias request received the
+      // high-performance adapter and MSAA that a previous request had been
+      // given. canvasSurface.ts exists precisely so a tier cannot acquire a
+      // setting it has no business asking for, and Rower3D feeds these
+      // straight into <Canvas gl={...}>. This assertion was the one missing
+      // from the test, which is how the wrong value got tested into place
+      // (#297).
+      expect(later.antialias, 'a tier was granted multisampling it did not ask for').toBe(false);
+      expect(
+        later.powerPreference,
+        'a tier was granted a richer adapter than it asked for',
+      ).toBe('default');
     } finally {
       vi.restoreAllMocks();
     }
