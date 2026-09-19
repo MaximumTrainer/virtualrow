@@ -19,6 +19,7 @@
     "test:e2e": "npx playwright test --config=playwright/playwright.config.ts",
     "test:e2e:ci": "npx playwright test --config=playwright/playwright.config.ci.ts --retries=2",
     "test:e2e:endurance": "npx playwright test --config=playwright/playwright.config.endurance.ts",
+    "test:e2e:stress": "npx playwright test --config=playwright/playwright.config.stress.ts",
     "start:sim": "node ./playwright/simulators/sim-server.cjs",
     "start:sim:bg": "node scripts/start-sim-bg.mjs",
     "stop:sim": "node scripts/stop-sim.mjs",

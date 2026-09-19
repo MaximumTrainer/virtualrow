@@ -1,0 +1,79 @@
+# The heavy stress traverse (#301).
+#
+# A question, not a guard: does a 20 km course of 2000 points really kill the
+# tab when the harness makes two round trips a tick? It did, twice, while #272
+# was being written - "Execution context was destroyed, most likely because of a
+# navigation", about four ticks in, with the app back at the setup view. The
+# shipped traverse uses a lighter shape and passes, which stopped the failure
+# happening without explaining it.
+#
+# Scheduled rather than run on every push, which #272's fourth criterion allows
+# for. Ten runs of this tell us whether the failure is real and how often.
+name: Route Stress (scheduled)
+
+on:
+  schedule:
+    # 03:00 UTC daily, away from the working day.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'How many times to repeat the traverse'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      CI: true
+      VITE_INTERVALS_CLIENT_ID: "playwright-e2e-client"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npm run pretest:e2e
+
+      - name: Clean up simulator ports
+        run: node scripts/kill-ports.mjs 9001 9002
+
+      - name: Start simulator server
+        run: node scripts/start-sim-bg.mjs
+
+      - name: Wait for simulator to be ready
+        run: npx wait-on http://localhost:9002 --timeout 30000
+
+      - name: Row the heavy course
+        run: |
+          for i in $(seq 1 "${{ github.event.inputs.runs || 1 }}"); do
+            echo "--- stress run $i"
+            npm run test:e2e:stress
+          done
+        timeout-minutes: 50
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: route-stress-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+
+      - name: Cleanup simulator
+        if: always()
+        run: node scripts/stop-sim.mjs

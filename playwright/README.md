@@ -11,7 +11,10 @@ The Playwright tests have been enhanced with automatic screenshot capture and er
 1. **Automatic Screenshot Capture** - Screenshots are captured at key points throughout test execution
 2. **Error Highlighting** - Failed assertions automatically highlight problematic elements with red borders and error overlays
 3. **Element Annotation** - Tests can annotate elements with labels to document what's being tested
-4. **Comprehensive Evidence** - Both passing and failing tests generate screenshot evidence
+4. **Evidence on failure** - a failing test captures a screenshot, and a retry
+   captures video and a trace. Passing tests capture none of that: recording it
+   for every test cost more than it was worth (#289). Specs that want a frame
+   regardless take one explicitly, through `screenshot-helper.ts`.
 
 For detailed documentation on using the screenshot evidence features, see the "Screenshot Evidence" section below.
 
@@ -26,11 +29,24 @@ npm install
 npx playwright install
 ```
 
-Run the dev app in one terminal:
+Do not start the app yourself. Playwright builds it and serves it at the base
+path the deploy publishes under (`/virtualrow/app/`), and it will refuse to run
+if something is already answering on port 5173:
 
 ```bash
-npm run dev
+npm run test:e2e
 ```
+
+To iterate against a server you are running — a dev server, say — point it there
+instead, which skips the build entirely:
+
+```bash
+BASE_URL=http://localhost:5173 npx playwright test --config=playwright/playwright.config.ts
+```
+
+Note that a dev server serves from `/` rather than the deploy's base, so an
+asset URL written from the domain root will work there and 404 in production.
+That is what #251 was.
 
 Start the simulator server (optional - the test will spawn it automatically if start:sim is run separately):
 
