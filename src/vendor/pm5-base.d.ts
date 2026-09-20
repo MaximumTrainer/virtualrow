@@ -19,6 +19,8 @@ export interface PM5MessageData {
   strokeRate?: number;
   heartRate?: number;
   averagePower?: number;
+  /** Instantaneous power in watts, from additional stroke data (#306). */
+  strokePower?: number;
   /** Any other PM5 field passed through verbatim by the wrapper. */
   [key: string]: unknown;
 }
@@ -74,6 +76,7 @@ export default class PM5 {
       | 'additional-status'
       | 'additional-status2'
       | 'stroke-data'
+      | 'additional-stroke-data'
       | 'disconnect'
       | string,
     callback: (event: PM5Event) => void,

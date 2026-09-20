@@ -47,6 +47,9 @@ const characteristics = {
     additionalStatus2: { id: 'ce060033-43e5-11e4-916c-0800200c9a66', service: services.rowing },
     multiplexedInformation: { id: 'ce060080-43e5-11e4-916c-0800200c9a66', service: services.rowing },
     strokeData: { id: 'ce060035-43e5-11e4-916c-0800200c9a66', service: services.rowing },
+    // Where power lives. The PM5 puts stroke power here and nowhere else the
+    // app reads, which is why a Concept2 rower saw 0 W for a whole row (#306).
+    additionalStrokeData: { id: 'ce060036-43e5-11e4-916c-0800200c9a66', service: services.rowing },
   },
 };
 
@@ -99,6 +102,8 @@ class PM5 {
         return this._addMultiplexedInformationListener();
       case 'additional-status':
         return this._addAdditionalStatus();
+      case 'additional-stroke-data':
+        return this._addAdditionalStrokeData();
       default:
         return Promise.resolve();
     }
@@ -114,6 +119,8 @@ class PM5 {
         return this._removeMultiplexedInformationListener();
       case 'additional-status':
         return this._removeAdditionalStatus();
+      case 'additional-stroke-data':
+        return this._removeAdditionalStrokeData();
       default:
         return Promise.resolve();
     }
@@ -192,6 +199,12 @@ class PM5 {
   _removeAdditionalStatus() {
     return this._teardownCharacteristicValueListener(characteristics.rowingService.additionalStatus, this._cbAdditionalStatus);
   }
+  _addAdditionalStrokeData() {
+    return this._setupCharacteristicValueListener(characteristics.rowingService.additionalStrokeData, this._cbAdditionalStrokeData);
+  }
+  _removeAdditionalStrokeData() {
+    return this._teardownCharacteristicValueListener(characteristics.rowingService.additionalStrokeData, this._cbAdditionalStrokeData);
+  }
   _addMultiplexedInformationListener() {
     return this._setupCharacteristicValueListener(characteristics.rowingService.multiplexedInformation, this._cbMultiplexedInformation);
   }
@@ -232,6 +245,42 @@ class PM5 {
 
   _cbAdditionalStatus(monitor, e, multiplexed = false) {
     const event = { type: multiplexed ? 'multiplexed-information' : 'additional-status', source: monitor, raw: e.target.value, data: monitor._extractAdditionalStatus(e, multiplexed) };
+    monitor.eventTarget.dispatchEvent(event);
+  }
+
+  /**
+   * Stroke power, and the fields either side of it.
+   *
+   * Transcribed from `_extractAdditionalStrokeData` in ergarcade/pm5-base
+   * `lib/pm5-ble.js`, the upstream this file was adapted from, so the offsets
+   * are the upstream's rather than a reading of the spec. `strokePower` is a
+   * little-endian uint16 of watts with no multiplier.
+   *
+   * The multiplexed frame differs in its last field only, and the app does not
+   * read that field; it is parsed anyway so the two shapes cannot silently
+   * diverge.
+   */
+  _extractAdditionalStrokeData(e, multiplexed = false) {
+    const v = new Uint8Array(e.target.value.buffer);
+    const o = multiplexed ? 1 : 0;
+    const r = {
+      elapsedTime: (v[o + 0] + (v[o + 1] << 8) + (v[o + 2] << 16)) * 0.01,
+      strokePower: v[o + 3] + (v[o + 4] << 8),
+      strokeCaloricBurnRate: v[o + 5] + (v[o + 6] << 8),
+      strokeCount: v[o + 7] + (v[o + 8] << 8),
+      projectedWorkTime: v[o + 9] + (v[o + 10] << 8) + (v[o + 11] << 16),
+      projectedWorkDistance: v[o + 12] + (v[o + 13] << 8) + (v[o + 14] << 16),
+    };
+    if (multiplexed) {
+      r.workPerStroke = v[o + 15] + (v[o + 16] << 8);
+    } else {
+      r.projectedWorkOther = v[o + 15] + (v[o + 16] << 8) + (v[o + 17] << 16);
+    }
+    return r;
+  }
+
+  _cbAdditionalStrokeData(monitor, e, multiplexed = false) {
+    const event = { type: multiplexed ? 'multiplexed-information' : 'additional-stroke-data', source: monitor, raw: e.target.value, data: monitor._extractAdditionalStrokeData(e, multiplexed) };
     monitor.eventTarget.dispatchEvent(event);
   }
 
