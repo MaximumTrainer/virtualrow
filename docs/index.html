@@ -197,6 +197,14 @@
       border-radius: var(--radius-md);
       box-shadow: 0 40px 100px rgba(0,0,0,0.6);
       width: 100%;
+      /* An <img>'s height attribute is a presentational hint, and it wins
+         wherever the CSS leaves height alone. Without this the hero rendered
+         720px tall at every width - 432x720 on a phone, a wide river strip
+         smeared into a portrait box. The picture is clipped to the route
+         stage's bounding box when it is captured, so its shape changes
+         whenever that layout does; `auto` is what stops the next one being
+         stretched too. */
+      height: auto;
       display: block;
     }
     .hero-screenshot-glow {
@@ -602,8 +610,8 @@
     <img
       src="screenshot-rower-3d.png"
       alt="VirtualRow 3D rowing scene — boat on a winding river with dynamic scenery"
-      width="1280"
-      height="720"
+      width="1214"
+      height="377"
       loading="eager"
     />
   </div>
@@ -779,8 +787,8 @@
         <img
           src="screenshot-rower-3d.png"
           alt="Close-up of the VirtualRow 3D single scull on the Willowbrook River"
-          width="640"
-          height="360"
+          width="1214"
+          height="377"
           loading="lazy"
         />
         <span class="screenshot-thumb-label">Willowbrook River</span>
