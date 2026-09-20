@@ -150,14 +150,28 @@ test('it only ever moves forward, and reaches 100 before it goes', async ({ page
   // And the bar really is gone, rather than the sampling having given up.
   await expect(bar(page).first()).toBeHidden({ timeout: 10_000 });
 
-  // The boat was *seen*, not given up on. useRouteLoadProgress falls back to
-  // calling the boat lost after 20s, and that path would also fill the bar and
-  // dismiss it - so without this the spec would pass just as happily on a
-  // build where the boat never loaded at all. Measured at ~3.2s.
-  expect(
-    Date.now() - startedAt,
-    'the load only finished around the give-up timeout, so the boat may never have arrived',
-  ).toBeLessThan(15_000);
+  // The boat was *seen*, not given up on.
+  //
+  // useRouteLoadProgress falls back to calling the boat lost after a while, and
+  // that path also fills the bar and dismisses it - so without this the spec
+  // would pass just as happily on a build where the boat never arrived.
+  //
+  // Asserted on the thing itself rather than on how long it took. An earlier
+  // version of this checked the elapsed time against 15 s, which is a proxy for
+  // "seen" and not the same claim: it held locally, where the load takes ~3.2 s,
+  // and failed on the macOS runner at 15,323 ms and 16,966 ms - where the boat
+  // had in fact arrived, just slowly. A test that infers a fact from a stopwatch
+  // fails on whichever machine is slowest, which is the one you least want to be
+  // arguing with.
+  const boatDownloaded = await page.evaluate(() =>
+    performance.getEntriesByType('resource').some((entry) => /scull-.*\.glb(\?|$)/.test(entry.name)),
+  );
+  expect(boatDownloaded, 'the browser never recorded fetching a scull model').toBe(true);
+
+  // And the app agrees: nothing is telling the rower their boat is missing.
+  await expect(page.getByText('The boat could not be loaded')).toBeHidden();
+
+  console.log(`[loading] the wait ran ${Date.now() - startedAt} ms`);
 });
 
 test('a boat that will not load does not strand the rower', async ({ page }) => {
@@ -170,7 +184,11 @@ test('a boat that will not load does not strand the rower', async ({ page }) => 
   await startDemoRow(page);
   await expect(bar(page).first()).toBeVisible({ timeout: 5_000 });
 
-  // The wait ends rather than stopping at the boat's share.
+  // The wait ends rather than stopping at the boat's share - and it ends well
+  // inside the 60 s give-up, which is the point. A 503 is recognised from the
+  // resource entry's responseStatus the moment the request settles; if that
+  // path ever stopped working this would hang to the backstop and fail here,
+  // rather than passing slowly and quietly.
   await expect(bar(page).first()).toBeHidden({ timeout: 40_000 });
 
   // And the rower is told why the river has no boat in it.

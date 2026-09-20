@@ -33,14 +33,21 @@ const POLL_MS = 100;
  *
  * A backstop, not a clock. The bar's *value* only ever moves when a phase
  * settles — this decides when an outstanding phase has settled as `failed`,
- * which is a different question. It is generous because a slow connection is
- * not a failure, and the cost of being wrong is telling a rower their boat is
- * missing while it is still arriving.
+ * which is a different question.
  *
- * A failed request usually declares itself sooner: Chrome records a resource
- * entry with `responseStatus` for a 503, and that path does not wait.
+ * Deliberately far longer than any load anyone has measured. It was 20 s, on
+ * the strength of a 3.2 s local load, and CI then measured the same load taking
+ * **15.3 s and 17.0 s** on the macOS runner — three seconds of margin before
+ * the app would have told a rower their boat was missing while it was still
+ * arriving. A rower on a slow connection fetching 1.9 MB has no reason to be
+ * treated better than a CI runner, and the asymmetry here is stark: waiting too
+ * long leaves a progress bar up, and giving up too early is a lie about their
+ * boat.
+ *
+ * A real failure does not wait for this. Chrome records a resource entry with
+ * `responseStatus` for a 503, and that path settles immediately.
  */
-const BOAT_GIVE_UP_MS = 20_000;
+const BOAT_GIVE_UP_MS = 60_000;
 
 interface ResourceOutcome {
   seen: boolean;
