@@ -216,6 +216,60 @@ describe('scheduleContextRestore', () => {
 
     expect(queued).toHaveLength(RESTORE_DELAYS_MS.length);
   });
+
+  /**
+   * Giving up quietly is what the rower saw (#309).
+   *
+   * Probed on the demo row: the context was lost, the three attempts ran out
+   * at about 5.8 s, and the stage went on saying "restoring..." for the next
+   * sixteen seconds and would have said it for ever. The schedule knows when
+   * it has finished and was the only thing that did.
+   */
+  it('says when it has stopped asking', () => {
+    const { queued, schedule } = fakeScheduler();
+    let exhausted = 0;
+
+    scheduleContextRestore(() => {}, () => true, schedule, () => (exhausted += 1));
+    for (let i = 0; i < 10 && queued[i]; i += 1) queued[i].fn();
+
+    expect(exhausted, 'the scene was never told the asking had stopped').toBe(1);
+  });
+
+  it('does not say so while it is still asking', () => {
+    const { queued, schedule } = fakeScheduler();
+    let exhausted = 0;
+
+    scheduleContextRestore(() => {}, () => true, schedule, () => (exhausted += 1));
+    queued[0].fn();
+
+    expect(exhausted).toBe(0);
+  });
+
+  it('does not say so when the context came back', () => {
+    const { queued, schedule } = fakeScheduler();
+    let lost = true;
+    let exhausted = 0;
+
+    scheduleContextRestore(
+      () => { lost = false; },
+      () => lost,
+      schedule,
+      () => (exhausted += 1),
+    );
+    for (let i = 0; i < 10 && queued[i]; i += 1) queued[i].fn();
+
+    expect(exhausted, 'a recovered scene was told the asking had failed').toBe(0);
+  });
+
+  it('works without being given anywhere to report it', () => {
+    // The callback is optional, and every existing call-site omits it.
+    const { queued, schedule } = fakeScheduler();
+
+    expect(() => {
+      scheduleContextRestore(() => {}, () => true, schedule);
+      for (let i = 0; i < 10 && queued[i]; i += 1) queued[i].fn();
+    }).not.toThrow();
+  });
 });
 
 describe('device probes are asked once (#261)', () => {

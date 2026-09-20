@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { describeSceneHealth, CONTEXT_LOST_TEXT, CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
+import {
+  describeSceneHealth,
+  CONTEXT_LOST_TEXT,
+  CONTEXT_LOST_MESSAGE,
+  CONTEXT_UNRECOVERABLE_MESSAGE,
+} from '../utils/sceneHealth';
 
 /**
  * Playwright specs were passing while the stage showed
@@ -132,5 +137,78 @@ describe('describeSceneHealth', () => {
     });
 
     expect(health.alive, 'a discarded canvas failed the live one').toBe(true);
+  });
+});
+
+/**
+ * A context that will not come back has to stop saying it is coming back
+ * (#309).
+ *
+ * Probed on the demo row: the context went, the three restore attempts ran out
+ * at about 5.8 s, and the stage went on reading "The 3D view lost the graphics
+ * context — restoring…" for the next sixteen seconds. Whatever a rower makes of
+ * that, it is not true.
+ */
+describe('the message for a context that is not coming back', () => {
+  it('still contains the fragment the guard matches on', () => {
+    // If it did not, a dead scene showing this message would pass
+    // expectSceneAlive's marker check - which is the fault #299 fixed, put
+    // back by a reworded sentence.
+    expect(CONTEXT_UNRECOVERABLE_MESSAGE.toLowerCase()).toContain(CONTEXT_LOST_TEXT);
+  });
+
+  it('stops promising a restore', () => {
+    expect(CONTEXT_UNRECOVERABLE_MESSAGE.toLowerCase()).not.toContain('restoring');
+  });
+
+  it('tells the rower their row is safe, and how to get the view back', () => {
+    // The two things they need: that the session is not lost, and the one
+    // action that helps. A message that only apologises is worse than none.
+    expect(CONTEXT_UNRECOVERABLE_MESSAGE.toLowerCase()).toContain('still being recorded');
+    expect(CONTEXT_UNRECOVERABLE_MESSAGE.toLowerCase()).toContain('reload');
+  });
+
+  it('is judged not alive, like the message it replaces', () => {
+    const health = describeSceneHealth({
+      contextLost: false,
+      markerText: CONTEXT_UNRECOVERABLE_MESSAGE,
+      canvasCount: 1,
+    });
+
+    expect(health.alive).toBe(false);
+  });
+});
+
+/**
+ * A discarded mount losing its context is not a fault (#309, R9).
+ *
+ * React mounts the Canvas twice under StrictMode and R3F disposes the renderer
+ * of the one it throws away. That releases a context, which is normal - but it
+ * is indistinguishable in the telemetry log from the canvas on screen losing
+ * one, which is not. #299 fixed the live judgement; the log still could not
+ * tell them apart afterwards, which is exactly when someone is reading it.
+ */
+describe('which canvas lost the context', () => {
+  it('reports a discarded mount as not the one on screen', () => {
+    // Two canvases, the first discarded and lost, the second drawing.
+    const health = describeSceneHealth({
+      contextLost: true,
+      markerText: '',
+      canvasCount: 2,
+      lostPerCanvas: [true, false],
+    });
+
+    expect(health.alive, 'a discarded mount was read as a live fault').toBe(true);
+  });
+
+  it('reports the canvas on screen losing its context as a fault', () => {
+    const health = describeSceneHealth({
+      contextLost: true,
+      markerText: '',
+      canvasCount: 2,
+      lostPerCanvas: [false, true],
+    });
+
+    expect(health.alive).toBe(false);
   });
 });

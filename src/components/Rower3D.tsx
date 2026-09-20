@@ -49,7 +49,7 @@ import { resolveSceneQuality } from './rower3d/sceneQuality';
 import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
 import { easeProgressTowards } from './rower3d/progressEasing';
-import { CONTEXT_LOST_MESSAGE } from '../utils/sceneHealth';
+import { CONTEXT_LOST_MESSAGE, CONTEXT_UNRECOVERABLE_MESSAGE } from '../utils/sceneHealth';
 import { recordTelemetry } from '../utils/sceneTelemetryLog';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
@@ -992,14 +992,41 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 // without it the scene stopped for good (#232).
                 ev.preventDefault?.();
                 const reason = (ev as Event & { statusMessage?: string }).statusMessage;
+
+                // Which canvas lost it?
+                //
+                // React mounts the Canvas twice under StrictMode and R3F
+                // disposes the renderer of the one it throws away, which
+                // releases a context perfectly normally. That is
+                // indistinguishable in the log from the canvas on screen
+                // losing one, which is not normal at all - and the log is read
+                // after the fact, when nobody can go and look (#309).
+                const onScreen = (() => {
+                  try {
+                    const canvases = document.querySelectorAll(
+                      '.rower3d-canvas-container canvas',
+                    );
+                    return canvases.length === 0 || canvases[canvases.length - 1] === canvas;
+                  } catch {
+                    return true;
+                  }
+                })();
+
                 recordContextLost(reason);
                 recordTelemetry('context-lost', {
                   // Empty as well as absent: a context lost on purpose, or
                   // by eviction, carries no statusMessage at all.
                   reason: reason || 'the driver gave none',
+                  onScreen,
                   losses: readContextState()?.losses,
                   stats: readRenderStats() ?? undefined,
                 });
+
+                // A mount React already discarded must not put a banner over a
+                // healthy river, and must not start a restore schedule for a
+                // canvas nobody is looking at.
+                if (!onScreen) return;
+
                 showContextMessage(CONTEXT_LOST_MESSAGE);
                 window.__ROWER3D_WEBGL_LOST = true;
                 // Deferred, and retried: the spec lets the browser ignore a
@@ -1007,6 +1034,18 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
                 scheduleContextRestore(
                   () => gl.forceContextRestore?.(),
                   () => window.__ROWER3D_WEBGL_LOST === true,
+                  undefined,
+                  () => {
+                    // Still gone after the last attempt. Saying "restoring…"
+                    // from here on would be a promise nothing intends to keep.
+                    try {
+                      if (window.__ROWER3D_WEBGL_LOST !== true) return;
+                      recordTelemetry('context-unrecoverable', {
+                        losses: readContextState()?.losses,
+                      });
+                      showContextMessage(CONTEXT_UNRECOVERABLE_MESSAGE);
+                    } catch { /* intentional */ }
+                  },
                 );
               } catch { /* intentional */ }
             }, false);
