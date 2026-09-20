@@ -174,7 +174,7 @@ After running tests:
 ### Files
 
 - `utils/screenshot-helper.ts` - Core helper functions
-- `fixtures/test-evidence.ts` - Custom Playwright fixtures
+- `fixtures/crash-watch.ts` - the `test` every spec imports; fails a test whose renderer died (#310)
 - `tests/routePlayback.spec.ts` - Example test with screenshot evidence
 - `playwright.config.ts` - Configuration with screenshot settings
 - `playwright.config.ci.ts` - CI configuration with screenshot settings

@@ -128,11 +128,23 @@ export const clearTelemetry = (): void => {
  * For pasting into an issue, which is what it is for — a wall of JSON is worse
  * than useless in a bug report.
  */
-export const telemetryAsText = (): string =>
-  readTelemetry()
+export const telemetryAsText = (): string => formatTelemetry(readTelemetry());
+
+/**
+ * Any log as text, one event per line.
+ *
+ * Separate from {@link telemetryAsText} because the reader is not always this
+ * process. The Playwright crash guard copies the log out of the browser and has
+ * to render events it did not record; formatting them itself would be a second
+ * copy of this, free to drift from the one a rower pastes into an issue.
+ */
+export const formatTelemetry = (events: TelemetryEvent[]): string => {
+  if (events.length === 0) return 'no telemetry was recorded';
+  return events
     .map((e) => {
       const seconds = (e.at / 1000).toFixed(1).padStart(7, ' ');
       const detail = e.detail ? ` ${JSON.stringify(e.detail)}` : '';
       return `${seconds}s  ${e.kind}${detail}`;
     })
     .join('\n');
+};
