@@ -14,5 +14,11 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["playwright", "src/types", "src/utils/sceneHealth.ts"]
+  "include": [
+    "playwright",
+    "src/types",
+    "src/utils/sceneHealth.ts",
+    "src/utils/crashEvidence.ts",
+    "src/utils/sceneTelemetryLog.ts"
+  ]
 }

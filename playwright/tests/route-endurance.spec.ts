@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures/crash-watch';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';

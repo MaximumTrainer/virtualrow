@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures/crash-watch';
 import { expectSceneAlive } from '../utils/scene-health';
 import * as fs from 'fs';
 import * as path from 'path';

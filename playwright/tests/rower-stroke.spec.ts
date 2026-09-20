@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/crash-watch';
 import { expectSceneAlive } from '../utils/scene-health';
 
 /**

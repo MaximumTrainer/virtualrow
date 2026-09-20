@@ -7,6 +7,7 @@ import {
   readTelemetry,
   recordTelemetry,
   telemetryAsText,
+  formatTelemetry,
 } from '../utils/sceneTelemetryLog';
 
 /**
@@ -159,6 +160,35 @@ describe('the scene telemetry log', () => {
     expect(text).toContain('GPU process exited');
     // One event per line, so it survives a paste.
     expect(text.split('\n').length).toBe(readTelemetry().length);
+  });
+
+  it('formats a log it did not record, for a reader in another process', () => {
+    // The Playwright crash guard copies the log out of the browser and renders
+    // events this process never saw. It shares the formatting rather than
+    // owning a second copy free to drift from the one a rower pastes.
+    const text = formatTelemetry([
+      { at: 1500, kind: 'run-start', detail: { recovered: 0 } },
+      { at: 6200, kind: 'context-lost', detail: { reason: 'GPU process exited' } },
+    ]);
+
+    expect(text.split('\n')).toHaveLength(2);
+    expect(text).toContain('run-start');
+    expect(text).toContain('GPU process exited');
+    expect(text).toContain('1.5s');
+    expect(text).toContain('6.2s');
+  });
+
+  it('says so plainly when there is no log to format', () => {
+    // An empty attachment reads as "nothing went wrong"; this reads as what it
+    // is, which is the absence of evidence.
+    expect(formatTelemetry([])).toBe('no telemetry was recorded');
+  });
+
+  it('agrees with telemetryAsText about the log this process holds', () => {
+    openTelemetry(fakeStorage());
+    recordTelemetry('context-lost', { reason: 'GPU process exited' });
+
+    expect(telemetryAsText()).toBe(formatTelemetry(readTelemetry()));
   });
 
   it('records when something was recorded, not just what', () => {
