@@ -40,8 +40,13 @@ describe('RownativeRouteImport', () => {
 
   function rownative(overrides: Record<string, unknown>) {
     return {
+      // Spreading a class instance copies its fields, not its prototype
+      // methods, so every method a call-site reaches has to be named here.
+      // `satisfies` does not catch it: the spread's *type* carries the methods
+      // even though the value does not.
       ...defaultServices.rownativeService,
       resolveCourseId: realResolve,
+      attachedTrack: () => null,
       ...overrides,
     } satisfies Services['rownativeService'];
   }
@@ -222,5 +227,132 @@ describe('RownativeRouteImport', () => {
     expect(screen.getByRole('button', { name: /^import$/i })).toBeDisabled();
     await user.type(screen.getByLabelText(/rownative course id or link/i), '5');
     expect(screen.getByRole('button', { name: /^import$/i })).toBeEnabled();
+  });
+});
+
+/**
+ * Attaching a track, through the UI (#313).
+ *
+ * The service half of this shipped with #206 and had no entrance: nothing under
+ * src/components imported trackAttachmentStore, and the E2E that covered it
+ * wrote the attachment straight into localStorage with a comment saying it was
+ * "seeded the way a previous session would have left it" — which no session
+ * could do. These drive the control a rower actually uses.
+ */
+describe('RownativeRouteImport — attaching a track', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  function renderWithServices(overrides?: Partial<Services>) {
+    const onRouteImported = vi.fn();
+    render(
+      <ServicesProvider services={{ ...defaultServices, ...overrides }}>
+        <RownativeRouteImport onRouteImported={onRouteImported} />
+      </ServicesProvider>,
+    );
+    return { onRouteImported };
+  }
+
+  function rownative(overrides: Record<string, unknown>) {
+    return {
+      // Spreading a class instance copies its fields, not its prototype
+      // methods, so every method a call-site reaches has to be named here.
+      // `satisfies` does not catch it: the spread's *type* carries the methods
+      // even though the value does not.
+      ...defaultServices.rownativeService,
+      resolveCourseId: realResolve,
+      attachedTrack: () => null,
+      ...overrides,
+    } satisfies Services['rownativeService'];
+  }
+
+  const noExisting = {
+    ...defaultServices.routeService,
+    findRouteByRownativeId: () => undefined,
+  } satisfies Services['routeService'];
+
+  const trackFile = () =>
+    new File(
+      [JSON.stringify({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[-4.56, 55.93], [-4.28, 55.85]] },
+      })],
+      'clyde.geojson',
+      { type: 'application/geo+json' },
+    );
+
+  /** Search, so the result list with its attach controls is on screen. */
+  async function showResults(overrides: Record<string, unknown>) {
+    const user = userEvent.setup();
+    const result = renderWithServices({
+      rownativeService: rownative({
+        searchCourses: vi.fn().mockResolvedValue([COURSES[0]]),
+        getCourseIndex: vi.fn().mockResolvedValue(COURSES),
+        ...overrides,
+      }),
+      routeService: noExisting,
+    });
+    await user.click(screen.getByRole('button', { name: /^search$/i }));
+    await screen.findByText(/showing 1 of 2 courses/i);
+    return { user, ...result };
+  }
+
+  it('offers an attach control on every course', async () => {
+    await showResults({ attachedTrack: () => null });
+
+    expect(screen.getByLabelText(/attach a track to Quinsig S to N/i)).toBeInTheDocument();
+  });
+
+  it('attaches a chosen file and hands back the re-imported route', async () => {
+    const route = createRoute();
+    const attachTrack = vi.fn().mockResolvedValue({
+      track: { courseId: '5', fileName: 'clyde.geojson', attachedAt: 1, coordinates: [] },
+      route,
+    });
+    const { user, onRouteImported } = await showResults({ attachTrack, attachedTrack: () => null });
+
+    await user.upload(screen.getByLabelText(/attach a track to Quinsig S to N/i), trackFile());
+
+    expect(attachTrack).toHaveBeenCalledWith('5', 'clyde.geojson', expect.stringContaining('LineString'));
+    expect(onRouteImported).toHaveBeenCalledWith(route);
+    expect(await screen.findByText(/clyde\.geojson attached/i)).toBeInTheDocument();
+  });
+
+  it('shows why a track was refused, in the words the check used', async () => {
+    // The gate check names the gate and the offset. Replacing that with
+    // "could not attach" would throw away the only useful part.
+    const attachTrack = vi.fn().mockRejectedValue(
+      new Error('This track passes 1,350 m from the "WP5" gate, more than the 40 m allowed.'),
+    );
+    const { user, onRouteImported } = await showResults({ attachTrack, attachedTrack: () => null });
+
+    await user.upload(screen.getByLabelText(/attach a track to Quinsig S to N/i), trackFile());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/1,350 m from the "WP5" gate/);
+    expect(onRouteImported, 'a refused track still changed the route').not.toHaveBeenCalled();
+  });
+
+  it('shows what is attached, and can remove it', async () => {
+    const route = createRoute();
+    const detachTrack = vi.fn().mockResolvedValue(route);
+    const { user, onRouteImported } = await showResults({
+      detachTrack,
+      attachedTrack: (id: string) => (id === '5' ? { courseId: '5', fileName: 'clyde.gpx', attachedAt: 1, coordinates: [] } : null),
+    });
+
+    expect(screen.getByText('clyde.gpx')).toBeInTheDocument();
+    // The control says what it will do to a course that already has one.
+    expect(screen.getByText(/replace track/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /remove the track attached to Quinsig S to N/i }));
+
+    expect(detachTrack).toHaveBeenCalledWith('5');
+    expect(onRouteImported).toHaveBeenCalledWith(route);
+  });
+
+  it('offers no remove control for a course with nothing attached', async () => {
+    await showResults({ attachedTrack: () => null });
+
+    expect(screen.queryByRole('button', { name: /remove the track/i })).toBeNull();
+    expect(screen.getByText(/attach track/i)).toBeInTheDocument();
   });
 });
