@@ -1,5 +1,6 @@
-import { test } from '../fixtures/crash-watch';
+import { test, expect } from '../fixtures/crash-watch';
 import { expectSceneAliveThroughout } from '../utils/scene-health';
+import { contextState } from '../utils/gl-context';
 
 /**
  * The river has to still be there a minute in.
@@ -43,4 +44,16 @@ test('the scene keeps its graphics context for the whole row', async ({ page }) 
   await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
 
   await expectSceneAliveThroughout(page, WATCH_MS, 'the demo row');
+
+  // Sampling every 250 ms cannot see a loss that is restored between two
+  // samples, and the rower still saw the banner. `losses` only goes up, so it
+  // catches what the sampling misses (#309, R8).
+  const state = await contextState(page);
+  if (state) {
+    expect(
+      state.losses,
+      `the scene lost its context ${state.losses} time(s) during the row ` +
+        `(last reason: ${state.lostReason ?? 'none given'})`,
+    ).toBe(0);
+  }
 });

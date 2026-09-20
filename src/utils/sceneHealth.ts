@@ -25,6 +25,27 @@ export const CONTEXT_LOST_TEXT = 'lost the graphics context';
  */
 export const CONTEXT_LOST_MESSAGE = 'The 3D view lost the graphics context — restoring…';
 
+/**
+ * What the rower sees once the app has stopped trying.
+ *
+ * The restore schedule is bounded - three attempts, the last at about 5.8 s -
+ * and when it ran out the stage went on saying "restoring…" anyway. Probed on
+ * the demo row, that promise was still on screen sixteen seconds later and
+ * would have stayed for the session (#309).
+ *
+ * Two things the rower needs and the old message gave neither: that the row is
+ * still being recorded, which it is - distance, time and heart rate never stop
+ * - and the one action that brings the view back.
+ *
+ * It keeps the CONTEXT_LOST_TEXT fragment deliberately. `describeSceneHealth`
+ * matches on that, so a scene showing this is still judged not alive; a
+ * rewording that dropped it would let a dead scene pass the sweep, which is the
+ * fault #299 fixed.
+ */
+export const CONTEXT_UNRECOVERABLE_MESSAGE =
+  'The 3D view lost the graphics context and could not get it back — your row is '
+  + 'still being recorded. Reload the page to get the view back.';
+
 export interface SceneObservation {
   /**
    * Whether the canvas in the DOM right now reports a lost context.

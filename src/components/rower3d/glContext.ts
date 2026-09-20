@@ -179,9 +179,17 @@ export const scheduleContextRestore = (
   restore: () => void,
   isLost: () => boolean,
   schedule: Scheduler = setTimeout,
+  onExhausted?: () => void,
 ): void => {
   const attempt = (index: number) => {
-    if (index >= RESTORE_DELAYS_MS.length) return;
+    if (index >= RESTORE_DELAYS_MS.length) {
+      // The asking has stopped, and until this existed nothing said so. The
+      // stage went on promising a restore that would never be attempted again
+      // - measured at sixteen seconds past the last try, and it would have
+      // been the rest of the session (#309).
+      onExhausted?.();
+      return;
+    }
     schedule(() => {
       if (!isLost()) return;
       restore();
