@@ -71,6 +71,11 @@ export class Concept2BluetoothService {
       // Note: multiplexed-information is already registered by doConnect() via the cb_message constructor arg
       await this.pm5Wrapper.addEventListener('additional-status', (e) => this.handlePM5Message({ type: 'additional-status', data: e.data }));
       await this.pm5Wrapper.addEventListener('general-status', (e) => this.handlePM5Message({ type: 'general-status', data: e.data }));
+      // Power arrives on its own characteristic and nowhere else. Without this
+      // subscription the Power card sat at 0 W for a whole session, the summary
+      // reported Avg Power 0 W, and the FIT export and intervals.icu upload
+      // carried no power at all (#306).
+      await this.pm5Wrapper.addEventListener('additional-stroke-data', (e) => this.handlePM5Message({ type: 'additional-stroke-data', data: e.data }));
 
       // Listen for disconnect events from the device
       await this.pm5Wrapper.addEventListener('disconnect', () => {
@@ -141,7 +146,14 @@ export class Concept2BluetoothService {
       if (data.distance != null) parsed.distance = Number(data.distance);
       if (data.strokeRate != null) parsed.cadence = Number(data.strokeRate);
       if (data.heartRate != null) parsed.heartRate = Number(data.heartRate);
+      // Stroke power, in watts, straight off the wire. `averagePower` was read
+      // here for a long time and no PM5 frame has ever carried a field by that
+      // name, so every Concept2 session recorded zero (#306). It is still
+      // accepted, because the multiplexed additional-status-2 frame does carry
+      // one, and a real average beats an instantaneous reading where both are
+      // present.
       if (data.averagePower != null) parsed.power = Number(data.averagePower);
+      else if (data.strokePower != null) parsed.power = Number(data.strokePower);
       Object.assign(this.pm5Data, parsed);
       this.emit('data', this.pm5Data);
     } catch (e) {

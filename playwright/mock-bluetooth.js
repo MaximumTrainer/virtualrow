@@ -66,6 +66,25 @@
     return new DataView(buf);
   }
 
+  /**
+   * An Additional Stroke Data frame (0xce060036), which is where power lives.
+   *
+   * The mock sent no power at all, which is why no spec noticed a Concept2
+   * rower seeing 0 W for a whole session (#306). Offsets match
+   * `_extractAdditionalStrokeData` in src/vendor/pm5-base.js exactly, as
+   * agents.md requires - a frame that disagrees with the parser makes a test
+   * pass for the wrong reason.
+   */
+  function buildPM5AdditionalStrokeDataView({ elapsedTime = 0, power = 0 } = {}) {
+    const buf = new ArrayBuffer(18);
+    const v = new Uint8Array(buf);
+    const cs = mustFit(Math.round(elapsedTime * 100), 24, 'elapsedTime (centiseconds)');
+    v[0] = cs & 0xff; v[1] = (cs >> 8) & 0xff; v[2] = (cs >> 16) & 0xff;
+    const watts = mustFit(Math.round(power), 16, 'power (watts)');
+    v[3] = watts & 0xff; v[4] = (watts >> 8) & 0xff;
+    return new DataView(buf);
+  }
+
   function buildHRDataView(bpm = 80, useUint16 = false) {
     const buffer = new ArrayBuffer(useUint16 ? 3 : 2);
     const dv = new DataView(buffer);
@@ -119,6 +138,7 @@
     if (msg.type === 'pm5') {
       if (window.__pm5CharGeneral) window.__pm5CharGeneral._dispatch(buildPM5GeneralDataView(msg.payload));
       if (window.__pm5CharAdditional) window.__pm5CharAdditional._dispatch(buildPM5AdditionalDataView(msg.payload));
+      if (window.__pm5CharStroke) window.__pm5CharStroke._dispatch(buildPM5AdditionalStrokeDataView(msg.payload));
     } else if (msg.type === 'ftms') {
       const dv = buildFTMSDataView(msg.payload);
       if (window.__ftmsChar) window.__ftmsChar._dispatch(dv);
@@ -157,6 +177,7 @@
   // per characteristic — prevents the 3× dispatch accumulation that caused stack overflows.
   if (!window.__pm5CharGeneral) window.__pm5CharGeneral = createCharacteristic('pm5-general');
   if (!window.__pm5CharAdditional) window.__pm5CharAdditional = createCharacteristic('pm5-additional');
+  if (!window.__pm5CharStroke) window.__pm5CharStroke = createCharacteristic('pm5-additional-stroke');
   if (!window.__pm5CharMux) window.__pm5CharMux = createCharacteristic('pm5-mux');
   // Keep __pm5Char as an alias to the multiplexed char for backward compatibility
   if (!window.__pm5Char) window.__pm5Char = window.__pm5CharMux;
@@ -208,6 +229,7 @@
                     // gets exactly one listener instead of all sharing __pm5Char.
                     if (uuidMatches(charUuid, 'ce060031')) return window.__pm5CharGeneral;
                     if (uuidMatches(charUuid, 'ce060032')) return window.__pm5CharAdditional;
+                    if (uuidMatches(charUuid, 'ce060036')) return window.__pm5CharStroke;
                     if (uuidMatches(charUuid, 'ce060080')) return window.__pm5CharMux;
                     return window.__pm5CharMux;
                   }
