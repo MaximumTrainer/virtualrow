@@ -22,7 +22,9 @@ import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
-import { resolveCrew } from './components/rower3d/crewModel';
+import { resolveCrew, CREW_URL } from './components/rower3d/crewModel';
+import { RouteLoadingBar } from './components/RouteLoadingBar';
+import { useRouteLoadProgress } from './hooks/useRouteLoadProgress';
 import { isGlbSceneryEnabled } from './components/rower3d/sceneryAssets';
 import { readTelemetry, telemetryAsText, clearTelemetry } from './utils/sceneTelemetryLog';
 import { useServices } from './context/useServices';
@@ -362,6 +364,16 @@ function App() {
 
   const selectedRouteEnrichment = selectedRoute ? routeEnrichments[selectedRoute.id] ?? null : null;
   const selectedRouteEnrichmentLoading = selectedRoute ? !!routeEnrichmentLoading[selectedRoute.id] : false;
+
+  // What the rower is waiting for between choosing a route and rowing it
+  // (#318). Watched off the performance timeline, so nothing here reaches into
+  // the scene's Suspense boundary - see useRouteLoadProgress for why that
+  // matters. CREW_URL comes from crewModel.ts, which is free of three and drei
+  // precisely so App can name the file without pulling the 3D bundle in.
+  const routeLoadProgress = useRouteLoadProgress(
+    currentView === 'workout' && isWorkoutActive,
+    CREW_URL[resolveCrew(user?.gender, crew.preference)],
+  );
 
   const handleStartWorkout = () => {
     // Guard against double-start (rapid clicks, re-entrant calls, or already-active session)
@@ -1265,24 +1277,13 @@ function App() {
             <div className="view-container activity-view">
               <div className="activity-screen">
                 <div className="activity-route-stage">
-                  <Suspense
-                    fallback={
-                      <div
-                        className="rower3d-fallback-marker"
-                        data-loaded="loading"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          height: '100%',
-                          color: '#888',
-                          fontSize: '13px',
-                        }}
-                      >
-                        Loading 3D view…
-                      </div>
-                    }
-                  >
+                  {/* How much of the wait is done, and gone when it really
+                      is (#318). The Suspense fallback below covers only the
+                      code chunk, which arrives 0.7s into a 3.2s load; the bar
+                      sits over the stage for the whole of it. */}
+                  <RouteLoadingBar progress={routeLoadProgress} />
+
+                  <Suspense fallback={null}>
                     <Rower3D
                       route={selectedRoute!}
                       enrichment={selectedRouteEnrichment}
