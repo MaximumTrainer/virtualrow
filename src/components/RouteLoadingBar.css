@@ -1,0 +1,54 @@
+/* ------------------------------------------------------- route loading ---
+   How much of the route load is done (#318). Sits over the stage while the
+   scene assembles, and goes when the scene is ready to row - not when its code
+   chunk arrives, which is what the static message it replaces used to do. */
+
+.route-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  /* Above the canvas, below anything the rower can act on. */
+  z-index: 2;
+  pointer-events: none;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.route-loading-bar {
+  width: min(320px, 70%);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.route-loading-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-color, #4da3ff);
+  /* Eased so a phase landing reads as movement rather than a jump. The width
+     itself is never animated towards a guess - it only changes when a phase
+     has actually finished. */
+  transition: width 200ms ease-out;
+}
+
+.route-loading-phase {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #9fb0c7);
+}
+
+.route-loading-percent {
+  color: var(--text-primary, #e8eef7);
+  font-variant-numeric: tabular-nums;
+}
+
+.route-loading-warning {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warning-color, #e0a33e);
+}
