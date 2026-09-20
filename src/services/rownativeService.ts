@@ -2,11 +2,18 @@ import type { WaterRoute } from '../types/index';
 import { routeService, type RownativeRouteImportData } from './routeService';
 import {
   resolveCourseGeometry,
+  classifyPolygons,
+  fitCandidateToGates,
   type RownativeCourseGeometryInput,
   type RownativeCoursePolygon,
   type WaterwayPathProvider,
 } from './rownativeGeometry';
-import { trackAttachmentStore, type TrackAttachmentStore } from './trackAttachmentStore';
+import {
+  trackAttachmentStore,
+  type TrackAttachmentStore,
+  type AttachedTrack,
+} from './trackAttachmentStore';
+import { parseTrackFile } from '../utils/trackParsers';
 
 // Discovery note (issue #46): rownative Worker API exposes /api/courses and related routes,
 // but browser CORS restricts origins to rownative.icu/localhost. VirtualRow therefore reads the
@@ -243,6 +250,59 @@ export class RownativeService {
    */
   async fetchCourseGeometry(rawId: string): Promise<RownativeCourseGeometryInput> {
     return this.fetchCourseDetail(this.resolveCourseId(rawId));
+  }
+
+  /** The track a rower has attached to this course, or null. */
+  attachedTrack(rawId: string): AttachedTrack | null {
+    try {
+      return this.tracks.get(this.resolveCourseId(rawId));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Attach a rower's own track to a course, if it is a track of that course.
+   *
+   * Every piece of this already existed and none of it was reachable: the
+   * parser, the gate check, the store and the geometry resolver were all
+   * written for a flow with no entrance (#313). This is the entrance.
+   *
+   * Nothing is stored until the file has parsed *and* passed the course's own
+   * gates, so a rejected file cannot cost the rower the track they already had.
+   * The course is re-imported afterwards because attaching changes the route
+   * they row, and returning both keeps the caller from having to know that.
+   */
+  async attachTrack(
+    rawId: string,
+    fileName: string,
+    fileContents: string,
+  ): Promise<{ track: AttachedTrack; route: WaterRoute }> {
+    const courseId = this.resolveCourseId(rawId);
+
+    // Throws TrackParseError naming the formats it reads, which is the message
+    // the UI shows unchanged.
+    const parsed = parseTrackFile(fileName, fileContents);
+
+    const detail = await this.fetchCourseDetail(courseId);
+    const { gates } = classifyPolygons(detail);
+    const fit = fitCandidateToGates(parsed.coordinates, gates);
+    if (!fit.ok) throw fit.error;
+
+    // The fitted line, not the raw file: oriented Start-before-Finish and
+    // trimmed to the part between them, which is what the resolver would do
+    // with it anyway and what the rower's distance is measured from.
+    const track = this.tracks.set(courseId, fileName, fit.coordinates);
+    const route = await this.importCourseDetail(detail, { id: courseId });
+    return { track, route };
+  }
+
+  /** Drop a course's attached track and re-import it from the next source. */
+  async detachTrack(rawId: string): Promise<WaterRoute> {
+    const courseId = this.resolveCourseId(rawId);
+    this.tracks.remove(courseId);
+    const detail = await this.fetchCourseDetail(courseId);
+    return this.importCourseDetail(detail, { id: courseId });
   }
 
   private async fetchCourseDetail(courseId: string): Promise<RownativeCourseFile> {

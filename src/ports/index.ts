@@ -144,6 +144,9 @@ export type RownativePort = Pick<
   | 'importCourseById'
   | 'resolveCourseId'
   | 'fetchCourseGeometry'
+  | 'attachTrack'
+  | 'detachTrack'
+  | 'attachedTrack'
 >;
 
 /**
