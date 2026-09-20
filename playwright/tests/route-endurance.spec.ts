@@ -127,6 +127,14 @@ interface Sample {
   textures: number;
   /** JS heap in megabytes, where the browser will say. 0 where it will not. */
   heapMb: number;
+  /**
+   * Metres of water beyond the blade tip, or null before the frame loop runs.
+   *
+   * #271 asks for the oar span checked against every segment of a route, and
+   * a traverse is the only thing here that visits them all. Negative means the
+   * blades are over the bank.
+   */
+  clearanceM: number | null;
 }
 
 /**
@@ -165,6 +173,7 @@ async function sampleAndObserve(page: Page) {
                 .usedJSHeapSize /
               (1024 * 1024)
             : 0,
+        clearanceM: window.__ROWER3D_CLEARANCE?.clearanceM ?? null,
       },
       observation: {
         contextLost: lostPerCanvas.some(Boolean),
@@ -322,6 +331,30 @@ function expectACleanTraverse(label: string, samples: Sample[], errors: string[]
   } else {
     console.log(`[endurance ${label}] heap: not reported by this browser`);
   }
+
+  // The blades stayed over water, for every segment the boat passed through.
+  //
+  // #271 asks for the oar span checked against the channel for every segment of
+  // every route, and a traverse is the only thing in the suite that visits them
+  // all. The reading comes from the same width function the water and both
+  // banks are built from, so a negative one means the rower was looking at
+  // blades over the bank.
+  const clearances = samples
+    .map((s) => s.clearanceM)
+    .filter((c): c is number => c !== null && Number.isFinite(c));
+
+  expect(
+    clearances.length,
+    `${label}: the scene never reported whether its blades were over water`,
+  ).toBeGreaterThan(3);
+
+  const narrowest = Math.min(...clearances);
+  console.log(`[endurance ${label}] narrowest blade clearance: ${narrowest.toFixed(2)} m`);
+  expect(
+    narrowest,
+    `${label}: the blades were ${Math.abs(narrowest).toFixed(2)} m over the bank at the ` +
+      `narrowest point of the route`,
+  ).toBeGreaterThan(0);
 
   expect(geometry.length, `${label}: no geometry was ever measured`).toBeGreaterThan(3);
   expect(

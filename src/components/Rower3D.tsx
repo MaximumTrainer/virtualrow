@@ -15,8 +15,10 @@ import {
   buildTerrainProfile,
   getDragMultiplierForProgress,
   getTerrainReliefForProgress,
+  getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
+import { bladeClearanceMeters, OAR_REACH_METERS } from './rower3d/navigableWidth';
 import {
   createRouteCurve,
   getRoutePositionAtProgress,
@@ -28,7 +30,12 @@ import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { RiverGuides } from './rower3d/RiverGuides';
 import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
-import { IS_TEST_MODE, SCENE_SCALE, hasExplicitPerformanceMode } from './rower3d/constants';
+import {
+  IS_TEST_MODE,
+  SCENE_SCALE,
+  WATER_CHANNEL_WIDTH,
+  hasExplicitPerformanceMode,
+} from './rower3d/constants';
 import {
   markRouteLoadStart,
   markFirstFrame,
@@ -403,6 +410,25 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         };
         window.__ROWER3D_CAMERA = {
           position: [camera.position.x, camera.position.y, camera.position.z]
+        };
+        // Is the boat actually between the banks, right now?
+        //
+        // The floor in navigableWidth.ts proves the arithmetic, and unit tests
+        // prove the floor. Neither proves the scene applies it — the water,
+        // both banks and the debug guides each read the width for themselves.
+        // Read here from the same function the water is built from, at the
+        // boat's own progress, so an E2E watches the running game rather than
+        // re-deriving it (#271).
+        const channelWidthSceneUnits = getWaterWidthSceneUnitsForProgress(
+          enrichment?.segmentProfiles,
+          enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
+          boatProgressRef.current,
+        );
+        window.__ROWER3D_CLEARANCE = {
+          halfWidthM: channelWidthSceneUnits / SCENE_SCALE / 2,
+          oarReachM: OAR_REACH_METERS,
+          clearanceM: bladeClearanceMeters(channelWidthSceneUnits),
+          progress: boatProgressRef.current,
         };
         // Draw this exact frame on demand.
         //
