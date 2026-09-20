@@ -19,6 +19,8 @@
 // either way.
 // ============================================================================
 
+import { SCENE_SCALE } from './constants';
+
 /** Centre to blade tip: gate offset plus outboard, from the rig. */
 export const OAR_REACH_METERS = 0.8 + 1.98;
 
@@ -39,4 +41,25 @@ export const navigableWaterWidthMeters = (reportedMeters: number): number => {
     return MIN_NAVIGABLE_WIDTH_METERS;
   }
   return Math.max(reportedMeters, MIN_NAVIGABLE_WIDTH_METERS);
+};
+
+/**
+ * How much water is left beyond the blade tip, in metres.
+ *
+ * The floor above proves the arithmetic. It cannot prove the scene applies it:
+ * the water, both banks and the debug guides each read the width for
+ * themselves, and #271's last acceptance point is about where the boat sits
+ * between the red edges rather than about what a function returns. Rower3D
+ * publishes this from the frame loop at the boat's own progress, so an E2E can
+ * watch the running game instead of re-deriving it.
+ *
+ * Takes scene units because that is what `getWaterWidthSceneUnitsForProgress`
+ * hands back, and converting at the call-site is where a factor of ten gets
+ * lost. Negative means the blades are over land, which is the fault #271
+ * reported; NaN means nothing was measured, which is not the same thing and
+ * must not read as a clearance of zero.
+ */
+export const bladeClearanceMeters = (channelWidthSceneUnits: number): number => {
+  if (!Number.isFinite(channelWidthSceneUnits)) return Number.NaN;
+  return channelWidthSceneUnits / SCENE_SCALE / 2 - OAR_REACH_METERS;
 };

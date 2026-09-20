@@ -332,6 +332,20 @@ declare global {
      * lands in the gap rather than on a finished picture (#261).
      */
     __ROWER3D_FORCE_RENDER?: () => void;
+    /**
+     * Whether the blades are over water where the boat is, right now (#271).
+     *
+     * `clearanceM` is the metres of water beyond the blade tip: positive means
+     * the boat and its oars fit, negative means they are over the bank. Read
+     * from the same width function the water channel and both banks are built
+     * from, so a disagreement means the scene is wrong rather than the reading.
+     */
+    __ROWER3D_CLEARANCE?: {
+      halfWidthM: number;
+      oarReachM: number;
+      clearanceM: number;
+      progress: number;
+    };
     __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number; builds?: number };
     __ROWER3D_SPEED_MPS?: number;
     __ROWER3D_STROKE_PHASE?: string;
