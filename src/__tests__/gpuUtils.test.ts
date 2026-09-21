@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isWebGLAvailable,
   resetGpuProbeCacheForTests,
-  detectGPUCapabilities,
-  hasWebGPUAPI,
   classifyGPUTier,
   describeUnmaskedRenderer,
   recommendPerformanceMode,
@@ -64,13 +62,6 @@ describe('gpuUtils', () => {
       expect(isWebGLAvailable()).toBe(false);
     });
   });
-  
-  describe('hasWebGPUAPI', () => {
-    it('returns false when navigator.gpu is not available', () => {
-      // In JSDOM, navigator.gpu is not available
-      expect(hasWebGPUAPI()).toBe(false);
-    });
-  });
 });
 
 describe('classifyGPUTier', () => {
@@ -110,10 +101,17 @@ describe('recommendPerformanceMode', () => {
       .toBe('low');
   });
 
-  it('offers high only where WebGPU came up', () => {
-    const discrete = { maxTextureSize: 16384, renderer: 'NVIDIA GeForce RTX 4070' };
-    expect(recommendPerformanceMode({ ...discrete, webgpu: true })).toBe('high');
-    expect(recommendPerformanceMode(discrete)).toBe('auto');
+  /**
+   * `high` used to be awarded to a "WebGPU backend", which in practice meant a
+   * renderer that handed back no WebGL context - a broken one, not a fast one.
+   * The canvas has always been a WebGLRenderer, so the probe was never telling
+   * anyone anything true (#345). A rower who wants everything on still picks
+   * High in the graphics panel; nothing is auto-promoted to it.
+   */
+  it('leaves a discrete card on auto rather than promoting it', () => {
+    expect(
+      recommendPerformanceMode({ maxTextureSize: 16384, renderer: 'NVIDIA GeForce RTX 4070' }),
+    ).toBe('auto');
   });
 
   it('keeps an undisclosed renderer on auto rather than assuming the worst', () => {
@@ -121,9 +119,9 @@ describe('recommendPerformanceMode', () => {
     expect(recommendPerformanceMode({ maxTextureSize: 8192, renderer: null })).toBe('auto');
   });
 
-  it('will not promote integrated graphics even on a WebGPU backend', () => {
+  it('will not promote integrated graphics whatever else it is told', () => {
     expect(
-      recommendPerformanceMode({ maxTextureSize: 8192, renderer: 'Intel UHD Graphics', webgpu: true }),
+      recommendPerformanceMode({ maxTextureSize: 8192, renderer: 'Intel UHD Graphics' }),
     ).toBe('low');
   });
 });
@@ -167,8 +165,8 @@ describe('describeUnmaskedRenderer', () => {
 
 describe('recommendPerformanceMode with an unknown texture budget', () => {
   it('does not downgrade a backend that exposes no capabilities', () => {
-    expect(recommendPerformanceMode({ renderer: 'NVIDIA GeForce RTX 4070', webgpu: true }))
-      .toBe('high');
+    expect(recommendPerformanceMode({ renderer: 'NVIDIA GeForce RTX 4070' }))
+      .toBe('auto');
   });
 });
 
@@ -224,16 +222,6 @@ describe('probe contexts are released (#261)', () => {
     );
   });
 
-  it('releases every context the capability probe opens', async () => {
-    const { created, released } = await withStubbedCanvas(async () => {
-      await detectGPUCapabilities();
-    });
-
-    expect(created.length).toBeGreaterThan(0);
-    expect(released.length, 'the capability probe kept contexts alive').toBe(
-      created.filter((k) => k !== 'experimental-webgl').length,
-    );
-  });
 });
 
 describe('WebGL availability is asked once (#context-loss)', () => {

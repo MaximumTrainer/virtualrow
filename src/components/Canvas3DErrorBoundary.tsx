@@ -1,5 +1,5 @@
 import React, { Component, type ReactNode } from 'react';
-import { isWebGPUAvailable, isWebGLAvailable } from '../utils/gpuUtils';
+import { isWebGLAvailable } from '../utils/gpuUtils';
 
 interface Props {
   children: ReactNode;
@@ -11,26 +11,20 @@ interface State {
   hasError: boolean;
   error: Error | null;
   gpuAvailable: boolean;
-  gpuBackend: 'webgpu' | 'webgl' | 'none';
+  gpuBackend: 'webgl' | 'none';
 }
 
-/**
- * Synchronously check GPU availability and return the best available backend.
- */
-function checkGPUAvailabilitySync(): { available: boolean; backend: 'webgpu' | 'webgl' | 'none' } {
-  // WebGL check is synchronous, WebGPU requires async check
-  // For synchronous fallback, just check WebGL
-  const webglAvailable = isWebGLAvailable();
-  if (webglAvailable) {
-    return { available: true, backend: 'webgl' };
-  }
-  return { available: false, backend: 'none' };
+/** Whether there is anything to draw with. */
+function checkGPUAvailability(): { available: boolean; backend: 'webgl' | 'none' } {
+  return isWebGLAvailable()
+    ? { available: true, backend: 'webgl' }
+    : { available: false, backend: 'none' };
 }
 
 /**
  * Error boundary for Three.js Canvas components.
- * Catches WebGPU/WebGL context loss and other 3D rendering errors,
- * displaying a graceful fallback UI instead of crashing the app.
+ * Catches WebGL context loss and other 3D rendering errors, displaying a
+ * graceful fallback UI instead of crashing the app.
  */
 export class Canvas3DErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -60,20 +54,12 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
     }
   }
 
+  // Synchronous. Retrying used to await a WebGPU probe and, if it resolved
+  // true, clear the error without checking there was a WebGL context to draw
+  // into - on a renderer R3F would then build in WebGL anyway (#345).
   handleRetry = (): void => {
-    // Check GPU availability before attempting retry
-    // Try WebGPU first asynchronously, fall back to WebGL sync check
-    isWebGPUAvailable().then((webgpuAvailable) => {
-      if (webgpuAvailable) {
-        this.setState({ hasError: false, error: null, gpuAvailable: true, gpuBackend: 'webgpu' });
-      } else {
-        const { available, backend } = checkGPUAvailabilitySync();
-        this.setState({ hasError: !available, error: null, gpuAvailable: available, gpuBackend: backend });
-      }
-    }).catch(() => {
-      const { available, backend } = checkGPUAvailabilitySync();
-      this.setState({ hasError: !available, error: null, gpuAvailable: available, gpuBackend: backend });
-    });
+    const { available, backend } = checkGPUAvailability();
+    this.setState({ hasError: !available, error: null, gpuAvailable: available, gpuBackend: backend });
   };
 
   render(): ReactNode {
@@ -109,7 +95,7 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
           <p style={{ margin: 0, fontSize: '14px', color: '#a0a0a0' }}>
             {this.state.gpuAvailable
               ? 'GPU context lost. Your workout data is still being tracked.'
-              : 'WebGPU/WebGL is not available. Your workout data is still being tracked.'}
+              : 'WebGL is not available. Your workout data is still being tracked.'}
           </p>
           {this.state.gpuAvailable && (
             <button

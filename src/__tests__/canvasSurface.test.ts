@@ -115,15 +115,3 @@ describe('no setting ever goes backwards as quality rises', () => {
   });
 });
 
-describe('the detected GPU backend never changes the surface', () => {
-  it('is the same plan whether or not WebGPU is available', () => {
-    // `gpuBackend` records what the browser reports it supports. R3F draws
-    // through WebGL regardless, so letting detection touch the surface would
-    // give two machines with identical GPUs different scenes.
-    for (const tier of QUALITY_TIERS) {
-      expect(canvasSurfaceFor(tier)).toEqual(canvasSurfaceFor(tier));
-    }
-
-    expect(canvasSurfaceFor).toHaveLength(1);
-  });
-});
