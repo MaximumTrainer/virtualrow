@@ -145,6 +145,20 @@ See §6 for the full gate and its escape hatches.
 - PM5 frame helpers (`dispatchGeneralStatus`, `dispatchAdditionalStatus`) live at file scope in the spec and match the wire format parsed by `src/vendor/pm5-base.js` exactly. When writing BLE test frames, verify byte layout against the parser — the PM5 general status has elapsedTime (24-bit LE, ×0.01s) at offset 0 and distance (24-bit LE, ×0.1m) at offset 3.
 - Type-checked via `tsconfig.playwright.json`.
 
+**Scene tests (Vitest, #343):**
+- `src/__tests__/sceneTestRenderer.tsx` mounts the real `RowerScene` through
+  `@react-three/test-renderer` — no WebGL, no canvas, no downloads — and
+  `rowerScene.smoke.test.tsx` asserts on the scene graph it builds.
+- A spec that uses it must first set `window.__PLAYWRIGHT_TESTING` in a
+  `vi.hoisted` block and stub drei's `Cloud` and `useGLTF`. The reasons are in
+  the spec's header; all three are downloads or GL calls, none is scene logic.
+- This is what lets the coverage gate cover the scene at all. `boatComponents`
+  and `skyComponents` are measured now; `Rower3D.tsx` follows once #328, #329
+  and #331 move its per-frame decisions into pure modules.
+- React is pinned to `~19.2.0` because `@react-three/fiber` requires
+  `>=19 <19.3`. The lockfile happened to hold that line; the manifest now says
+  it, which is what let the test renderer install at all.
+
 **Visual baselines (Playwright, #340):**
 - Live in `playwright/tests/visual/`, with their PNGs in `playwright/tests/visual/__snapshots__/`.
 - Excluded from every other config, so the verification matrix does not run them.

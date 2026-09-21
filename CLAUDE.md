@@ -67,6 +67,8 @@ playwright/       E2E tests, mock BLE, simulators
 - **`ParsedCoordinateList`**: all track parsers return `{ coordinates, dropped, total }`, not bare arrays.
 - **Coordinate order**: internal = `{ lat, lng }`, GeoJSON export = `[lng, lat]` per RFC 7946.
 - **Coverage ratchets up**: raise thresholds in `vitest.config.ts` when your change improves coverage. Never lower them.
+  Removing a file from `coverage.exclude` is the one case where the global ratio may fall while tested-ness rises —
+  pin the newly measured file with a per-file threshold and say so in the config comment (#343).
 - **BLE frames match parsers**: test frames in mock-bluetooth.js and Playwright specs must match the wire format in `src/vendor/pm5-base.js` and `src/services/ftmsBluetoothService.ts`.
 - **The FIT encoder is ours**: `fitEncoderService` is hand-written and lazy-loaded. `@garmin/fitsdk` is a **devDependency** used only by the round-trip decode test — never import it from `src/`.
 

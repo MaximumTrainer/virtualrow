@@ -91,6 +91,15 @@ import './Rower3D.css';
 /** How often the scene writes a line about itself, in seconds. */
 const TELEMETRY_SAMPLE_SECONDS = 5;
 
+/**
+ * The name on the group that carries the boat along the route.
+ *
+ * Three of them in the JSX below - one per quality tier - but only ever one in
+ * the graph, so a test can find the boat by name rather than by counting groups
+ * (#343).
+ */
+export const BOAT_GROUP_NAME = 'BoatGroup';
+
 const detectRouteTheme = (route: WaterRoute): RouteTheme => {
   const name = route.name?.toLowerCase() || '';
   const tags = route.tags || [];
@@ -113,7 +122,7 @@ const detectRouteTheme = (route: WaterRoute): RouteTheme => {
   return 'willowbrook';
 };
 
-interface Rower3DProps {
+export interface Rower3DProps {
   route: WaterRoute;
   enrichment?: RouteEnrichmentData | null;
   paceSPer500?: number | null;
@@ -180,7 +189,7 @@ const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode
   }, [gl, requested]);
 };
 
-const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({ 
+export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({ 
   route, 
   enrichment,
   paceSPer500, 
@@ -656,7 +665,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       )}
       
       {IS_TEST_MODE ? (
-        <group ref={boatGroupRef}>
+        <group ref={boatGroupRef} name={BOAT_GROUP_NAME}>
           <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
         </group>
       ) : (
@@ -664,7 +673,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
           fallback={
             // Physics failing is no reason to lose the boat: keep the GLB scull,
             // with the procedural one covering the load (issue #232).
-            <group ref={boatGroupRef}>
+            <group ref={boatGroupRef} name={BOAT_GROUP_NAME}>
               <Suspense fallback={<RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />}>
                 <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} />
               </Suspense>
@@ -673,7 +682,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
           bare={
             // Loads nothing, so a rejected crew GLB cannot take this rung down
             // the way it took the rich fallback down (review of #232).
-            <group ref={boatGroupRef}>
+            <group ref={boatGroupRef} name={BOAT_GROUP_NAME}>
               <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />
             </group>
           }
