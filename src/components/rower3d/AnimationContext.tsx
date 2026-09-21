@@ -15,6 +15,7 @@
 import React, { useCallback, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { AnimationContext, type FrameCallback } from './animationFrame';
+import { frozenClock, readSceneFreeze } from './sceneFreeze';
 
 // ============================================================================
 // Provider — owns the single useFrame and fans out to all subscribers
@@ -23,7 +24,10 @@ export const AnimationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const callbacksRef = useRef<Set<FrameCallback>>(new Set());
 
   useFrame((state) => {
-    const time = state.clock.elapsedTime;
+    // One clock for every subscriber, and a frozen one when a visual spec has
+    // stopped it (#340): the water, the clouds and the reeds all read the same
+    // second, so a screenshot catches them in the same pose every run.
+    const time = frozenClock(readSceneFreeze(), state.clock.elapsedTime);
     for (const cb of callbacksRef.current) cb(time);
   });
 

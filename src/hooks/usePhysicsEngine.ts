@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState } from 'react';
 import type { PM5Data } from '../types';
+import { frozenStrokeCycle, readSceneFreeze } from '../components/rower3d/sceneFreeze';
 
 export interface BoatState {
   velocityMps: number;
@@ -63,7 +64,13 @@ export function usePhysicsEngine() {
       // Advance stroke cycle: cadence (spm) → fraction of cycle per second
       const cadenceSpm = pm5Data?.cadence ?? 20;
       const cycleFreq = cadenceSpm / 60;
-      const newT = (boatStateRef.current.strokeCycleT + dt * cycleFreq) % 1.0;
+      // Parked where the frozen clock stopped when a visual spec has frozen
+      // the scene (#340). Pinning the cycle rather than the pose settles the
+      // phase too, so the blade spray stops respawning and the frame holds.
+      const newT = frozenStrokeCycle(
+        readSceneFreeze(),
+        (boatStateRef.current.strokeCycleT + dt * cycleFreq) % 1.0,
+      );
 
       // Derive stroke phase from standardised boundaries
       let newPhase: string;

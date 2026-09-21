@@ -80,6 +80,7 @@ import { GothicVeniceLandscape } from './rower3d/themes/GothicVeniceScene';
 import { SteampunkHenleyLandscape } from './rower3d/themes/SteampunkHenleyScene';
 import { DystopianThamesLandscape } from './rower3d/themes/DystopianThamesScene';
 import { SciFiBostonLandscape } from './rower3d/themes/SciFiBostonScene';
+import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
 import './Rower3D.css';
 
 // The crewed sculls are preloaded in boatComponents, beside the component that
@@ -322,6 +323,12 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       );
     }
     
+    // A visual spec pins the boat to a point on the route (#340), so the shot
+    // it takes is of the same water every run rather than of however far the
+    // boat happened to get while the page was loading.
+    const freeze = readSceneFreeze();
+    boatProgressRef.current = frozenProgress(freeze, boatProgressRef.current);
+
     const routePos = getRoutePositionAtProgress(
       routeCurve,
       boatProgressRef.current,
@@ -335,7 +342,8 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
       boatGroupRef.current.rotation.y = boatRotationRef.current;
     }
 
-    const elapsedTime = state.clock.elapsedTime;
+    const liveTime = state.clock.elapsedTime;
+    const elapsedTime = frozenClock(freeze, liveTime);
     if (elapsedTime - lastSceneryUpdateRef.current > 0.1) {
       lastSceneryUpdateRef.current = elapsedTime;
       const newProgress = boatProgressRef.current;
@@ -454,7 +462,7 @@ const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({
         window.__ROWER3D_FRAME_STATS = frameStats.read() ?? undefined;
         // Walking the scene graph is not free, so it is sampled about once a
         // second rather than every frame, and only under automation.
-        if (Math.floor(elapsedTime) !== Math.floor(elapsedTime - delta)) {
+        if (Math.floor(liveTime) !== Math.floor(liveTime - delta)) {
           window.__ROWER3D_MEMORY = measureSceneMemory(scene, gl);
         }
       }

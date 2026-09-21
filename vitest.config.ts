@@ -72,13 +72,15 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-14: 88.37 / 82.96 / 83.65 (issue #232 phase 2a,
-        // which added the scenery-track tests and excluded the R3F
-        // sceneryModels component alongside its siblings).
-        lines: 88,
-        statements: 88,
-        branches: 82,
-        functions: 83,
+        // Last measured 2026-09-21: 91.02 / 83.93 / 86.71 (issue #340, which
+        // added the scene-freeze helper and the tests for the two call-sites
+        // that read it). The jump from the 88.37 / 82.96 / 83.65 recorded in
+        // September is mostly accumulated drift: the floor had not been raised
+        // since #232 phase 2a.
+        lines: 91,
+        statements: 91,
+        branches: 83,
+        functions: 86,
       },
     },
   },

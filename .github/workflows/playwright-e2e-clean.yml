@@ -87,6 +87,84 @@ jobs:
         if: always()
         run: node scripts/stop-sim.mjs
 
+  # The visual baselines (#340).
+  #
+  # One frozen frame per theme, tier and viewport, compared with a committed
+  # PNG. Ubuntu alone, because a baseline is a picture of one rasteriser: the
+  # same scene drawn by SwiftShader on Linux, by ANGLE on Windows and by Metal
+  # on macOS differs everywhere, and a three-way matrix here would measure the
+  # operating systems rather than the change under test.
+  #
+  # Recording is deliberate rather than automatic. Put the `visual-baseline`
+  # label on a pull request and this job re-records every shot, then compares
+  # against what it just recorded - so a frame that is not reproducible fails
+  # here instead of becoming a baseline that fails for the next person. The
+  # recorded PNGs come back as an artifact to commit; nothing is written to the
+  # repository by CI, and nothing is ever recorded on a developer's GPU.
+  visual:
+    needs: preflight
+    runs-on: ubuntu-latest
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      CI: true
+      VITE_INTERVALS_CLIENT_ID: "playwright-e2e-client"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npm run pretest:e2e
+
+      - name: Record the baselines
+        if: contains(github.event.pull_request.labels.*.name, 'visual-baseline')
+        run: npm run test:visual:update
+        timeout-minutes: 45
+
+      - name: Upload the recorded baselines
+        if: always() && contains(github.event.pull_request.labels.*.name, 'visual-baseline')
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines-${{ github.run_id }}
+          path: playwright/tests/visual/__snapshots__
+          if-no-files-found: warn
+
+      # Always, including straight after a recording: a shot that differs from
+      # the one taken a minute earlier is not a baseline, and this is where that
+      # shows up rather than on someone else's pull request.
+      - name: Compare the scene with its baselines
+        run: npm run test:visual
+        timeout-minutes: 45
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-visual-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+
   # The long-running route traverses (#272).
   #
   # Separate from the job above, which verifies a deploy. These row a route from

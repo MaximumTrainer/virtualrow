@@ -44,10 +44,21 @@ export const ENDURANCE_SPEC = '**/route-endurance.spec.ts';
  */
 export const HEAVY_SPEC = '**/*.heavy.spec.ts';
 
+/**
+ * The visual baselines (#340).
+ *
+ * They compare the canvas against a committed PNG, and a PNG only means
+ * anything on the rasteriser that drew it - so they run on one Linux job with
+ * SwiftShader and nowhere else. On a developer's GPU, or on the Windows and
+ * macOS legs of the verification matrix, every shot would differ for reasons
+ * that have nothing to do with the change under test.
+ */
+export const VISUAL_SPEC = '**/visual/*.spec.ts';
+
 /** The matrix as Playwright projects, plus a `default` project for every other spec. */
 export function responsiveProjects(): Project[] {
   return [
-    { name: 'default', testIgnore: [RESPONSIVE_SPEC, ENDURANCE_SPEC, HEAVY_SPEC] },
+    { name: 'default', testIgnore: [RESPONSIVE_SPEC, ENDURANCE_SPEC, HEAVY_SPEC, VISUAL_SPEC] },
     ...RESPONSIVE_VIEWPORTS.map((v) => ({
       name: v.name,
       testMatch: RESPONSIVE_SPEC,

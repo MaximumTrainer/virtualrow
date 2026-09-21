@@ -55,6 +55,29 @@ describe('AnimationProvider', () => {
     expect(received).toEqual([1.0, 2.5]);
   });
 
+  // Issue #340 — the shared tick is where a frozen scene either holds still or
+  // does not. Every animated piece of scenery reads its time through here, so a
+  // freeze that this provider ignores is a freeze that nothing honours.
+  it('hands every subscriber the frozen time while a visual spec holds the scene', () => {
+    const received: number[] = [];
+    render(
+      <AnimationProvider>
+        <Consumer onFrame={(t) => received.push(t)} />
+      </AnimationProvider>,
+    );
+
+    window.__ROWER3D_FREEZE = { time: 12.5, progress: 0.31 };
+    try {
+      act(() => fireFrame(1.0));
+      act(() => fireFrame(2.5));
+    } finally {
+      delete window.__ROWER3D_FREEZE;
+    }
+    act(() => fireFrame(4.0));
+
+    expect(received).toEqual([12.5, 12.5, 4.0]);
+  });
+
   it('fans out to multiple subscribed children', () => {
     const a: number[] = [];
     const b: number[] = [];

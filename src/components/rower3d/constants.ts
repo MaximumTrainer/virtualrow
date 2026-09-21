@@ -3,16 +3,6 @@
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
-    /**
-     * Forces a performance mode, independent of {@link IS_TEST_MODE}.
-     *
-     * Without this the test flag decided both "are we in a test" and "which
-     * effects run", so the postprocessing path could never execute under
-     * automation — it was exempt from testing by construction (issue #197).
-     * Setting this lets a spec run the full effect stack while still being in
-     * test mode.
-     */
-    __VIRTUALROW_PERFORMANCE_MODE?: 'low' | 'auto' | 'high';
   }
 }
 
