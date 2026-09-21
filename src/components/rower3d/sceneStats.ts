@@ -41,9 +41,11 @@ export interface RenderStats extends RenderStatsContext {
   /**
    * The renderer doing the drawing.
    *
-   * `backend` is only what GPU detection preferred; R3F builds a WebGL
-   * renderer regardless, and a panel reporting "webgpu" sends a reader looking
-   * in the wrong place (#232).
+   * `backend` is what the browser can supply; this is what three is actually
+   * using. They agree now the WebGPU label has gone (#345) - it never named a
+   * renderer anyone built - but a panel that reports a preference as a fact is
+   * how a reader gets sent looking in the wrong place (#232), so the scene
+   * still reports what it has rather than what was chosen for it.
    */
   drawing: 'webgl' | 'webgpu' | 'unknown';
   /** Draw calls issued for the previous frame, all passes included. */

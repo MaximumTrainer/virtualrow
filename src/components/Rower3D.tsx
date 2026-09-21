@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import type { WaterRoute } from '../types/index';
 import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import {
-  isWebGPUAvailable,
   isWebGLAvailable,
   describeUnmaskedRenderer,
   recommendPerformanceMode,
@@ -147,8 +146,6 @@ const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode
     return recommendPerformanceMode({
       maxTextureSize: renderer.capabilities?.maxTextureSize,
       renderer: describeUnmaskedRenderer(context),
-      // A backend with no WebGL context to hand back is the WebGPU one.
-      webgpu: !context,
     });
   }, [gl, requested]);
 };
@@ -789,7 +786,12 @@ const showContextMessage = (message: string | null): void => {
 // MAIN COMPONENT - Canvas wrapper with GPU detection
 // ============================================================================
 const Rower3D: React.FC<Rower3DProps> = (props) => {
-  const [gpuBackend, setGpuBackend] = useState<GPUBackend>('webgl');
+  // Synchronous, because there is one question to ask.
+  //
+  // This used to await a WebGPU probe in an effect and set state from it, so
+  // the wrapper rendered once with a provisional backend and again with the
+  // real one - for a backend R3F was never going to build (#345).
+  const gpuBackend: GPUBackend = isWebGLAvailable() ? 'webgl' : 'none';
 
   // Decide the quality before building the canvas, not after. 'auto' used to
   // count as high here — shadows, MSAA, dpr 2, discrete adapter — while the
@@ -822,32 +824,6 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       }),
     [surface],
   );
-  
-  useEffect(() => {
-    let mounted = true;
-    
-    async function detectBackend() {
-      try {
-        const webgpuAvailable = await isWebGPUAvailable();
-        if (mounted) {
-          if (webgpuAvailable) {
-            setGpuBackend('webgpu');
-          } else if (isWebGLAvailable()) {
-            setGpuBackend('webgl');
-          } else {
-            setGpuBackend('none');
-          }
-        }
-      } catch {
-        if (mounted) {
-          setGpuBackend(isWebGLAvailable() ? 'webgl' : 'none');
-        }
-      }
-    }
-    
-    detectBackend();
-    return () => { mounted = false; };
-  }, []);
   
   // No configuration the driver would grant: say so, rather than mounting a
   // canvas that can never draw and leaving the rower with a blank box (#232).

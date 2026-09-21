@@ -75,13 +75,13 @@ describe('recordRenderStats', () => {
 
   it('carries frame timing when the scene has measured some', () => {
     recordRenderStats(renderer(10, 20), {
-      backend: 'webgpu',
+      backend: 'webgl',
       performanceMode: 'low',
       fps: 58.6,
       p95Ms: 21.4,
     });
 
-    expect(readRenderStats()).toMatchObject({ fps: 58.6, p95Ms: 21.4, backend: 'webgpu' });
+    expect(readRenderStats()).toMatchObject({ fps: 58.6, p95Ms: 21.4, backend: 'webgl' });
   });
 
   it('survives a renderer that reports no counters at all', () => {
@@ -95,15 +95,16 @@ describe('recordRenderStats', () => {
 describe('the renderer actually in use', () => {
   beforeEach(() => clearRenderStats());
 
-  it('reports what is drawing, not what detection preferred', () => {
-    // gpuBackend records what the browser said it supports; R3F builds a
-    // WebGL renderer regardless, and a panel that says "webgpu" sends whoever
-    // reads it looking in the wrong place (#232).
+  it('reports the renderer it was handed, not the one detection found', () => {
+    // `backend` says what the browser can do; `drawing` says what three is
+    // actually using. They agreed once the WebGPU label went (#345), but they
+    // are still different questions - and the panel answering the wrong one is
+    // what sent a reader looking in the wrong place in the first place (#232).
     const gl = { ...renderer(10, 20), isWebGLRenderer: true };
 
-    recordRenderStats(gl, { backend: 'webgpu', performanceMode: 'low' });
+    recordRenderStats(gl, { backend: 'webgl', performanceMode: 'low' });
 
-    expect(readRenderStats()).toMatchObject({ backend: 'webgpu', drawing: 'webgl' });
+    expect(readRenderStats()).toMatchObject({ backend: 'webgl', drawing: 'webgl' });
   });
 
   it('says so when it cannot tell', () => {

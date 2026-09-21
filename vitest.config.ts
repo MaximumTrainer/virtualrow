@@ -100,10 +100,14 @@ export default defineConfig({
         // regress" rather than "did the last digit move", and per-file floors
         // below so the two newly measured files cannot slip whatever the
         // global does.
-        lines: 90,
-        statements: 90,
+        // Raised by #345: deleting a WebGPU probe nothing used, and testing
+        // Canvas3DErrorBoundary for the first time, put the reading at
+        // 91.23 / 83.80 / 87.32. Lines and functions go up; branches stay,
+        // being only 0.80 clear of 84 and not worth a floor that flaps.
+        lines: 91,
+        statements: 91,
         branches: 83,
-        functions: 86,
+        functions: 87,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
         // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch

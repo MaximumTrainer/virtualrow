@@ -69,5 +69,12 @@ export const RENDER_CONFIG = {
 } as const;
 
 // GPU backend type for renderer selection
-export type GPUBackend = 'webgpu' | 'webgl' | 'none';
+/**
+ * What the scene is drawing with.
+ *
+ * `webgpu` was a third option that nothing ever selected: R3F builds a
+ * `WebGLRenderer` whatever the probe said, so the label only ever misled the
+ * telemetry log that #232 and #309 read (#345).
+ */
+export type GPUBackend = 'webgl' | 'none';
 export type PerformanceMode = 'auto' | 'high' | 'low';

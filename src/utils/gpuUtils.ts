@@ -1,33 +1,12 @@
 /**
- * GPU detection and initialization utilities for WebGPU with WebGL fallback.
- * 
- * This module provides utilities for detecting GPU capabilities and
- * creating the appropriate renderer (WebGPU or WebGL).
+ * What the browser can draw with, and how hard to work it.
+ *
+ * This module used to probe for WebGPU as well, label the backend `webgpu`,
+ * and hand that label to telemetry and to the performance heuristic - while
+ * R3F built a `WebGLRenderer` regardless. Nothing ever rendered through
+ * WebGPU, so the label was only ever wrong (#345). Adopting `WebGPURenderer`
+ * for real is a separate question; scope B of that issue holds it.
  */
-
-/**
- * Check if WebGPU is available in the current browser.
- * WebGPU requires both the navigator.gpu API and a compatible adapter.
- */
-export async function isWebGPUAvailable(): Promise<boolean> {
-  try {
-    if (!navigator.gpu) {
-      return false;
-    }
-    const adapter = await navigator.gpu.requestAdapter();
-    return adapter !== null;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Synchronous check for WebGPU API presence (doesn't verify adapter availability).
- * Use isWebGPUAvailable() for a complete check.
- */
-export function hasWebGPUAPI(): boolean {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator;
-}
 
 /**
  * Hand a probe context straight back to the browser.
@@ -89,71 +68,6 @@ export function isWebGLAvailable(): boolean {
     cachedWebGLAvailable = false;
     return cachedWebGLAvailable;
   }
-}
-
-/**
- * Get the preferred GPU backend based on availability.
- * Returns 'webgpu' if WebGPU is available, 'webgl' if only WebGL is available, or 'none' if neither.
- */
-export async function getPreferredGPUBackend(): Promise<'webgpu' | 'webgl' | 'none'> {
-  if (await isWebGPUAvailable()) {
-    return 'webgpu';
-  }
-  if (isWebGLAvailable()) {
-    return 'webgl';
-  }
-  return 'none';
-}
-
-/**
- * GPU capability information returned by detectGPUCapabilities.
- */
-export interface GPUCapabilities {
-  /** Whether WebGPU is available */
-  webgpu: boolean;
-  /** Whether WebGL 2 is available */
-  webgl2: boolean;
-  /** Whether WebGL 1 is available */
-  webgl: boolean;
-  /** The recommended backend to use ('none' if no GPU rendering available) */
-  recommended: 'webgpu' | 'webgl' | 'none';
-}
-
-/**
- * Detect all GPU capabilities asynchronously.
- */
-export async function detectGPUCapabilities(): Promise<GPUCapabilities> {
-  const webgpu = await isWebGPUAvailable();
-  
-  let webgl2 = false;
-  let webgl = false;
-  
-  try {
-    const canvas = document.createElement('canvas');
-    const gl2 = canvas.getContext('webgl2');
-    webgl2 = !!gl2;
-    releaseProbeContext(gl2);
-    const gl1 = canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl');
-    webgl = !!gl1;
-    releaseProbeContext(gl1);
-  } catch {
-    // Ignore errors
-  }
-  
-  // Determine recommended backend
-  let recommended: 'webgpu' | 'webgl' | 'none' = 'none';
-  if (webgpu) {
-    recommended = 'webgpu';
-  } else if (webgl2 || webgl) {
-    recommended = 'webgl';
-  }
-  
-  return {
-    webgpu,
-    webgl2,
-    webgl,
-    recommended,
-  };
 }
 
 /**
@@ -236,8 +150,6 @@ export interface RendererProfile {
   maxTextureSize?: number;
   /** The unmasked renderer string, where the browser discloses one. */
   renderer?: string | null;
-  /** Whether the scene is running on a WebGPU backend. */
-  webgpu?: boolean;
 }
 
 /**
@@ -245,20 +157,22 @@ export interface RendererProfile {
  *
  * `low` is for parts that will not hold a frame rate with shadows and
  * post-processing: a small texture budget is the clearest signal, and shared
- * memory the next clearest. `high` is only offered where WebGPU came up, since
- * that is the path with the headroom for larger shadow maps and reflection
- * probes. Everything else gets `auto`, which is also where an undisclosed
- * renderer lands — guessing `low` from silence would downgrade most desktops.
+ * memory the next clearest. Everything else gets `auto`, which is also where an
+ * undisclosed renderer lands — guessing `low` from silence would downgrade most
+ * desktops.
+ *
+ * Nothing is promoted to `high` automatically. It used to be, for a "WebGPU
+ * backend" — which in practice meant a renderer that handed back no WebGL
+ * context, so the most expensive tier was awarded to the most broken renderer
+ * (#345). A rower who wants everything on chooses High in the graphics panel.
  */
 export function recommendPerformanceMode({
   maxTextureSize,
   renderer,
-  webgpu = false,
 }: RendererProfile): 'low' | 'auto' | 'high' {
   if (Number.isFinite(maxTextureSize) && (maxTextureSize as number) < 4096) return 'low';
 
   const tier = classifyGPUTier(renderer);
   if (tier === 'integrated') return 'low';
-  if (webgpu) return 'high';
   return 'auto';
 }
