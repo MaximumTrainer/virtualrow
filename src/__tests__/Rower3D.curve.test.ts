@@ -153,16 +153,16 @@ describe('Rower3D curve helpers', () => {
       // Two-point Catmull-Rom collapses to a straight line.
       const coords: Coordinate[] = [
         { lat: 0, lng: 0 },
-        { lat: 0, lng: 0.001 }, // ~111 m east → scaled to ~11.1 scene units
+        { lat: 0, lng: 0.001 }, // ~111 m east, and a unit is a metre (#321)
       ];
       const curve = createRouteCurve(coords)!;
       const distances = getCurveDistances(curve, 100);
       const len = distances[distances.length - 1];
-      expect(len).toBeGreaterThan(0);
-      // Should be roughly between 5 and 30 scene units (sanity bound, depends
-      // on Earth radius constant and 0.1 sceneScale).
-      expect(len).toBeGreaterThan(5);
-      expect(len).toBeLessThan(30);
+      // Stated as the metres it is rather than as a wide sanity band: a degree
+      // of longitude at the equator is 111.32 km, so a thousandth of one is
+      // 111.32 m, and the curve is that many units long.
+      expect(len).toBeGreaterThan(105);
+      expect(len).toBeLessThan(118);
     });
   });
 

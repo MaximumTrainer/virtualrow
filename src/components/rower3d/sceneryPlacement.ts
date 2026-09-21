@@ -18,22 +18,34 @@ import {
 } from '../../services/routeEnrichmentService';
 import type { ResolvedScenery, SceneryModelId } from './sceneryAssets';
 
-/** mm -> scene units; puts a ~22 m tree at ~9 units, a 30 m boathouse at ~12. */
-export const ASSET_SCALE = 0.0004;
+/**
+ * mm -> metres. A 22 000 mm tree is 22 units tall (#321).
+ *
+ * It was 0.0004, which put that tree at 8.8 units beside an 8-unit boat - which
+ * is why the trees read as boat-sized and the boathouses looked like sheds.
+ */
+export const ASSET_SCALE = 0.001;
 
 export type Category = keyof ResolvedScenery;
 
-/** Perpendicular offset (scene units from the water centreline) per category. */
+/**
+ * Perpendicular offset in metres from the water centreline, per category.
+ *
+ * Scaled up by two and a half from the bands the scenery kit was authored
+ * against, which ran at roughly 1 unit = 2.5 m (#321). Each band keeps the
+ * place it held relative to the others, so the bank still reads bank, scatter,
+ * trees, buildings, landform, backdrop - it is now that far out in metres.
+ */
 export const CATEGORY_OFFSET: Record<Category, [number, number]> = {
-  surface: [0, 2.5],
-  inWater: [0, 2],
-  bankEdge: [2.5, 4.5],
-  furniture: [3, 6],
-  scatter: [6, 14],
-  buildings: [18, 38],
-  trees: [16, 44],
-  landform: [46, 60],
-  backdrop: [78, 95],
+  surface: [0, 6],
+  inWater: [0, 5],
+  bankEdge: [6, 11],
+  furniture: [8, 15],
+  scatter: [15, 35],
+  buildings: [45, 95],
+  trees: [40, 110],
+  landform: [115, 150],
+  backdrop: [195, 240],
 };
 
 /** Whether a category should yaw to face the water. */

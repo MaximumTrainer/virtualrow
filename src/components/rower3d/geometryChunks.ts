@@ -57,21 +57,26 @@ export const chunkSegmentCount = (
 ): number => Math.max(1, Math.round(routeSegments * (to - from)));
 
 /**
- * Scene units past which a strip chunk stops being drawn.
+ * Metres past which a strip chunk stops being drawn.
  *
  * The figure was chosen when the scene had fog: `fogExp2` at density 0.0025
  * left about a tenth of a surface visible at 700 units, so the cut was hidden.
  * The fog is gone, and this distance is now justified by geometry alone — the
- * water is near-horizontal and near-edge-on by 700 units, and that is 7 km of
- * route at {@link SCENE_SCALE}, so nothing shorter than a head race culls at
- * all.
+ * water is near-horizontal and near-edge-on by then, so nothing shorter than a
+ * head race culls at all.
  *
- * On a course long enough to reach it, the strip now ends without anything
- * softening the edge. The horizon silhouette is 300 units wide against a 60°
- * field of view, so it covers most of the view ahead but not its margins
- * (issue #232).
+ * Seven kilometres of route, which is what 700 units bought at the old
+ * ten-metre unit and what 7000 buys now that a unit is a metre (#321). VR-01
+ * proposed 1500 on the grounds that fog would hide the cut well before it, but
+ * fog is VR-05 and does not exist yet: cutting to 1500 m today would expose an
+ * edge that nothing softens, on a scale change whose whole point is that only
+ * the wrong things move. Bring it down with the fog.
+ *
+ * On a course long enough to reach it, the strip ends without anything
+ * softening the edge. The horizon silhouette covers most of the view ahead
+ * against a 60° field of view, but not its margins (issue #232).
  */
-export const CHUNK_VIEW_DISTANCE_SCENE_UNITS = 700;
+export const CHUNK_VIEW_DISTANCE_SCENE_UNITS = 7000;
 
 /**
  * Whether a chunk is close enough to the boat to be worth drawing.

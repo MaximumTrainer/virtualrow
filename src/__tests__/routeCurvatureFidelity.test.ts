@@ -126,8 +126,12 @@ describe('tight-curve routes render without faceting (#224)', () => {
     const unsimplified = createRouteCurve(track, SCENE_SCALE, 10, 0)!;
 
     // Both curves must still travel the same distance around the bend, to
-    // within a metre of scene length (0.1 scene units at SCENE_SCALE).
-    expect(simplified.getLength()).toBeCloseTo(unsimplified.getLength(), 0);
+    // within the 3 m simplification epsilon. Said as metres rather than as a
+    // `toBeCloseTo` precision, because a unit is a metre now (#321) and a
+    // precision of 0 silently means half of whatever a unit happens to be.
+    expect(
+      Math.abs(simplified.getLength() - unsimplified.getLength()),
+    ).toBeLessThan(3);
   });
 
   it('spends more segments on a hairpin than the old fixed 200 would have', () => {
@@ -170,7 +174,8 @@ describe('closed-loop routes join without a seam (#224)', () => {
     const first = new THREE.Vector3().fromBufferAttribute(position, 0);
     const last = new THREE.Vector3().fromBufferAttribute(position, position.count - 2);
 
-    expect(first.distanceTo(last)).toBeLessThan(0.05);
+    // Half a metre, which is what 0.05 units meant before #321.
+    expect(first.distanceTo(last)).toBeLessThan(0.5);
   });
 
   it('keeps a loop smooth through the join', () => {

@@ -19,8 +19,6 @@
 // either way.
 // ============================================================================
 
-import { SCENE_SCALE } from './constants';
-
 /** Centre to blade tip: gate offset plus outboard, from the rig. */
 export const OAR_REACH_METERS = 0.8 + 1.98;
 
@@ -55,11 +53,16 @@ export const navigableWaterWidthMeters = (reportedMeters: number): number => {
  *
  * Takes scene units because that is what `getWaterWidthSceneUnitsForProgress`
  * hands back, and converting at the call-site is where a factor of ten gets
- * lost. Negative means the blades are over land, which is the fault #271
- * reported; NaN means nothing was measured, which is not the same thing and
- * must not read as a clearance of zero.
+ * lost. A unit is a metre since #321, so there is no conversion left to lose -
+ * dividing by `SCENE_SCALE` here would be dividing by one, and a division by a
+ * constant that is currently 1 is the kind of leftover that comes back to life
+ * the next time somebody changes the constant.
+ *
+ * Negative means the blades are over land, which is the fault #271 reported;
+ * NaN means nothing was measured, which is not the same thing and must not read
+ * as a clearance of zero.
  */
 export const bladeClearanceMeters = (channelWidthSceneUnits: number): number => {
   if (!Number.isFinite(channelWidthSceneUnits)) return Number.NaN;
-  return channelWidthSceneUnits / SCENE_SCALE / 2 - OAR_REACH_METERS;
+  return channelWidthSceneUnits / 2 - OAR_REACH_METERS;
 };

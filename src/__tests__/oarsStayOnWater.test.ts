@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getWaterWidthSceneUnitsForProgress } from '../services/routeEnrichmentService';
 import type { RouteSegmentEnrichment } from '../services/routeEnrichmentService';
-import { OAR_REACH_METERS } from '../components/rower3d/navigableWidth';
+import { OAR_REACH_METERS, bladeClearanceMeters } from '../components/rower3d/navigableWidth';
 import { SCENE_SCALE } from '../components/rower3d/constants';
 
 /**
@@ -31,6 +31,23 @@ const profiles = (widths: number[]): RouteSegmentEnrichment[] =>
   );
 
 describe('the blades stay over water', () => {
+  // The narrowest water a real route reports, read through the same function
+  // the frame loop reads it through and handed to the same clearance function
+  // (#321). A stream defaults to 7 m, which is narrower than the floor, so what
+  // this proves is that the floor is applied and then measured in the units it
+  // was applied in - the pair of conversions that used to disagree by ten.
+  it('leaves water beyond the blades on a 7 m stream', () => {
+    const stream = profiles([7, 7, 7]);
+
+    for (const t of [0, 0.5, 1]) {
+      const width = getWaterWidthSceneUnitsForProgress(stream, 7, t);
+      expect(
+        bladeClearanceMeters(width),
+        `blades over the bank at progress ${t}`,
+      ).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('clears the reach on a narrow stream', () => {
     // 3 m of reported water against a 5.56 m span: the case that put the
     // blades on the bank.

@@ -107,13 +107,22 @@ describe('createWaterChannelGeometry', () => {
 
   it('opens the channel to the route\u2019s measured water width', () => {
     const curve = curveFor(2000);
-    const narrow = createWaterChannelGeometry(curve, { enrichment: flatEnrichment(20) });
-    const wide = createWaterChannelGeometry(curve, { enrichment: flatEnrichment(200) });
+    const NARROW_METRES = 20;
+    const WIDE_METRES = 200;
+    const narrow = createWaterChannelGeometry(curve, {
+      enrichment: flatEnrichment(NARROW_METRES),
+    });
+    const wide = createWaterChannelGeometry(curve, { enrichment: flatEnrichment(WIDE_METRES) });
     const spanAtStart = (geometry: THREE.BufferGeometry) =>
       vertexAt(geometry, 0).distanceTo(vertexAt(geometry, 1));
 
     expect(spanAtStart(wide)).toBeGreaterThan(spanAtStart(narrow) * 5);
-    expect(spanAtStart(wide)).toBeCloseTo(WATER_CHANNEL_WIDTH, 3);
+    // The span is the width, in metres, because a unit is a metre (#321). This
+    // used to read `WATER_CHANNEL_WIDTH` and passed on a coincidence: 200 m at
+    // the old ten-metre unit came out as 20 units, which is the number the
+    // default channel width happens to hold.
+    expect(spanAtStart(wide)).toBeCloseTo(WIDE_METRES, 3);
+    expect(spanAtStart(narrow)).toBeCloseTo(WATER_CHANNEL_WIDTH, 3);
   });
 
   it('carries a bounding sphere so the frame loop can cull it', () => {
