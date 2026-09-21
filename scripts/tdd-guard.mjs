@@ -169,15 +169,27 @@ function parseThresholds(configSource) {
   );
 }
 
-/** Coverage thresholds ratchet up. A drop or a deletion is a blocked commit. */
+/**
+ * Coverage thresholds ratchet up. A drop or a deletion is a blocked commit.
+ *
+ * With one exception, and it is the only way a smaller number can be a better
+ * gate: taking a file out of `coverage.exclude` puts code nothing was measuring
+ * into the denominator, so the ratio falls while the amount of tested code
+ * rises. Blocking that would have the guard arguing for leaving the 3D scene
+ * untested, which is the opposite of what it is for (#343). A threshold that
+ * falls without the population growing is blocked exactly as before.
+ */
 export function findLoweredThresholds({ before, after }) {
   const was = parseThresholds(before);
   const now = parseThresholds(after);
+  const measuringMore =
+    parseCoverageExclusions(after).length < parseCoverageExclusions(before).length;
 
   return Object.entries(was).flatMap(([metric, from]) => {
     const to = now[metric];
     if (to === undefined) return [{ metric, from, to: null }];
-    return to < from ? [{ metric, from, to }] : [];
+    if (to >= from || measuringMore) return [];
+    return [{ metric, from, to }];
   });
 }
 
