@@ -25,11 +25,11 @@ export function resolvePerformanceMode(): 'low' | 'auto' | 'high' {
 /**
  * Metres-to-scene-units factor for every route curve in the scene.
  *
- * One source of truth: the geometry builders divide by it to recover a route's
- * real length when choosing their sampling resolution, so a curve built at a
- * different scale would be sampled at the wrong one.
+ * One source of truth, and now genuinely one: it lives in `utils/worldScale`
+ * because `routeEnrichmentService` needs it and a service may not import from
+ * `components/`, so it used to keep a second copy of the number (#321).
  */
-export const SCENE_SCALE = 0.1;
+export { SCENE_SCALE } from '../../utils/worldScale';
 
 /**
  * True when the mode was pinned by a test or a user, and hardware detection
@@ -41,16 +41,23 @@ export function hasExplicitPerformanceMode(): boolean {
   return override === 'low' || override === 'auto' || override === 'high' || IS_TEST_MODE;
 }
 
-// Water channel width constant - keeps water wider than single scull (~1.5m wide)
-export const WATER_CHANNEL_WIDTH = 20; // meters in scene units (boat is ~0.5 wide, water is 40x wider)
-export const RIVERBANK_WIDTH = 60; // width of each riverbank
-export const LANDSCAPE_OFFSET = 50; // minimum distance from water center to landscape objects
+// The waterway, in metres.
+//
+// These read as metres now and drew ten times as much before (#321): the
+// channel said 20 and laid out 200 m of water, the landscape stood 500 m back
+// rather than 50. The numbers are unchanged - what was wrong was the unit.
+/** Metres of water across the channel, before a route's own width widens it. */
+export const WATER_CHANNEL_WIDTH = 20;
+/** Metres of bank either side of the water. */
+export const RIVERBANK_WIDTH = 60;
+/** Metres from the centre of the water to the first landscape object. */
+export const LANDSCAPE_OFFSET = 50;
 
 export const RENDER_CONFIG = {
   /** Progress-band around boat for landscape shadow casting (0..1) */
   shadowNearProgressBand: 0.08,
-  /** World-unit band around boat for non-curve landscape shadow casting */
-  shadowNearBand: 150,
+  /** Metres around the boat within which non-curve landscape casts shadows. */
+  shadowNearBand: 1500,
 } as const;
 
 // GPU backend type for renderer selection

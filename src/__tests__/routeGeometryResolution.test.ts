@@ -113,8 +113,9 @@ describe('createRouteCurve simplification', () => {
       return simplified.getPointAt(t).distanceTo(raw.getPointAt(t));
     }).reduce((a, b) => Math.max(a, b), 0);
 
-    // Scene units at 0.1 scale: 0.3 units is 3 m of water.
-    expect(worstDrift).toBeLessThan(0.3);
+    // Metres of water, because a unit is a metre (#321). Three of them is the
+    // simplification epsilon; this read 0.3 when three metres was 0.3 units.
+    expect(worstDrift).toBeLessThan(3);
   });
 
   it('keeps a 10,000-point import to a spline the frame loop can afford', () => {
@@ -141,8 +142,8 @@ describe('createRouteCurve simplification', () => {
       return imported.reduce((nearest, p) => Math.min(nearest, point.distanceTo(p)), Infinity);
     }).reduce((a, b) => Math.max(a, b));
 
-    // Scene units at 0.1 scale: 0.3 units is the 3 m simplification epsilon.
-    expect(worstDrift).toBeLessThan(0.3);
+    // Metres: the 3 m simplification epsilon, which read 0.3 units before #321.
+    expect(worstDrift).toBeLessThan(3);
   });
 
   it('never simplifies a route below a drawable two points', () => {

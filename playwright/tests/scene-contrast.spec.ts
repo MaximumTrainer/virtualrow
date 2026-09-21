@@ -168,6 +168,36 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
     const left = contentOf(0.0, 0.12);
     const right = contentOf(0.88, 1.0);
 
+    /**
+     * How much of a strip is something other than the water, and other than
+     * the sky.
+     *
+     * The median above answers "what colour is most of this strip", which was
+     * a fair question while the water was a narrow ribbon down the middle of
+     * the frame. Since the world is built in metres (#321) the river is as wide
+     * as a river, so water is most of every strip and the median says "water"
+     * on both sides even with banks plainly in the picture. This counts the
+     * ground instead of polling the column, so it does not care where in the
+     * frame the bank sits - which is just as well, because #328 moves the
+     * camera next.
+     */
+    const groundShareOf = (xFrom: number, xTo: number, water: [number, number, number]) => {
+      let nonSky = 0;
+      let ground = 0;
+      for (let y = 0; y < H; y += 2) {
+        for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
+          const [r, g, b] = at(x, y);
+          if (apart([r, g, b], sky) <= 40) continue;
+          nonSky += 1;
+          if (apart([r, g, b], water) > 60) ground += 1;
+        }
+      }
+      return nonSky ? ground / nonSky : 0;
+    };
+
+    const leftGroundShare = groundShareOf(0.0, 0.12, middle.colour);
+    const rightGroundShare = groundShareOf(0.88, 1.0, middle.colour);
+
     let empty = 0;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i] > 200 && data[i + 2] > 200 && data[i + 1] < 60) empty += 1;
@@ -181,6 +211,8 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
       sky,
       leftShare: left.share,
       rightShare: right.share,
+      leftGroundShare,
+      rightGroundShare,
       waterToLeft: apart(middle.colour, left.colour),
       waterToRight: apart(middle.colour, right.colour),
     };
@@ -198,15 +230,18 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     const seen = await rowAndClassify(page, tier);
 
     expect(seen, 'no canvas to classify').not.toBeNull();
-    const { empty, water, leftGround, rightGround, sky, leftShare, rightShare, waterToLeft, waterToRight } =
-      seen!;
+    const {
+      empty, water, leftGround, rightGround, sky, leftShare, rightShare,
+      waterToLeft, waterToRight, leftGroundShare, rightGroundShare,
+    } = seen!;
 
     const show = (c: [number, number, number]) => `rgb(${c.join(',')})`;
     console.log(
       `[contrast ${tier}] water=${show(water)} left=${show(leftGround)} ` +
         `right=${show(rightGround)} sky=${show(sky)} | water-to-bank ` +
         `${waterToLeft.toFixed(0)}/${waterToRight.toFixed(0)} | non-sky share ` +
-        `${(leftShare * 100).toFixed(0)}%/${(rightShare * 100).toFixed(0)}% ` +
+        `${(leftShare * 100).toFixed(0)}%/${(rightShare * 100).toFixed(0)}% | ground share ` +
+        `${(leftGroundShare * 100).toFixed(0)}%/${(rightGroundShare * 100).toFixed(0)}% ` +
         `empty=${(empty * 100).toFixed(1)}%`,
     );
 
@@ -229,21 +264,31 @@ for (const tier of ['low', 'auto', 'high'] as const) {
       ).toBeGreaterThan(0.2);
     }
 
-    // And it is visibly different from the water. Stated as a distance rather
-    // than as a list of hues, so it holds on every theme: 60 in RGB is a
-    // difference nobody would call subtle, and two shades of the same green are
-    // under 20.
-    const DISTINCT = 60;
+    // And there is ground out there, visibly different from the water.
+    //
+    // Counted rather than averaged. An earlier version took the median colour
+    // of each outer strip and asked how far it sat from the water's; that held
+    // while the water was a narrow ribbon down the middle of the frame, and
+    // stopped holding the moment the world was built in metres (#321) and the
+    // river became as wide as a river. Water is now most of every strip, so
+    // the median reads "water" on both sides with the banks plainly in shot.
+    //
+    // What the acceptance criterion actually says is that the ground either
+    // side looks different from the water. So: of everything on that side of
+    // the frame that is not sky, how much of it is not water either. Zero is
+    // the missing right bank (#280); zero is also a bank drawn the colour of
+    // the river (#269). Neither can hide behind an average.
+    const DISTINCT_SHARE = 0.08;
 
-    for (const [side, distance] of [
-      ['left', waterToLeft],
-      ['right', waterToRight],
+    for (const [side, share] of [
+      ['left', leftGroundShare],
+      ['right', rightGroundShare],
     ] as const) {
       expect(
-        distance,
-        `the ground on the ${side} is only ${distance.toFixed(0)} from the water in colour, ` +
-          'which is not a bank anyone could see',
-      ).toBeGreaterThan(DISTINCT);
+        share,
+        `only ${(share * 100).toFixed(0)}% of the ${side} of the frame is ground that ` +
+          'looks any different from the water, so there is no bank anyone could see',
+      ).toBeGreaterThan(DISTINCT_SHARE);
     }
   });
 }

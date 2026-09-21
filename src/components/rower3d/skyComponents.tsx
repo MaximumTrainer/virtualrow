@@ -6,6 +6,21 @@ import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
 import { seededRandom } from './helpers';
 
+/**
+ * What one unit of the sky's own numbers is worth, in metres (#321).
+ *
+ * The clouds and the horizon silhouette are billboards whose only job is to
+ * subtend the right angle from the boat. Their distances, heights and scales
+ * were authored against the old ten-metre unit, and a distance and a size that
+ * both grow by the same factor look identical - so they are converted here with
+ * one factor rather than restated twenty times, which would be twenty chances
+ * to get one of them wrong.
+ *
+ * #326 moves the sky and the silhouette to follow the boat's XZ and #346 gives
+ * them time-of-day presets; either is the place to author these in metres.
+ */
+const SKY_UNIT_METRES = 10;
+
 // ============================================================================
 // HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
 // ============================================================================
@@ -60,7 +75,7 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
       />
 
       {cloudConfig.enabled && (
-        <group ref={cloudGroupRef} position={[0, 0, boatZ]}>
+        <group ref={cloudGroupRef} position={[0, 0, boatZ]} scale={SKY_UNIT_METRES}>
           {cloudPositions.map((pos, i) => (
             <Cloud
               key={i}
@@ -76,7 +91,11 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
       )}
 
       {cloudConfig.enabled && (
-        <group ref={layer2Ref} position={[0, 160, boatZ - 350]}>
+        <group
+          ref={layer2Ref}
+          position={[0, 160 * SKY_UNIT_METRES, boatZ - 350 * SKY_UNIT_METRES]}
+          scale={SKY_UNIT_METRES}
+        >
           {[...Array(Math.ceil(cloudConfig.count * 0.4))].map((_, i) => (
             <Cloud
               key={`distant-${i}`}
@@ -96,7 +115,10 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
       )}
 
       {cloudConfig.enabled && cloudConfig.depth > 0.7 && (
-        <group position={[0, 220, boatZ - 500]}>
+        <group
+          position={[0, 220 * SKY_UNIT_METRES, boatZ - 500 * SKY_UNIT_METRES]}
+          scale={SKY_UNIT_METRES}
+        >
           {[...Array(2)].map((_, i) => (
             <Cloud
               key={`wispy-${i}`}
@@ -193,7 +215,10 @@ export const HorizonSilhouette: React.FC<{ boatZ: number; theme: RouteTheme }> =
   }), [horizonConfig.color]);
 
   return (
-    <group position={[0, 0, boatZ - horizonConfig.distance]}>
+    <group
+      position={[0, 0, boatZ - horizonConfig.distance * SKY_UNIT_METRES]}
+      scale={SKY_UNIT_METRES}
+    >
       <mesh geometry={silhouetteGeo} material={silhouetteMat} />
     </group>
   );

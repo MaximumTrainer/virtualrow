@@ -12,10 +12,10 @@ export const ROUTE_SEGMENT_LENGTH_METERS = 50;
 export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
+import { SCENE_SCALE } from '../utils/worldScale';
 
 export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
 const ROUTE_ENRICHMENT_CACHE_PREFIX = 'virtualrow:route-enrichment:';
-const SCENE_SCALE = 0.1;
 
 export type SceneryProfile =
   | 'forest'
@@ -618,7 +618,7 @@ export const getDragMultiplierForProgress = (
 /**
  * Real metres of elevation per scene unit of height.
  *
- * The scene renders horizontal distance at `SCENE_SCALE` (1 unit = 10 m). Using
+ * The scene renders horizontal distance at `SCENE_SCALE` (1 unit = 1 m). Using
  * that same factor vertically would put a 60 m valley side 6 units above a boat
  * that is half a unit wide, walling the rower into a trench. Relief is
  * therefore compressed relative to the horizontal scale — the goal is for the

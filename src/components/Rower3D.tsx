@@ -442,7 +442,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           boatProgressRef.current,
         );
         window.__ROWER3D_CLEARANCE = {
-          halfWidthM: channelWidthSceneUnits / SCENE_SCALE / 2,
+          halfWidthM: channelWidthSceneUnits / 2,
           oarReachM: OAR_REACH_METERS,
           clearanceM: bladeClearanceMeters(channelWidthSceneUnits),
           progress: boatProgressRef.current,
@@ -579,11 +579,11 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
         shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
         shadow-camera-near={0.1}
-        shadow-camera-far={performanceMode === 'high' ? 200 : 300}
-        shadow-camera-left={-100}
-        shadow-camera-right={100}
-        shadow-camera-top={100}
-        shadow-camera-bottom={-100}
+        shadow-camera-far={performanceMode === 'high' ? 250 : 400}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
       />
       
       <ambientLight 
@@ -968,7 +968,11 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       <div className="rower3d-gpu-backend" data-backend={gpuBackend} style={{ display: 'none' }} />
       <GPUErrorBoundary>
         <Canvas
-          camera={{ position: [0, 2.5, 6], fov: 60 }}
+          // The far plane is stated because a unit is a metre now (#321): the
+          // horizon silhouette stands 3–4 km down the route and the water
+          // strip is drawn to 7 km, and three's 2000-unit default would have
+          // clipped both the moment the world stopped being ten metres wide.
+          camera={{ position: [0, 2.5, 6], fov: 60, near: 0.1, far: 12000 }}
           shadows={surface.shadows}
           dpr={surface.dpr}
           gl={{
