@@ -209,4 +209,43 @@ describe('findLoweredThresholds', () => {
       }),
     ).toEqual([]);
   });
+
+  /**
+   * The one case where a smaller number is a better gate.
+   *
+   * Taking a file out of `coverage.exclude` puts code that nothing was
+   * measuring into the denominator, so the ratio falls while the amount of
+   * tested code rises. Blocking that is the gate arguing for keeping the scene
+   * untested, which is the opposite of what it is for (#343). Every other way
+   * of lowering a threshold stays blocked.
+   */
+  const configWithExcludes = (excludes: string, thresholds: string) =>
+    `coverage: { exclude: ${excludes}, thresholds: ${thresholds} }`;
+
+  it('allows a threshold to fall when the same change measures more files', () => {
+    expect(
+      findLoweredThresholds({
+        before: configWithExcludes("['a.tsx', 'b.tsx']", '{ lines: 91 }'),
+        after: configWithExcludes("['a.tsx']", '{ lines: 90 }'),
+      }),
+    ).toEqual([]);
+  });
+
+  it('still blocks a threshold that falls on its own', () => {
+    expect(
+      findLoweredThresholds({
+        before: configWithExcludes("['a.tsx']", '{ lines: 91 }'),
+        after: configWithExcludes("['a.tsx']", '{ lines: 90 }'),
+      }),
+    ).toEqual([{ metric: 'lines', from: 91, to: 90 }]);
+  });
+
+  it('still blocks a threshold that falls while an exclusion is added', () => {
+    expect(
+      findLoweredThresholds({
+        before: configWithExcludes("['a.tsx']", '{ lines: 91 }'),
+        after: configWithExcludes("['a.tsx', 'b.tsx']", '{ lines: 90 }'),
+      }),
+    ).toEqual([{ metric: 'lines', from: 91, to: 90 }]);
+  });
 });

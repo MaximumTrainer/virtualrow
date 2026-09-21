@@ -123,6 +123,7 @@ Write tests first, from the outside in. Start at the boundary the user or caller
 | A changed module covered by an existing test, with no test change staged | warning — the refactor path |
 | A staged spec containing `it.only` / `describe.only` / `test.only` | blocked |
 | A coverage threshold in `vitest.config.ts` edited downward or deleted | blocked |
+| A threshold lowered in the same change that removes a `coverage.exclude` entry | allowed — the denominator grew |
 
 "Names it" means a test file under `src/__tests__/` or `playwright/tests/` mentions the module's basename — `routeService.ts` is covered by any spec that references `routeService`. Exemptions are not a second list to maintain: the guard reads `test.coverage.exclude` from `vitest.config.ts`, so anything that counts toward the coverage gate needs a test, and anything excluded there (the R3F scene, vendored code, generated bindings, `src/data/`) does not.
 
@@ -191,6 +192,9 @@ See §6 for the full gate and its escape hatches.
 - **Track parsers return `ParsedCoordinateList`** (`{ coordinates, dropped, total }`), not bare arrays. The drop allowance (one point or 10% of total, whichever is larger) is checked in `parseTrackFile` and applies uniformly to GPX, KML, and GeoJSON.
 
 - **Coverage thresholds ratchet.** When your change improves coverage, raise the thresholds in `vitest.config.ts` to the new floor. Never lower them to make a PR pass.
+  The one exception is removing a `coverage.exclude` entry: that puts unmeasured code into the denominator, so the ratio can fall while the
+  amount of tested code rises. Pin the newly measured file with a per-file threshold so the trade cannot be made twice, and say in the config
+  comment what moved. The guard recognises this case and allows it (#343).
 
 - **A completed row is recorded once per second, and its position comes from the route.** `ActivitySample` is the unit the FIT encoder writes records from. Positions are `distance` interpolated along the selected route's polyline (`interpolateAlong`), so an exported track covers the water actually rowed rather than the whole course. Do not reintroduce a sample cap: truncating the series silently falsifies the averages computed at `endSession()`.
 
