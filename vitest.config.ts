@@ -72,13 +72,16 @@ export default defineConfig({
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
-        // Last measured 2026-09-21: 91.02 / 83.93 / 86.71 (issue #340, which
-        // added the scene-freeze helper and the tests for the two call-sites
-        // that read it). The jump from the 88.37 / 82.96 / 83.65 recorded in
-        // September is mostly accumulated drift: the floor had not been raised
-        // since #232 phase 2a.
-        lines: 91,
-        statements: 91,
+        //
+        // Measured on main 2026-09-21: 90.95 / 83.67 / 86.71. #340 set lines
+        // and statements to 91 from a 91.02 reading taken on its own branch,
+        // and main measures 90.95 - so `npm run coverage`, and with it every
+        // `pre-push`, failed on main for everyone. A floor set within a
+        // rounding error of the measurement is not a floor; leave it a point
+        // clear of the reading so the gate answers "did this regress" rather
+        // than "did the last digit move".
+        lines: 90,
+        statements: 90,
         branches: 83,
         functions: 86,
       },
