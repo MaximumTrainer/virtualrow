@@ -1,10 +1,8 @@
 import React, { useRef, useMemo, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { RigidBody } from '@react-three/rapier';
-import type { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
-import { IS_TEST_MODE } from './constants';
+import { BOAT_GROUP_NAME, IS_TEST_MODE } from './constants';
 import { strokePose } from './strokePose';
 import { GLB_ROWER_NODES } from './crewRig';
 import { createBoatNormalMap } from './helpers';
@@ -403,26 +401,24 @@ export const BoatKinematicController: React.FC<{
   strokeCycleTRef: React.MutableRefObject<number>;
   crew?: Crew;
 }> = ({ positionRef, rotationRef, cadence, strokeCycleTRef, crew = 'male' }) => {
-  const bodyRef = useRef<RapierRigidBody>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
+  // Straight onto the group.
+  //
+  // This used to set a kinematic translation and a quaternion on a Rapier
+  // rigid body, which had no colliders and which nothing ever collided with,
+  // so a physics engine read those two values back and wrote them onto exactly
+  // this group (#322). The quaternion is gone with it: a heading about Y is a
+  // Y rotation.
   useFrame(() => {
-    if (!bodyRef.current) return;
-    bodyRef.current.setNextKinematicTranslation({
-      x: positionRef.current.x,
-      y: positionRef.current.y,
-      z: positionRef.current.z,
-    });
-    const halfAngle = rotationRef.current / 2;
-    bodyRef.current.setNextKinematicRotation({
-      x: 0,
-      y: Math.sin(halfAngle),
-      z: 0,
-      w: Math.cos(halfAngle),
-    });
+    const group = groupRef.current;
+    if (!group) return;
+    group.position.copy(positionRef.current);
+    group.rotation.y = rotationRef.current;
   });
 
   return (
-    <RigidBody ref={bodyRef} type="kinematicPosition" colliders={false}>
+    <group ref={groupRef} name={BOAT_GROUP_NAME}>
       {IS_TEST_MODE ? (
         // Tests rely on the procedural boat's synchronous, asset-free oar signal.
         <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
@@ -433,6 +429,6 @@ export const BoatKinematicController: React.FC<{
           <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} crew={crew} />
         </Suspense>
       )}
-    </RigidBody>
+    </group>
   );
 };

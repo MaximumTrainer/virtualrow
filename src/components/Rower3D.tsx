@@ -1,7 +1,6 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Physics } from '@react-three/rapier';
 import type { WaterRoute } from '../types/index';
 import { routeTotalDistanceMeters } from '../utils/geoUtils';
 import {
@@ -30,6 +29,7 @@ import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { RiverGuides } from './rower3d/RiverGuides';
 import {
+  BOAT_GROUP_NAME,
   IS_TEST_MODE,
   SCENE_SCALE,
   WATER_CHANNEL_WIDTH,
@@ -85,14 +85,6 @@ import './Rower3D.css';
 /** How often the scene writes a line about itself, in seconds. */
 const TELEMETRY_SAMPLE_SECONDS = 5;
 
-/**
- * The name on the group that carries the boat along the route.
- *
- * Three of them in the JSX below - one per quality tier - but only ever one in
- * the graph, so a test can find the boat by name rather than by counting groups
- * (#343).
- */
-export const BOAT_GROUP_NAME = 'BoatGroup';
 
 export interface Rower3DProps {
   route: WaterRoute;
@@ -606,15 +598,13 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
             </group>
           }
         >
-          <Physics gravity={[0, -9.81, 0]}>
-            <BoatKinematicController
-              positionRef={boatPositionRef}
-              rotationRef={boatRotationRef}
-              cadence={cadence || 30}
-              strokeCycleTRef={strokeCycleTRef}
-              crew={crew}
-            />
-          </Physics>
+          <BoatKinematicController
+            positionRef={boatPositionRef}
+            rotationRef={boatRotationRef}
+            cadence={cadence || 30}
+            strokeCycleTRef={strokeCycleTRef}
+            crew={crew}
+          />
         </SceneErrorBoundary>
       )}
 

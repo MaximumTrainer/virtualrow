@@ -37,7 +37,6 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
     "@react-three/postprocessing": "^3.0.4",
-    "@react-three/rapier": "^2.2.0",
     "chart.js": "^4.5.1",
     "postprocessing": "^6.38.2",
     "react": "~19.2.0",
