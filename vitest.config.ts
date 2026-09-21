@@ -65,9 +65,7 @@ export default defineConfig({
         // suspends. Its logic lives in sceneryPlacement.ts and sceneryAssets.ts,
         // both unit-tested; the component itself is covered by Playwright.
         'src/components/rower3d/sceneryModels.tsx',
-        'src/components/rower3d/themes/**',
         // 3D scene asset packs — large, mostly geometry/material constants.
-        'src/components/routeLandmarks/**',
         // Dev-only on-screen simulators (Bluetooth/PM5/HR/route generator UIs).
         'src/components/PM5Simulator.tsx',
         'src/components/HeartRateSimulator.tsx',

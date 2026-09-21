@@ -7,13 +7,19 @@
 //   trees · architecture · groundCover · horizon
 // ============================================================================
 
-export type RouteTheme =
-  | 'willowbrook'
-  | 'crystal-bled'
-  | 'gothic-venice'
-  | 'steampunk-henley'
-  | 'dystopian-thames'
-  | 'scifi-boston';
+/**
+ * The themes a route can be dressed in (#361).
+ *
+ * One, since the other five were retired: fantasy reskins nothing reached, two
+ * of which rendered very nearly black, and which between them intercepted the
+ * Tideway, the Charles and Henley Reach by matching their names.
+ *
+ * Kept as a named type rather than dissolved into the scene because the shape
+ * below is the scene's art direction, read by the bank, sky, clouds, horizon,
+ * water, vegetation, colour grading and exposure alike - and #346 wants that
+ * same shape on a different axis.
+ */
+export type RouteTheme = 'willowbrook';
 
 // ---------------------------------------------------------------------------
 // Per-section config interfaces
@@ -207,323 +213,10 @@ export interface ThemeConfig {
 // ---------------------------------------------------------------------------
 
 export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
-  'crystal-bled': {
-    landscapeSource: 'bespoke',
-    water: {
-      color: '#3a9db8', transmission: 0.65, roughness: 0.04, thickness: 3.5,
-      emissive: '#00e5ff', emissiveIntensity: 0.06, attenuationColor: '#00a8cc',
-      attenuationDistance: 8.0, specularIntensity: 1.2, sheenColor: '#80deea',
-      turbidity: 0.1, waveAmplitude: 0.6, waveFrequency: 0.8,
-      foamIntensity: 0.2, underwaterFog: '#00a8cc',
-    },
-    bank: {
-      color: '#5a8a42', roughness: 0.88, metalness: 0.0,
-      emissive: '#2a4a22', emissiveIntensity: 0.01, sheen: 0.25, sheenColor: '#7ab05a',
-      flatColor: '#2d5a27',
-    },
-    landscapeColors: {
-      tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
-      mountain: '#5a7247', mountainSnow: '#f8faff',
-      building: '#8fa4b8', buildingAccent: '#6a8098', windowGlow: '#e8f4ff',
-    },
-    atmosphere: {
-      fogColor: '#b0ddfa', fogNear: 80, fogFar: 800,
-      skyColor: '#87ceeb', ambientColor: '#c0e0ff', ambientIntensity: 0.45,
-    },
-    sky: {
-      sunPosition: [120, 100, 60], turbidity: 1.2, rayleigh: 2.2,
-      mieCoefficient: 0.003, mieDirectionalG: 0.75,
-      inclination: 0.70, azimuth: 0.25, exposure: 0.55,
-      sunIntensity: 2.2, sunColor: '#fffaf0',
-    },
-    clouds: {
-      enabled: true, count: 5, opacity: 0.42, speed: 0.18,
-      color: '#ffffff', segments: 32, scale: 1.3, depth: 0.8,
-    },
-    lighting: {
-      ambientColor: '#c0e0ff', ambientIntensity: 0.25,
-      sunColor: '#fffaf0', sunIntensity: 1.2,
-      fillColor: '#b4c7dc', fillIntensity: 0.3,
-      sunElevation: 55, sunAzimuth: 90,
-    },
-    colorGrading: { hue: -0.05, saturation: 0.2, brightness: 0.05, contrast: 0.1 },
-    trees: {
-      species: [
-        { type: 'pine',  color: '#2a5a38', trunkColor: '#4a3020', heightRange: [8, 18],  radiusRange: [1.5, 3.0], density: 0.6 },
-        { type: 'oak',   color: '#3a6a28', trunkColor: '#5a4030', heightRange: [6, 12],  radiusRange: [2.0, 4.5], density: 0.4 },
-      ],
-    },
-    architecture: {
-      buildingStyle: 'gothic',
-      wallMaterial: { color: '#c8cfc0', roughness: 0.85 },
-      roofStyle: 'pointed',
-      roofColor: '#8a2020',
-      hasBridges: true,
-      bridgeStyle: 'stone-arch',
-    },
-    groundCover: {
-      types: [
-        { type: 'flower', color: '#e8e0c0', density: 0.5, scale: 0.4 },
-        { type: 'rock',   color: '#8a9090', density: 0.3, scale: 0.6 },
-        { type: 'grass',  color: '#3a5a30', density: 0.7, scale: 0.5 },
-      ],
-    },
-    horizon: { type: 'mountains', color: '#5a7090', distance: 400, height: 80 },
-  },
 
-  'gothic-venice': {
-    landscapeSource: 'bespoke',
-    water: {
-      color: '#1e3a3a', transmission: 0.22, roughness: 0.18, thickness: 1.5,
-      emissive: '#0a3d62', emissiveIntensity: 0.015, attenuationColor: '#1a2f2f',
-      attenuationDistance: 2.0, specularIntensity: 0.6, sheenColor: '#2a4a4a',
-      turbidity: 0.7, waveAmplitude: 1.2, waveFrequency: 1.0,
-      foamIntensity: 0.45, underwaterFog: '#1a2f2f',
-    },
-    bank: {
-      color: '#2a3a2a', roughness: 0.95, metalness: 0.02,
-      emissive: '#1a2a1a', emissiveIntensity: 0.005, sheen: 0.1, sheenColor: '#3a4a3a',
-      flatColor: '#1e272e',
-    },
-    landscapeColors: {
-      tree: '#1a2818', treeBark: '#2a1810', treeHighlight: '#2a3a28',
-      mountain: '#3d4a3a', mountainSnow: '#c0c8d0',
-      building: '#3a4552', buildingAccent: '#2a3542', windowGlow: '#ff8844',
-    },
-    atmosphere: {
-      fogColor: '#2a3a4a', fogNear: 15, fogFar: 250,
-      skyColor: '#1e272e', ambientColor: '#4a5a6a', ambientIntensity: 0.25,
-    },
-    sky: {
-      sunPosition: [40, 12, -120], turbidity: 12, rayleigh: 3.5,
-      mieCoefficient: 0.06, mieDirectionalG: 0.96,
-      inclination: 0.32, azimuth: 0.78, exposure: 0.28,
-      sunIntensity: 0.8, sunColor: '#ff9966',
-    },
-    clouds: {
-      enabled: true, count: 14, opacity: 0.65, speed: 0.06,
-      color: '#5a6268', segments: 38, scale: 1.5, depth: 1.2,
-    },
-    lighting: {
-      ambientColor: '#4a5568', ambientIntensity: 0.12,
-      sunColor: '#8fa4b8', sunIntensity: 0.5,
-      fillColor: '#b4c7dc', fillIntensity: 0.15,
-      sunElevation: 20, sunAzimuth: 270,
-    },
-    colorGrading: { hue: 0.02, saturation: -0.1, brightness: -0.05, contrast: 0.15 },
-    trees: {
-      species: [
-        { type: 'cypress', color: '#1a2818', trunkColor: '#2a1810', heightRange: [10, 22], radiusRange: [0.8, 1.5], density: 0.55 },
-        { type: 'palm',    color: '#1e3020', trunkColor: '#3a2810', heightRange: [6, 14],  radiusRange: [1.5, 3.0], density: 0.45 },
-      ],
-    },
-    architecture: {
-      buildingStyle: 'canal',
-      wallMaterial: { color: '#c8b898', roughness: 0.9 },
-      roofStyle: 'flat',
-      roofColor: '#6a5040',
-      hasBridges: true,
-      bridgeStyle: 'gondola-bridge',
-    },
-    groundCover: {
-      types: [
-        { type: 'reed',   color: '#3a4a2a', density: 0.6, scale: 0.8 },
-        { type: 'debris', color: '#2a2a2a', density: 0.4, scale: 0.5 },
-      ],
-    },
-    horizon: { type: 'islands', color: '#1e2a2a', distance: 300, height: 25 },
-  },
 
-  'steampunk-henley': {
-    landscapeSource: 'bespoke',
-    water: {
-      color: '#3a4a38', transmission: 0.28, roughness: 0.15, thickness: 2.0,
-      emissive: '#4a6741', emissiveIntensity: 0.008, attenuationColor: '#3a4a38',
-      attenuationDistance: 3.0, specularIntensity: 0.8, sheenColor: '#5a7a58',
-      turbidity: 0.5, waveAmplitude: 1.0, waveFrequency: 0.95,
-      foamIntensity: 0.35, underwaterFog: '#3a4a38',
-    },
-    bank: {
-      color: '#6a7a48', roughness: 0.82, metalness: 0.0,
-      emissive: '#4a5a30', emissiveIntensity: 0.008, sheen: 0.35, sheenColor: '#8a9a68',
-      flatColor: '#5d4e37',
-    },
-    landscapeColors: {
-      tree: '#4a5a3a', treeBark: '#5a4030', treeHighlight: '#6a7a5a',
-      mountain: '#8b7355', mountainSnow: '#e8dcd0',
-      building: '#c49a32', buildingAccent: '#8b6914', windowGlow: '#ffcc44',
-    },
-    atmosphere: {
-      fogColor: '#9a8365', fogNear: 35, fogFar: 450,
-      skyColor: '#d4a857', ambientColor: '#c9a227', ambientIntensity: 0.4,
-    },
-    sky: {
-      sunPosition: [90, 28, 70], turbidity: 9, rayleigh: 1.4,
-      mieCoefficient: 0.035, mieDirectionalG: 0.92,
-      inclination: 0.40, azimuth: 0.12, exposure: 0.48,
-      sunIntensity: 1.6, sunColor: '#ffcc66',
-    },
-    clouds: {
-      enabled: true, count: 9, opacity: 0.48, speed: 0.12,
-      color: '#f0e0c8', segments: 30, scale: 1.2, depth: 0.9,
-    },
-    lighting: {
-      ambientColor: '#c9a227', ambientIntensity: 0.25,
-      sunColor: '#ffd700', sunIntensity: 1.5,
-      fillColor: '#ffb347', fillIntensity: 0.3,
-      sunElevation: 30, sunAzimuth: 135,
-    },
-    colorGrading: { hue: 0.05, saturation: -0.15, brightness: -0.1, contrast: 0.2 },
-    trees: {
-      species: [
-        { type: 'oak',  color: '#4a5a3a', trunkColor: '#5a4030', heightRange: [7, 14],  radiusRange: [2.5, 5.0], density: 0.55 },
-        { type: 'pine', color: '#3a4a2a', trunkColor: '#4a3a28', heightRange: [8, 16],  radiusRange: [1.5, 3.0], density: 0.45 },
-      ],
-    },
-    architecture: {
-      buildingStyle: 'industrial',
-      wallMaterial: { color: '#4a3a2a', roughness: 0.92 },
-      roofStyle: 'gabled',
-      roofColor: '#2a2020',
-      hasBridges: true,
-      bridgeStyle: 'iron-truss',
-    },
-    groundCover: {
-      types: [
-        { type: 'grass', color: '#5a6040', density: 0.6, scale: 0.6 },
-        { type: 'rock',  color: '#6a5a48', density: 0.3, scale: 0.7 },
-        { type: 'reed',  color: '#4a5030', density: 0.4, scale: 0.5 },
-      ],
-    },
-    horizon: { type: 'hills', color: '#7a6a4a', distance: 350, height: 30 },
-  },
 
-  'dystopian-thames': {
-    landscapeSource: 'bespoke',
-    water: {
-      color: '#0a1a2a', transmission: 0.15, roughness: 0.22, thickness: 1.0,
-      emissive: '#1a2a4a', emissiveIntensity: 0.025, attenuationColor: '#0a1520',
-      attenuationDistance: 1.0, specularIntensity: 1.4, sheenColor: '#2a3a5a',
-      turbidity: 0.9, waveAmplitude: 1.5, waveFrequency: 1.3,
-      foamIntensity: 0.55, underwaterFog: '#0a1520',
-    },
-    bank: {
-      color: '#1a1a18', roughness: 0.96, metalness: 0.05,
-      emissive: '#0a0a08', emissiveIntensity: 0.002, sheen: 0.05, sheenColor: '#2a2a28',
-      flatColor: '#1a1a2e',
-    },
-    landscapeColors: {
-      tree: '#151512', treeBark: '#1a1510', treeHighlight: '#252520',
-      mountain: '#2a2a2a', mountainSnow: '#4a4a4a',
-      building: '#3a3a3a', buildingAccent: '#2a2a2a', windowGlow: '#ff4422',
-    },
-    atmosphere: {
-      fogColor: '#1a1a28', fogNear: 20, fogFar: 300,
-      skyColor: '#0f172a', ambientColor: '#2a2a3a', ambientIntensity: 0.2,
-    },
-    sky: {
-      sunPosition: [25, 6, -90], turbidity: 20, rayleigh: 0.4,
-      mieCoefficient: 0.12, mieDirectionalG: 0.99,
-      inclination: 0.25, azimuth: 0.88, exposure: 0.22,
-      sunIntensity: 0.5, sunColor: '#ff6633',
-    },
-    clouds: {
-      enabled: true, count: 16, opacity: 0.72, speed: 0.04,
-      color: '#3a3a42', segments: 42, scale: 1.6, depth: 1.4,
-    },
-    lighting: {
-      ambientColor: '#2a1f1a', ambientIntensity: 0.1,
-      sunColor: '#ff6b35', sunIntensity: 0.4,
-      fillColor: '#b4c7dc', fillIntensity: 0.15,
-      sunElevation: 15, sunAzimuth: 270,
-    },
-    colorGrading: { hue: -0.02, saturation: -0.3, brightness: -0.15, contrast: 0.25 },
-    trees: {
-      species: [
-        { type: 'bare', color: '#151512', trunkColor: '#1a1510', heightRange: [5, 12], radiusRange: [0.5, 1.5], density: 0.8 },
-      ],
-    },
-    architecture: {
-      buildingStyle: 'industrial',
-      wallMaterial: { color: '#3a3a3a', roughness: 0.95 },
-      roofStyle: 'flat',
-      roofColor: '#2a2a2a',
-      hasBridges: true,
-      bridgeStyle: 'iron-truss',
-    },
-    groundCover: {
-      types: [
-        { type: 'debris', color: '#2a2a28', density: 0.6, scale: 0.8 },
-        { type: 'rock',   color: '#303030', density: 0.5, scale: 0.7 },
-        { type: 'grass',  color: '#252520', density: 0.3, scale: 0.4 },
-      ],
-    },
-    horizon: { type: 'industrial', color: '#2a2a2a', distance: 400, height: 60 },
-  },
 
-  'scifi-boston': {
-    landscapeSource: 'bespoke',
-    water: {
-      color: '#0a3a4a', transmission: 0.45, roughness: 0.06, thickness: 2.5,
-      emissive: '#00ced1', emissiveIntensity: 0.12, attenuationColor: '#006080',
-      attenuationDistance: 5.0, specularIntensity: 1.0, sheenColor: '#40e0d0',
-      turbidity: 0.3, waveAmplitude: 0.8, waveFrequency: 0.9,
-      foamIntensity: 0.3, underwaterFog: '#006080',
-    },
-    bank: {
-      color: '#1a2a3a', roughness: 0.75, metalness: 0.15,
-      emissive: '#0a1a2a', emissiveIntensity: 0.015, sheen: 0.2, sheenColor: '#2a4a5a',
-      flatColor: '#0f172a',
-    },
-    landscapeColors: {
-      tree: '#152a20', treeBark: '#1a2018', treeHighlight: '#2a4a3a',
-      mountain: '#2a3a4a', mountainSnow: '#4a6a8a',
-      building: '#3a5a7a', buildingAccent: '#2a4a6a', windowGlow: '#00e0ff',
-    },
-    atmosphere: {
-      fogColor: '#0a1428', fogNear: 50, fogFar: 550,
-      skyColor: '#162447', ambientColor: '#1a3a5a', ambientIntensity: 0.3,
-    },
-    sky: {
-      sunPosition: [-60, 70, 120], turbidity: 0.4, rayleigh: 0.15,
-      mieCoefficient: 0.0008, mieDirectionalG: 0.65,
-      inclination: 0.62, azimuth: 0.55, exposure: 0.18,
-      sunIntensity: 0.6, sunColor: '#aaccff',
-    },
-    clouds: {
-      enabled: true, count: 3, opacity: 0.22, speed: 0.28,
-      color: '#2a4a6a', segments: 22, scale: 0.9, depth: 0.6,
-    },
-    lighting: {
-      ambientColor: '#162447', ambientIntensity: 0.15,
-      sunColor: '#a0d2ff', sunIntensity: 0.3,
-      fillColor: '#4a90d9', fillIntensity: 0.3,
-      sunElevation: 60, sunAzimuth: 225,
-    },
-    colorGrading: { hue: 0.1, saturation: 0.15, brightness: 0.1, contrast: 0.05 },
-    trees: {
-      species: [
-        { type: 'ornamental', color: '#1a3a2a', trunkColor: '#c0c0c8', heightRange: [4, 9],  radiusRange: [1.0, 2.5], density: 0.7 },
-        { type: 'pine',       color: '#152a20', trunkColor: '#1a2018', heightRange: [5, 11], radiusRange: [0.8, 1.8], density: 0.3 },
-      ],
-    },
-    architecture: {
-      buildingStyle: 'futuristic',
-      wallMaterial: { color: '#2a4a6a', roughness: 0.2 },
-      roofStyle: 'flat',
-      roofColor: '#1a3a5a',
-      hasBridges: true,
-      bridgeStyle: 'modern-cable',
-    },
-    groundCover: {
-      types: [
-        { type: 'flower', color: '#00e0ff', density: 0.5, scale: 0.3 },
-        { type: 'grass',  color: '#152a20', density: 0.4, scale: 0.4 },
-        { type: 'rock',   color: '#2a4a6a', density: 0.3, scale: 0.5 },
-      ],
-    },
-    horizon: { type: 'city', color: '#1a2a4a', distance: 400, height: 70 },
-  },
 
   'willowbrook': {
     landscapeSource: 'glb-kit',
@@ -592,7 +285,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
 
 /** Convenience accessor — returns the full config for the given theme. */
 export function getThemeConfig(theme: RouteTheme): ThemeConfig {
-  return THEME_CONFIG[theme] ?? THEME_CONFIG['willowbrook'];
+  return THEME_CONFIG[theme];
 }
 
 /** Whether this theme is dressed from the shared GLB scenery catalogue. */

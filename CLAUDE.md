@@ -27,7 +27,7 @@ npm run test:e2e:ci      # The same, with CI settings and retries
 npm run test:e2e:endurance # The long route traverses (#272), their own CI job
 npm run test:e2e:stress  # The heavy stress traverse (#301), scheduled only
 npm run test:visual      # Visual baselines (#340). Compares one frozen frame per
-                         #   theme/tier/viewport with a committed PNG. Baselines are
+                         #   tier/viewport with a committed PNG. Baselines are
                          #   recorded on Linux/SwiftShader in CI, never from a local
                          #   GPU — put the `visual-baseline` label on the PR and
                          #   commit the artifact the `visual` job uploads.

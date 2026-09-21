@@ -65,7 +65,7 @@ BLE characteristic notification
 
 ### 3D scene composition
 
-`Rower3D.tsx` lazy-loads a React Three Fiber `<Canvas>` with Rapier physics. The scene graph includes: water surface (Gerstner waves), curved water channel and riverbanks following the route curve, procedural terrain with elevation-driven relief, instanced vegetation (PineTrees, GroundCover) offset by terrain Y, the rowing scull model, wake/splash particle effects, per-route themed landscape overlays, and post-processing (bloom, color grading, vignette).
+`Rower3D.tsx` lazy-loads a React Three Fiber `<Canvas>` with Rapier physics. The scene graph includes: water surface (Gerstner waves), curved water channel and riverbanks following the route curve, procedural terrain with elevation-driven relief, instanced vegetation (PineTrees, GroundCover) offset by terrain Y, the rowing scull model, wake/splash particle effects, and post-processing (bloom, color grading, vignette). There is one route theme since #361; `themeConfig` is still the scene's art direction, read by the bank, sky, clouds, horizon, water, vegetation, colour grading and exposure alike.
 
 Route coordinates → `createRouteCurve()` → Three.js CatmullRomCurve3. Enrichment segment profiles drive scenery placement, water width, and terrain relief per 50m segment.
 

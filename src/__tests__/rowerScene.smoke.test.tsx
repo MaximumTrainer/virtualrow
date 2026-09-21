@@ -77,24 +77,11 @@ describe('RowerScene', () => {
     await scene.unmount();
   });
 
-  /**
-   * Every theme, because each dresses the scene differently and the theme is
-   * read off the route name.
-   *
-   * A theme is six or seven components' worth of sky, water, banks and
-   * landscape chosen by a switch, and until this existed the only one any unit
-   * test had ever built was willowbrook - so five of the six were reached by
-   * nothing but a person opening the app and picking that route.
-   */
-  it.each([
-    ['willowbrook', 'Willowbrook Reach'],
-    ['crystal-bled', 'Crystal Bled Lake'],
-    ['gothic-venice', 'Gothic Venice Canal'],
-    ['steampunk-henley', 'Steampunk Henley Regatta'],
-    ['dystopian-thames', 'Dystopian Thames Tideway'],
-    ['scifi-boston', 'Sci-Fi Boston Charles'],
-  ])('dresses the scene for %s', async (_theme, routeName) => {
-    const scene = await renderScene({ route: { ...demoRoute, name: routeName } });
+  // The one surviving theme dresses the scene, on a route named for it or
+  // not: #361 retired the other five, so a route's name no longer decides
+  // what it looks like.
+  it('dresses the scene whatever the route is called', async () => {
+    const scene = await renderScene({ route: { ...demoRoute, name: 'Leviathan Reach' } });
 
     const names = scene.objects().map((o) => o.name);
     expect(names, 'the scene never came out of Suspense').not.toContain('SceneSuspended');

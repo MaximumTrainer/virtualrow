@@ -10,7 +10,8 @@ import type { RouteTheme } from '../components/rower3d/themeConfig';
  * a rendered frame came back near-white and the channel could not be told from
  * the bank (#269).
  */
-const THEMES: RouteTheme[] = ['willowbrook', 'crystal-bled', 'gothic-venice', 'steampunk-henley', 'dystopian-thames', 'scifi-boston'];
+/** One theme since #361, and the loop below still reads as the rule it is. */
+const THEMES: RouteTheme[] = ['willowbrook'];
 
 describe('sceneExposure', () => {
   it('uses the exposure the theme authored', () => {
