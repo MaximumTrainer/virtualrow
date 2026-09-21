@@ -259,8 +259,28 @@ test('the scene draws again when the context comes back', async ({ page }) => {
     })
     .toBe(true);
 
+  // Polled, not read once.
+  //
+  // There are two readings of "is the context back", and they do not land
+  // together. `__ROWER3D_WEBGL_LOST` is set by the `webglcontextrestored`
+  // handler itself, so it flips the instant the event arrives.
+  // `__ROWER3D_CONTEXT_STATE` is a copy of the module's state taken inside
+  // `useFrame` - so it is stale until the scene draws again, and after a
+  // restore on a software rasteriser the first frame is not immediate.
+  //
+  // Reading it once, straight after polling the other flag, is a race the
+  // macOS leg lost about half the time while every other platform won it. That
+  // this spec is named for the scene drawing again is the point: waiting for
+  // the frame-published reading is waiting for the frame.
+  await expect
+    .poll(() => page.evaluate(() => window.__ROWER3D_CONTEXT_STATE?.lost), {
+      timeout: 20_000,
+      intervals: [250],
+      message: 'the scene still believes its context is gone',
+    })
+    .toBe(false);
+
   const state = await contextState(page);
-  expect(state?.lost, 'the scene still believes its context is gone').toBe(false);
   // One loss, not two: a restore must not be recorded as another failure.
   expect(state?.losses).toBe(1);
 
