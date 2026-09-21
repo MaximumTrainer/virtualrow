@@ -100,9 +100,27 @@ describe('per-frame route work on a 5,000-point winding route (#224)', () => {
       return performance.now() - started;
     };
 
-    const early = sampleAt(0.02);
-    const late = sampleAt(0.98);
-    expect(late).toBeLessThan(early * 3 + 5);
+    // Interleaved, and compared on the median of several rounds.
+    //
+    // The property is algorithmic — a binary search does not care where in the
+    // table it lands — but the measurement is a wall clock on a shared CI
+    // runner, where one garbage collection inside the second sample is enough
+    // to make a constant-time lookup look linear. Taking early and late
+    // alternately puts any such pause in front of both, and the median throws
+    // out the round it lands in. Measured on macOS as 18 ms against 91 ms from
+    // a single pair, which is the shape of a GC pause and not of a linear scan.
+    const rounds = 5;
+    const earlies: number[] = [];
+    const lates: number[] = [];
+    for (let round = 0; round < rounds; round += 1) {
+      earlies.push(sampleAt(0.02));
+      lates.push(sampleAt(0.98));
+    }
+
+    const median = (times: number[]) =>
+      [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
+
+    expect(median(lates)).toBeLessThan(median(earlies) * 3 + 5);
   });
 
   it('allocates no vectors per frame', () => {
