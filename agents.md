@@ -144,6 +144,20 @@ See §6 for the full gate and its escape hatches.
 - PM5 frame helpers (`dispatchGeneralStatus`, `dispatchAdditionalStatus`) live at file scope in the spec and match the wire format parsed by `src/vendor/pm5-base.js` exactly. When writing BLE test frames, verify byte layout against the parser — the PM5 general status has elapsedTime (24-bit LE, ×0.01s) at offset 0 and distance (24-bit LE, ×0.1m) at offset 3.
 - Type-checked via `tsconfig.playwright.json`.
 
+**Visual baselines (Playwright, #340):**
+- Live in `playwright/tests/visual/`, with their PNGs in `playwright/tests/visual/__snapshots__/`.
+- Excluded from every other config, so the verification matrix does not run them.
+- A shot is only meaningful on the rasteriser that drew it. They are recorded on
+  one Linux/SwiftShader CI job and nowhere else — never from a developer GPU,
+  never on the Windows or macOS legs. Put the `visual-baseline` label on the pull
+  request, let the `visual` job re-record and then re-compare, and commit the
+  PNGs it uploads as an artifact.
+- The scene holds still for the camera via `window.__ROWER3D_FREEZE`
+  (`src/components/rower3d/sceneFreeze.ts`), which pins the clock, the boat's
+  progress along the route and the stroke cycle. Anything new that animates
+  should read its time through `useAnimationFrame` or `frozenClock`, or it will
+  be the one thing in a frozen frame that still moves.
+
 ### 3. Clean, fluent code
 
 **Naming is the design.** A well-named function doesn't need a comment. Name functions for what they return or what effect they have. Name variables for what they hold. Name types for what they represent. If you can't name it clearly, the abstraction is wrong.

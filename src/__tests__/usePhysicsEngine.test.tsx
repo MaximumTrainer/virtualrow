@@ -21,6 +21,38 @@ describe('usePhysicsEngine', () => {
     expect(result.current.boatStateRef.current.acceleration).toBe(1);
   });
 
+  // Issue #340 — the oars are the one thing in a frozen frame that would still
+  // move. Parking the cycle rather than the pose settles the phase with it, so
+  // the blade spray stops respawning and two shots of the same scene match.
+  it('parks the stroke where the clock stopped while a visual spec holds the scene', () => {
+    const { result } = renderHook(() => usePhysicsEngine());
+
+    window.__ROWER3D_FREEZE = { time: 12.5, progress: 0.31 };
+    try {
+      act(() => {
+        result.current.dispatchTick(0.5, {
+          pace: 120,
+          power: undefined,
+          cadence: 30,
+          distance: 0,
+          elapsedTime: 0,
+        });
+        result.current.dispatchTick(0.5, {
+          pace: 120,
+          power: undefined,
+          cadence: 30,
+          distance: 0,
+          elapsedTime: 0,
+        });
+      });
+    } finally {
+      delete window.__ROWER3D_FREEZE;
+    }
+
+    expect(result.current.boatStateRef.current.strokeCycleT).toBe(0.5);
+    expect(result.current.boatStateRef.current.strokePhase).toBe('finish');
+  });
+
   it('resets boat state and position accumulator', () => {
     const { result } = renderHook(() => usePhysicsEngine());
 

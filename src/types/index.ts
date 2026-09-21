@@ -303,6 +303,19 @@ declare global {
     __PLAYWRIGHT_TESTING?: boolean;
     __PM5_DATA?: PM5Data;
     /**
+     * Forces a performance mode, independent of `IS_TEST_MODE`.
+     *
+     * Without this the test flag decided both "are we in a test" and "which
+     * effects run", so the postprocessing path could never execute under
+     * automation - it was exempt from testing by construction (issue #197).
+     * Setting this lets a spec run the full effect stack while still being in
+     * test mode. Declared here rather than beside `resolvePerformanceMode`
+     * because the Playwright suite type-checks against `src/types` alone, and a
+     * spec that has to cast to reach a hook is a spec that keeps compiling
+     * after the hook is renamed (#340).
+     */
+    __VIRTUALROW_PERFORMANCE_MODE?: 'low' | 'auto' | 'high';
+    /**
      * The live WorkoutService, exposed only under __PLAYWRIGHT_TESTING so an
      * E2E test can start and end sessions without driving the UI.
      *
@@ -332,6 +345,15 @@ declare global {
      * lands in the gap rather than on a finished picture (#261).
      */
     __ROWER3D_FORCE_RENDER?: () => void;
+    /**
+     * Hold the scene still so it can be photographed (#340).
+     *
+     * Set by a visual-regression spec before the app loads. `time` is the
+     * second every animated thing reads instead of the live clock, and
+     * `progress` is where along the route the boat is pinned. Read through
+     * `readSceneFreeze` in `components/rower3d/sceneFreeze.ts`.
+     */
+    __ROWER3D_FREEZE?: { time: number; progress: number };
     /**
      * Whether the blades are over water where the boat is, right now (#271).
      *
