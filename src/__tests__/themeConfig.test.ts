@@ -7,11 +7,6 @@ import {
 
 const ALL_THEMES: RouteTheme[] = [
   'willowbrook',
-  'crystal-bled',
-  'gothic-venice',
-  'steampunk-henley',
-  'dystopian-thames',
-  'scifi-boston',
 ];
 
 describe('THEME_CONFIG', () => {
@@ -182,11 +177,6 @@ describe('THEME_CONFIG', () => {
     }
   });
 
-  it('themes are visually distinct (water colors differ)', () => {
-    const waterColors = ALL_THEMES.map((t) => THEME_CONFIG[t].water.color);
-    const unique = new Set(waterColors);
-    expect(unique.size).toBe(ALL_THEMES.length);
-  });
 });
 
 describe('getThemeConfig', () => {
@@ -196,55 +186,6 @@ describe('getThemeConfig', () => {
     }
   });
 
-  it('falls back to willowbrook for an unknown theme', () => {
-    const fallback = getThemeConfig('unknown-theme' as RouteTheme);
-    expect(fallback).toBe(THEME_CONFIG['willowbrook']);
-  });
-
-  it('crystal-bled has high water transmission (clear alpine lake)', () => {
-    expect(getThemeConfig('crystal-bled').water.transmission).toBeGreaterThan(0.5);
-  });
-
-  it('crystal-bled has low turbidity (clearest water)', () => {
-    const bled = getThemeConfig('crystal-bled').water.turbidity;
-    const dystopian = getThemeConfig('dystopian-thames').water.turbidity;
-    expect(bled).toBeLessThan(dystopian);
-  });
-
-  it('dystopian-thames has highest waveAmplitude (rough industrial river)', () => {
-    const dystopian = getThemeConfig('dystopian-thames').water.waveAmplitude;
-    for (const theme of ALL_THEMES.filter(t => t !== 'dystopian-thames')) {
-      expect(dystopian).toBeGreaterThanOrEqual(getThemeConfig(theme).water.waveAmplitude);
-    }
-  });
-
-  it('sun elevation varies meaningfully across themes (#126)', () => {
-    const elevations = ALL_THEMES.map(t => getThemeConfig(t).lighting.sunElevation);
-    const min = Math.min(...elevations);
-    const max = Math.max(...elevations);
-    expect(max - min).toBeGreaterThan(20);
-  });
-
-  it('colorGrading values are distinct across themes (#124)', () => {
-    const satValues = ALL_THEMES.map(t => getThemeConfig(t).colorGrading.saturation);
-    const unique = new Set(satValues);
-    expect(unique.size).toBeGreaterThan(1);
-  });
-
-  it('scifi-boston has positive saturation boost (neon aesthetic)', () => {
-    expect(getThemeConfig('scifi-boston').colorGrading.saturation).toBeGreaterThan(0);
-  });
-
-  it('dystopian-thames has negative saturation (desaturated dystopia)', () => {
-    expect(getThemeConfig('dystopian-thames').colorGrading.saturation).toBeLessThan(0);
-  });
-
-  it('gothic-venice has darker atmosphere than crystal-bled', () => {
-    const venice = getThemeConfig('gothic-venice').atmosphere;
-    const bled = getThemeConfig('crystal-bled').atmosphere;
-    // fogFar should be shorter (denser fog) in gothic-venice
-    expect(venice.fogFar).toBeLessThan(bled.fogFar);
-  });
 });
 
 describe('trees config (#128)', () => {
@@ -275,16 +216,6 @@ describe('trees config (#128)', () => {
     }
   });
 
-  it('dystopian-thames has bare/dead trees only', () => {
-    const types = THEME_CONFIG['dystopian-thames'].trees.species.map(s => s.type);
-    expect(types.every(t => t === 'bare')).toBe(true);
-  });
-
-  it('crystal-bled has pine trees for alpine setting', () => {
-    const types = THEME_CONFIG['crystal-bled'].trees.species.map(s => s.type);
-    expect(types).toContain('pine');
-  });
-
   it('willowbrook has willow trees', () => {
     const types = THEME_CONFIG['willowbrook'].trees.species.map(s => s.type);
     expect(types).toContain('willow');
@@ -311,29 +242,10 @@ describe('architecture config (#129)', () => {
     }
   });
 
-  it('gothic-venice uses canal building style', () => {
-    expect(THEME_CONFIG['gothic-venice'].architecture.buildingStyle).toBe('canal');
-  });
-
-  it('gothic-venice has gondola bridges', () => {
-    expect(THEME_CONFIG['gothic-venice'].architecture.bridgeStyle).toBe('gondola-bridge');
-  });
-
   it('willowbrook uses georgian style', () => {
     expect(THEME_CONFIG['willowbrook'].architecture.buildingStyle).toBe('georgian');
   });
 
-  it('scifi-boston uses futuristic style with modern-cable bridges', () => {
-    const a = THEME_CONFIG['scifi-boston'].architecture;
-    expect(a.buildingStyle).toBe('futuristic');
-    expect(a.bridgeStyle).toBe('modern-cable');
-  });
-
-  it('building styles are not all the same across themes', () => {
-    const styles = ALL_THEMES.map(t => THEME_CONFIG[t].architecture.buildingStyle);
-    const unique = new Set(styles);
-    expect(unique.size).toBeGreaterThan(2);
-  });
 });
 
 describe('groundCover config (#130)', () => {
@@ -361,11 +273,6 @@ describe('groundCover config (#130)', () => {
     }
   });
 
-  it('dystopian-thames has debris ground cover', () => {
-    const types = THEME_CONFIG['dystopian-thames'].groundCover.types.map(t => t.type);
-    expect(types).toContain('debris');
-  });
-
   it('willowbrook has reeds and flowers', () => {
     const types = THEME_CONFIG['willowbrook'].groundCover.types.map(t => t.type);
     expect(types).toContain('reed');
@@ -388,31 +295,4 @@ describe('horizon config (#131)', () => {
     }
   });
 
-  it('crystal-bled has mountain horizon', () => {
-    expect(THEME_CONFIG['crystal-bled'].horizon.type).toBe('mountains');
-  });
-
-  it('scifi-boston has city horizon', () => {
-    expect(THEME_CONFIG['scifi-boston'].horizon.type).toBe('city');
-  });
-
-  it('dystopian-thames has industrial horizon', () => {
-    expect(THEME_CONFIG['dystopian-thames'].horizon.type).toBe('industrial');
-  });
-
-  it('mountain horizons are taller than island horizons', () => {
-    const mountainThemes = ALL_THEMES.filter(t => THEME_CONFIG[t].horizon.type === 'mountains');
-    const islandThemes = ALL_THEMES.filter(t => THEME_CONFIG[t].horizon.type === 'islands');
-    if (mountainThemes.length > 0 && islandThemes.length > 0) {
-      const avgMountain = mountainThemes.reduce((s, t) => s + THEME_CONFIG[t].horizon.height, 0) / mountainThemes.length;
-      const avgIsland = islandThemes.reduce((s, t) => s + THEME_CONFIG[t].horizon.height, 0) / islandThemes.length;
-      expect(avgMountain).toBeGreaterThan(avgIsland);
-    }
-  });
-
-  it('horizon types are diverse across themes', () => {
-    const types = ALL_THEMES.map(t => THEME_CONFIG[t].horizon.type);
-    const unique = new Set(types);
-    expect(unique.size).toBeGreaterThan(2);
-  });
 });

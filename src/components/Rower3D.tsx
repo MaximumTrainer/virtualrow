@@ -29,7 +29,6 @@ import { getThemeConfig, themeUsesGlbScenery } from './rower3d/themeConfig';
 import type { RouteTheme } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { RiverGuides } from './rower3d/RiverGuides';
-import { getRouteLandmarkConfig, LandmarkRenderer } from './routeLandmarks';
 import {
   IS_TEST_MODE,
   SCENE_SCALE,
@@ -75,19 +74,14 @@ import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
-import { CrystalBledLandscape } from './rower3d/themes/CrystalBledScene';
-import { GothicVeniceLandscape } from './rower3d/themes/GothicVeniceScene';
-import { SteampunkHenleyLandscape } from './rower3d/themes/SteampunkHenleyScene';
-import { DystopianThamesLandscape } from './rower3d/themes/DystopianThamesScene';
-import { SciFiBostonLandscape } from './rower3d/themes/SciFiBostonScene';
 import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
+import { detectRouteTheme } from './rower3d/routeTheme';
 import './Rower3D.css';
 
 // The crewed sculls are preloaded in boatComponents, beside the component that
 // draws them. The old uncrewed /models/scull.glb is no longer rendered, so
 // preloading it only cost a request (issue #232).
 
-// Detect route theme from route name and tags
 /** How often the scene writes a line about itself, in seconds. */
 const TELEMETRY_SAMPLE_SECONDS = 5;
 
@@ -99,28 +93,6 @@ const TELEMETRY_SAMPLE_SECONDS = 5;
  * (#343).
  */
 export const BOAT_GROUP_NAME = 'BoatGroup';
-
-const detectRouteTheme = (route: WaterRoute): RouteTheme => {
-  const name = route.name?.toLowerCase() || '';
-  const tags = route.tags || [];
-  
-  if (name.includes('bled') || name.includes('crystal') || name.includes('sanctum') || tags.includes('elven')) {
-    return 'crystal-bled';
-  }
-  if (name.includes('venice') || name.includes('anime') || name.includes('perdute') || tags.includes('gothic')) {
-    return 'gothic-venice';
-  }
-  if (name.includes('henley') || name.includes('iron sovereign') || name.includes('gauntlet') || tags.includes('steampunk')) {
-    return 'steampunk-henley';
-  }
-  if (name.includes('thames') || name.includes('leviathan') || tags.includes('dystopian') || tags.includes('kaiju')) {
-    return 'dystopian-thames';
-  }
-  if (name.includes('charles') || name.includes('boston') || name.includes('architect') || name.includes('equation') || tags.includes('sci-fi')) {
-    return 'scifi-boston';
-  }
-  return 'willowbrook';
-};
 
 export interface Rower3DProps {
   route: WaterRoute;
@@ -224,10 +196,6 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   // coordinates — no extra network call (#232).
   const sceneryRegion = useMemo(() => resolveRegion(route.coordinates), [route.coordinates]);
   const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
-  const landmarkConfig = useMemo(
-    () => getRouteLandmarkConfig(route.name, route.tags),
-    [route.name, route.tags],
-  );
   
   const routeCurve = useMemo(() => {
     markRouteLoadStart();
@@ -478,60 +446,27 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
     } catch { /* intentional: window access may fail in test environments */ }
   });
   
-  const renderThemedLandscape = () => {
-    switch (routeTheme) {
-      case 'crystal-bled':
-        return (
-          <>
-            <CrystalBledLandscape side="left" boatZ={boatZ} />
-            <CrystalBledLandscape side="right" boatZ={boatZ} />
-          </>
-        );
-      case 'gothic-venice':
-        return (
-          <>
-            <GothicVeniceLandscape side="left" boatZ={boatZ} />
-            <GothicVeniceLandscape side="right" boatZ={boatZ} />
-          </>
-        );
-      case 'steampunk-henley':
-        return (
-          <>
-            <SteampunkHenleyLandscape side="left" boatZ={boatZ} />
-            <SteampunkHenleyLandscape side="right" boatZ={boatZ} />
-          </>
-        );
-      case 'dystopian-thames':
-        return (
-          <>
-            <DystopianThamesLandscape side="left" boatZ={boatZ} />
-            <DystopianThamesLandscape side="right" boatZ={boatZ} />
-          </>
-        );
-      case 'scifi-boston':
-        return (
-          <>
-            <SciFiBostonLandscape side="left" boatZ={boatZ} />
-            <SciFiBostonLandscape side="right" boatZ={boatZ} />
-          </>
-        );
-      default:
-        return (
-          <>
-            <ProceduralTerrain side="left" boatZ={boatZ} enrichment={enrichment} />
-            <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
-            <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-            <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-            {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
-              <Suspense fallback={null}>
-                <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
-                <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
-              </Suspense>
-            )}
-          </>
-        );
-    }
-  };
+  /**
+   * The banks, dressed from the shared scenery catalogue.
+   *
+   * This was a switch over six themes, five of which returned a bespoke
+   * landscape of their own. They were retired in #361 and this is what the one
+   * survivor always did.
+   */
+  const renderThemedLandscape = () => (
+    <>
+      <ProceduralTerrain side="left" boatZ={boatZ} enrichment={enrichment} />
+      <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
+      <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
+      <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
+      {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
+        <Suspense fallback={null}>
+          <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+          <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+        </Suspense>
+      )}
+    </>
+  );
 
   const sunLightPos = useMemo((): [number, number, number] => {
     const elevRad = (themeConfig.lighting.sunElevation * Math.PI) / 180;
@@ -556,20 +491,10 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       
       <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
       
-      <hemisphereLight 
-        args={[
-          routeTheme === 'dystopian-thames' ? '#4a3728' : 
-          routeTheme === 'gothic-venice' ? '#3d4f5f' :
-          routeTheme === 'steampunk-henley' ? '#d4a574' :
-          routeTheme === 'scifi-boston' ? '#1e3a5f' :
-          '#b4d7ff',
-          routeTheme === 'dystopian-thames' ? '#1a1a1a' :
-          routeTheme === 'gothic-venice' ? '#2c3e50' :
-          '#3d5c3a',
-          routeTheme === 'dystopian-thames' || routeTheme === 'gothic-venice' ? 0.5 : 0.9
-        ]} 
-        position={[0, 50, 0]}
-      />
+      {/* Sky and ground bounce. The three arguments were ternary chains over
+          six themes; five of them were retired in #361, so these are the
+          values the survivor always took. */}
+      <hemisphereLight args={['#b4d7ff', '#3d5c3a', 0.9]} position={[0, 50, 0]} />
       
       <directionalLight
         position={sunLightPos}
@@ -658,12 +583,6 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         </Suspense>
       )}
 
-      {landmarkConfig && (
-        <group position={[0, 0, boatZ]}>
-          <LandmarkRenderer config={landmarkConfig} />
-        </group>
-      )}
-      
       {IS_TEST_MODE ? (
         <group ref={boatGroupRef} name={BOAT_GROUP_NAME}>
           <RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />

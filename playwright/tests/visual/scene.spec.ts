@@ -36,20 +36,14 @@ const mockBluetoothPath = path.resolve(__dirname, '../../mock-bluetooth.js');
 const courseFixturePath = path.resolve(__dirname, '../../fixtures/rownative-sample-course.geojson');
 
 /**
- * A route name per theme, because the theme is read off the name.
+ * The one surviving theme (#361).
  *
- * `detectRouteTheme` in Rower3D matches words in the route name, so importing
- * the same course under six names is the whole of the theme matrix. Willowbrook
- * is the fall-through, and is named to match none of the other five rules.
+ * This was six route names, because the theme used to be read off the name.
+ * Five of them were retired - fantasy reskins that between them intercepted
+ * the Tideway, the Charles and Henley Reach - so there is one look to
+ * photograph and the suite is four shots rather than twenty-four.
  */
-const THEMES = [
-  { theme: 'willowbrook', routeName: 'Willowbrook Reach' },
-  { theme: 'crystal-bled', routeName: 'Crystal Bled Lake' },
-  { theme: 'gothic-venice', routeName: 'Gothic Venice Canal' },
-  { theme: 'steampunk-henley', routeName: 'Steampunk Henley Regatta' },
-  { theme: 'dystopian-thames', routeName: 'Dystopian Thames Tideway' },
-  { theme: 'scifi-boston', routeName: 'Sci-Fi Boston Charles' },
-] as const;
+const THEMES = [{ theme: 'willowbrook', routeName: 'Willowbrook Reach' }] as const;
 
 /**
  * Both tiers a rower can actually get.
