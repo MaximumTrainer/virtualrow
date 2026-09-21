@@ -41,14 +41,26 @@ export default defineConfig({
         'src/types/**',
         // R3F 3D scene components — exercised by Playwright E2E; pure utilities
         // (curve, helpers, themeConfig) are unit-tested separately.
+        //
+        // boatComponents.tsx and skyComponents.tsx came off this list with
+        // #343: `rowerScene.smoke.test.tsx` mounts the real scene through
+        // @react-three/test-renderer, so they are unit-tested now and the TDD
+        // guard asks for a test when they change. That is the point of the
+        // exercise - this list is where the wrong-axis normal (#298) and the
+        // rower who never moved (#273) both survived review.
+        //
+        // Rower3D.tsx stays for now. The smoke tests reach 56% of its lines and
+        // 23% of its functions, because most of what is left is per-frame
+        // decisions inlined in one 1100-line useFrame. Admitting it at 23%
+        // would drag the whole gate down to buy a floor too low to catch
+        // anything. It comes off when #328, #329 and #331 move those decisions
+        // into pure modules, which is what #343 asks for and they deliver.
         'src/components/Rower3D.tsx',
         'src/components/rower3d/effectComponents.tsx',
         'src/components/rower3d/waterComponents.tsx',
         'src/components/rower3d/bankComponents.tsx',
         'src/components/rower3d/routeStripChunks.tsx',
         'src/components/rower3d/vegetationComponents.tsx',
-        'src/components/rower3d/skyComponents.tsx',
-        'src/components/rower3d/boatComponents.tsx',
         // Same class as its siblings above: an R3F component that loads GLBs and
         // suspends. Its logic lives in sceneryPlacement.ts and sceneryAssets.ts,
         // both unit-tested; the component itself is covered by Playwright.
@@ -73,17 +85,29 @@ export default defineConfig({
         // Locked to the measured floor (rounded down) so the gate enforces
         // "don't regress". Ratchet upward as coverage improves.
         //
-        // Measured on main 2026-09-21: 90.95 / 83.67 / 86.71. #340 set lines
-        // and statements to 91 from a 91.02 reading taken on its own branch,
-        // and main measures 90.95 - so `npm run coverage`, and with it every
-        // `pre-push`, failed on main for everyone. A floor set within a
-        // rounding error of the measurement is not a floor; leave it a point
-        // clear of the reading so the gate answers "did this regress" rather
-        // than "did the last digit move".
+        // Two things moved it on 2026-09-21, and they pull opposite ways.
+        //
+        // #340 set lines and statements to 91 from a 91.02 reading taken on its
+        // own branch, while main measured 90.95 - so `npm run coverage`, and
+        // with it every `pre-push`, failed on a tree nobody had changed. A
+        // floor set within a rounding error of its measurement is not a floor.
+        //
+        // #343 then brought boatComponents.tsx and skyComponents.tsx into the
+        // measurement for the first time, by mounting the real scene in Vitest.
+        // That is ~640 statements at about 73% joining the denominator: the
+        // ratio falls, the amount of checked code rises. Against the floor
+        // these changes started from - 88 / 82 / 83 - every axis is up.
+        //
+        // So: a point clear of the reading, so the gate answers "did this
+        // regress" rather than "did the last digit move", and per-file floors
+        // below so the two newly measured files cannot slip whatever the
+        // global does.
         lines: 90,
         statements: 90,
         branches: 83,
         functions: 86,
+        '**/boatComponents.tsx': { lines: 78, statements: 78, branches: 76, functions: 50 },
+        '**/skyComponents.tsx': { lines: 60, statements: 60, branches: 100, functions: 50 },
       },
     },
   },
