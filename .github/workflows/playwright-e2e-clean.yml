@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    # `labeled` is not one of the default three, and the visual job reads the
+    # labels off the event payload - so without it, putting `visual-baseline`
+    # on a pull request changes nothing until the next push (#340).
+    types: [ opened, synchronize, reopened, labeled ]
 
 permissions:
   contents: read
