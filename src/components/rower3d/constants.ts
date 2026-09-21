@@ -23,6 +23,14 @@ export function resolvePerformanceMode(): 'low' | 'auto' | 'high' {
 }
 
 /**
+ * The name on the group that carries the boat along the route.
+ *
+ * One group in the graph whatever the quality tier or the asset ladder, so a
+ * test can find the boat by name rather than by counting groups (#343).
+ */
+export const BOAT_GROUP_NAME = 'BoatGroup';
+
+/**
  * Metres-to-scene-units factor for every route curve in the scene.
  *
  * One source of truth, and now genuinely one: it lives in `utils/worldScale`

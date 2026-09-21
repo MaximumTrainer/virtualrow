@@ -104,7 +104,13 @@ export default defineConfig({
         statements: 90,
         branches: 83,
         functions: 86,
-        '**/boatComponents.tsx': { lines: 78, statements: 78, branches: 76, functions: 50 },
+        // boatComponents moved on every axis when #322 took the physics engine
+        // out and `boatComponents.test.tsx` started mounting the controller:
+        // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch
+        // ratio fell because the denominator grew - 12 of 17 covered where it
+        // was 10 of 13 - which is the same shape as admitting a file to the
+        // measurement, one file down. Two axes up, one recorded where it lands.
+        '**/boatComponents.tsx': { lines: 85, statements: 85, branches: 70, functions: 75 },
         '**/skyComponents.tsx': { lines: 60, statements: 60, branches: 100, functions: 50 },
       },
     },

@@ -51,7 +51,7 @@ vi.mock('@react-three/drei', async () => {
 });
 
 const { renderScene, demoRoute } = await import('./sceneTestRenderer');
-const { BOAT_GROUP_NAME } = await import('../components/Rower3D');
+const { BOAT_GROUP_NAME } = await import('../components/rower3d/constants');
 
 /** 2:00/500m — 4.17 m/s, and a pace a test can do arithmetic on. */
 const PACE_S_PER_500 = 120;
