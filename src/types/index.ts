@@ -369,6 +369,13 @@ declare global {
       progress: number;
     };
     __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number; builds?: number };
+    /**
+     * The fog the scene is actually drawing with (#325).
+     *
+     * Published so a spec can check the theme's numbers reached the renderer,
+     * rather than that a helper returns them.
+     */
+    __ROWER3D_SCENE_FOG?: { near: number; far: number };
     __ROWER3D_SPEED_MPS?: number;
     __ROWER3D_STROKE_PHASE?: string;
     __ROWER3D_DISTANCE_M?: number;

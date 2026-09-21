@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { curveLengthMeters } from './curve';
 import {
+  CHUNK_VIEW_DISTANCE_SCENE_UNITS,
   chunkCountForRoute,
   chunkProgressRanges,
   isChunkWithinViewDistance,
@@ -28,6 +29,13 @@ export interface RouteStripChunksProps {
   buildChunk: (range: ProgressRange) => THREE.BufferGeometry;
   /** Chunks built before the first frame, counted from the start of the route. */
   eagerChunks?: number;
+  /**
+   * Metres past which a chunk stops being drawn.
+   *
+   * Passed in rather than read from a constant, because how far is worth
+   * drawing is decided by how far can be seen - which is the fog (#325).
+   */
+  viewDistance?: number;
 }
 
 export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
@@ -35,6 +43,7 @@ export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
   material,
   buildChunk,
   eagerChunks = 2,
+  viewDistance = CHUNK_VIEW_DISTANCE_SCENE_UNITS,
 }) => {
   const ranges = useMemo(
     () => chunkProgressRanges(chunkCountForRoute(curveLengthMeters(curve))),
@@ -59,6 +68,7 @@ export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
       mesh.visible = isChunkWithinViewDistance(
         mesh.geometry.boundingSphere,
         camera.position,
+        viewDistance,
       );
     }
   });

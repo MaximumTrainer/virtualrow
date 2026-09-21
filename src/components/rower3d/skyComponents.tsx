@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
@@ -49,6 +49,20 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
     return positions;
   }, [cloudConfig.count, cloudConfig.scale]);
 
+  /**
+   * The sky is never fogged.
+   *
+   * `Sky` builds its own shader material and takes no `fog` prop, so the flag
+   * is set on the instance. Without it the dome is painted out to the fog
+   * colour and the scene loses its sun, its gradient and every cloud behind it
+   * (#325).
+   */
+  const skyRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.ShaderMaterial> | null>(null);
+  useEffect(() => {
+    const material = skyRef.current?.material;
+    if (material) material.fog = false;
+  });
+
   const cloudGroupRef = useRef<THREE.Group>(null);
   const layer2Ref = useRef<THREE.Group>(null);
 
@@ -66,6 +80,7 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
   return (
     <group>
       <Sky
+        ref={skyRef}
         distance={500000}
         sunPosition={skyConfig.sunPosition}
         turbidity={skyConfig.turbidity}
@@ -212,6 +227,10 @@ export const HorizonSilhouette: React.FC<{ boatZ: number; theme: RouteTheme }> =
     side: THREE.FrontSide,
     transparent: true,
     opacity: 0.85,
+    // Out of the fog (#325). The silhouette stands well beyond the fog's far
+    // plane, so fogging it would paint it out entirely - and it is the thing
+    // the fade is supposed to be revealing.
+    fog: false,
   }), [horizonConfig.color]);
 
   return (

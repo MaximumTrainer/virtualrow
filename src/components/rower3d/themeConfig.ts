@@ -238,7 +238,10 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       building: '#8b7355', buildingAccent: '#6a5a45', windowGlow: '#ffcc88',
     },
     atmosphere: {
-      fogColor: '#a8d0f0', fogNear: 60, fogFar: 600,
+      // Metres, since #321. 60/600 was authored when a unit was ten of them,
+      // so the fade began at 600 m and closed six kilometres out - which is to
+      // say never, on any water a rower can see across (#325).
+      fogColor: '#a8d0f0', fogNear: 80, fogFar: 550,
       skyColor: '#a0cdfa', ambientColor: '#b0d0e0', ambientIntensity: 0.38,
     },
     sky: {

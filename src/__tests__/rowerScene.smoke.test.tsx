@@ -52,6 +52,7 @@ vi.mock('@react-three/drei', async () => {
 
 const { renderScene, demoRoute } = await import('./sceneTestRenderer');
 const { BOAT_GROUP_NAME } = await import('../components/rower3d/constants');
+const { fogFor } = await import('../components/rower3d/fogPlan');
 
 /** 2:00/500m — 4.17 m/s, and a pace a test can do arithmetic on. */
 const PACE_S_PER_500 = 120;
@@ -86,6 +87,23 @@ describe('RowerScene', () => {
     const names = scene.objects().map((o) => o.name);
     expect(names, 'the scene never came out of Suspense').not.toContain('SceneSuspended');
     expect(names).toContain(BOAT_GROUP_NAME);
+
+    await scene.unmount();
+  });
+
+  // Issue #325 — the fog the theme authored has to reach the renderer, not
+  // just be returned by a helper. This is the seam where it used to stop: the
+  // numbers existed in the theme table for the whole life of the project and
+  // nothing ever mounted them.
+  it('fogs the scene with the distance the theme authored', async () => {
+    const scene = await renderScene({ performanceMode: 'low' });
+    // `instance` is typed as the base Object3D; the root of an R3F tree is a Scene.
+    const { fog } = scene.renderer.scene.instance as unknown as THREE.Scene;
+
+    expect(fog, 'the scene has no fog').toBeTruthy();
+    const linear = fog as THREE.Fog;
+    expect(linear.near).toBe(fogFor('willowbrook').near);
+    expect(linear.far).toBe(fogFor('willowbrook').far);
 
     await scene.unmount();
   });
