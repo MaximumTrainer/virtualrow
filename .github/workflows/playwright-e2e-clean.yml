@@ -152,6 +152,25 @@ jobs:
           path: playwright/tests/visual/__snapshots__
           if-no-files-found: warn
 
+      # A recording that changed something has to be committed before merge.
+      #
+      # The comparison below runs against whatever the job has on disk, so
+      # straight after a re-record it compares the new shots with themselves and
+      # passes - while the pull request still carries the old ones. Merge that
+      # and main compares the new scene against stale baselines and goes red,
+      # on a change that was green a minute earlier. This is the step that says
+      # so, and the artifact above is what to commit.
+      - name: Check the recorded baselines were committed
+        if: contains(github.event.pull_request.labels.*.name, 'visual-baseline')
+        run: |
+          if ! git diff --quiet -- playwright/tests/visual/__snapshots__; then
+            echo "::error::Re-recording changed these baselines, and the branch still has the old ones:"
+            git diff --name-only -- playwright/tests/visual/__snapshots__
+            echo "::error::Download the visual-baselines artifact from this run, commit it, and push."
+            exit 1
+          fi
+          echo "Re-recording reproduced the committed baselines exactly."
+
       # Always, including straight after a recording: a shot that differs from
       # the one taken a minute earlier is not a baseline, and this is where that
       # shows up rather than on someone else's pull request.
