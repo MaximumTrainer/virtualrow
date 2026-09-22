@@ -162,6 +162,11 @@ See §6 for the full gate and its escape hatches.
 **Visual baselines (Playwright, #340):**
 - Live in `playwright/tests/visual/`, with their PNGs in `playwright/tests/visual/__snapshots__/`.
 - Excluded from every other config, so the verification matrix does not run them.
+- Recording and committing are one step. The labelled job re-records, then fails
+  if that changed a committed baseline — because the comparison after it runs
+  against what was just recorded, so a branch can go green while still carrying
+  the old shots, and main then goes red on a change that passed. Commit the
+  artifact the job uploads.
 - A shot is only meaningful on the rasteriser that drew it. They are recorded on
   one Linux/SwiftShader CI job and nowhere else — never from a developer GPU,
   never on the Windows or macOS legs. Put the `visual-baseline` label on the pull
