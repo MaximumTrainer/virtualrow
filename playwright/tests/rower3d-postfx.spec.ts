@@ -155,7 +155,16 @@ test.describe('3D postprocessing', () => {
           const o = await readObservation(page);
           return o.best > 0 && o.frames >= 30;
         },
-        { timeout: 60_000, message: 'the 3D scene never mounted a canvas and rendered into it' },
+        {
+          // Two minutes, not one. The comment above already says this budget
+          // is wall clock and that the main thread spends much of it blocked;
+          // with two workers sharing a runner it spends more of it blocked
+          // still, and the poll ran out on macOS before thirty frames had been
+          // drawn. What is asserted is unchanged - a canvas, and thirty frames
+          // into it - and it is given the time to happen.
+          timeout: 120_000,
+          message: 'the 3D scene never mounted a canvas and rendered into it',
+        },
       )
       .toBe(true);
 

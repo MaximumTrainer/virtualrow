@@ -1,8 +1,18 @@
 (function () {
   // Indicate we're running inside Playwright test harness so app exposes test hooks
   try { window.__PLAYWRIGHT_TESTING = true; } catch (e) { /* ignore */ }
-  // Connect to simulator WS
-  const port = 9001;
+  // Connect to simulator WS.
+  //
+  // The ports come from the worker that opened this page, not from a constant:
+  // the suite runs several workers now, and each has a simulator of its own
+  // because the server broadcasts every message to every socket connected to
+  // it (see playwright/utils/simPorts.ts). The defaults are worker zero's, so
+  // a page opened by hand still finds the simulator where it always was.
+  const simPorts = (window.__SIM_PORTS && typeof window.__SIM_PORTS === 'object')
+    ? window.__SIM_PORTS
+    : { ws: 9001, http: 9002 };
+  const port = Number(simPorts.ws) || 9001;
+  const httpPort = Number(simPorts.http) || 9002;
   const ws = new WebSocket(`ws://localhost:${port}`);
   ws.addEventListener('open', () => console.log('Simulator WS connected'));
   ws.addEventListener('message', (ev) => {
@@ -259,7 +269,7 @@
     startSequence: async (id, sequence) => {
       // POST to control HTTP endpoint to start a sequence on the simulator
       try {
-        await fetch(`http://localhost:9002/sequence`, {
+        await fetch(`http://localhost:${httpPort}/sequence`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, sequence }),
@@ -273,7 +283,7 @@
     startRoute: async (id, options) => {
       // options: { distance, step, startHr, endHr, msPerStep }
       try {
-        await fetch(`http://localhost:9002/route`, {
+        await fetch(`http://localhost:${httpPort}/route`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, ...options }),
@@ -286,7 +296,7 @@
     },
     startFtmsRoute: async (id, options) => {
       try {
-        await fetch(`http://localhost:9002/ftms/route`, {
+        await fetch(`http://localhost:${httpPort}/ftms/route`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id, ...options }),
@@ -299,7 +309,7 @@
     },
     stopSequence: async (id) => {
       try {
-        await fetch(`http://localhost:9002/sequence/stop/${id}`, { method: 'POST' });
+        await fetch(`http://localhost:${httpPort}/sequence/stop/${id}`, { method: 'POST' });
         return true;
       } catch (e) {
         console.error('Failed to stop sequence', e);

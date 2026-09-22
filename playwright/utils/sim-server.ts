@@ -1,6 +1,7 @@
 import * as child_process from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { simPortsForWorker } from './simPorts';
 
 /**
  * Lifecycle for the PM5/FTMS simulator that feeds the mock BLE layer.
@@ -18,8 +19,27 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || '9001', 10);
-export const SIM_HTTP_PORT = parseInt(process.env.SIM_HTTP_PORT || '9002', 10);
+/**
+ * This worker's simulator ports.
+ *
+ * `TEST_PARALLEL_INDEX` is the value Playwright provides for exactly this -
+ * allocating a resource per worker. It stays inside `[0, workers)` however
+ * many times a worker is restarted, which `TEST_WORKER_INDEX` does not, so a
+ * crash mid-run cannot walk the ports off into a range nothing cleans up.
+ *
+ * An explicit `SIM_WS_PORT` still wins, for anyone driving the simulator by
+ * hand.
+ */
+const workerPorts = simPortsForWorker(Number(process.env.TEST_PARALLEL_INDEX ?? 0));
+
+export const SIM_WS_PORT = parseInt(
+  process.env.SIM_WS_PORT || String(workerPorts.ws),
+  10,
+);
+export const SIM_HTTP_PORT = parseInt(
+  process.env.SIM_HTTP_PORT || String(workerPorts.http),
+  10,
+);
 
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.cjs');
 

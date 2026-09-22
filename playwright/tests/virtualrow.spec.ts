@@ -5,14 +5,25 @@ import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations, captureGameplayCanvas } from '../utils/screenshot-helper';
 import { expectSceneAlive } from '../utils/scene-health';
+import { simPortsForWorker } from '../utils/simPorts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.js');
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
-// Read ports from environment variables with defaults
-const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || '9001', 10);
-const SIM_HTTP_PORT = parseInt(process.env.SIM_HTTP_PORT || '9002', 10);
+// This worker's simulator ports, or whatever the environment insists on.
+//
+// This file still owns a second copy of the simulator's process management -
+// `utils/sim-server.ts` says as much in its own header - and consolidating it
+// is a change for its own commit. What matters here is that the copy agrees
+// with the original about which ports this worker owns, because a suite with
+// several workers has several simulators (playwright/utils/simPorts.ts).
+const workerSimPorts = simPortsForWorker(Number(process.env.TEST_PARALLEL_INDEX ?? 0));
+const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || String(workerSimPorts.ws), 10);
+const SIM_HTTP_PORT = parseInt(
+  process.env.SIM_HTTP_PORT || String(workerSimPorts.http),
+  10,
+);
 
 let simProcess: child_process.ChildProcess;
 
@@ -82,7 +93,22 @@ async function cleanupPortsAndWait(): Promise<void> {
   await new Promise((r) => setTimeout(r, 2000));
 }
 
+/** Is a simulator already answering on this worker's port? */
+async function simServerIsUp(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${SIM_HTTP_PORT}`);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function startSimServer(retryCount = 0): Promise<void> {
+  // Two describes in this file each want a simulator, and they share a worker.
+  // Without this the second spawn hits EADDRINUSE, kills the port the first
+  // one is on and starts again - which works, and is a silly way to get there.
+  if (await simServerIsUp()) return;
+
   const simPath = simServerPath.replace(/\.js$/, '.cjs');
 
   return new Promise((resolve, reject) => {
@@ -386,10 +412,13 @@ test.describe('device and connectivity guards', () => {
 // ===========================================================================
 test.describe('FTMS rower device support', () => {
   test.beforeAll(async () => {
-    if (process.env.CI === 'true') {
-      await ensureSimServerStarted();
-    }
-    // In local dev the sim server may not be running; tests that need it handle failure gracefully.
+    // Start one wherever this runs.
+    //
+    // This used to only *wait* under CI, because the workflow started a single
+    // shared simulator before Playwright. There is no shared simulator any
+    // more - each worker has its own, which is what lets CI run more than one
+    // - so waiting for someone else to start it waits for nobody.
+    await startSimServer();
   });
 
   test.beforeEach(async ({ page }) => {
@@ -457,17 +486,14 @@ test.describe('Simulated e2e route playback', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
-    if (process.env.CI === 'true') {
-      await ensureSimServerStarted();
-      return;
-    }
+    // See the note above: there is no shared simulator to wait for any more.
     await startSimServer();
   });
 
   test.afterAll(async () => {
-    if (process.env.CI === 'true') {
-      return;
-    }
+    // Stopped everywhere now. Under CI this used to leave the shared server
+    // alone, which was right when the workflow owned it; leaving a per-worker
+    // one running would leak a process and hold its ports for the next run.
     await stopSimServer();
   });
 
