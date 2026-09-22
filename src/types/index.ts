@@ -343,6 +343,8 @@ declare global {
     };
     /** Upper-arm angle through the stroke, published under automation (#273). */
     __ROWER3D_ARM_ANGLE?: number;
+    /** Blade tip height in scene units, so a spec can watch it enter the water (#329). */
+    __ROWER3D_BLADE_Y?: number;
     /**
      * Draw the current frame immediately. Test mode only.
      *

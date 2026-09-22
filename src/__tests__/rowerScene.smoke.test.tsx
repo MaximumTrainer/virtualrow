@@ -191,4 +191,32 @@ describe('RowerScene', () => {
 
     await scene.unmount();
   });
+
+  /**
+   * Issue #329 — the hull pitches about its own lateral axis.
+   *
+   * three applies Euler rotations in `XYZ` order by default, which puts the
+   * pitch on world X. A boat heading east would then roll instead of pitching,
+   * and one heading north-east would do a bit of each. Yaw has to come first.
+   */
+  it('pitches the boat about its own beam, not about world X', async () => {
+    const scene = await renderScene({
+      performanceMode: 'low',
+      paceSPer500: PACE_S_PER_500,
+      cadence: 30,
+      isPlaying: true,
+    });
+
+    await scene.tick(10);
+    const boat = scene.objects().find((o) => o.name === BOAT_GROUP_NAME);
+
+    expect(boat, 'no boat in the scene').toBeDefined();
+    expect(
+      boat!.rotation.order,
+      'the boat rolls instead of pitching on any heading but due north',
+    ).toBe('YXZ');
+
+    await scene.unmount();
+  });
+
 });

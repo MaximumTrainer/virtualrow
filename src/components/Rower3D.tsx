@@ -92,6 +92,7 @@ import {
   type CameraView,
 } from './rower3d/cameraRig';
 import { useCameraView } from '../hooks/useCameraView';
+import { SURGE_AMPLITUDE, boatMotion } from './rower3d/boatMotion';
 
 /**
  * How far the tangent must swing before the route counts as bending (#328).
@@ -363,7 +364,15 @@ export const RowerScene: React.FC<
     );
     // Cosmetic-only slowdown on bends: this changes rendered route travel slightly
     // without altering the WASM physics model or stroke timing.
-    const renderedSpeedMps = speedMps / visualDragMultiplier;
+    //
+    // The surge is the same kind of thing (#329): a scull accelerates through
+    // the drive and checks at the catch, and the mean over a stroke is one, so
+    // the erg's distance is untouched. `boatMotion.test.ts` integrates it and
+    // holds that to 2%, because a rowing app that quietly adds distance is a
+    // rowing app that lies about how far you went.
+    const motion = boatMotion(strokeCycleTRef.current);
+    const renderedSpeedMps =
+      (speedMps / visualDragMultiplier) * (1 + SURGE_AMPLITUDE * motion.surge);
     
     if (isPlaying && speedMps > 0 && totalDistance > 0 && curveData.length > 0) {
       const progressRate = renderedSpeedMps / totalDistance;
@@ -401,8 +410,19 @@ export const RowerScene: React.FC<
     boatRotationRef.current = routePos.angle;
     
     if (boatGroupRef.current) {
+      // Pitch and heave come from the same thing - the crew's weight moving
+      // along the boat - so they are in phase and both read from `boatMotion`.
+      // Held still under reduced motion, which is what that setting is for.
+      const still = reducedMotionRef.current;
+      // Yaw first, then pitch about the boat's own lateral axis. three's
+      // default 'XYZ' order applies the X rotation first, which would pitch
+      // about world X - so a boat heading east would roll instead of pitching,
+      // and one heading north-east would do a bit of each (#329).
+      boatGroupRef.current.rotation.order = 'YXZ';
       boatGroupRef.current.position.copy(boatPositionRef.current);
+      if (!still) boatGroupRef.current.position.y += motion.heaveM;
       boatGroupRef.current.rotation.y = boatRotationRef.current;
+      boatGroupRef.current.rotation.x = still ? 0 : motion.pitchRad;
     }
 
     const liveTime = state.clock.elapsedTime;
