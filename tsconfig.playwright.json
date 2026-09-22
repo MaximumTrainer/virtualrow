@@ -22,6 +22,7 @@
     "src/utils/sceneTelemetryLog.ts",
     "src/utils/worldScale.ts",
     "src/components/rower3d/constants.ts",
-    "src/components/rower3d/renderBudget.ts"
+    "src/components/rower3d/renderBudget.ts",
+    "src/components/rower3d/strokePose.ts"
   ]
 }
