@@ -13,83 +13,117 @@ import { getThemeConfig } from './themeConfig';
 import { recordComposerMounted } from './composerState';
 import type { RouteTheme, ColorGradingConfig } from './themeConfig';
 import { createCausticsTexture } from './helpers';
+import {
+  FOAM_RING_LIFETIME_SECONDS,
+  STERN_Z_METRES,
+  WAKE_RENDER_ORDER,
+  WAKE_SURFACE_Y,
+  bloomSafeFoamColor,
+  createFoamRingTexture,
+  createWakeGeometry,
+  createWakeTexture,
+  foamRingFor,
+  wakeFor,
+} from './wakeTexture';
 
 // ============================================================================
-// WAKE EFFECT — V-shaped Kelvin wake trailing behind the boat, velocity-scaled
+// WAKE EFFECT — the trail behind the stern (#323)
+//
+// Was three white quads drawn from the boat's centre backwards, which put most
+// of the wake under the hull and all of it above the bloom pass's threshold.
+// It is one textured mesh now, starting at the stern, in a colour the bloom
+// cannot see. The pure half — shape, colour, falloff — is in `wakeTexture.ts`.
 // ============================================================================
 export const WakeEffect: React.FC<{
   positionRef: React.MutableRefObject<THREE.Vector3>;
   rotationRef: React.MutableRefObject<number>;
   velocityRef: React.MutableRefObject<number>;
-}> = ({ positionRef, rotationRef, velocityRef }) => {
-  const groupRef    = useRef<THREE.Group>(null);
-  const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
-  const rightMatRef = useRef<THREE.MeshBasicMaterial>(null);
-  const sternMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  foamColor: string;
+}> = ({ positionRef, rotationRef, velocityRef, foamColor }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshBasicMaterial>(null);
 
-  const HALF_ANGLE = Math.PI / 9.2;
-  const WAKE_LEN = 5;
+  const geometry = useMemo(() => createWakeGeometry(), []);
+  const texture = useMemo(() => createWakeTexture(), []);
+  const color = useMemo(() => bloomSafeFoamColor(foamColor), [foamColor]);
+
+  useEffect(
+    () => () => {
+      geometry.dispose();
+      texture?.dispose();
+    },
+    [geometry, texture],
+  );
 
   useFrame(() => {
-    const g = groupRef.current;
-    if (!g) return;
+    const group = groupRef.current;
+    const mesh = meshRef.current;
+    const material = materialRef.current;
+    if (!group || !mesh || !material) return;
 
-    const vel = velocityRef.current;
-    g.position.copy(positionRef.current);
-    g.rotation.y = rotationRef.current;
+    const { length, opacity } = wakeFor(velocityRef.current);
 
-    const alpha = Math.min(vel / 2.5, 1.0) * 0.3;
-    const visible = vel > 0.15;
-    for (const matRef of [leftMatRef, rightMatRef, sternMatRef]) {
-      if (matRef.current) {
-        matRef.current.opacity  = alpha;
-        matRef.current.visible  = visible;
-      }
-    }
-    const s = Math.min(vel / 4.17, 1.0);
-    g.scale.set(s, 1, s);
+    // On the water, not on the boat: the hull rises and falls with the stroke
+    // and the wake does not go with it.
+    const position = positionRef.current;
+    group.position.set(position.x, WAKE_SURFACE_Y, position.z);
+    group.rotation.y = rotationRef.current;
+
+    // The mesh keeps its offset to the stern while it scales: the unit wake
+    // grows in X and Z together, so the V holds its angle and the arms spread
+    // as the boat speeds up.
+    mesh.scale.set(length, 1, length);
+
+    material.opacity = opacity;
+    group.visible = opacity > 0.01 && length > 0.01;
   });
 
-  const armAngle = HALF_ANGLE;
-  const halfLen  = WAKE_LEN / 2;
-
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} visible={false}>
       <mesh
-        position={[-Math.sin(armAngle) * halfLen, -0.07, -Math.cos(armAngle) * halfLen]}
-        rotation={[-Math.PI / 2, 0, armAngle]}
+        ref={meshRef}
+        geometry={geometry}
+        position={[0, 0, STERN_Z_METRES]}
+        renderOrder={WAKE_RENDER_ORDER}
       >
-        <planeGeometry args={[0.35, WAKE_LEN, 1, 8]} />
-        <meshBasicMaterial ref={leftMatRef} color="white" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh
-        position={[Math.sin(armAngle) * halfLen, -0.07, -Math.cos(armAngle) * halfLen]}
-        rotation={[-Math.PI / 2, 0, -armAngle]}
-      >
-        <planeGeometry args={[0.35, WAKE_LEN, 1, 8]} />
-        <meshBasicMaterial ref={rightMatRef} color="white" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh position={[0, -0.07, -halfLen * 0.6]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1.2, halfLen * 1.2, 1, 4]} />
-        <meshBasicMaterial ref={sternMatRef} color="white" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          ref={materialRef}
+          map={texture ?? undefined}
+          color={color}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.NormalBlending}
+          side={THREE.DoubleSide}
+        />
       </mesh>
     </group>
   );
 };
 
 // ============================================================================
-// BLADE ENTRY FOAM — white foam sprites at oar-blade entry on the catch phase
+// BLADE ENTRY FOAM — the ring a blade leaves on the surface at the catch (#323)
+//
+// Was two white discs at fixed size, fading over 0.6 s. They are rings now, and
+// they expand as they fade: a blade tears a hole in the surface and the hole
+// spreads. Same colour ceiling as the wake, so the bloom pass leaves them be.
 // ============================================================================
 export const BladeEntryFoam: React.FC<{
   positionRef: React.MutableRefObject<THREE.Vector3>;
   rotationRef: React.MutableRefObject<number>;
   strokePhase: string;
+  foamColor: string;
   foamIntensity?: number;
-}> = ({ positionRef, rotationRef, strokePhase, foamIntensity = 0.65 }) => {
+}> = ({ positionRef, rotationRef, strokePhase, foamColor, foamIntensity = 0.65 }) => {
   const leftRef  = useRef<THREE.Mesh>(null);
   const rightRef = useRef<THREE.Mesh>(null);
   const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
   const rightMatRef = useRef<THREE.MeshBasicMaterial>(null);
+
+  const texture = useMemo(() => createFoamRingTexture(), []);
+  const color = useMemo(() => bloomSafeFoamColor(foamColor), [foamColor]);
+  useEffect(() => () => texture?.dispose(), [texture]);
 
   const foamLifeRef = useRef(0);
   const prevPhaseRef = useRef('recovery');
@@ -106,8 +140,12 @@ export const BladeEntryFoam: React.FC<{
     }
     prevPhaseRef.current = strokePhase;
 
-    foamLifeRef.current = Math.max(0, foamLifeRef.current - delta / 0.6);
-    const alpha = foamLifeRef.current * foamIntensity;
+    foamLifeRef.current = Math.max(
+      0,
+      foamLifeRef.current - delta / FOAM_RING_LIFETIME_SECONDS,
+    );
+    const { scale, opacity } = foamRingFor(foamLifeRef.current);
+    const alpha = opacity * foamIntensity;
 
     const pos = positionRef.current;
     const rot = rotationRef.current;
@@ -115,24 +153,50 @@ export const BladeEntryFoam: React.FC<{
     const sinR = Math.sin(rot);
     const span = 3.2;
 
-    left.position.set(pos.x - cosR * span, pos.y - 0.05, pos.z + sinR * span);
-    right.position.set(pos.x + cosR * span, pos.y - 0.05, pos.z - sinR * span);
+    left.position.set(pos.x - cosR * span, WAKE_SURFACE_Y, pos.z + sinR * span);
+    right.position.set(pos.x + cosR * span, WAKE_SURFACE_Y, pos.z - sinR * span);
+    left.scale.setScalar(scale);
+    right.scale.setScalar(scale);
 
     lMat.opacity = alpha;
     rMat.opacity = alpha;
-    lMat.visible = alpha > 0.01;
-    rMat.visible = alpha > 0.01;
+    left.visible = alpha > 0.01;
+    right.visible = alpha > 0.01;
   });
+
+  const ringMaterial = (
+    materialRef: React.RefObject<THREE.MeshBasicMaterial | null>,
+  ) => (
+    <meshBasicMaterial
+      ref={materialRef}
+      map={texture ?? undefined}
+      color={color}
+      transparent
+      opacity={0}
+      depthWrite={false}
+      blending={THREE.NormalBlending}
+    />
+  );
 
   return (
     <>
-      <mesh ref={leftRef} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.55, 12]} />
-        <meshBasicMaterial ref={leftMatRef} color="white" transparent opacity={0} depthWrite={false} />
+      <mesh
+        ref={leftRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={WAKE_RENDER_ORDER}
+        visible={false}
+      >
+        <circleGeometry args={[0.55, 24]} />
+        {ringMaterial(leftMatRef)}
       </mesh>
-      <mesh ref={rightRef} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.55, 12]} />
-        <meshBasicMaterial ref={rightMatRef} color="white" transparent opacity={0} depthWrite={false} />
+      <mesh
+        ref={rightRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={WAKE_RENDER_ORDER}
+        visible={false}
+      >
+        <circleGeometry args={[0.55, 24]} />
+        {ringMaterial(rightMatRef)}
       </mesh>
     </>
   );

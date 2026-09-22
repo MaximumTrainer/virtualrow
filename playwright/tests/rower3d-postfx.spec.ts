@@ -308,3 +308,75 @@ test.describe('one tone-mapping stage', () => {
     });
   }
 });
+
+/**
+ * Issue #323 — the wake and the blade foam as a blown-out white slab.
+ *
+ * Three untextured `color="white"` quads drawn from the boat's centre
+ * backwards, which put them under the hull, and bright enough for the bloom
+ * pass to find. The result was a lamp under the boat in every screenshot.
+ *
+ * The readback is deliberately of the frame rather than of the materials: the
+ * fault was what the composite looked like, and a material assertion would
+ * have passed throughout.
+ */
+test.describe('the water under the boat', () => {
+  test('is not a blown-out white slab at auto', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__PLAYWRIGHT_TESTING = true;
+    });
+    await bootAt(page, 'auto');
+    await startDemoRow(page);
+    await expectSceneAlive(page, 'the wake scene');
+
+    // Long enough for the boat to be up to speed: the wake scales with
+    // velocity, and at rest there is nothing to blow out.
+    await page.waitForTimeout(10_000);
+
+    const reading = await page.evaluate(() => {
+      window.__ROWER3D_FORCE_RENDER?.();
+      const canvas = document.querySelector(
+        '.rower3d-canvas-container canvas',
+      ) as HTMLCanvasElement | null;
+      if (!canvas) return null;
+
+      const flat = document.createElement('canvas');
+      flat.width = canvas.width;
+      flat.height = canvas.height;
+      const ctx = flat.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(canvas, 0, 0);
+
+      // The block is specified in CSS pixels; the backing store may be denser.
+      const density = canvas.clientWidth ? canvas.width / canvas.clientWidth : 1;
+      const width = Math.round(200 * density);
+      const height = Math.round(120 * density);
+      const left = Math.max(0, Math.round(flat.width / 2 - width / 2));
+      const top = Math.max(
+        0,
+        Math.round(flat.height / 2 + 40 * density - height / 2),
+      );
+      const right = Math.min(flat.width, left + width);
+      const bottom = Math.min(flat.height, top + height);
+      if (right <= left || bottom <= top) return null;
+
+      const { data } = ctx.getImageData(left, top, right - left, bottom - top);
+      let nearWhite = 0;
+      let counted = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        counted += 1;
+        if (data[i] >= 245 && data[i + 1] >= 245 && data[i + 2] >= 245) nearWhite += 1;
+      }
+      return { nearWhite, counted };
+    });
+
+    expect(reading, 'no frame could be read back').not.toBeNull();
+    expect(reading!.counted).toBeGreaterThan(0);
+
+    const share = reading!.nearWhite / reading!.counted;
+    expect(
+      share,
+      'the water under the boat is blown out to white, which is the #323 slab',
+    ).toBeLessThan(0.02);
+  });
+});

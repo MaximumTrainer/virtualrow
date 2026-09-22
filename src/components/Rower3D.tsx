@@ -657,6 +657,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
           velocityRef={velocityRef}
+          foamColor={themeConfig.water.foamColor}
         />
       )}
 
@@ -665,6 +666,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
           strokePhase={strokePhase}
+          foamColor={themeConfig.water.foamColor}
           foamIntensity={themeConfig.water.foamIntensity}
         />
       )}
