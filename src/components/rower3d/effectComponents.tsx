@@ -316,7 +316,11 @@ export const FinishSplash: React.FC<{
 // ============================================================================
 // CAUSTICS LIGHT — animated SpotLight with caustics cookie texture (#123)
 // ============================================================================
-export const CausticsLight: React.FC<{ boatZ: number }> = ({ boatZ }) => {
+export const CausticsLight: React.FC<{
+  /** Where the boat is, in XZ. Z alone left the caustics behind on a bend (#326). */
+  boatXZ: [number, number];
+}> = ({ boatXZ }) => {
+  const [boatX, boatZ] = boatXZ;
   const spotRef = useRef<THREE.SpotLight>(null);
   const targetRef = useRef<THREE.Object3D>(null);
   const causticsTexture = useMemo(() => createCausticsTexture(), []);
@@ -325,7 +329,7 @@ export const CausticsLight: React.FC<{ boatZ: number }> = ({ boatZ }) => {
   useAnimationFrame((time) => {
     if (spotRef.current) {
       const r = 2.0;
-      spotRef.current.position.x = Math.sin(time * 0.4) * r;
+      spotRef.current.position.x = boatX + Math.sin(time * 0.4) * r;
       spotRef.current.position.z = boatZ + Math.cos(time * 0.4) * r;
     }
     if (causticsTexture) {
