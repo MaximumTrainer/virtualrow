@@ -107,3 +107,61 @@ test('the blades stay over water for the whole demo row', async ({ page }) => {
 
   expect(errors, 'the page reported errors while rowing').toEqual([]);
 });
+
+/**
+ * Issue #329 — the blades go in the water and come out again.
+ *
+ * `strokePose` swept the oars with `sin(phase * 2pi) * 0.5` and nothing else:
+ * the blades never squared, never feathered and never touched the water. They
+ * scythed over the surface at a constant height for the whole stroke, which is
+ * the one thing a sculler never does.
+ *
+ * Sampled from the running scene rather than from the pose, because the pose
+ * is already unit-tested — what this adds is that the GLB oars are actually
+ * being driven by it.
+ */
+test('the blades enter the water on the drive and clear it on the recovery', async ({ page }) => {
+  test.slow();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() => {
+    (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
+      .__VIRTUALROW_PERFORMANCE_MODE = 'low';
+  });
+  await page.goto('./');
+  await page.locator('.btn-try-demo').click();
+  await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
+  await expectSceneAlive(page, 'the blade scene');
+
+  await expect
+    .poll(() => page.evaluate(() => window.__ROWER3D_BLADE_Y ?? null), {
+      timeout: 30_000,
+      message: 'the scene never reported where its blades were',
+    })
+    .not.toBeNull();
+
+  // Sampled across several strokes, so both halves of the cycle are caught
+  // whatever phase the scene happened to be at when the polling started.
+  const heights: number[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    const y = await page.evaluate(() => window.__ROWER3D_BLADE_Y ?? null);
+    if (y !== null) heights.push(y);
+    await page.waitForTimeout(120);
+  }
+
+  // A blade height at all means the GLB scull mounted and its frame loop is
+  // running, which is the only precondition this check has.
+  expect(heights.length, 'no blade heights were sampled').toBeGreaterThan(30);
+
+  const deepest = Math.min(...heights);
+  const highest = Math.max(...heights);
+  console.log(
+    `[blades] deepest ${deepest.toFixed(3)} highest ${highest.toFixed(3)} ` +
+      `over ${heights.length} samples`,
+  );
+
+  // WATER_SURFACE_Y is -0.1. The blade goes 0.15 m under it on the drive and
+  // 0.25 m over it on the recovery, so both sides of the surface are visited.
+  expect(deepest, 'the blades never entered the water').toBeLessThan(-0.1);
+  expect(highest, 'the blades never came out of the water').toBeGreaterThan(-0.1);
+});

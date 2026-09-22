@@ -3,7 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { BOAT_GROUP_NAME, IS_TEST_MODE } from './constants';
-import { strokePose } from './strokePose';
+import { OAR_LEVER_RATIO, strokePose } from './strokePose';
+import { WATER_SURFACE_Y } from './waterGeometry';
 import { GLB_ROWER_NODES } from './crewRig';
 import { createBoatNormalMap } from './helpers';
 import { CREW_URL, type Crew } from './crewModel';
@@ -334,11 +335,15 @@ const GltfScullBase: React.FC<{
   // so a plain deep clone preserves the named nodes we animate).
   const model = useMemo(() => scene.clone(true), [scene]);
   const oarsRef = useRef<{ left: THREE.Object3D | null; right: THREE.Object3D | null }>({ left: null, right: null });
+  /** Where the rig authored the oars, so the dip is measured from it not from zero. */
+  const oarRestYRef = useRef(0);
   useEffect(() => {
+    const left = model.getObjectByName('LeftOar') ?? null;
     oarsRef.current = {
-      left: model.getObjectByName('LeftOar') ?? null,
+      left,
       right: model.getObjectByName('RightOar') ?? null,
     };
+    if (left) oarRestYRef.current = left.position.y;
   }, [model]);
 
   // The rig authors these alongside the oars (scripts/build_crew.py), and they
@@ -364,6 +369,15 @@ const GltfScullBase: React.FC<{
     if (oars.left) oars.left.rotation.y = oarSweep;
     if (oars.right) oars.right.rotation.y = -oarSweep;
 
+    // The blades square up and go in, and feather and come out (#329). The oar
+    // pivots at the gate, so the shaft's own roll is the feather, and lifting
+    // the gate end by the lever ratio puts the tip at the height asked for.
+    for (const oar of [oars.left, oars.right]) {
+      if (!oar) continue;
+      oar.rotation.z = pose.bladeFeatherRad;
+      oar.position.y = oarRestYRef.current + pose.bladeHeightM * OAR_LEVER_RATIO;
+    }
+
     // Arms draw in through the drive and extend on the recovery, from the same
     // pose that swept the oars — so they stay in step by construction.
     const rower = rowerRef.current;
@@ -382,6 +396,9 @@ const GltfScullBase: React.FC<{
         window.__ROWER3D_OAR_ANGLE = oarSweep;
         window.__ROWER3D_STROKE_RATE = strokesPerMinute;
         window.__ROWER3D_ARM_ANGLE = pose.upperArmAngle;
+        // Where the blade tip is relative to the water, so a spec can watch it
+        // go in and come out rather than taking the pose's word for it (#329).
+        window.__ROWER3D_BLADE_Y = WATER_SURFACE_Y + pose.bladeHeightM;
       }
     } catch { /* intentional: window access may fail in test environments */ }
   });

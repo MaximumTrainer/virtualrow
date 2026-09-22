@@ -1,5 +1,9 @@
 import { test, expect } from '../fixtures/crash-watch';
 import { expectSceneAlive } from '../utils/scene-health';
+import {
+  CATCH_SWEEP_RAD,
+  FINISH_SWEEP_RAD,
+} from '../../src/components/rower3d/strokePose';
 
 /**
  * Issue #273 — the rower's arms move with the oars in the GLB scull.
@@ -22,8 +26,18 @@ import { expectSceneAlive } from '../utils/scene-health';
 const ARM_MIN = -0.5;
 const ARM_MAX = 0.7;
 
-/** oarSweep is sin(phase * 2pi) * 0.5. */
-const OAR_LIMIT = 0.5;
+/**
+ * How far the oar can sweep either way, from the angles the stroke is built
+ * from rather than from a number written down beside them.
+ *
+ * This was a flat 0.5, with a comment saying `oarSweep` is
+ * `sin(phase * 2pi) * 0.5`. It was, until #329 gave the stroke the catch and
+ * finish angles a sculler actually rows - 55 degrees towards the bow and 35
+ * the other way - and then the spec was asserting the shape of a stroke the
+ * code had stopped having. Importing the constants means the next person to
+ * retune them does not have to remember this line exists.
+ */
+const OAR_LIMIT = Math.max(Math.abs(CATCH_SWEEP_RAD), Math.abs(FINISH_SWEEP_RAD));
 
 test('the GLB scull drives the rower from the same stroke as the oars', async ({ page }) => {
   test.slow();
