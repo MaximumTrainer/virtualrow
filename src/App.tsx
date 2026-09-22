@@ -39,6 +39,8 @@ import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
 import { CrewPicker } from './components/CrewPicker';
 import { useCrewPreference } from './hooks/useCrewPreference';
 import { useRenderStats } from './hooks/useRenderStats';
+import { RENDER_BUDGET, overBudget } from './components/rower3d/renderBudget';
+import type { PerformanceMode } from './components/rower3d/constants';
 import { useStructuredWorkout } from './hooks/useStructuredWorkout';
 import { WorkoutLibrary } from './components/WorkoutLibrary';
 import { WorkoutOverlay } from './components/WorkoutOverlay';
@@ -1456,10 +1458,23 @@ function App() {
               <tbody>
                 {renderStats.stats ? (
                   <>
-                    <tr><td>Draw calls:</td><td>{renderStats.stats.drawCalls}</td></tr>
-                    <tr><td>Triangles:</td><td>{renderStats.stats.triangles.toLocaleString()}</td></tr>
+                    {/* Against the budget CI holds, not on its own: a draw
+                        call count means nothing without the line it is near
+                        (#342). The breached axes are named in red so the panel
+                        answers the same question the gate does. */}
+                    <tr className={overBudget(renderStats.stats.performanceMode as PerformanceMode, { drawCalls: renderStats.stats.drawCalls }).length ? 'debug-over-budget' : undefined}>
+                      <td>Draw calls:</td>
+                      <td>{renderStats.stats.drawCalls} / {RENDER_BUDGET[renderStats.stats.performanceMode as PerformanceMode]?.drawCalls ?? '—'}</td>
+                    </tr>
+                    <tr className={overBudget(renderStats.stats.performanceMode as PerformanceMode, { triangles: renderStats.stats.triangles }).length ? 'debug-over-budget' : undefined}>
+                      <td>Triangles:</td>
+                      <td>{renderStats.stats.triangles.toLocaleString()} / {RENDER_BUDGET[renderStats.stats.performanceMode as PerformanceMode]?.triangles.toLocaleString() ?? '—'}</td>
+                    </tr>
                     <tr><td>FPS:</td><td>{renderStats.stats.fps?.toFixed(1) ?? 'N/A'}</td></tr>
-                    <tr><td>Frame p95 (ms):</td><td>{renderStats.stats.p95Ms?.toFixed(1) ?? 'N/A'}</td></tr>
+                    <tr className={overBudget(renderStats.stats.performanceMode as PerformanceMode, { p95Ms: renderStats.stats.p95Ms }).length ? 'debug-over-budget' : undefined}>
+                      <td>Frame p95 (ms):</td>
+                      <td>{renderStats.stats.p95Ms?.toFixed(1) ?? 'N/A'} / {RENDER_BUDGET[renderStats.stats.performanceMode as PerformanceMode]?.p95Ms ?? '—'}</td>
+                    </tr>
                     <tr><td>Drawing with:</td><td>{renderStats.stats.drawing}</td></tr>
                     <tr><td>Backend detected:</td><td>{renderStats.stats.backend}</td></tr>
                     <tr><td>Quality:</td><td>{renderStats.stats.performanceMode}</td></tr>

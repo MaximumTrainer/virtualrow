@@ -19,6 +19,9 @@
     "src/types",
     "src/utils/sceneHealth.ts",
     "src/utils/crashEvidence.ts",
-    "src/utils/sceneTelemetryLog.ts"
+    "src/utils/sceneTelemetryLog.ts",
+    "src/utils/worldScale.ts",
+    "src/components/rower3d/constants.ts",
+    "src/components/rower3d/renderBudget.ts"
   ]
 }

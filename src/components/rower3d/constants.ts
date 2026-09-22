@@ -10,6 +10,23 @@ declare global {
 export const IS_TEST_MODE = typeof window !== 'undefined' && !!window.__PLAYWRIGHT_TESTING;
 
 /**
+ * Whether to publish render and frame telemetry onto `window`.
+ *
+ * Test mode publishes it, and test mode also drops the effect stack, the wake,
+ * the spray and the environment probe. So everything the numbers described was
+ * the automation scene rather than the one a rower gets: the draw-call budget
+ * beside them had to be written as "186 here, 1114 outside test mode", which
+ * is a budget for a scene nobody runs (#342).
+ *
+ * `__VIRTUALROW_TELEMETRY` separates the two, exactly as
+ * `__VIRTUALROW_PERFORMANCE_MODE` separated the tier from the automation flag
+ * in #197. A spec can then measure the scene it means to budget.
+ */
+export const isTelemetryPublished = (): boolean =>
+  typeof window !== 'undefined' &&
+  (!!window.__PLAYWRIGHT_TESTING || !!window.__VIRTUALROW_TELEMETRY);
+
+/**
  * Performance mode to render at.
  *
  * An explicit override wins; otherwise automation defaults to `low` for speed

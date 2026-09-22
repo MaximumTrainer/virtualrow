@@ -1689,6 +1689,18 @@ body {
   width: 50%;
 }
 
+/* A frame over the ceiling CI holds it to (#342). Colour alone would not say
+   so to a reader who cannot see it, hence the marker the row carries too. */
+.debug-table tr.debug-over-budget td {
+  color: var(--color-danger, #d64545);
+  font-weight: 600;
+}
+
+.debug-table tr.debug-over-budget td:last-child::after {
+  content: ' ⚠ over budget';
+  font-weight: 400;
+}
+
 .debug-table td:last-child {
   color: var(--color-text-primary);
   font-weight: 600;

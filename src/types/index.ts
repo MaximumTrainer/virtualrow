@@ -418,6 +418,8 @@ declare global {
       fallbackReason?: string;
     };
     /** Per-frame render cost, sampled before the effect composer runs (#232). */
+    /** Publish render and frame telemetry without entering test mode (#342). */
+    __VIRTUALROW_TELEMETRY?: boolean;
     __ROWER3D_RENDER_STATS?: {
       drawing: string;
       drawCalls: number;
