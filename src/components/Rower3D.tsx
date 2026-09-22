@@ -416,7 +416,19 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         // perfectly well (#261). A capture calls this first so it photographs a
         // complete frame instead of the gap between two.
         window.__ROWER3D_FORCE_RENDER = () => {
+          // Graded, even though this bypasses the composer.
+          //
+          // This draws straight through the renderer, and since #327 the
+          // renderer stops tone-mapping wherever a composer carries that pass -
+          // so a forced frame came out ungraded and dark, which is what every
+          // capture then photographed. Putting ACES back for the duration makes
+          // a forced frame look like the frame a rower sees; it is still
+          // missing the composer's other passes, which is the standing cost of
+          // rendering around it.
+          const grading = gl.toneMapping;
+          if (readComposerMounted()) gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.render(scene, camera);
+          gl.toneMapping = grading;
         };
         window.__ROWER3D_ROUTE = {
           hasCurve: !!routeCurve,
@@ -854,6 +866,39 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
     [surface],
   );
   
+  /**
+   * The renderer's own options, memoised (#327).
+   *
+   * R3F re-applies the `gl` prop whenever the object changes identity, and an
+   * inline literal changes on every render - so every re-render of this
+   * component re-applied `toneMapping: ACES`, undoing the composer's claim on
+   * it and grading the frame twice again a moment later. Nothing in here
+   * changes after the canvas is built.
+   */
+  const rendererOptions = useMemo(
+    () => ({
+      antialias: glSelection.antialias,
+      // Opaque, so the page cannot show through the world.
+      //
+      // The bank is a strip whose outer reach is clamped on bends (#285), and
+      // past it there was nothing: the canvas cleared to transparent and
+      // `.rower3d-canvas-container`'s CSS gradient showed through. On any bend
+      // that is a tear of page background between the bank and the horizon
+      // (#334).
+      alpha: false,
+      powerPreference: glSelection.powerPreference,
+      failIfMajorPerformanceCaveat: false,
+      preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
+      // The starting value only. Which stage grades the frame is decided by the
+      // effect plan and applied in DynamicPostFx (#327).
+      toneMapping: THREE.ACESFilmicToneMapping,
+      // Set from the theme below; the initial value only covers the first
+      // frames before the effect runs.
+      toneMappingExposure: 0.55,
+    }),
+    [glSelection.antialias, glSelection.powerPreference],
+  );
+
   // No configuration the driver would grant: say so, rather than mounting a
   // canvas that can never draw and leaving the rower with a blank box (#232).
   if (gpuBackend === 'none' || !glSelection.usable) {
@@ -889,24 +934,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           camera={{ position: [0, 2.5, 6], fov: 60, near: 0.1, far: 12000 }}
           shadows={surface.shadows}
           dpr={surface.dpr}
-          gl={{
-            antialias: glSelection.antialias,
-            // Opaque, so the page cannot show through the world.
-            //
-            // The bank is a strip whose outer reach is clamped on bends (#285),
-            // and past it there was nothing: the canvas cleared to transparent
-            // and `.rower3d-canvas-container`'s CSS gradient showed through.
-            // On any bend that is a tear of page background between the bank
-            // and the horizon (#334).
-            alpha: false,
-            powerPreference: glSelection.powerPreference,
-            failIfMajorPerformanceCaveat: false,
-            preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
-            toneMapping: THREE.ACESFilmicToneMapping,
-            // Set from the theme below; the initial value only covers the first
-            // frames before the effect runs.
-            toneMappingExposure: 0.55,
-          }}
+          gl={rendererOptions}
           onCreated={({ gl, scene }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             // Whatever the world does not cover is the distance, so it is the

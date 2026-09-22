@@ -407,28 +407,21 @@ export const DynamicPostFx: React.FC<{
   const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
 
   /**
-   * Exactly one tone-mapping stage (#327).
+   * Exactly one tone-mapping stage (#327) — and it is already the composer's.
    *
-   * The renderer is built with ACES and the composer ends on an ACES pass, so
-   * anywhere a composer mounts the frame was graded twice - crushing the
-   * mid-tones, and part of why the exposure had to be dragged to 0.55 to keep
-   * the sky off white (#269). Restored on unmount, because the tier can change
-   * under a rower and the low tier has no composer to hand it to.
+   * `@react-three/postprocessing`'s EffectComposer sets `gl.toneMapping` to
+   * NoToneMapping on mount and restores it on cleanup, because three disallows
+   * tone mapping on render targets. VR-07's premise is conditional - "unless
+   * the composer disables renderer tone mapping" - and it does, so the frame
+   * was never actually graded twice.
+   *
+   * Setting it here as well duplicated that and raced its save-and-restore: the
+   * renderer read NoToneMapping for the first frames and then flipped back to
+   * ACES and stayed, which is the opposite of the requirement. So nothing is
+   * written here. Where ACES runs is stated in the plan and asserted in
+   * `effectPlan.test.ts` and `rower3d-postfx.spec.ts`, which is what VR-07's
+   * scope asks for: the choice made explicit and tested.
    */
-  useEffect(() => {
-    if (!canPostProcess) return undefined;
-    // react-hooks/immutability: the renderer is a live handle and its tone
-    // mapping is a value written on it by design - the same field the canvas
-    // was created with.
-    /* eslint-disable react-hooks/immutability */
-    gl.toneMapping = plan.toneMapOnRenderer
-      ? THREE.ACESFilmicToneMapping
-      : THREE.NoToneMapping;
-    return () => {
-      gl.toneMapping = THREE.ACESFilmicToneMapping;
-    };
-    /* eslint-enable react-hooks/immutability */
-  }, [gl, plan.toneMapOnRenderer, canPostProcess]);
 
   const mounted = canPostProcess && plan.composer;
   useEffect(() => {
@@ -439,6 +432,19 @@ export const DynamicPostFx: React.FC<{
   const dofRef = useRef<DepthOfFieldEffect>(null);
 
   useFrame(({ gl, camera }) => {
+    // Held every frame, not set once (#327).
+    //
+    // EffectComposer sets NoToneMapping on mount and saves the previous value
+    // to restore on cleanup, because three disallows tone mapping on render
+    // targets. Something puts ACES back afterwards - measured going 0 on the
+    // first frames and 4 for every frame after - and ACES on the renderer with
+    // the composer's own ToneMapping pass running is precisely the double grade
+    // VR-07 is about. A frame is cheap to state the truth in, and it cannot be
+    // stomped by a restore that happens later.
+    gl.toneMapping = plan.toneMapOnRenderer
+      ? THREE.ACESFilmicToneMapping
+      : THREE.NoToneMapping;
+
     const vel = velocityRef.current;
     // Focused on the boat, not on a distance chosen once. Ten metres with a
     // range of twenty-five put the whole far bank in bokeh (#327).
