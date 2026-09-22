@@ -75,6 +75,7 @@ import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
 import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
 import { detectRouteTheme } from './rower3d/routeTheme';
+import { fogFor } from './rower3d/fogPlan';
 import './Rower3D.css';
 
 // The crewed sculls are preloaded in boatComponents, beside the component that
@@ -422,6 +423,10 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           curveLength: curveData.length,
           builds: routeLoadCount()
         };
+        window.__ROWER3D_SCENE_FOG =
+          scene.fog instanceof THREE.Fog
+            ? { near: scene.fog.near, far: scene.fog.far }
+            : undefined;
         window.__ROWER3D_SPEED_MPS = renderedSpeedMps;
         window.__ROWER3D_STROKE_PHASE = boatStateRef.current.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
@@ -474,12 +479,18 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   // at all (#233).
   const [sunMesh, setSunMesh] = useState<THREE.Mesh | null>(null);
   const godRaysSunMesh = godRaysSun(performanceMode, sunMesh);
+  const fog = useMemo(() => fogFor(routeTheme), [routeTheme]);
 
   return (
     <AnimationProvider>
       
       <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
       
+      {/* Aerial perspective, and the thing that lets the world end.
+          Linear rather than exponential: the chunk cull is a hard distance, so
+          the fade has to be one too if the cut is to land inside it (#325). */}
+      <fog attach="fog" args={[fog.color, fog.near, fog.far]} />
+
       {/* Sky and ground bounce. The three arguments were ternary chains over
           six themes; five of them were retired in #361, so these are the
           values the survivor always took. */}

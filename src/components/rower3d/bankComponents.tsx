@@ -17,6 +17,7 @@ import {
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { createBankGeometry } from './bankGeometry';
 import { RouteStripChunks } from './routeStripChunks';
+import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
 import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
 import type { SceneryTrack } from './sceneryTrack';
@@ -94,8 +95,18 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
 
   return (
     <group>
-      <RouteStripChunks curve={curve} material={material} buildChunk={buildLeft} />
-      <RouteStripChunks curve={curve} material={material} buildChunk={buildRight} />
+      <RouteStripChunks
+        curve={curve}
+        material={material}
+        buildChunk={buildLeft}
+        viewDistance={chunkViewDistanceFor(theme)}
+      />
+      <RouteStripChunks
+        curve={curve}
+        material={material}
+        buildChunk={buildRight}
+        viewDistance={chunkViewDistanceFor(theme)}
+      />
     </group>
   );
 };

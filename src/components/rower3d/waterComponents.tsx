@@ -10,6 +10,7 @@ import type { RouteTheme } from './themeConfig';
 import { attachGerstnerShader, createWaterNormalMap } from './helpers';
 import { createWaterChannelGeometry } from './waterGeometry';
 import { RouteStripChunks } from './routeStripChunks';
+import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
 import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
 
@@ -242,5 +243,12 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
 
   if (!curve) return null;
 
-  return <RouteStripChunks curve={curve} material={material} buildChunk={buildChunk} />;
+  return (
+    <RouteStripChunks
+      curve={curve}
+      material={material}
+      buildChunk={buildChunk}
+      viewDistance={chunkViewDistanceFor(theme)}
+    />
+  );
 };
