@@ -4,6 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { expectSceneAlive } from '../utils/scene-health';
 
+
 /**
  * Issue #269 — the ground either side of the waterway must look different from
  * the water.
@@ -133,6 +134,26 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
     ];
 
     /**
+     * Whether a pixel is sky, by where it is as well as what colour it is.
+     *
+     * Colour alone is not enough, and #328 is how that came out. Moving the
+     * chase camera from 6 m back to 7 flattens the view onto the water by a
+     * couple of degrees, and a flatter view of water reflects more sky — so
+     * the river turned pale, every one of its pixels fell inside the sky
+     * tolerance, and the whole river was discarded before anything was
+     * measured. The centre column's median then read the bank's green, every
+     * comparison against it inverted at once, and the spec reported 2% ground
+     * on both banks with the banks plainly in shot.
+     *
+     * The sky is above the horizon and the horizon is in the upper part of the
+     * frame in every view this scene has. Water that mirrors the sky is still
+     * water, and it is below that line.
+     */
+    const SKY_BAND = 0.45;
+    const isSky = (pixel: [number, number, number], y: number) =>
+      y < H * SKY_BAND && apart(pixel, sky) <= 40;
+
+    /**
      * What a vertical strip of the frame is made of, ignoring the sky.
      *
      * Strips with the sky filtered out, rather than a patch at coordinates
@@ -152,7 +173,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
         for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
           const [r, g, b] = at(x, y);
           looked += 1;
-          if (apart([r, g, b], sky) <= 40) continue;
+          if (isSky([r, g, b], y)) continue;
           reds.push(r);
           greens.push(g);
           blues.push(b);
@@ -187,7 +208,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
       for (let y = 0; y < H; y += 2) {
         for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
           const [r, g, b] = at(x, y);
-          if (apart([r, g, b], sky) <= 40) continue;
+          if (isSky([r, g, b], y)) continue;
           nonSky += 1;
           if (apart([r, g, b], water) > 60) ground += 1;
         }
@@ -292,3 +313,30 @@ for (const tier of ['low', 'auto', 'high'] as const) {
     }
   });
 }
+
+/*
+ * Issue #324 asked for a "water is not flat" metric here, and it is not here.
+ * What was tried, and why it was taken out again:
+ *
+ * VR-04 proposes luminance standard deviation >= 6/255 inside the water. That
+ * does not measure the water: the *old* flat water scores 19.3, because a
+ * frame contains a boat, a bank, a fog gradient and a vignette whatever the
+ * river is made of.
+ *
+ * Neighbour detail - the mean absolute luminance difference between adjacent
+ * pixels in two bands either side of the boat - does measure it. Flat water
+ * reads 0.04 to 0.42; the rippled water reads 0.43 to 1.03. The ranges touch,
+ * and worse, single captures on a software rasteriser come back at 0.002 and
+ * 0.013 when the frame has not composited yet. Best-of-four across twelve
+ * seconds still failed one attempt in two. A gate that fails half the time
+ * fails pull requests that did nothing wrong, and it costs a minute an
+ * attempt in a suite whose E2E step has a forty-minute ceiling - which it
+ * exceeded, at 42m44s, on the run that tried it.
+ *
+ * The property is gated, deterministically, by the committed visual baselines.
+ * They are captured from a frozen scene, so they do not have this variance,
+ * and the water going flat is exactly the change they catch: turning it on
+ * moved `willowbrook-low-1280x720` by 7,448 pixels and grew the file from
+ * 49 KB to 177 KB. Turning it off again would move it back.
+ */
+

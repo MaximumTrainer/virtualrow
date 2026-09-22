@@ -73,7 +73,23 @@ jobs:
         # long as it runs instead of going quiet a few seconds in. That is the
         # point, and it costs real time on a software rasteriser: macOS ran to
         # 29.3 minutes of test time and tripped the old 30 minute ceiling.
-        timeout-minutes: 40
+        #
+        # Raised again for #324. The water gained scrolling normal ripples, a
+        # fresnel blend and a sky environment to reflect, and every 3D spec in
+        # the suite got about 30% slower for it - ubuntu 32 to 42 minutes,
+        # windows 38 to 46. The rise is spread across every spec rather than
+        # concentrated in one, which is what a per-fragment cost looks like.
+        #
+        # Wall clock here is not the performance signal. CI renders on
+        # SwiftShader, one to two orders of magnitude slower than the
+        # integrated GPU the frame-rate criterion is written against - the
+        # point `route-performance-budgets.spec.ts` has made since #224. What
+        # guards the real cost is that spec's per-tier draw-call and triangle
+        # budgets (#342), and those still pass.
+        #
+        # 55 rather than 50: #347 has more scene work in it, and a ceiling
+        # that has to be raised every second PR is not a ceiling.
+        timeout-minutes: 55
 
       - name: Upload Playwright artifacts
         if: always()
