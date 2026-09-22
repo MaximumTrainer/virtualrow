@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH, RIVERBANK_WIDTH } from './constants';
 import { WHOLE_ROUTE } from './geometryChunks';
+import { WATER_SURFACE_Y } from './waterGeometry';
 import {
   sampleStripFrame,
   stripProgressSchedule,
@@ -18,8 +19,16 @@ import {
 // exports components only.
 // ============================================================================
 
-/** Scene height of the waterline; the inner edge of both banks sits here. */
-export const BANK_WATERLINE_Y = -0.5;
+/**
+ * Scene height of the waterline; the inner edge of both banks sits here.
+ *
+ * Two centimetres under the water surface, so the shore is tucked beneath it
+ * rather than z-fighting with it. It was -0.5 while the water sat at -0.1, a
+ * pair of numbers authored separately and neither aware of the other - so the
+ * shore was a 38 cm cliff the length of the route, seen edge-on from a camera
+ * two and a half metres up (#334).
+ */
+export const BANK_WATERLINE_Y = WATER_SURFACE_Y - 0.02;
 
 /**
  * Builds one riverbank as a strip running from the waterline out to the top of
@@ -154,8 +163,9 @@ export const createBankGeometry = (
     inner.copy(point).addScaledVector(perp, outward * waterHalfWidth);
     outer.copy(point).addScaledVector(perp, outward * reaches[i]);
 
-    // The waterline is fixed, so the inner edge stays put and the bank climbs
-    // away from it. Moving it would open a gap between land and water.
+    // The waterline is where the water is, so the inner edge stays put and the
+    // bank climbs away from it. Moving it would open a gap between land and
+    // water - which is what a separate constant did (#334).
     inner.y = BANK_WATERLINE_Y;
     outer.y = BANK_WATERLINE_Y + getTerrainReliefForProgress(terrain, t);
 
@@ -192,5 +202,77 @@ export const createBankGeometry = (
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
 
+  return geometry;
+};
+
+/** How far inside the water's edge the wet strip begins, in metres. */
+export const SHORELINE_INNER_METRES = 0.4;
+/** How far up the bank it reaches. */
+export const SHORELINE_OUTER_METRES = 0.8;
+/** Total width of the strip. */
+export const SHORELINE_WIDTH_METRES = SHORELINE_INNER_METRES + SHORELINE_OUTER_METRES;
+
+/**
+ * The line where the water meets the land (#334).
+ *
+ * A narrow strip straddling the water's edge, carrying a foam-to-sand gradient
+ * across its width: `uv.x` runs 0 at the wet end to 1 at the dry one, so the
+ * material can fade out rather than stop.
+ *
+ * It does not need the fold-clamping the bank does. That exists because a bank
+ * reaching tens of metres off a bend folds through its own centre of curvature
+ * (#285); a strip 1.2 m wide cannot fold on any water a boat can turn in, so
+ * this is the plain offset walk the bank cannot be.
+ */
+export const createShorelineGeometry = (
+  curve: THREE.CatmullRomCurve3,
+  side: 'left' | 'right',
+  { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
+): THREE.BufferGeometry => {
+  const schedule = stripProgressSchedule(curve, range);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  const point = new THREE.Vector3();
+  const perp = new THREE.Vector3();
+  const edge = new THREE.Vector3();
+  const outward = side === 'left' ? -1 : 1;
+
+  schedule.forEach((t, i) => {
+    sampleStripFrame(curve, t, point, perp);
+
+    const waterHalfWidth =
+      getWaterWidthSceneUnitsForProgress(
+        enrichment?.segmentProfiles,
+        enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
+        t,
+      ) / 2;
+
+    for (const [offset, u] of [
+      [waterHalfWidth - SHORELINE_INNER_METRES, 0],
+      [waterHalfWidth + SHORELINE_OUTER_METRES, 1],
+    ] as const) {
+      edge.copy(point).addScaledVector(perp, outward * offset);
+      // Just above the water, so the foam sits on the surface rather than in it.
+      positions.push(edge.x, WATER_SURFACE_Y + 0.01, edge.z);
+      uvs.push(u, t * 10);
+    }
+
+    if (i > 0) {
+      const a = (i - 1) * 2;
+      const b = i * 2;
+      // Wound so the strip faces up on both banks; `outward` mirrors one of them.
+      if (side === 'left') indices.push(a, a + 1, b, a + 1, b + 1, b);
+      else indices.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
   return geometry;
 };

@@ -59,7 +59,10 @@ describe('riverbank terrain relief (#202)', () => {
   it('draws a flat bank when there is no enrichment at all', () => {
     const geometry = createBankGeometry(straightCurve(), 'left');
 
-    expect(outerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
+    // Compared with a tolerance, not `===`. The heights come back out of a
+    // Float32BufferAttribute, and strict equality only held while the waterline
+    // happened to be -0.5 - a value float32 stores exactly (#334).
+    for (const y of outerHeights(geometry)) expect(y).toBeCloseTo(BANK_WATERLINE_Y, 5);
     geometry.dispose();
   });
 
@@ -68,7 +71,7 @@ describe('riverbank terrain relief (#202)', () => {
     // never reached OpenTopoData must render exactly as it did before.
     const geometry = createBankGeometry(straightCurve(), 'left', { enrichment: enrichmentWith([0, 0, 0, 0]) });
 
-    expect(outerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
+    for (const y of outerHeights(geometry)) expect(y).toBeCloseTo(BANK_WATERLINE_Y, 5);
     geometry.dispose();
   });
 
@@ -97,7 +100,7 @@ describe('riverbank terrain relief (#202)', () => {
       { enrichment: enrichmentWith([0, 400, 900, 1500]) },
     );
 
-    expect(innerHeights(geometry).every((y) => y === BANK_WATERLINE_Y)).toBe(true);
+    for (const y of innerHeights(geometry)) expect(y).toBeCloseTo(BANK_WATERLINE_Y, 5);
     geometry.dispose();
   });
 

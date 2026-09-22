@@ -216,7 +216,10 @@ describe('createBankGeometry', () => {
     const left = createBankGeometry(curve, 'left');
     const right = createBankGeometry(curve, 'right');
 
-    expect(vertexAt(left, 0).y).toBe(BANK_WATERLINE_Y);
+    // A tolerance, not `===`: the height comes back out of a
+    // Float32BufferAttribute, and strict equality only held while the
+    // waterline happened to be -0.5, which float32 stores exactly (#334).
+    expect(vertexAt(left, 0).y).toBeCloseTo(BANK_WATERLINE_Y, 5);
     expect(vertexAt(left, 1).distanceTo(vertexAt(left, 0))).toBeGreaterThan(0);
     // The two banks straddle the channel: their inner edges sit on opposite sides.
     expect(vertexAt(left, 0).distanceTo(vertexAt(right, 0))).toBeCloseTo(
