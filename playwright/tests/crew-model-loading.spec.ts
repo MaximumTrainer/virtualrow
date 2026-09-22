@@ -136,3 +136,47 @@ for (const crew of ['female', 'male'] as const) {
     await endWorkout(page);
   });
 }
+
+/**
+ * Issue #330 — the rower slides.
+ *
+ * The rig has authored a `Seat` node alongside the oars since it was built and
+ * nothing ever moved it: the legs compressed while the seat stayed where it
+ * was, so the rower shrank and grew rather than sliding up and down the boat.
+ *
+ * Sampled from the running scene rather than from the pose, because the pose
+ * is unit-tested already — what this adds is that the GLB's seat is being
+ * driven by it.
+ */
+test('the rower slides up and down the boat', async ({ page }) => {
+  test.slow();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() => {
+    (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
+      .__VIRTUALROW_PERFORMANCE_MODE = 'low';
+  });
+  await page.goto('./');
+  await page.locator('.btn-try-demo').click();
+  await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
+
+  await expect
+    .poll(() => page.evaluate(() => window.__ROWER3D_SEAT_Z ?? null), {
+      timeout: 30_000,
+      message: 'the scene never reported where its seat was',
+    })
+    .not.toBeNull();
+
+  const seen: number[] = [];
+  for (let i = 0; i < 60; i += 1) {
+    const z = await page.evaluate(() => window.__ROWER3D_SEAT_Z ?? null);
+    if (z !== null) seen.push(z);
+    await page.waitForTimeout(120);
+  }
+
+  expect(seen.length, 'no seat positions were sampled').toBeGreaterThan(30);
+  const travel = Math.max(...seen) - Math.min(...seen);
+  console.log(`[slide] travel ${travel.toFixed(3)} m over ${seen.length} samples`);
+
+  expect(travel, 'the rower is not sliding').toBeGreaterThanOrEqual(0.4);
+});

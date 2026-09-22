@@ -4,7 +4,7 @@ import ReactThreeTestRenderer from '@react-three/test-renderer';
 import { installCanvasMock } from './canvasMock';
 
 /**
- * Issue #329 — the parts of the GLB scull the frame loop moves.
+ * Issues #329 and #330 — the parts of the GLB scull the frame loop moves.
  *
  * The rower sat rigid while the oars swept and nobody noticed, because
  * `Rower3D` renders `RowingScull` under `IS_TEST_MODE` and `GltfScull`
@@ -60,6 +60,7 @@ const {
   BLADE_CLEARANCE_M,
   BLADE_DEPTH_M,
   FEATHER_RAD,
+  SLIDE_TRAVEL_M,
   STROKE_DRIVE_FRACTION,
   OAR_LEVER_RATIO,
 } = await import('../components/rower3d/strokePose');
@@ -118,7 +119,7 @@ describe('the GLB scull', () => {
     const scull = await mountAt(0);
     const nodes = await scull.at(0);
 
-    for (const name of ['LeftOar', 'RightOar', 'Rower_Torso']) {
+    for (const name of ['LeftOar', 'RightOar', 'Seat', 'Rower_Torso']) {
       expect(nodes[name], `no ${name} in the mounted scull`).toBeDefined();
     }
 
@@ -154,6 +155,37 @@ describe('the GLB scull', () => {
     ).toBeGreaterThan(drive.LeftOar.y);
 
     await scull.renderer.unmount();
+  });
+
+  // #330. The rig has always carried a Seat and nothing ever moved it, so the
+  // rower's legs compressed while their seat stayed where it was - they shrank
+  // and grew rather than sliding up and down the boat.
+  it('slides the seat the length of the slide', async () => {
+    const scull = await mountAt(0);
+
+    const rest = 0.2; // where the mock rig authors the seat
+    const atCatch = await scull.at(0);
+    const atFinish = await scull.at(STROKE_DRIVE_FRACTION - 0.001);
+
+    expect(atCatch.Seat.z, 'the seat is not back at the catch').toBeCloseTo(
+      rest - SLIDE_TRAVEL_M,
+      2,
+    );
+    expect(atFinish.Seat.z, 'the seat did not come up the slide').toBeCloseTo(rest, 2);
+  });
+
+  it('keeps the seat and the knees agreeing', async () => {
+    // `seatPosition` is derived from `legCompression` rather than tracked
+    // beside it, so a rower cannot end up sitting somewhere their legs do not.
+    const scull = await mountAt(0);
+
+    // A quarter of the way through the drive, not half: the legs have their
+    // own window and it is the drive's first half, so by the midpoint they are
+    // already down and the seat has arrived.
+    const partWay = await scull.at(STROKE_DRIVE_FRACTION * 0.25);
+    const rest = 0.2;
+    expect(partWay.Seat.z).toBeGreaterThan(rest - SLIDE_TRAVEL_M);
+    expect(partWay.Seat.z).toBeLessThan(rest);
   });
 
   it('sweeps the oars in opposite directions, as a sculler does', async () => {

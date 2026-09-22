@@ -350,11 +350,15 @@ const GltfScullBase: React.FC<{
   // were never animated: the blades swept while the rower held still, so the
   // boat looked as though it were rowing itself (#273).
   const rowerRef = useRef<Record<string, THREE.Object3D | null>>({});
+  /** Where the rig authored the seat, so the slide is measured from it. */
+  const seatRestZRef = useRef(0);
 
   useEffect(() => {
     rowerRef.current = Object.fromEntries(
       GLB_ROWER_NODES.map((name) => [name, model.getObjectByName(name) ?? null]),
     );
+    const seat = rowerRef.current.Seat;
+    if (seat) seatRestZRef.current = seat.position.z;
   }, [model]);
 
   useFrame((state) => {
@@ -387,6 +391,9 @@ const GltfScullBase: React.FC<{
     if (rower.LeftArm_Fore) rower.LeftArm_Fore.rotation.x = pose.forearmAngle;
     if (rower.RightArm_Fore) rower.RightArm_Fore.rotation.x = pose.forearmAngle;
     if (rower.Rower_Torso) rower.Rower_Torso.rotation.x = pose.bodyLean;
+    // The slide, which nothing drove before #330: the legs compressed and the
+    // seat stayed put, so the rower shrank and grew rather than sliding.
+    if (rower.Seat) rower.Seat.position.z = seatRestZRef.current + pose.seatPosition;
     try {
       // Published under automation rather than only in test mode. The GLB scull
       // renders only when IS_TEST_MODE is false, so gating its telemetry on that
@@ -399,6 +406,8 @@ const GltfScullBase: React.FC<{
         // Where the blade tip is relative to the water, so a spec can watch it
         // go in and come out rather than taking the pose's word for it (#329).
         window.__ROWER3D_BLADE_Y = WATER_SURFACE_Y + pose.bladeHeightM;
+        // Where the seat is on the slide, so a spec can watch it move (#330).
+        window.__ROWER3D_SEAT_Z = pose.seatPosition;
       }
     } catch { /* intentional: window access may fail in test environments */ }
   });

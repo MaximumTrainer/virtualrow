@@ -12,6 +12,9 @@
 
 /** Rower nodes the scene animates through the stroke. */
 export const GLB_ROWER_NODES = [
+  // The slide. Authored by the rig alongside the oars and never animated: the
+  // rower's legs went down and their seat stayed where it was (#330).
+  'Seat',
   'Rower_Torso',
   'Rower_LeftArm',
   'Rower_RightArm',

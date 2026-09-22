@@ -50,6 +50,14 @@ export const BLADE_TRANSITION_FRACTION = 0.02;
  */
 export const OAR_LEVER_RATIO = 0.35;
 
+/**
+ * How far the seat travels along the slide, in metres.
+ *
+ * Zero is the finish, negative is towards the stern at the catch — the
+ * direction the rig authors the slide in.
+ */
+export const SLIDE_TRAVEL_M = 0.5;
+
 export interface StrokePose {
   /** Oar rotation about its gate, radians. Positive sweeps one way. */
   oarSweep: number;
@@ -83,6 +91,18 @@ const easeInOut = (t: number): number =>
   t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
 /**
+ * How far through a segment of the stroke `t` is, eased, and 0 or 1 outside it.
+ *
+ * This is what sequences the drive (#330). `armPull`, `legCompression` and
+ * `bodyLean` all came off the same eased `t`, so the legs, the back and the
+ * arms moved in lockstep - which is not a drive, it is a shrug. A real one is
+ * legs first, back through the middle, arms to finish, and the recovery
+ * reverses it: arms away, body over, then the slide.
+ */
+const segment = (t: number, from: number, to: number): number =>
+  easeInOut(Math.min(1, Math.max(0, (t - from) / (to - from))));
+
+/**
  * How far through feathering the blade is: 0 squared, 1 flat.
  *
  * Ramped over `BLADE_TRANSITION_FRACTION` at each end rather than switched,
@@ -113,21 +133,22 @@ export const strokePose = (phase: number): StrokePose => {
   let legCompression: number;
   let armPull: number;
   let bodyLean: number;
-  let seatPosition: number;
 
   if (safe < STROKE_DRIVE_FRACTION) {
-    const t = easeInOut(safe / STROKE_DRIVE_FRACTION);
-    legCompression = 1 - t;
-    armPull = t;
-    bodyLean = -0.3 + t * 0.5;
-    seatPosition = -0.5 + t * 0.5;
+    const t = safe / STROKE_DRIVE_FRACTION;
+    legCompression = 1 - segment(t, 0.0, 0.5);
+    bodyLean = -0.3 + 0.5 * segment(t, 0.25, 0.8);
+    armPull = segment(t, 0.5, 1.0);
   } else {
-    const t = easeInOut((safe - STROKE_DRIVE_FRACTION) / (1 - STROKE_DRIVE_FRACTION));
-    legCompression = t;
-    armPull = 1 - t;
-    bodyLean = 0.2 - t * 0.5;
-    seatPosition = t * -0.5;
+    const t = (safe - STROKE_DRIVE_FRACTION) / (1 - STROKE_DRIVE_FRACTION);
+    armPull = 1 - segment(t, 0.0, 0.4);
+    bodyLean = 0.2 - 0.5 * segment(t, 0.2, 0.7);
+    legCompression = segment(t, 0.4, 1.0);
   }
+
+  // The seat is the slide, and the slide is the legs: one number, so the rower
+  // cannot end up sitting somewhere their knees do not agree with.
+  const seatPosition = -SLIDE_TRAVEL_M * legCompression;
 
   // Asymmetric, because a stroke is. The old `sin(phase * 2pi) * 0.5` swept an
   // even 28.6 degrees either side of square, which is neither the angle a

@@ -6,6 +6,7 @@ import {
   CATCH_SWEEP_RAD,
   FEATHER_RAD,
   FINISH_SWEEP_RAD,
+  SLIDE_TRAVEL_M,
   STROKE_DRIVE_FRACTION,
   strokePose,
 } from '../components/rower3d/strokePose';
@@ -103,6 +104,91 @@ describe('strokePose', () => {
 
       expect(between / 1000).toBeLessThan(BLADE_TRANSITION_FRACTION * 3);
     });
+  });
+
+  /**
+   * Issue #330 — a drive is sequenced, not a shrug.
+   *
+   * `armPull`, `legCompression` and `bodyLean` all came off the same eased
+   * `t`, so the legs, the back and the arms moved in lockstep. A real drive is
+   * legs first, back through the middle, arms to finish; the recovery reverses
+   * it — arms away, body over, then the slide.
+   */
+  describe('the sequence of the drive', () => {
+    /** A phase a given fraction of the way through the drive. */
+    const throughDrive = (fraction: number) => strokePose(STROKE_DRIVE_FRACTION * fraction);
+
+    it('sends the legs down before the arms come in', () => {
+      const early = throughDrive(0.2);
+
+      expect(early.legCompression, 'the legs have not started').toBeLessThan(0.7);
+      expect(early.armPull, 'the arms came in with the legs').toBeLessThan(0.05);
+    });
+
+    it('swings the back through the middle', () => {
+      const early = throughDrive(0.15);
+      const middle = throughDrive(0.5);
+
+      expect(middle.bodyLean, 'the back never swung').toBeGreaterThan(early.bodyLean);
+    });
+
+    it('draws the arms in to finish', () => {
+      expect(throughDrive(0.6).armPull, 'the arms have not begun').toBeGreaterThan(0.05);
+      expect(throughDrive(0.999).armPull).toBeGreaterThan(0.9);
+    });
+
+    it('has everything at its end value by the finish', () => {
+      const finish = throughDrive(0.999);
+
+      expect(finish.legCompression).toBeLessThan(0.02);
+      expect(finish.armPull).toBeGreaterThan(0.9);
+      expect(finish.seatPosition).toBeGreaterThan(-0.02);
+    });
+
+    it('reverses the order on the recovery: arms away, body over, then slide', () => {
+      const recovery = (fraction: number) =>
+        strokePose(STROKE_DRIVE_FRACTION + (1 - STROKE_DRIVE_FRACTION) * fraction);
+
+      // A fifth of the way back, the hands have gone and the slide has not.
+      expect(recovery(0.2).armPull).toBeLessThan(0.6);
+      expect(recovery(0.2).legCompression, 'the slide started before the hands left')
+        .toBeLessThan(0.05);
+      // Three quarters back, the slide is under way.
+      expect(recovery(0.75).legCompression).toBeGreaterThan(0.2);
+    });
+  });
+
+  describe('the slide', () => {
+    it('follows the legs exactly, so the seat and the knees agree', () => {
+      for (let i = 0; i < 200; i += 1) {
+        const pose = strokePose(i / 200);
+        expect(pose.seatPosition).toBeCloseTo(-SLIDE_TRAVEL_M * pose.legCompression, 6);
+      }
+    });
+
+    it('travels the length of the slide over a stroke', () => {
+      let lowest = Infinity;
+      let highest = -Infinity;
+      for (let i = 0; i < 400; i += 1) {
+        const { seatPosition } = strokePose(i / 400);
+        lowest = Math.min(lowest, seatPosition);
+        highest = Math.max(highest, seatPosition);
+      }
+
+      expect(highest - lowest, 'the seat barely moves').toBeGreaterThan(0.4);
+    });
+  });
+
+  // Nothing may jump at the seam, or the rower twitches once a stroke.
+  it('is continuous across the end of the stroke', () => {
+    const before = strokePose(0.9999);
+    const after = strokePose(0);
+
+    for (const key of ['legCompression', 'armPull', 'bodyLean', 'seatPosition'] as const) {
+      expect(Math.abs(before[key] - after[key]), `${key} jumps at the catch`).toBeLessThan(
+        0.05,
+      );
+    }
   });
 
   it('draws the arms in through the drive and extends them on the recovery', () => {

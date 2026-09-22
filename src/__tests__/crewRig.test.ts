@@ -57,6 +57,13 @@ describe('the crew rig exposes what the scene animates', () => {
     expect([...names].some((n) => n.includes('Rower'))).toBe(false);
   });
 
+  // The slide. The rig has always authored it and nothing ever moved it, so
+  // the rower's legs compressed while their seat stayed where it was — they
+  // shrank and grew rather than sliding (#330).
+  it('names the seat, so the rower can slide', () => {
+    expect(GLB_ROWER_NODES).toContain('Seat');
+  });
+
   it('names the arms and the oars, so a stroke can move both', () => {
     expect(GLB_ROWER_NODES).toContain('Rower_LeftArm');
     expect(GLB_ROWER_NODES).toContain('Rower_RightArm');
