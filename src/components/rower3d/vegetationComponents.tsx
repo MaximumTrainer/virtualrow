@@ -1,5 +1,6 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
+import { useFollowPoint } from './followBoat';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme, TreeSpeciesEntry } from './themeConfig';
@@ -13,7 +14,16 @@ import { makeSwayFoliageMaterial } from './foliageMaterial';
 // ============================================================================
 // PINE TREES - Scattered along the banks
 // ============================================================================
-export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?: RouteTheme; enrichment?: RouteEnrichmentData | null; terrainY?: number }> = ({ side, boatZ, theme = 'willowbrook', enrichment, terrainY = 0 }) => {
+export const PineTrees: React.FC<{
+  side: 'left' | 'right';
+  /** Where the tiled band sits: the boat's Z, lifted by the local relief (#331). */
+  followRef?: React.RefObject<THREE.Vector3 | null>;
+  theme?: RouteTheme;
+  enrichment?: RouteEnrichmentData | null;
+}> = ({ side, followRef, theme = 'willowbrook', enrichment }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  useFollowPoint(groupRef, followRef);
+
   const xBase = side === 'left' ? -25 : 25;
 
   // PineTrees is used on the non-curve (flat) path where all trees span the
@@ -106,7 +116,7 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
   }, [trees]);
 
   return (
-    <group position={[0, terrainY, boatZ]}>
+    <group ref={groupRef}>
       {trees.map((tree, i) => {
         const nearShadow = Math.abs(tree.z) < RENDER_CONFIG.shadowNearBand;
         const trunkColor = tree.species.trunkColor;
@@ -180,7 +190,16 @@ export const PineTrees: React.FC<{ side: 'left' | 'right'; boatZ: number; theme?
 // ============================================================================
 // GROUND COVER — instanced reeds, rocks, and grass along the banks (#130)
 // ============================================================================
-export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode; enrichment?: RouteEnrichmentData | null; terrainY?: number }> = ({ boatZ, theme, enrichment, terrainY = 0 }) => {
+export const GroundCover: React.FC<{
+  /** Where the tiled band sits: the boat's Z, lifted by the local relief (#331). */
+  followRef?: React.RefObject<THREE.Vector3 | null>;
+  theme: RouteTheme;
+  performanceMode?: PerformanceMode;
+  enrichment?: RouteEnrichmentData | null;
+}> = ({ followRef, theme, enrichment }) => {
+  const coverRef = useRef<THREE.Group>(null);
+  useFollowPoint(coverRef, followRef);
+
   const gcConfig = useMemo(() => getThemeConfig(theme).groundCover, [theme]);
 
   // GroundCover is a global component that spans the full scene on the
@@ -299,7 +318,7 @@ export const GroundCover: React.FC<{ boatZ: number; theme: RouteTheme; performan
   }, [theme, reedEntry, rockEntry, grassEntry, reedCount, rockCount, grassCount]);
 
   return (
-    <group position={[0, terrainY, boatZ]}>
+    <group ref={coverRef}>
       {reedEntry && (
         <instancedMesh ref={reedMeshRef} args={[undefined, undefined, REED_MAX]} frustumCulled={false}>
           <cylinderGeometry args={[0.05, 0.05, 1.5, 4]} />

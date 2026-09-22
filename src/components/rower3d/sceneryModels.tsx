@@ -17,7 +17,7 @@
 // node already rotates Z-up -> glTF Y-up, so here we only scale mm -> scene
 // units and yaw each instance to sit with the existing landscape.
 // ============================================================================
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import type { RouteTheme } from './themeConfig';
@@ -49,11 +49,38 @@ import {
   computePlacements,
   type Placement,
 } from './sceneryPlacement';
+import { useAnimationFrame } from './animationFrame';
+import { cullByDistance, withinMountRange } from './visibilityCull';
+import { chunkViewDistanceFor } from './fogPlan';
+
+/**
+ * Frames between scenery culls.
+ *
+ * The test is over every placement on the route, and a tree does not come
+ * into view in a sixtieth of a second.
+ */
+export const SCENERY_CULL_FRAME_INTERVAL = 6;
 
 interface SceneryModelsProps {
   side?: 'left' | 'right';
   boatZ?: number;
-  boatProgress?: number;
+  /**
+   * Where the boat is, read every few frames to decide what is worth drawing.
+   *
+   * A ref rather than a number: this used to be `boatProgress`, a prop pushed
+   * from `setSceneryState` ten times a second, and every push rebuilt the JSX
+   * below — mounting and unmounting `<primitive>` groups as the boat moved
+   * (#331). Nothing re-renders now; `object.visible` is written in place.
+   */
+  positionRef?: React.RefObject<THREE.Vector3 | null>;
+  /**
+   * Progress the mounted window is centred on (#331).
+   *
+   * Every mounted instance is a cloned GLB resident on the GPU, so the window
+   * stays the width it was; what changed is that it moves about twenty times
+   * across a route rather than three thousand.
+   */
+  mountProgress?: number;
   theme?: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
   terrainY?: number;
@@ -79,7 +106,9 @@ const SceneryModelsChunk: React.FC<
   onChunkLoaded,
   side = 'left',
   boatZ = 0,
-  boatProgress = 0,
+  positionRef = null,
+  mountProgress = 0,
+  theme = 'willowbrook',
   enrichment,
   terrainY = 0,
   performanceMode = 'high',
@@ -149,6 +178,7 @@ const SceneryModelsChunk: React.FC<
   }, [ready, gltfs]);
 
   const budget = budgetFor(performanceMode);
+  const viewDistance = chunkViewDistanceFor(theme);
 
   const placements = useMemo<Placement[]>(
     () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side, track }),
@@ -170,27 +200,83 @@ const SceneryModelsChunk: React.FC<
   const instances = useMemo(
     () =>
       [...placements, ...structurePlacements]
+        .filter((p) => !curve || withinMountRange(p.progress, mountProgress))
         .map((p, i) => {
           const src = sceneById.get(p.id);
           if (!src) return null;
           return { key: `${i}-${p.id}`, obj: src.clone(true), p };
         })
         .filter((v): v is { key: string; obj: THREE.Group; p: Placement } => v !== null),
-    [placements, structurePlacements, sceneById],
+    [placements, structurePlacements, sceneById, curve, mountProgress],
   );
 
-  // In curve mode, only render instances near the boat (cheap per-frame filter,
-  // no re-clone), matching CurvedLandscapeElements' visibility window.
-  const visible = curve
-    ? instances.filter(({ p }) => Math.abs(p.progress - boatProgress) < 0.12 || p.progress < 0.06)
-    : instances;
+  // Every instance is mounted, and which of them are drawn is decided in the
+  // frame loop rather than in the render (#331).
+  //
+  // This used to be `instances.filter(...)` on a `boatProgress` prop, keeping
+  // a window of 0.12 progress either side of the boat plus the route's first
+  // 6% always on. Two things were wrong with it. A progress window is not a
+  // distance, so the same number meant 240 m on a 2 km route and 2.4 km on a
+  // 20 km one; and the filter ran during render, so every push of the prop
+  // mounted and unmounted `<primitive>` groups — a scene graph edit ten times
+  // a second, which is what the periodic 100-300 ms frames were.
+  //
+  // The window is the fog's far plane now, because that is the honest answer
+  // to "can this be seen": past it there is nothing but fog colour.
+  const centres = useMemo(() => {
+    const packed = new Float32Array(instances.length * 2);
+    instances.forEach(({ p }, index) => {
+      packed[index * 2] = p.position[0];
+      packed[index * 2 + 1] = p.position[2];
+    });
+    return packed;
+  }, [instances]);
+
+  const groupRefs = useRef<(THREE.Group | null)[]>([]);
+  const drawnRef = useRef<Uint8Array>(new Uint8Array(0));
+  const frameRef = useRef(0);
+
+  useEffect(() => {
+    groupRefs.current.length = instances.length;
+    drawnRef.current = new Uint8Array(instances.length);
+  }, [instances.length]);
+
+  useAnimationFrame(() => {
+    const boat = positionRef?.current;
+    if (!curve || !boat) return;
+
+    // Every sixth frame: a tree does not come into view in a sixtieth of a
+    // second, and the test is over every placement on the route.
+    frameRef.current += 1;
+    if (frameRef.current % SCENERY_CULL_FRAME_INTERVAL !== 0) return;
+
+    const drawn = drawnRef.current;
+    if (drawn.length !== groupRefs.current.length) return;
+
+    cullByDistance(centres, boat, viewDistance, drawn);
+    for (let index = 0; index < drawn.length; index += 1) {
+      const group = groupRefs.current[index];
+      if (group) group.visible = drawn[index] === 1;
+    }
+  });
 
   const groupPos: [number, number, number] = curve ? [0, 0, 0] : [0, terrainY, boatZ];
 
   return (
     <group position={groupPos}>
-      {visible.map(({ key, obj, p }) => (
-        <group key={key} position={p.position} rotation={[0, p.rotationY, 0]} scale={p.scale}>
+      {instances.map(({ key, obj, p }, index) => (
+        <group
+          key={key}
+          ref={(group) => {
+            groupRefs.current[index] = group;
+          }}
+          position={p.position}
+          rotation={[0, p.rotationY, 0]}
+          scale={p.scale}
+          // Along a route, nothing is drawn until the frame loop has said it is
+          // near enough; off a route there is no boat to be near, so all of it is.
+          visible={!curve}
+        >
           <primitive object={obj} />
         </group>
       ))}

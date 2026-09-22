@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useFollowPoint } from './followBoat';
+import { withinMountRange } from './visibilityCull';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
@@ -212,10 +214,31 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
 // ============================================================================
 // CURVED LANDSCAPE ELEMENTS - Trees and objects placed along curved path
 // ============================================================================
+/**
+ * Frames between landscape culls. The same cadence the GLB scenery uses.
+ */
+export const LANDSCAPE_CULL_FRAME_INTERVAL = 6;
+
 interface CurvedLandscapeProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
-  boatProgress: number;
+  /** Where the boat is, read in the frame loop to decide what is drawn (#331). */
+  positionRef?: React.RefObject<THREE.Vector3 | null>;
+  /** Progress at the centre of the boat's chunk, for the shadow band (#331). */
+  chunkProgress: number;
+  /**
+   * Progress the mounted window is centred on (#331).
+   *
+   * Not every element on the route: a tree here is a `coneGeometry` and a
+   * house a handful of `boxGeometry`, so everything mounted is geometry
+   * resident on the GPU. Mounting the whole route took the #272 traverse from
+   * 412 uploaded geometries to 766 against a ceiling of 627. The window is the
+   * width it always was; what changed is that it moves about twenty times
+   * across a route instead of three thousand.
+   */
+  mountProgress: number;
+  /** Metres past which an element stops being drawn — the fog's far plane. */
+  viewDistance: number;
   enrichment?: RouteEnrichmentData | null;
   /** Authored dressing, preferred over enrichment when the route has one (#232). */
   track?: SceneryTrack | null;
@@ -258,10 +281,14 @@ const getSegmentStyle = (
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
   theme,
-  boatProgress,
+  positionRef,
+  chunkProgress,
+  mountProgress,
+  viewDistance,
   enrichment,
   track = null,
 }) => {
+  const elementsGroupRef = useRef<THREE.Group>(null);
   const landscapeElements = useMemo(() => {
     if (!curve) return { leftElements: [], rightElements: [] };
     
@@ -345,18 +372,29 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   ], [colors, swayTime]);
   useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
   useAnimationFrame((time) => { swayTime.value = time; });
-  
+
+  // The elements are laid out once and switched on and off from here, rather
+  // than filtered during render (#331). Every sixth frame: a tree on a bank
+  // does not arrive in a sixtieth of a second.
+  const cullFrameRef = useRef(0);
+  useAnimationFrame(() => {
+    const group = elementsGroupRef.current;
+    const boat = positionRef?.current;
+    if (!group || !boat) return;
+
+    cullFrameRef.current += 1;
+    if (cullFrameRef.current % LANDSCAPE_CULL_FRAME_INTERVAL !== 0) return;
+
+    const rangeSquared = viewDistance * viewDistance;
+    for (const child of group.children) {
+      const dx = child.position.x - boat.x;
+      const dz = child.position.z - boat.z;
+      child.visible = dx * dx + dz * dz <= rangeSquared;
+    }
+  });
+
   if (!curve) return null;
   
-  const visibleRange = 0.15;
-  const filteredLeft = landscapeElements.leftElements.filter((_, i) => {
-    const elementProgress = i * 0.02 / 0.6;
-    return Math.abs(elementProgress - boatProgress) < visibleRange || elementProgress < 0.1;
-  });
-  const filteredRight = landscapeElements.rightElements.filter((_, i) => {
-    const elementProgress = i * 0.02 / 0.6;
-    return Math.abs(elementProgress - boatProgress) < visibleRange || elementProgress < 0.1;
-  });
   
   const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string, castNearShadow: boolean) => {
     const distToCamera = camera.position.distanceTo(el.position);
@@ -483,18 +521,37 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     }
   };
   
+  /**
+   * Every element is mounted; the frame loop decides which are drawn (#331).
+   *
+   * This was two `.filter()` calls on a `boatProgress` prop pushed ten times a
+   * second, so moving the boat rebuilt the JSX for every tree and house on the
+   * bank. It also computed each element's progress from its index *after* the
+   * filter, which is a different number from the one it was placed at - so
+   * `nearShadow` was wrong for everything but the first element of each side.
+   * Progress comes from the element's own index now, and the shadow band is
+   * measured from the chunk the boat is in, which changes on a cadence a
+   * render can afford.
+   */
+  const shadowCentre = chunkProgress;
+  const progressOf = (index: number) => (index * 0.02) / 0.6;
+
+  const mounted = (
+    elements: typeof landscapeElements.leftElements,
+    side: 'left' | 'right',
+  ) =>
+    elements.flatMap((element, index) => {
+      const elementProgress = progressOf(index);
+      if (!withinMountRange(elementProgress, mountProgress)) return [];
+      const nearShadow =
+        Math.abs(elementProgress - shadowCentre) < RENDER_CONFIG.shadowNearProgressBand;
+      return [renderElement(element, index, side, nearShadow)];
+    });
+
   return (
-    <group>
-      {filteredLeft.map((el, i) => {
-        const elementProgress = i * 0.02 / 0.6;
-        const nearShadow = Math.abs(elementProgress - boatProgress) < RENDER_CONFIG.shadowNearProgressBand;
-        return renderElement(el, i, 'left', nearShadow);
-      })}
-      {filteredRight.map((el, i) => {
-        const elementProgress = i * 0.02 / 0.6;
-        const nearShadow = Math.abs(elementProgress - boatProgress) < RENDER_CONFIG.shadowNearProgressBand;
-        return renderElement(el, i, 'right', nearShadow);
-      })}
+    <group ref={elementsGroupRef}>
+      {mounted(landscapeElements.leftElements, 'left')}
+      {mounted(landscapeElements.rightElements, 'right')}
     </group>
   );
 };
@@ -512,9 +569,12 @@ export const REFERENCE_TERRAIN_RANGE_METERS = 120;
 
 export const ProceduralTerrain: React.FC<{
   side: 'left' | 'right';
-  boatZ: number;
+  /** Where the tiled band sits: the boat's Z, lifted by the local relief (#331). */
+  followRef?: React.RefObject<THREE.Vector3 | null>;
   enrichment?: RouteEnrichmentData | null;
-}> = ({ side, boatZ, enrichment }) => {
+}> = ({ side, followRef, enrichment }) => {
+  const terrainRef = useRef<THREE.Group>(null);
+  useFollowPoint(terrainRef, followRef);
   const xOffset = side === 'left' ? -35 : 35;
 
   // Before #202 every route got the same 15–40 unit hills from a fixed seed,
@@ -568,7 +628,7 @@ export const ProceduralTerrain: React.FC<{
   }, [rockBodyMaterials, rockOutcrop1Material, rockOutcrop2Material, snowCapMaterial, snowDetailMaterial, treelineMaterial]);
 
   return (
-    <group position={[0, 0, boatZ]}>
+    <group ref={terrainRef}>
       {mountains.map((m, i) => {
         const nearShadow = Math.abs(m.z) < RENDER_CONFIG.shadowNearBand;
         return (

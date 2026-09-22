@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
 import ReactThreeTestRenderer from '@react-three/test-renderer';
 import type * as THREE from 'three';
 import { RowerScene } from '../components/Rower3D';
@@ -23,10 +23,22 @@ import type { Rower3DProps } from '../components/Rower3D';
 /** The built-in demo route, which every scene test rows. */
 export const demoRoute = routeService.getAllRoutes()[0];
 
-export const renderScene = async (props: Partial<Rower3DProps> = {}) => {
+export const renderScene = async (
+  props: Partial<Rower3DProps> = {},
+  /**
+   * Called on every commit of the scene subtree (#331).
+   *
+   * The scenery used to re-render ten times a second, and the only way to say
+   * that it no longer does is to count commits — a scene graph that looks
+   * right says nothing about how many times React rebuilt it to get there.
+   */
+  onRender?: ProfilerOnRenderCallback,
+) => {
   const renderer = await ReactThreeTestRenderer.create(
     <Suspense fallback={<group name="SceneSuspended" />}>
-      <RowerScene route={demoRoute} gpuBackend="webgl" performanceMode="low" {...props} />
+      <Profiler id="scene" onRender={onRender ?? (() => undefined)}>
+        <RowerScene route={demoRoute} gpuBackend="webgl" performanceMode="low" {...props} />
+      </Profiler>
     </Suspense>,
   );
 

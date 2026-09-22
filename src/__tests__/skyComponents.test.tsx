@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import ReactThreeTestRenderer from '@react-three/test-renderer';
 import { installCanvasMock } from './canvasMock';
+import { AnimationProvider } from '../components/rower3d/AnimationContext';
+
+/** A boat position ref, the shape the followers read (#331). */
+const boatAt = (x: number, z: number): React.RefObject<THREE.Vector3> => ({
+  current: new THREE.Vector3(x, 0, z),
+});
 
 /**
  * Issue #325 — the sky is the one thing the fog must not touch.
@@ -62,7 +68,7 @@ describe('the sky stands outside the fog', () => {
 
   it('keeps the skydome out of it', async () => {
     const { renderer, found } = await materialsOf(
-      <PhotorealisticSkydome theme="willowbrook" boatXZ={[0, 0]} performanceMode="high" />,
+      <PhotorealisticSkydome theme="willowbrook" positionRef={boatAt(0, 0)} performanceMode="high" />,
     );
 
     expect(found.length, 'the skydome drew nothing').toBeGreaterThan(0);
@@ -76,7 +82,7 @@ describe('the sky stands outside the fog', () => {
 
   it('keeps the horizon silhouette out of it', async () => {
     const { renderer, found } = await materialsOf(
-      <HorizonSilhouette theme="willowbrook" boatXZ={[0, 0]} />,
+      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
     );
 
     expect(found.length, 'the silhouette drew nothing').toBeGreaterThan(0);
@@ -104,10 +110,18 @@ describe('the sky follows the boat', () => {
   });
   afterAll(() => uninstall());
 
-  const skyAt = async (boatXZ: [number, number], mode: 'low' | 'auto' | 'high' = 'high') => {
+  /**
+   * The sky follows the boat in the frame loop now (#331), so the test has to
+   * run frames. `AnimationProvider` owns the single `useFrame` the followers
+   * subscribe to, which is the real path rather than a stand-in for it.
+   */
+  const skyAt = async (x: number, z: number, mode: 'low' | 'auto' | 'high' = 'high') => {
     const renderer = await ReactThreeTestRenderer.create(
-      <PhotorealisticSkydome theme="willowbrook" boatXZ={boatXZ} performanceMode={mode} />,
+      <AnimationProvider>
+        <PhotorealisticSkydome theme="willowbrook" positionRef={boatAt(x, z)} performanceMode={mode} />
+      </AnimationProvider>,
     );
+    await renderer.advanceFrames(2, 1 / 60);
     let layer: THREE.Object3D | undefined;
     (renderer.scene.instance as unknown as THREE.Scene).traverse((o) => {
       if (o.name === CLOUD_LAYER_NAME) layer = o;
@@ -116,11 +130,43 @@ describe('the sky follows the boat', () => {
   };
 
   it('puts the clouds over the boat, not over the origin', async () => {
-    const { renderer, layer } = await skyAt([420, -1800]);
+    const { renderer, layer } = await skyAt(420, -1800);
 
     expect(layer, 'no cloud layer to find').toBeDefined();
-    expect(layer!.position.x, 'the sky stayed at x=0 while the boat rounded a bend').toBeCloseTo(420, 3);
+    // The drift is a few metres of sideways wander; the boat is 420 m out.
+    expect(
+      layer!.position.x,
+      'the sky stayed at x=0 while the boat rounded a bend',
+    ).toBeGreaterThan(400);
     expect(layer!.position.z).toBeCloseTo(-1800, 3);
+
+    await renderer.unmount();
+  });
+
+  // The scene mounts before the first frame has run, so a follower can be
+  // asked where to go before there is anywhere to go. The origin is not an
+  // answer: it is a real place on the route, and snapping the sky to it would
+  // put the clouds over the start line for as long as it lasted.
+  it('leaves the sky alone when there is no boat to follow yet', async () => {
+    const renderer = await ReactThreeTestRenderer.create(
+      <AnimationProvider>
+        <PhotorealisticSkydome
+          theme="willowbrook"
+          positionRef={{ current: null }}
+          performanceMode="high"
+        />
+      </AnimationProvider>,
+    );
+    await renderer.advanceFrames(2, 1 / 60);
+
+    let layer: THREE.Object3D | undefined;
+    (renderer.scene.instance as unknown as THREE.Scene).traverse((o) => {
+      if (o.name === CLOUD_LAYER_NAME) layer = o;
+    });
+
+    expect(layer, 'no cloud layer to find').toBeDefined();
+    expect(layer!.position.x, 'the sky moved to somewhere no boat has been').toBe(0);
+    expect(layer!.position.z).toBe(0);
 
     await renderer.unmount();
   });
@@ -129,8 +175,8 @@ describe('the sky follows the boat', () => {
   // describes a sky that failed to build, and that is not what is being
   // claimed.
   it('draws clouds for high and none for low', async () => {
-    const high = await skyAt([0, 0]);
-    const low = await skyAt([0, 0], 'low');
+    const high = await skyAt(0, 0);
+    const low = await skyAt(0, 0, 'low');
 
     expect(high.layer?.children.length, 'the sky built no clouds at all').toBeGreaterThan(0);
     expect(low.layer?.children ?? [], 'the low tier is paying for clouds').toHaveLength(0);
@@ -157,7 +203,7 @@ describe('the horizon silhouette', () => {
 
   it('is billboarded to the camera, and only about Y', async () => {
     const renderer = await ReactThreeTestRenderer.create(
-      <HorizonSilhouette theme="willowbrook" boatXZ={[0, 0]} />,
+      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
     );
 
     const billboards: string[] = [];
@@ -174,7 +220,7 @@ describe('the horizon silhouette', () => {
 
   it('keeps the shape inside the billboard, not beside it', async () => {
     const renderer = await ReactThreeTestRenderer.create(
-      <HorizonSilhouette theme="willowbrook" boatXZ={[0, 0]} />,
+      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
     );
 
     let billboard: THREE.Object3D | undefined;
