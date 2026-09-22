@@ -3,17 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { expectSceneAlive } from '../utils/scene-health';
-import { decodePng } from '../../src/utils/pngDecode';
 
-/**
- * Mean absolute luminance difference between neighbouring water pixels (#324).
- *
- * Measured on this branch: 1.03 with the ripples, and 0.04, 0.08 and 0.42
- * across three runs without them. The floor sits between the two, nearer the
- * flat water's worst run than the ripples' - a software rasteriser is not a
- * stable enough instrument to put a gate close to either side.
- */
-const WATER_DETAIL_FLOOR = 0.6;
 
 /**
  * Issue #269 — the ground either side of the waterway must look different from
@@ -144,6 +134,26 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
     ];
 
     /**
+     * Whether a pixel is sky, by where it is as well as what colour it is.
+     *
+     * Colour alone is not enough, and #328 is how that came out. Moving the
+     * chase camera from 6 m back to 7 flattens the view onto the water by a
+     * couple of degrees, and a flatter view of water reflects more sky — so
+     * the river turned pale, every one of its pixels fell inside the sky
+     * tolerance, and the whole river was discarded before anything was
+     * measured. The centre column's median then read the bank's green, every
+     * comparison against it inverted at once, and the spec reported 2% ground
+     * on both banks with the banks plainly in shot.
+     *
+     * The sky is above the horizon and the horizon is in the upper part of the
+     * frame in every view this scene has. Water that mirrors the sky is still
+     * water, and it is below that line.
+     */
+    const SKY_BAND = 0.45;
+    const isSky = (pixel: [number, number, number], y: number) =>
+      y < H * SKY_BAND && apart(pixel, sky) <= 40;
+
+    /**
      * What a vertical strip of the frame is made of, ignoring the sky.
      *
      * Strips with the sky filtered out, rather than a patch at coordinates
@@ -163,7 +173,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
         for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
           const [r, g, b] = at(x, y);
           looked += 1;
-          if (apart([r, g, b], sky) <= 40) continue;
+          if (isSky([r, g, b], y)) continue;
           reds.push(r);
           greens.push(g);
           blues.push(b);
@@ -198,7 +208,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
       for (let y = 0; y < H; y += 2) {
         for (let x = Math.floor(xFrom * W); x < Math.floor(xTo * W); x += 2) {
           const [r, g, b] = at(x, y);
-          if (apart([r, g, b], sky) <= 40) continue;
+          if (isSky([r, g, b], y)) continue;
           nonSky += 1;
           if (apart([r, g, b], water) > 60) ground += 1;
         }
@@ -304,108 +314,29 @@ for (const tier of ['low', 'auto', 'high'] as const) {
   });
 }
 
-/**
- * Issue #324 — the water is a surface, not a sheet of paint.
+/*
+ * Issue #324 asked for a "water is not flat" metric here, and it is not here.
+ * What was tried, and why it was taken out again:
  *
- * The channel was `MeshStandardMaterial { roughness 0.55, emissive = the water
- * colour }` with no normal map and nothing to reflect, so every pixel of the
- * river was very nearly the same pixel. Luminance variance is the measurement
- * that says so, and it is close to zero for a flat colour however pretty the
- * colour is.
+ * VR-04 proposes luminance standard deviation >= 6/255 inside the water. That
+ * does not measure the water: the *old* flat water scores 19.3, because a
+ * frame contains a boat, a bank, a fog gradient and a vignette whatever the
+ * river is made of.
  *
- * Rowed through the demo button rather than through the BLE harness, and that
- * is the point: the harness sets `__PLAYWRIGHT_TESTING`, and the water's wave
- * shader, its second ripple layer and its sky environment are all behind
- * `IS_TEST_MODE`. Measured that way the river would be flat no matter what
- * this PR did — the same shape of blind spot #342 found in the render budget.
+ * Neighbour detail - the mean absolute luminance difference between adjacent
+ * pixels in two bands either side of the boat - does measure it. Flat water
+ * reads 0.04 to 0.42; the rippled water reads 0.43 to 1.03. The ranges touch,
+ * and worse, single captures on a software rasteriser come back at 0.002 and
+ * 0.013 when the frame has not composited yet. Best-of-four across twelve
+ * seconds still failed one attempt in two. A gate that fails half the time
+ * fails pull requests that did nothing wrong, and it costs a minute an
+ * attempt in a suite whose E2E step has a forty-minute ceiling - which it
+ * exceeded, at 42m44s, on the run that tried it.
+ *
+ * The property is gated, deterministically, by the committed visual baselines.
+ * They are captured from a frozen scene, so they do not have this variance,
+ * and the water going flat is exactly the change they catch: turning it on
+ * moved `willowbrook-low-1280x720` by 7,448 pixels and grew the file from
+ * 49 KB to 177 KB. Turning it off again would move it back.
  */
-test('the water has a surface rather than a single colour', async ({ page }) => {
-  // The full scene, outside test mode, on a software rasteriser: a frame takes
-  // a second or two, so both the settle and the capture need room.
-  test.setTimeout(240_000);
 
-  await page.addInitScript(() => {
-    (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
-      .__VIRTUALROW_PERFORMANCE_MODE = 'auto';
-  });
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('./');
-  await page.locator('.btn-try-demo').click();
-  await expect(page.locator('.activity-view')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(20_000);
-
-  // Screenshotted rather than read back from the canvas.
-  //
-  // `drawImage` from a WebGL canvas gives a black frame unless the read
-  // happens inside the same task as a render — which is what
-  // `__ROWER3D_FORCE_RENDER` is for, and that is published only in test mode,
-  // the mode this test exists to avoid. A screenshot is the composited page,
-  // so it works whatever the drawing buffer is doing.
-  const shot = await page
-    .locator('.rower3d-canvas-container canvas')
-    .screenshot({ timeout: 90_000, animations: 'allow' });
-  const image = decodePng(shot);
-
-  /**
-   * Two strips either side of the boat, low in the frame: from a chase camera
-   * two and a half metres up that is river, and the boat is not in it.
-   *
-   * What is measured is *local* variation — the mean absolute difference
-   * between neighbouring pixels — and not the spread of the whole strip.
-   * Spread was the first thing tried, and it does not work: the old flat water
-   * measured a standard deviation of 19.3 against the issue's threshold of 6,
-   * because a frame contains a boat, a bank, a fog gradient and a vignette
-   * whatever the water is made of. Ripples are high-frequency detail, so
-   * high-frequency detail is what to look at.
-   */
-  const bands: Array<[number, number]> = [
-    [0.24, 0.4],
-    [0.6, 0.76],
-  ];
-  const top = Math.floor(image.height * 0.68);
-  const bottom = Math.floor(image.height * 0.9);
-
-  const luma = (i: number) =>
-    0.2126 * image.pixels[i] + 0.7152 * image.pixels[i + 1] + 0.0722 * image.pixels[i + 2];
-
-  let energy = 0;
-  let pairs = 0;
-  let sum = 0;
-  let samples = 0;
-
-  for (const [from, to] of bands) {
-    const left = Math.floor(image.width * from);
-    const right = Math.floor(image.width * to);
-    for (let y = top; y < bottom; y += 1) {
-      for (let x = left; x < right; x += 1) {
-        const here = luma((y * image.width + x) * 3);
-        sum += here;
-        samples += 1;
-        if (x + 1 < right) {
-          energy += Math.abs(luma((y * image.width + x + 1) * 3) - here);
-          pairs += 1;
-        }
-      }
-    }
-  }
-
-  const reading = {
-    mean: sum / samples,
-    detail: pairs > 0 ? energy / pairs : 0,
-    samples,
-  };
-
-  console.log(
-    `[water] mean luminance ${reading.mean.toFixed(1)} ` +
-      `neighbour detail ${reading.detail.toFixed(3)} over ${reading.samples} pixels`,
-  );
-
-  expect(reading.samples).toBeGreaterThan(1000);
-  // A black frame is not flat water; it is no frame at all.
-  expect(reading.mean, 'the screenshot is empty').toBeGreaterThan(5);
-  expect(
-    reading.detail,
-    'the water has no detail from one pixel to the next, which is what #324 was about',
-  ).toBeGreaterThanOrEqual(WATER_DETAIL_FLOOR);
-});
