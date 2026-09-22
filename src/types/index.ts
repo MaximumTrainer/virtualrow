@@ -375,6 +375,15 @@ declare global {
      * Published so a spec can check the theme's numbers reached the renderer,
      * rather than that a helper returns them.
      */
+    /**
+     * The tone-mapping mode the renderer is actually set to (#327).
+     *
+     * Published with whether a composer is mounted, so a spec can assert the
+     * invariant rather than a value: ACES on the renderer where there is no
+     * composer, NoToneMapping where the composer carries the pass instead.
+     * Never both.
+     */
+    __ROWER3D_TONE_MAPPING?: { mode: number; composer: boolean };
     __ROWER3D_SCENE_FOG?: { near: number; far: number };
     __ROWER3D_SPEED_MPS?: number;
     __ROWER3D_STROKE_PHASE?: string;

@@ -243,3 +243,68 @@ test.describe('3D postprocessing', () => {
     await expectSceneAlive(page, 'the postfx scene at low');
   });
 });
+
+/**
+ * Issue #327 — the frame is tone-mapped once.
+ *
+ * The renderer was created with `ACESFilmicToneMapping` and the composer ends on
+ * a `ToneMapping` pass set to ACES as well, so wherever a composer mounted the
+ * frame was graded twice. That crushes the mid-tones, and it is part of why
+ * `sceneExposure` had to be dragged down to 0.55 to keep the sky off white
+ * (#269) — the exposure was compensating for a second grade nobody had noticed.
+ *
+ * Asserted through the renderer rather than through the plan, because the plan
+ * being right is what `effectPlan.test.ts` covers, and the renderer actually
+ * carrying it out is a different claim.
+ */
+test.describe('one tone-mapping stage', () => {
+  /** three's ToneMapping constants; NoToneMapping is 0 and ACESFilmic is 4. */
+  const NO_TONE_MAPPING = 0;
+  const ACES_FILMIC = 4;
+
+  /** What the renderer is set to, and whether a composer is carrying the pass. */
+  const grading = (page: Page) =>
+    page.evaluate(() => window.__ROWER3D_TONE_MAPPING ?? null);
+
+  /**
+   * The scene publishes its telemetry only under automation, and the specs
+   * above deliberately install no BLE harness - which is what normally sets
+   * that flag. These read the renderer, so they need it set.
+   */
+  const bootReporting = async (page: Page, mode: 'low' | 'auto' | 'high') => {
+    await page.addInitScript(() => {
+      window.__PLAYWRIGHT_TESTING = true;
+    });
+    await bootAt(page, mode);
+  };
+
+  for (const mode of ['low', 'auto', 'high'] as const) {
+    test(`grades the frame once at ${mode}`, async ({ page }) => {
+      await bootReporting(page, mode);
+      await startDemoRow(page);
+      await expectSceneAlive(page, `the ${mode} scene`);
+
+      // Polled: the tier's plan is applied in an effect, so the first frames
+      // can be drawn before it has run.
+      await expect
+        .poll(() => grading(page), {
+          timeout: 20_000,
+          message: 'the renderer never reported its tone mapping',
+        })
+        .not.toBeNull();
+
+      const reported = (await grading(page))!;
+
+      // The invariant, not a value. Where the context reports no attributes the
+      // composer is dropped deliberately (#257) and ACES on the renderer is
+      // then the right answer - so what must hold is that exactly one of the
+      // two grades, whichever way that falls on this rasteriser.
+      expect(
+        reported.mode,
+        reported.composer
+          ? 'a composer is mounted and the renderer is grading as well'
+          : 'no composer is mounted and nothing is grading the frame',
+      ).toBe(reported.composer ? NO_TONE_MAPPING : ACES_FILMIC);
+    });
+  }
+});

@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO, GodRays, HueSaturation, BrightnessContrast } from '@react-three/postprocessing';
-import { ToneMappingMode, ChromaticAberrationEffect } from 'postprocessing';
+import { ToneMappingMode, ChromaticAberrationEffect, type DepthOfFieldEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { effectPlanFor, type EffectName } from './effectPlan';
 import { IS_TEST_MODE } from './constants';
@@ -10,6 +10,7 @@ import { sceneExposure } from './sceneExposure';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
+import { recordComposerMounted } from './composerState';
 import type { RouteTheme, ColorGradingConfig } from './themeConfig';
 import { createCausticsTexture } from './helpers';
 
@@ -377,7 +378,9 @@ export const DynamicPostFx: React.FC<{
    * source every frame, and a ref is truthy before its mesh exists (#233).
    */
   sunMesh?: THREE.Mesh | null;
-}> = ({ velocityRef, performanceMode, theme, sunMesh }) => {
+  /** Where the boat is, so depth of field can focus on it rather than on a fixed distance. */
+  boatPositionRef: React.MutableRefObject<THREE.Vector3>;
+}> = ({ velocityRef, performanceMode, theme, sunMesh, boatPositionRef }) => {
   const gl = useThree((state) => state.gl);
   const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
   useEffect(() => () => caEffect.dispose(), [caEffect]);
@@ -405,8 +408,54 @@ export const DynamicPostFx: React.FC<{
 
   const colorGrading: ColorGradingConfig = useMemo(() => getThemeConfig(theme).colorGrading, [theme]);
 
-  useFrame(({ gl }) => {
+  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
+
+  /**
+   * Exactly one tone-mapping stage (#327) — and it is already the composer's.
+   *
+   * `@react-three/postprocessing`'s EffectComposer sets `gl.toneMapping` to
+   * NoToneMapping on mount and restores it on cleanup, because three disallows
+   * tone mapping on render targets. VR-07's premise is conditional - "unless
+   * the composer disables renderer tone mapping" - and it does, so the frame
+   * was never actually graded twice.
+   *
+   * Setting it here as well duplicated that and raced its save-and-restore: the
+   * renderer read NoToneMapping for the first frames and then flipped back to
+   * ACES and stayed, which is the opposite of the requirement. So nothing is
+   * written here. Where ACES runs is stated in the plan and asserted in
+   * `effectPlan.test.ts` and `rower3d-postfx.spec.ts`, which is what VR-07's
+   * scope asks for: the choice made explicit and tested.
+   */
+
+  const mounted = canPostProcess && plan.composer;
+  useEffect(() => {
+    recordComposerMounted(mounted);
+    return () => recordComposerMounted(false);
+  }, [mounted]);
+
+  const dofRef = useRef<DepthOfFieldEffect>(null);
+
+  useFrame(({ gl, camera }) => {
+    // Held every frame, not set once (#327).
+    //
+    // EffectComposer sets NoToneMapping on mount and saves the previous value
+    // to restore on cleanup, because three disallows tone mapping on render
+    // targets. Something puts ACES back afterwards - measured going 0 on the
+    // first frames and 4 for every frame after - and ACES on the renderer with
+    // the composer's own ToneMapping pass running is precisely the double grade
+    // VR-07 is about. A frame is cheap to state the truth in, and it cannot be
+    // stomped by a restore that happens later.
+    gl.toneMapping = plan.toneMapOnRenderer
+      ? THREE.ACESFilmicToneMapping
+      : THREE.NoToneMapping;
+
     const vel = velocityRef.current;
+    // Focused on the boat, not on a distance chosen once. Ten metres with a
+    // range of twenty-five put the whole far bank in bokeh (#327).
+    const dof = dofRef.current;
+    if (dof) {
+      dof.cocMaterial.worldFocusDistance = camera.position.distanceTo(boatPositionRef.current);
+    }
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
     caEffect.offset.set(aberration, aberration * 0.6);
 
@@ -419,7 +468,6 @@ export const DynamicPostFx: React.FC<{
   // Every hook above runs unconditionally; only the render bails out.
   if (!canPostProcess) return null;
 
-  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
   if (!plan.composer) return null;
 
   const has = (effect: EffectName) => plan.effects.includes(effect);
@@ -432,26 +480,26 @@ export const DynamicPostFx: React.FC<{
             key="ssao"
             samples={plan.ssaoSamples ?? 16}
             rings={4}
-            distanceThreshold={1.0}
+            distanceThreshold={0.6}
             distanceFalloff={0.1}
             rangeThreshold={0.5}
             rangeFalloff={0.1}
             luminanceInfluence={0.9}
-            radius={15}
+            radius={1.5}
             bias={0.5}
-            intensity={1.0}
+            intensity={0.8}
           />
         ) : null,
         has('bloom') ? (
-          <Bloom key="bloom" intensity={0.28} luminanceThreshold={0.72} luminanceSmoothing={0.85} />
+          <Bloom key="bloom" intensity={0.18} luminanceThreshold={0.9} luminanceSmoothing={0.85} />
         ) : null,
         has('chromaticAberration') ? <primitive key="ca" object={caEffect} /> : null,
         has('depthOfField') ? (
           <DepthOfField
             key="dof"
-            worldFocusDistance={10}
-            worldFocusRange={25}
-            bokehScale={2}
+            ref={dofRef}
+            worldFocusRange={60}
+            bokehScale={1.2}
             height={480}
           />
         ) : null,
@@ -476,7 +524,7 @@ export const DynamicPostFx: React.FC<{
             samples={60}
           />
         ) : null,
-        has('vignette') ? <Vignette key="vignette" eskil={false} offset={0.3} darkness={0.5} /> : null,
+        has('vignette') ? <Vignette key="vignette" eskil={false} offset={0.3} darkness={0.25} /> : null,
         has('toneMapping') ? <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} /> : null,
       ].filter((effect): effect is React.ReactElement => effect !== null)}
     </EffectComposer>
