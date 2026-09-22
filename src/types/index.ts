@@ -334,7 +334,13 @@ declare global {
     __PM5_SIMULATOR_PORT?: number;
     // Rower3D telemetry exposed for Playwright assertions
     __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
-    __ROWER3D_CAMERA?: { position: [number, number, number] };
+    __ROWER3D_CAMERA?: {
+      position: [number, number, number];
+      /** Which of the rig's views the camera is looking through (#328). */
+      view?: string;
+      /** Field of view in degrees, after the speed coupling and aspect (#328). */
+      fov?: number;
+    };
     /** Upper-arm angle through the stroke, published under automation (#273). */
     __ROWER3D_ARM_ANGLE?: number;
     /**

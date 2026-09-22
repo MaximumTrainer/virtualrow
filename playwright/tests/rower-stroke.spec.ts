@@ -63,3 +63,77 @@ test('the GLB scull drives the rower from the same stroke as the oars', async ({
 
   expect(errors.filter((e) => !/reading 'alpha'/.test(e))).toEqual([]);
 });
+
+/**
+ * Issue #328 — the camera is a rig, and the rower can point it somewhere else.
+ *
+ * It was `camera.position.set(boat - tangent * 6)` every frame, with no lag,
+ * no damping and one view. What is checked here is the part a unit test
+ * cannot reach: that the rig is actually driving the camera in a running
+ * scene, that it settles where it says it will, and that `V` reaches it.
+ */
+test('the camera rig follows the boat and answers to V', async ({ page }) => {
+  test.slow();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() => {
+    (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
+      .__VIRTUALROW_PERFORMANCE_MODE = 'low';
+    // `__ROWER3D_POS` is automation scaffolding and stays behind the test
+    // flag; the camera is measured against it, so this spec sets it.
+    window.__PLAYWRIGHT_TESTING = true;
+  });
+  await page.goto('./');
+  await page.locator('.btn-try-demo').click();
+  await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
+  await expectSceneAlive(page, 'the camera scene');
+
+  await expect
+    .poll(() => page.evaluate(() => window.__ROWER3D_CAMERA?.view ?? null), {
+      timeout: 30_000,
+      message: 'the camera never reported which view it was using',
+    })
+    .toBe('chase');
+
+  // Long enough for the damping to have settled: the position time constant is
+  // 0.35 s, so three seconds is eight of them.
+  await page.waitForTimeout(3_000);
+
+  const settled = await page.evaluate(() => {
+    const camera = window.__ROWER3D_CAMERA;
+    const boat = window.__ROWER3D_POS;
+    if (!camera || !boat) return null;
+    return {
+      view: camera.view,
+      fov: camera.fov,
+      distance: Math.hypot(camera.position[0] - boat.x, camera.position[2] - boat.z),
+      height: camera.position[1] - boat.y,
+    };
+  });
+
+  expect(settled, 'no camera or boat position was published').not.toBeNull();
+  console.log(
+    `[camera] view=${settled!.view} distance=${settled!.distance.toFixed(2)}m ` +
+      `height=${settled!.height.toFixed(2)}m fov=${settled!.fov?.toFixed(1)}`,
+  );
+
+  // The chase view sits 7 m back. The window is wide enough for a boat that is
+  // still accelerating, and narrow enough to fail if the rig stopped driving.
+  expect(settled!.distance).toBeGreaterThan(6.5);
+  expect(settled!.distance).toBeLessThan(7.5);
+  expect(settled!.height).toBeGreaterThan(2.3);
+  expect(settled!.height).toBeLessThan(2.9);
+
+  // Pressing V reaches the rig, and the button says the same thing.
+  await page.locator('.rower3d-canvas-container canvas').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('v');
+
+  await expect
+    .poll(() => page.evaluate(() => window.__ROWER3D_CAMERA?.view ?? null), {
+      timeout: 15_000,
+      message: 'V did not change the camera view',
+    })
+    .toBe('side');
+
+  await expect(page.locator('.btn-camera-view')).toContainText('side');
+});

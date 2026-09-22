@@ -82,6 +82,25 @@ import type { Crew } from './rower3d/crewModel';
 import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
 import { detectRouteTheme } from './rower3d/routeTheme';
 import { fogFor, chunkViewDistanceFor } from './rower3d/fogPlan';
+import {
+  LOOK_AT_TAU,
+  POSITION_TAU,
+  cameraTarget,
+  createRigTarget,
+  dampedFollow,
+  portraitFov,
+  type CameraView,
+} from './rower3d/cameraRig';
+import { useCameraView } from '../hooks/useCameraView';
+
+/**
+ * How far the tangent must swing before the route counts as bending (#328).
+ *
+ * The tangent is sampled from dense Hermite points, which wobble on a nominal
+ * straight. Without a deadband the side camera would hop banks several times a
+ * minute on a course that is not turning at all.
+ */
+const BEND_SIGN_DEADBAND = 0.002;
 import './Rower3D.css';
 
 // The crewed sculls are preloaded in boatComponents, beside the component that
@@ -162,7 +181,10 @@ const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode
   }, [gl, requested]);
 };
 
-export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = ({ 
+export const RowerScene: React.FC<
+  Rower3DProps & { gpuBackend: GPUBackend; cameraView?: CameraView }
+> = ({
+  cameraView = 'chase',
   route, 
   enrichment,
   paceSPer500, 
@@ -244,6 +266,31 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
    * lookup happens once rather than in each of them.
    */
   const sceneryFollowRef = useVector3Ref();
+
+  // The camera rig's per-frame scratch, allocated once (#328).
+  const rigTargetRef = useRef(createRigTarget());
+  const cameraLookRef = useVector3Ref();
+  const cameraOffsetRef = useVector3Ref();
+  const cameraLookOffsetRef = useVector3Ref();
+  const cameraScratchRef = useVector3Ref();
+  const cameraViewRef = useRef<CameraView>(cameraView);
+  cameraViewRef.current = cameraView;
+  const bendSignRef = useRef(0);
+  const previousTangentRef = useVector3Ref();
+  const reducedMotionRef = useRef(false);
+
+  // Read once and watched: a rower can turn the setting on mid-row, and the
+  // field-of-view coupling is exactly the motion it is meant to stop.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotionRef.current = query.matches;
+    const onChange = (event: MediaQueryListEvent) => {
+      reducedMotionRef.current = event.matches;
+    };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   /** How many chunks the route is cut into — the cadence the tree changes on. */
   const geometryChunkCount = useMemo(
@@ -393,20 +440,70 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       setSceneryMount({ chunk, progress: boatProgressRef.current });
     }
     
-    const cameraDistance = 6;
-    const cameraHeight = 2.5;
+    // The camera rig (#328). This was a hard assignment every frame - boat
+    // minus tangent times six, `lookAt` the boat - so every wobble in the
+    // tangent reached the camera, and the tangent is sampled from dense
+    // Hermite points that wobble on bends by construction (#224).
     const tangent = routePos.tangent;
-    
-    camera.position.set(
-      boatPositionRef.current.x - tangent.x * cameraDistance,
-      boatPositionRef.current.y + cameraHeight,
-      boatPositionRef.current.z - tangent.z * cameraDistance
+
+    // Which way the route is turning, from how the tangent has swung since the
+    // last frame: the Y component of the cross product of the two. Held
+    // through a straight rather than zeroed, so the side camera does not swap
+    // banks every time the curvature wanders across zero.
+    const previous = previousTangentRef.current;
+    const turn = previous.x * tangent.z - previous.z * tangent.x;
+    if (Math.abs(turn) > BEND_SIGN_DEADBAND) bendSignRef.current = Math.sign(turn);
+    previous.copy(tangent);
+
+    const target = cameraTarget(
+      {
+        boat: boatPositionRef.current,
+        tangent,
+        velocityMps: velocityRef.current,
+        view: cameraViewRef.current,
+        bendSign: bendSignRef.current,
+        reducedMotion: reducedMotionRef.current,
+      },
+      rigTargetRef.current,
     );
-    camera.lookAt(
-      boatPositionRef.current.x,
-      boatPositionRef.current.y + 0.3,
-      boatPositionRef.current.z
+
+    // Damped relative to the boat, not in the world: an exponential follower
+    // trails a moving target by velocity times the time constant, which put
+    // the chase camera 8.04 m behind a boat it is meant to sit 7 m behind.
+    const boat = boatPositionRef.current;
+    dampedFollow(
+      cameraOffsetRef.current,
+      target.position,
+      boat,
+      POSITION_TAU,
+      delta,
+      camera.position,
+      cameraScratchRef.current,
     );
+    dampedFollow(
+      cameraLookOffsetRef.current,
+      target.lookAt,
+      boat,
+      LOOK_AT_TAU,
+      delta,
+      cameraLookRef.current,
+      cameraScratchRef.current,
+    );
+    camera.lookAt(cameraLookRef.current);
+
+    // Written only when it has actually moved: assigning `fov` marks the
+    // projection matrix dirty, and recomputing it every frame for a tenth of a
+    // degree is work for nothing. The portrait widening composes on top of the
+    // speed coupling (#195, #328).
+    const perspective = camera as THREE.PerspectiveCamera;
+    const { width, height } = state.size;
+    const wanted = portraitFov(target.fov, height > 0 ? width / height : 1);
+    if (perspective.isPerspectiveCamera && Math.abs(perspective.fov - wanted) > 0.1) {
+      /* eslint-disable react-hooks/immutability */
+      perspective.fov = wanted;
+      perspective.updateProjectionMatrix();
+      /* eslint-enable react-hooks/immutability */
+    }
     
     // Before the composer renders: the counters still describe the frame just
     // drawn, and after it they describe its last fullscreen pass (#232).
@@ -452,6 +549,15 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       if (isTelemetryPublished()) {
         window.__ROWER3D_RENDER_STATS = readRenderStats() ?? undefined;
         window.__ROWER3D_FRAME_STATS = frameStats.read() ?? undefined;
+        // Where the rig has put the camera, and which view it is (#328). Out
+        // here with the other telemetry rather than inside the test-mode block
+        // below, because a spec that wants to watch the camera should not have
+        // to enter the mode that changes the scene it is watching.
+        window.__ROWER3D_CAMERA = {
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          view: cameraViewRef.current,
+          fov: (camera as THREE.PerspectiveCamera).fov,
+        };
       }
 
       if (IS_TEST_MODE) {
@@ -462,9 +568,6 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           z: boatPositionRef.current.z,
           progress: boatProgressRef.current,
           angle: boatRotationRef.current
-        };
-        window.__ROWER3D_CAMERA = {
-          position: [camera.position.x, camera.position.y, camera.position.z]
         };
         // Is the boat actually between the banks, right now?
         //
@@ -801,34 +904,14 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
 // ============================================================================
 // GPU ERROR BOUNDARY
 // ============================================================================
-/**
- * Widen the vertical FOV on portrait/narrow canvases.
- *
- * Three's `fov` is vertical, so a tall narrow viewport crops horizontally and a
- * portrait phone loses the banks either side of the lane (issue #195). Scaling
- * the FOV by aspect restores roughly the same horizontal coverage.
+/*
+ * `CameraAspectFix` stood here. It widened the vertical field of view on a
+ * portrait canvas (#195) from a resize effect, which worked while nothing else
+ * wrote `camera.fov`. The camera rig writes it every frame (#328), so the two
+ * would have fought and the rig would have won on the very next frame. The
+ * widening is `portraitFov` in `cameraRig.ts` now, composed on top of the
+ * speed coupling rather than racing it.
  */
-const CameraAspectFix: React.FC<{ baseFov?: number }> = ({ baseFov = 60 }) => {
-  // Read through the R3F store inside the effect: the camera is scene state we
-  // are meant to drive imperatively, and taking it from a hook selector makes
-  // the mutation below look like mutating a hook argument.
-  const store = useThree((state) => state.get);
-  const width = useThree((state) => state.size.width);
-  const height = useThree((state) => state.size.height);
-
-  useEffect(() => {
-    if (height === 0) return;
-    const perspective = store().camera as THREE.PerspectiveCamera;
-    if (!perspective?.isPerspectiveCamera) return;
-    const aspect = width / height;
-    const fov = aspect < 1 ? Math.min(100, baseFov + (1 - aspect) * 35) : baseFov;
-    if (Math.abs(perspective.fov - fov) < 0.01) return;
-    perspective.fov = fov;
-    perspective.updateProjectionMatrix();
-  }, [store, width, height, baseFov]);
-
-  return null;
-};
 
 class GPUErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -911,6 +994,10 @@ const showContextMessage = (message: string | null): void => {
 // MAIN COMPONENT - Canvas wrapper with GPU detection
 // ============================================================================
 const Rower3D: React.FC<Rower3DProps> = (props) => {
+  // Held outside the Canvas so the key binding and the button are one state,
+  // and so the choice survives the scene remounting on a route change (#328).
+  const { view: cameraView, cycle: cycleCameraView } = useCameraView();
+
   // Synchronous, because there is one question to ask.
   //
   // This used to await a WebGPU probe in an effect and set state from it, so
@@ -1009,6 +1096,18 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
     <div className="rower3d-canvas-container">
       <div className="rower3d-fallback-marker" data-loaded="true" style={{ display: 'none' }} />
       <div className="rower3d-gpu-backend" data-backend={gpuBackend} style={{ display: 'none' }} />
+      {/* The other three views are only reachable through this, so it is a
+          control and not a shortcut hint: V does the same thing for anyone
+          who would rather not reach for the screen (#328). */}
+      <button
+        type="button"
+        className="btn-camera-view"
+        onClick={cycleCameraView}
+        title="Change camera view (V)"
+        aria-label={"Camera view: " + cameraView + ". Press to change."}
+      >
+        <span aria-hidden="true">CAM</span> {cameraView}
+      </button>
       <GPUErrorBoundary>
         <Canvas
           // The far plane is stated because a unit is a metre now (#321): the
@@ -1116,7 +1215,6 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             }, false);
           }}
         >
-          <CameraAspectFix />
           {/* The scene's own boundary, and it must stay here.
 
               Everything that dresses the river loads late - models, textures,
@@ -1133,7 +1231,12 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
 
               Suspending here costs a frame of scenery instead. */}
           <Suspense fallback={null}>
-            <RowerScene {...props} performanceMode={quality} gpuBackend={gpuBackend} />
+            <RowerScene
+              {...props}
+              performanceMode={quality}
+              gpuBackend={gpuBackend}
+              cameraView={cameraView}
+            />
           </Suspense>
         </Canvas>
       </GPUErrorBoundary>
