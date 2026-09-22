@@ -79,7 +79,7 @@ import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerra
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
-import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
+import { frozenClock, frozenProgress, frozenVelocity, readSceneFreeze } from './rower3d/sceneFreeze';
 import { detectRouteTheme } from './rower3d/routeTheme';
 import { fogFor, chunkViewDistanceFor } from './rower3d/fogPlan';
 import {
@@ -459,7 +459,7 @@ export const RowerScene: React.FC<
       {
         boat: boatPositionRef.current,
         tangent,
-        velocityMps: velocityRef.current,
+        velocityMps: frozenVelocity(freeze, velocityRef.current),
         view: cameraViewRef.current,
         bendSign: bendSignRef.current,
         reducedMotion: reducedMotionRef.current,
