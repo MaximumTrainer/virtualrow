@@ -1995,8 +1995,14 @@ body {
   z-index: 5;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35em;
-  padding: 0.35rem 0.7rem;
+  /* At least 44px square, which `responsive.spec.ts` holds every control to.
+     It was 0.35rem of padding and a 0.75rem font, which came out at 28px high
+     on a phone - a control you have to aim at. */
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 0.85rem;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.45);
