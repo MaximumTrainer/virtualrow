@@ -3,6 +3,7 @@ import { describeCrashEvidence } from '../../src/utils/crashEvidence';
 import { formatTelemetry } from '../../src/utils/sceneTelemetryLog';
 import type { TelemetryEvent } from '../../src/utils/sceneTelemetryLog';
 import { simPortsForWorker } from '../utils/simPorts';
+import { releaseSimServer, useSimServer } from '../utils/sim-server';
 
 /**
  * Fail a spec whose renderer died, whether or not the spec was looking.
@@ -53,6 +54,24 @@ const readTelemetry = async (page: Page): Promise<TelemetryEvent[]> => {
   }
 };
 
+type CrashWatchWorkerFixtures = {
+  /**
+   * One simulator per worker, for the whole worker.
+   *
+   * The workflow used to start a single shared one before Playwright, so every
+   * page that injected `mock-bluetooth.js` found something on 9001 whether or
+   * not its spec cared. Removing that shared server to make room for
+   * per-worker ones took the guarantee with it, and specs that never asked for
+   * a simulator started logging `ERR_CONNECTION_REFUSED` - which
+   * `rownative-course-import.spec.ts`, whose whole assertion is that the
+   * console stays clean, failed on.
+   *
+   * Worker-scoped and auto-use, so it is started once per worker and every
+   * spec gets the guarantee back on its own ports.
+   */
+  simServer: void;
+};
+
 type CrashWatchFixtures = {
   /**
    * Tell the page which simulator to talk to, before any of its scripts run.
@@ -73,7 +92,20 @@ type CrashWatchFixtures = {
   crashWatch: void;
 };
 
-export const test = base.extend<CrashWatchFixtures>({
+export const test = base.extend<CrashWatchFixtures, CrashWatchWorkerFixtures>({
+  simServer: [
+    // Playwright reads the destructured names to work out what a fixture
+    // depends on, so the first argument has to be a pattern even when the
+    // fixture depends on nothing - `_unused` is rejected at runtime.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      await useSimServer();
+      await use();
+      await releaseSimServer();
+    },
+    { scope: 'worker', auto: true },
+  ],
+
   simPorts: [
     async ({ page }, use, testInfo: TestInfo) => {
       // `parallelIndex`, not `workerIndex`: it stays inside [0, workers) even

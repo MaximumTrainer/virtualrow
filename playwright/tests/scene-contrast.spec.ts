@@ -79,7 +79,62 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
   );
   await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 30_000 });
   await expectSceneAlive(page, 'the contrast scene');
-  await page.waitForTimeout(6_000);
+
+  /**
+   * Wait for the world to appear, not for the clock.
+   *
+   * This was six fixed seconds, which was enough while one test had a runner
+   * to itself. With two workers sharing four cores the scene takes longer to
+   * assemble and the classification ran against a half-drawn frame: the sky
+   * came back as rgb(61,79,98) instead of rgb(224,229,231) and the spec
+   * reported no bank at all. It passed on retry every time, which is the
+   * signature of a race rather than a bug.
+   *
+   * Waiting for a bright sky alone is not enough either - that was tried, and
+   * the sky arrives first: every strip of the frame then read rgb(168,208,240)
+   * because the whole picture *was* sky. What the classification needs is a
+   * frame with something in it, so the wait is for the bottom of the frame to
+   * stop looking like the top.
+   */
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const canvas = document.querySelector(
+            '.rower3d-canvas-container canvas',
+          ) as HTMLCanvasElement | null;
+          if (!canvas) return 0;
+          const flat = document.createElement('canvas');
+          flat.width = canvas.width;
+          flat.height = canvas.height;
+          const ctx = flat.getContext('2d');
+          if (!ctx) return 0;
+          ctx.drawImage(canvas, 0, 0);
+
+          const band = Math.max(1, flat.height >> 4);
+          const meanLuma = (y: number) => {
+            const { data } = ctx.getImageData(0, y, flat.width, band);
+            let sum = 0;
+            for (let i = 0; i < data.length; i += 4) {
+              sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+            }
+            return sum / (data.length / 4);
+          };
+
+          const top = meanLuma(0);
+          const bottom = meanLuma(flat.height - band - 1);
+          // Dark everywhere means nothing has drawn at all, which is not ready
+          // either however different the two bands happen to be.
+          if (top < 100) return 0;
+          return Math.abs(top - bottom);
+        }),
+      {
+        timeout: 60_000,
+        intervals: [500, 1000, 2000],
+        message: 'the frame never gained a horizon, so the scene never finished drawing',
+      },
+    )
+    .toBeGreaterThan(40);
 
   return page.evaluate(() => {
     window.__ROWER3D_FORCE_RENDER?.();
