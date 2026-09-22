@@ -66,18 +66,55 @@ export const chunkIndexFor = (progress: number, chunks: number): number => {
 export const SCENERY_STATE_MIN_INTERVAL_SECONDS = 1;
 
 /**
+ * How far the boat may travel, in progress, before the mounted set is rebuilt.
+ *
+ * A chunk boundary alone is not enough, and this is the part the issue's plan
+ * did not allow for. #331 asks for the tree to change only on a chunk change,
+ * which assumes the scenery is instanced and all of it can stay mounted. It is
+ * not: `CurvedLandscapeElements` builds a `coneGeometry` or a `boxGeometry`
+ * per tree and per house, so everything mounted is geometry resident on the
+ * GPU. Mounting the whole route took the #272 endurance traverse from 412 to
+ * 766 uploaded geometries, against a ceiling of 627.
+ *
+ * So the mounted set stays a window around the boat, as it was, and this is
+ * how often that window moves: about twenty times across a route rather than
+ * the three thousand the old 0.1-second push managed.
+ */
+export const SCENERY_REMOUNT_PROGRESS = 0.05;
+
+/**
  * Whether the scenery tree should be rebuilt now.
  *
- * Both conditions have to hold: the boat has moved into a different chunk, and
- * enough time has passed since the last rebuild. Stated as a function so the
- * rule is somewhere a test can reach, rather than inline in a frame callback
- * where it was previously four floating-point comparisons nobody could check.
+ * Either the boat has crossed into a different chunk or it has rowed far
+ * enough that the window it was mounted for no longer covers it — and in both
+ * cases at most once a second. Stated as a function so the rule is somewhere a
+ * test can reach, rather than inline in a frame callback where it was
+ * previously four floating-point comparisons nobody could check.
  */
 export const shouldRebuildScenery = (
   chunk: number,
   lastChunk: number,
+  progress: number,
+  lastProgress: number,
   elapsedSeconds: number,
   lastRebuildSeconds: number,
-): boolean =>
-  chunk !== lastChunk &&
-  elapsedSeconds - lastRebuildSeconds >= SCENERY_STATE_MIN_INTERVAL_SECONDS;
+): boolean => {
+  if (elapsedSeconds - lastRebuildSeconds < SCENERY_STATE_MIN_INTERVAL_SECONDS) return false;
+  return (
+    chunk !== lastChunk ||
+    Math.abs(progress - lastProgress) >= SCENERY_REMOUNT_PROGRESS
+  );
+};
+
+/**
+ * How much of the route either side of the boat is mounted, in progress.
+ *
+ * The window `CurvedLandscapeElements` and `SceneryModels` used before #331,
+ * kept because it is what the geometry budget was measured against. What
+ * changed is how often it moves, not how wide it is.
+ */
+export const SCENERY_MOUNT_RANGE_PROGRESS = 0.15;
+
+/** Whether a placement at `progress` is inside the window mounted at `centre`. */
+export const withinMountRange = (progress: number, centre: number): boolean =>
+  Math.abs(progress - centre) <= SCENERY_MOUNT_RANGE_PROGRESS;

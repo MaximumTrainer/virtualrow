@@ -50,7 +50,7 @@ import {
   type Placement,
 } from './sceneryPlacement';
 import { useAnimationFrame } from './animationFrame';
-import { cullByDistance } from './visibilityCull';
+import { cullByDistance, withinMountRange } from './visibilityCull';
 import { chunkViewDistanceFor } from './fogPlan';
 
 /**
@@ -73,6 +73,14 @@ interface SceneryModelsProps {
    * (#331). Nothing re-renders now; `object.visible` is written in place.
    */
   positionRef?: React.RefObject<THREE.Vector3 | null>;
+  /**
+   * Progress the mounted window is centred on (#331).
+   *
+   * Every mounted instance is a cloned GLB resident on the GPU, so the window
+   * stays the width it was; what changed is that it moves about twenty times
+   * across a route rather than three thousand.
+   */
+  mountProgress?: number;
   theme?: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
   terrainY?: number;
@@ -99,6 +107,7 @@ const SceneryModelsChunk: React.FC<
   side = 'left',
   boatZ = 0,
   positionRef = null,
+  mountProgress = 0,
   theme = 'willowbrook',
   enrichment,
   terrainY = 0,
@@ -191,13 +200,14 @@ const SceneryModelsChunk: React.FC<
   const instances = useMemo(
     () =>
       [...placements, ...structurePlacements]
+        .filter((p) => !curve || withinMountRange(p.progress, mountProgress))
         .map((p, i) => {
           const src = sceneById.get(p.id);
           if (!src) return null;
           return { key: `${i}-${p.id}`, obj: src.clone(true), p };
         })
         .filter((v): v is { key: string; obj: THREE.Group; p: Placement } => v !== null),
-    [placements, structurePlacements, sceneById],
+    [placements, structurePlacements, sceneById, curve, mountProgress],
   );
 
   // Every instance is mounted, and which of them are drawn is decided in the

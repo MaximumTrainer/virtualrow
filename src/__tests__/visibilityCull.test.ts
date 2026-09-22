@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import {
+  SCENERY_MOUNT_RANGE_PROGRESS,
+  SCENERY_REMOUNT_PROGRESS,
   SCENERY_STATE_MIN_INTERVAL_SECONDS,
   chunkIndexFor,
   cullByDistance,
   shouldRebuildScenery,
+  withinMountRange,
 } from '../components/rower3d/visibilityCull';
 
 /**
@@ -87,20 +90,63 @@ describe('chunkIndexFor', () => {
 
 describe('shouldRebuildScenery', () => {
   it('rebuilds when the boat crosses into a new chunk', () => {
-    expect(shouldRebuildScenery(2, 1, 100, 0)).toBe(true);
+    expect(shouldRebuildScenery(2, 1, 0.5, 0.5, 100, 0)).toBe(true);
   });
 
-  it('does not rebuild while the boat stays in its chunk', () => {
-    expect(shouldRebuildScenery(1, 1, 100, 0)).toBe(false);
+  // A chunk boundary alone is not enough. #331's plan assumed the scenery was
+  // instanced and all of it could stay mounted; it is not — a tree is a
+  // `coneGeometry` — and mounting the whole route took the #272 traverse from
+  // 412 uploaded geometries to 766, against a ceiling of 627.
+  it('rebuilds when the boat rows out of the window it was mounted for', () => {
+    expect(
+      shouldRebuildScenery(1, 1, 0.5 + SCENERY_REMOUNT_PROGRESS * 1.01, 0.5, 100, 0),
+      'the boat left its mounted window and nothing was rebuilt',
+    ).toBe(true);
   });
 
-  it('refuses to rebuild twice inside the interval, however the chunk moves', () => {
+  it('does not rebuild while the boat stays inside its window and its chunk', () => {
+    expect(shouldRebuildScenery(1, 1, 0.51, 0.5, 100, 0)).toBe(false);
+  });
+
+  // Stated a hair past the threshold rather than on it: `0.5 - 0.05` is
+  // 0.44999999999999996 in binary floating point, so an exact-boundary case
+  // here would be testing the arithmetic of doubles, not the rule.
+  it('rebuilds whichever way the boat is going', () => {
+    const backwards = 0.5 - SCENERY_REMOUNT_PROGRESS * 1.01;
+    expect(shouldRebuildScenery(1, 1, backwards, 0.5, 100, 0)).toBe(true);
+  });
+
+  it('refuses to rebuild twice inside the interval, however far the boat moved', () => {
     const justUnder = SCENERY_STATE_MIN_INTERVAL_SECONDS - 0.01;
-    expect(shouldRebuildScenery(2, 1, justUnder, 0)).toBe(false);
-    expect(shouldRebuildScenery(2, 1, SCENERY_STATE_MIN_INTERVAL_SECONDS, 0)).toBe(true);
+    expect(shouldRebuildScenery(2, 1, 0.9, 0.1, justUnder, 0)).toBe(false);
+    expect(
+      shouldRebuildScenery(2, 1, 0.9, 0.1, SCENERY_STATE_MIN_INTERVAL_SECONDS, 0),
+    ).toBe(true);
   });
 
   it('caps the rebuild rate at once a second', () => {
     expect(SCENERY_STATE_MIN_INTERVAL_SECONDS).toBe(1);
+  });
+
+  // The window has to be wider than the distance the boat can travel between
+  // rebuilds, or it rows past the end of its own scenery.
+  it('moves the window well before the boat reaches its edge', () => {
+    expect(SCENERY_REMOUNT_PROGRESS).toBeLessThan(SCENERY_MOUNT_RANGE_PROGRESS);
+  });
+});
+
+describe('withinMountRange', () => {
+  it('mounts what is near the centre of the window', () => {
+    expect(withinMountRange(0.5, 0.5)).toBe(true);
+    expect(withinMountRange(0.5 + SCENERY_MOUNT_RANGE_PROGRESS / 2, 0.5)).toBe(true);
+  });
+
+  it('leaves out what is beyond it, on either side', () => {
+    expect(withinMountRange(0.5 + SCENERY_MOUNT_RANGE_PROGRESS + 0.001, 0.5)).toBe(false);
+    expect(withinMountRange(0.5 - SCENERY_MOUNT_RANGE_PROGRESS - 0.001, 0.5)).toBe(false);
+  });
+
+  it('keeps what sits exactly on the edge', () => {
+    expect(withinMountRange(SCENERY_MOUNT_RANGE_PROGRESS, 0)).toBe(true);
   });
 });

@@ -230,8 +230,9 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
    * `boatPositionRef` in the frame loop now; what is left here is the set of
    * placements, which genuinely does need a render to change.
    */
-  const [sceneryChunk, setSceneryChunk] = useState(0);
+  const [sceneryMount, setSceneryMount] = useState({ chunk: 0, progress: 0 });
   const lastSceneryChunkRef = useRef(0);
+  const lastSceneryProgressRef = useRef(0);
 
   const terrainProfile = useMemo(() => buildTerrainProfile(enrichment?.elevations), [enrichment?.elevations]);
 
@@ -257,9 +258,9 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
    */
   const chunkProgress = useMemo(() => {
     const ranges = chunkProgressRanges(geometryChunkCount);
-    const range = ranges[Math.min(sceneryChunk, ranges.length - 1)];
+    const range = ranges[Math.min(sceneryMount.chunk, ranges.length - 1)];
     return (range.from + range.to) / 2;
-  }, [geometryChunkCount, sceneryChunk]);
+  }, [geometryChunkCount, sceneryMount.chunk]);
 
   const boatGroupRef = useRef<THREE.Group>(null);
   /** Which five-second slot the last telemetry sample belonged to. */
@@ -379,13 +380,16 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       shouldRebuildScenery(
         chunk,
         lastSceneryChunkRef.current,
+        boatProgressRef.current,
+        lastSceneryProgressRef.current,
         sceneryClockRef.current,
         lastSceneryUpdateRef.current,
       )
     ) {
       lastSceneryChunkRef.current = chunk;
+      lastSceneryProgressRef.current = boatProgressRef.current;
       lastSceneryUpdateRef.current = sceneryClockRef.current;
-      setSceneryChunk(chunk);
+      setSceneryMount({ chunk, progress: boatProgressRef.current });
     }
     
     const cameraDistance = 6;
@@ -656,6 +660,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           theme={routeTheme}
           positionRef={boatPositionRef}
           chunkProgress={chunkProgress}
+          mountProgress={sceneryMount.progress}
           viewDistance={chunkViewDistanceFor(routeTheme)}
           enrichment={enrichment}
           track={sceneryTrack}
@@ -669,6 +674,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           <SceneryModels
             curve={routeCurve}
             positionRef={boatPositionRef}
+            mountProgress={sceneryMount.progress}
             theme={routeTheme}
             enrichment={enrichment}
             performanceMode={performanceMode}

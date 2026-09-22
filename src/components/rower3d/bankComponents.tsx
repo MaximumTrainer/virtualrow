@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useFollowPoint } from './followBoat';
+import { withinMountRange } from './visibilityCull';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
@@ -225,6 +226,17 @@ interface CurvedLandscapeProps {
   positionRef?: React.RefObject<THREE.Vector3 | null>;
   /** Progress at the centre of the boat's chunk, for the shadow band (#331). */
   chunkProgress: number;
+  /**
+   * Progress the mounted window is centred on (#331).
+   *
+   * Not every element on the route: a tree here is a `coneGeometry` and a
+   * house a handful of `boxGeometry`, so everything mounted is geometry
+   * resident on the GPU. Mounting the whole route took the #272 traverse from
+   * 412 uploaded geometries to 766 against a ceiling of 627. The window is the
+   * width it always was; what changed is that it moves about twenty times
+   * across a route instead of three thousand.
+   */
+  mountProgress: number;
   /** Metres past which an element stops being drawn — the fog's far plane. */
   viewDistance: number;
   enrichment?: RouteEnrichmentData | null;
@@ -271,6 +283,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   theme,
   positionRef,
   chunkProgress,
+  mountProgress,
   viewDistance,
   enrichment,
   track = null,
@@ -521,21 +534,24 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
    * render can afford.
    */
   const shadowCentre = chunkProgress;
+  const progressOf = (index: number) => (index * 0.02) / 0.6;
+
+  const mounted = (
+    elements: typeof landscapeElements.leftElements,
+    side: 'left' | 'right',
+  ) =>
+    elements.flatMap((element, index) => {
+      const elementProgress = progressOf(index);
+      if (!withinMountRange(elementProgress, mountProgress)) return [];
+      const nearShadow =
+        Math.abs(elementProgress - shadowCentre) < RENDER_CONFIG.shadowNearProgressBand;
+      return [renderElement(element, index, side, nearShadow)];
+    });
 
   return (
     <group ref={elementsGroupRef}>
-      {landscapeElements.leftElements.map((el, i) => {
-        const elementProgress = (i * 0.02) / 0.6;
-        const nearShadow =
-          Math.abs(elementProgress - shadowCentre) < RENDER_CONFIG.shadowNearProgressBand;
-        return renderElement(el, i, 'left', nearShadow);
-      })}
-      {landscapeElements.rightElements.map((el, i) => {
-        const elementProgress = (i * 0.02) / 0.6;
-        const nearShadow =
-          Math.abs(elementProgress - shadowCentre) < RENDER_CONFIG.shadowNearProgressBand;
-        return renderElement(el, i, 'right', nearShadow);
-      })}
+      {mounted(landscapeElements.leftElements, 'left')}
+      {mounted(landscapeElements.rightElements, 'right')}
     </group>
   );
 };

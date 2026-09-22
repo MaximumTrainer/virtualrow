@@ -47,7 +47,14 @@ describe('steady rowing', () => {
   });
   afterAll(() => uninstallCanvasMock());
 
-  /** Mount the bank with a boat the test can move, and count its commits. */
+  /**
+   * Mount the bank with a boat the test can move, and count its commits.
+   *
+   * `mountProgress` 0.15 either side of 0.1 covers the first 500 m of the 2 km
+   * route, so the boat can row inside the mounted window and the cull is what
+   * decides what is drawn — which is the thing under test. Mounting is a
+   * separate, far slower decision (#331).
+   */
   const mountBank = async (viewDistance = 200) => {
     const boat = { current: new THREE.Vector3(0, 0, 0) };
     let commits = 0;
@@ -65,6 +72,7 @@ describe('steady rowing', () => {
             theme="willowbrook"
             positionRef={boat}
             chunkProgress={0}
+            mountProgress={0.1}
             viewDistance={viewDistance}
           />
         </Profiler>
@@ -98,16 +106,16 @@ describe('steady rowing', () => {
     const drawnAtStart = bank.elements().filter((o) => o.visible);
     expect(drawnAtStart.length, 'nothing was drawn at the start').toBeGreaterThan(0);
 
-    // A kilometre down a 2 km route with a 200 m view distance: nothing that
-    // stood beside the boat at the start can still be in range.
-    await bank.rowTo(-1000);
+    // Four hundred metres down the route with a 200 m view distance: nothing
+    // that stood beside the boat at the start is still in range.
+    await bank.rowTo(-400);
     const nearStartStillDrawn = bank
       .elements()
-      .filter((object) => object.visible && object.position.z > -400);
+      .filter((object) => object.visible && object.position.z > -180);
 
     expect(
       nearStartStillDrawn.length,
-      'the bank by the start line is still drawn a kilometre later',
+      'the bank by the start line is still drawn four hundred metres later',
     ).toBe(0);
 
     await bank.renderer.unmount();
@@ -123,7 +131,7 @@ describe('steady rowing', () => {
       .filter((object) => object.visible)
       .map((object) => object.position.z);
 
-    await bank.rowTo(-1200);
+    await bank.rowTo(-400);
     const later = bank
       .elements()
       .filter((object) => object.visible)
