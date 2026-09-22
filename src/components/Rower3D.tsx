@@ -34,6 +34,7 @@ import { RiverGuides } from './rower3d/RiverGuides';
 import {
   BOAT_GROUP_NAME,
   IS_TEST_MODE,
+  isTelemetryPublished,
   SCENE_SCALE,
   WATER_CHANNEL_WIDTH,
   hasExplicitPerformanceMode,
@@ -443,8 +444,17 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
     }
 
     try {
-      if (IS_TEST_MODE) {
+      // The cost of the frame, published whether or not this is test mode.
+      //
+      // It used to go up only under `IS_TEST_MODE`, and test mode is also what
+      // drops the effect stack, the wake and the environment probe — so every
+      // number a budget could read described a scene no rower ever sees (#342).
+      if (isTelemetryPublished()) {
         window.__ROWER3D_RENDER_STATS = readRenderStats() ?? undefined;
+        window.__ROWER3D_FRAME_STATS = frameStats.read() ?? undefined;
+      }
+
+      if (IS_TEST_MODE) {
         window.__ROWER3D_CONTEXT_STATE = readContextState() ?? undefined;
         window.__ROWER3D_POS = {
           x: boatPositionRef.current.x,
@@ -521,7 +531,6 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         window.__ROWER3D_SPEED_MPS = renderedSpeedMps;
         window.__ROWER3D_STROKE_PHASE = boatStateRef.current.strokePhase;
         window.__ROWER3D_DISTANCE_M = boatProgressRef.current * totalDistance;
-        window.__ROWER3D_FRAME_STATS = frameStats.read() ?? undefined;
         // Walking the scene graph is not free, so it is sampled about once a
         // second rather than every frame, and only under automation.
         if (Math.floor(liveTime) !== Math.floor(liveTime - delta)) {

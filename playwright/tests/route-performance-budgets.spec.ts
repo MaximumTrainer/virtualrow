@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { expectSceneAlive } from '../utils/scene-health';
+import { RENDER_BUDGET, overBudget } from '../../src/components/rower3d/renderBudget';
 
 /**
  * Issue #224 — the runtime budgets: sustained frame rate, GPU memory, and no
@@ -175,35 +176,71 @@ test('reports frame telemetry while rowing a 5,000-point winding route', async (
   expect(problems).toEqual([]);
 });
 
-test('keeps the demo route inside its draw-call budget', async ({ page }) => {
-  await page.addInitScript({ content: fs.readFileSync(mockBluetoothPath, 'utf8') });
-  await page.goto('./');
-  await expect(page.locator('.route-info-overlay h2')).toContainText('Willowbrook River');
-  await connectHardwareAndStart(page);
+/**
+ * Issue #342 — the budget is a gate, per tier, on the scene a rower gets.
+ *
+ * There was a draw-call ceiling here before, and it had to be written with a
+ * caveat: it read `window.__ROWER3D_RENDER_STATS`, which the scene published
+ * only under `IS_TEST_MODE`, and test mode is also what drops the effect
+ * stack, the wake, the spray and the environment probe. It recorded 186 draw
+ * calls where the same route outside test mode recorded 1114 — a ceiling over
+ * a scene nobody runs.
+ *
+ * `__VIRTUALROW_TELEMETRY` publishes the numbers without entering test mode,
+ * the way `__VIRTUALROW_PERFORMANCE_MODE` gave #197 a tier without one. These
+ * run at each tier against `RENDER_BUDGET`, which is the same table the debug
+ * panel shows a rower.
+ */
+for (const tier of ['low', 'auto', 'high'] as const) {
+  test(`keeps the demo route inside its ${tier} render budget`, async ({ page }) => {
+    await page.addInitScript((mode) => {
+      (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
+        .__VIRTUALROW_PERFORMANCE_MODE = mode as string;
+    }, tier);
+    await page.addInitScript(() => {
+      (window as unknown as { __VIRTUALROW_TELEMETRY?: boolean }).__VIRTUALROW_TELEMETRY = true;
+    });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('./');
+    await page.locator('.btn-try-demo').click();
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 30_000 });
 
-  await expect
-    .poll(async () => page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0), {
-      timeout: 60_000,
-      intervals: [1000],
-    })
-    .toBeGreaterThan(0);
+    await expect
+      .poll(async () => page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0), {
+        timeout: 60_000,
+        intervals: [1000],
+      })
+      .toBeGreaterThan(0);
 
-  const stats = await page.evaluate(() => window.__ROWER3D_RENDER_STATS!);
-  console.log(
-    `draw calls ${stats.drawCalls}, triangles ${stats.triangles}, ` +
-      `quality ${stats.performanceMode}, renderer ${stats.backend}`,
-  );
+    // Long enough for the progressive chunk build to have settled: a count
+    // taken while the route is still tessellating describes a scene mid-load.
+    await page.waitForTimeout(20_000);
 
-  // Unlike frame rate, draw calls do not depend on the GPU underneath, so this
-  // is the part of the #224 frame budget CI can honestly hold.
-  //
-  // It holds the *test-mode* scene, which is a good deal lighter than the one a
-  // rower gets: IS_TEST_MODE drops the effect stack, so this path measured 186
-  // draw calls where the same route outside test mode measured 1114. Read this
-  // as a regression guard on the geometry the scene builds, not as the cost of
-  // a real session.
-  expect(stats.drawCalls).toBeLessThanOrEqual(400);
-});
+    const stats = await page.evaluate(() => window.__ROWER3D_RENDER_STATS!);
+    const frames = await page.evaluate(() => window.__ROWER3D_FRAME_STATS ?? null);
+    const software = await isSoftwareRendered(page);
+
+    console.log(
+      `${tier}: draw calls ${stats.drawCalls}/${RENDER_BUDGET[tier].drawCalls}, ` +
+        `triangles ${stats.triangles}/${RENDER_BUDGET[tier].triangles}, ` +
+        `p50 ${frames?.p50Ms?.toFixed(1) ?? 'n/a'}ms, ` +
+        `p95 ${frames?.p95Ms?.toFixed(1) ?? 'n/a'}/${RENDER_BUDGET[tier].p95Ms}ms, ` +
+        `software=${software}`,
+    );
+
+    expect(stats.performanceMode, 'the tier override did not take').toBe(tier);
+
+    // Draw calls and triangles are what the scene asks for and do not depend
+    // on what is drawing it, so they are held on every machine. Frame time
+    // does: this scene measures a p50 of 750 ms at low and 2,000 ms at high on
+    // SwiftShader, so asserting it there would describe the rasteriser.
+    const cost = software
+      ? { drawCalls: stats.drawCalls, triangles: stats.triangles }
+      : { drawCalls: stats.drawCalls, triangles: stats.triangles, p95Ms: frames?.p95Ms };
+
+    expect(overBudget(tier, cost), `the ${tier} scene is over budget`).toEqual([]);
+  });
+}
 
 test('keeps a 20 km route inside its geometry memory budget', async ({ page }) => {
   await rowGeneratedCourse(page, 'Twenty Kilometre Course', windingCourse(4000, 20_000, 16));
