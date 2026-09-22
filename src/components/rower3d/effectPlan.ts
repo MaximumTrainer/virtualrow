@@ -42,6 +42,17 @@ export interface EffectPlan {
   effects: EffectName[];
   /** SSAO sample count, when SSAO runs. */
   ssaoSamples?: number;
+  /**
+   * Where ACES runs: on the renderer when there is no composer, in the
+   * composer when there is.
+   *
+   * The renderer is built with ACESFilmicToneMapping and the composer ends on a
+   * ToneMapping pass set to ACES as well, so wherever a composer was mounted
+   * the frame was graded twice - crushing the mid-tones, and part of why
+   * `sceneExposure` had to be dragged to 0.55 to stop the sky blowing out
+   * (#269, #327). Deciding it here means the two cannot disagree.
+   */
+  toneMapOnRenderer: boolean;
 }
 
 /** Colour and tone work: cheap, full-screen, and what makes the scene look composed. */
@@ -54,7 +65,12 @@ const GRADE: EffectName[] = [
   'toneMapping',
 ];
 
-const EMPTY: EffectPlan = { composer: false, normalPass: false, effects: [] };
+const EMPTY: EffectPlan = {
+  composer: false,
+  normalPass: false,
+  effects: [],
+  toneMapOnRenderer: true,
+};
 
 /**
  * The effects a tier runs.
@@ -72,11 +88,16 @@ export const effectPlanFor = (
       normalPass: true,
       effects: [...GRADE, 'ssao', 'depthOfField', ...(hasSun ? (['godRays'] as EffectName[]) : [])],
       ssaoSamples: 24,
+      toneMapOnRenderer: false,
     };
   }
 
   if (mode === 'auto') {
-    return { composer: true, normalPass: false, effects: [...GRADE] };
+    // No depth of field. At worldFocusDistance 10 and range 25, from a camera
+    // six metres behind the boat, everything past about thirty-five metres was
+    // bokeh - which since #321 made a unit a metre is the entire far bank,
+    // permanently. It survives at high, where it is focused on the boat (#327).
+    return { composer: true, normalPass: false, effects: [...GRADE], toneMapOnRenderer: false };
   }
 
   return EMPTY;

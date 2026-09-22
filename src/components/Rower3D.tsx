@@ -44,6 +44,7 @@ import { createFrameStatsRecorder } from './rower3d/frameStats';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
+import { readComposerMounted } from './rower3d/composerState';
 import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
 import { easeProgressTowards } from './rower3d/progressEasing';
@@ -423,6 +424,15 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
           curveLength: curveData.length,
           builds: routeLoadCount()
         };
+        // Read off the renderer rather than off the plan, and paired with
+        // whether a composer is mounted, so a spec can assert the invariant:
+        // exactly one of the two grades the frame (#327). Published here rather
+        // than in DynamicPostFx because that does not mount at the low tier,
+        // which is precisely the tier whose answer is "the renderer".
+        window.__ROWER3D_TONE_MAPPING = {
+          mode: gl.toneMapping,
+          composer: readComposerMounted(),
+        };
         window.__ROWER3D_SCENE_FOG =
           scene.fog instanceof THREE.Fog
             ? { near: scene.fog.near, far: scene.fog.far }
@@ -672,6 +682,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
             performanceMode={performanceMode}
             theme={routeTheme}
             sunMesh={godRaysSunMesh}
+            boatPositionRef={boatPositionRef}
           />
         </SceneErrorBoundary>
       )}

@@ -132,3 +132,72 @@ describe('godRaysSun — the light source the pass is given (#233)', () => {
     expect(effectPlanFor('high', { hasSun: !!live }).effects).toContain('godRays');
   });
 });
+
+/**
+ * Issue #327 — the frame is tone-mapped once.
+ *
+ * The renderer is built with `ACESFilmicToneMapping` and the composer ends on a
+ * `ToneMapping` pass set to ACES as well, so wherever a composer was mounted
+ * the frame was graded twice. That crushes the mid-tones, and it is part of why
+ * `sceneExposure` had to be dragged down to 0.55 to stop the sky blowing out
+ * (#269) - the exposure was compensating for a second grade nobody had noticed.
+ *
+ * Which of the two runs is now a property of the plan, so it is decided in one
+ * place and can be asserted without a GPU.
+ */
+describe('exactly one tone-mapping stage', () => {
+  it('leaves it on the renderer when there is no composer', () => {
+    const plan = effectPlanFor('low', { hasSun: false });
+
+    expect(plan.composer, 'the low tier grew a composer').toBe(false);
+    expect(plan.toneMapOnRenderer, 'nothing would tone-map the frame at all').toBe(true);
+  });
+
+  it.each(['auto', 'high'] as const)('hands it to the composer at %s', (mode) => {
+    const plan = effectPlanFor(mode, { hasSun: true });
+
+    expect(plan.composer).toBe(true);
+    expect(plan.effects, 'the composer has no tone-mapping pass to hand it to').toContain(
+      'toneMapping',
+    );
+    expect(plan.toneMapOnRenderer, 'the frame is tone-mapped twice').toBe(false);
+  });
+
+  it('never tone-maps in both places, whatever the tier', () => {
+    for (const mode of ['low', 'auto', 'high'] as const) {
+      const plan = effectPlanFor(mode, { hasSun: true });
+      const inComposer = plan.composer && plan.effects.includes('toneMapping');
+
+      expect(
+        Number(plan.toneMapOnRenderer) + Number(inComposer),
+        `${mode} tone-maps ${Number(plan.toneMapOnRenderer) + Number(inComposer)} times`,
+      ).toBe(1);
+    }
+  });
+});
+
+/**
+ * Issue #327 — depth of field blurred the whole world.
+ *
+ * `worldFocusDistance 10` with `worldFocusRange 25`, from a camera six metres
+ * behind the boat, put everything past about thirty-five metres into bokeh.
+ * Since #321 made a unit a metre that is the entire far bank, permanently.
+ */
+describe('depth of field', () => {
+  it('is not in the auto stack at all', () => {
+    expect(effectPlanFor('auto', { hasSun: true }).effects).not.toContain('depthOfField');
+  });
+
+  it('is kept for high, where it is focused on the boat each frame', () => {
+    expect(effectPlanFor('high', { hasSun: true }).effects).toContain('depthOfField');
+  });
+
+  it('keeps the tiers in cost order with it gone from auto', () => {
+    const low = effectCost(effectPlanFor('low', { hasSun: true }));
+    const auto = effectCost(effectPlanFor('auto', { hasSun: true }));
+    const high = effectCost(effectPlanFor('high', { hasSun: true }));
+
+    expect(low).toBeLessThan(auto);
+    expect(auto).toBeLessThan(high);
+  });
+});
