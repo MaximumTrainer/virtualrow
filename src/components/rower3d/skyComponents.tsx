@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Sky, Cloud } from '@react-three/drei';
+import { Billboard, Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
+import { cloudsFor } from './cloudPlan';
+import type { PerformanceMode } from './constants';
 import type { RouteTheme } from './themeConfig';
 import { seededRandom } from './helpers';
 
@@ -21,12 +23,21 @@ import { seededRandom } from './helpers';
  */
 const SKY_UNIT_METRES = 10;
 
+/** The name on the cloud layer, so a test can ask where the sky is (#326). */
+export const CLOUD_LAYER_NAME = 'CloudLayer';
+
 // ============================================================================
 // HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
 // ============================================================================
-export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number }> = ({ theme, boatZ }) => {
+export const PhotorealisticSkydome: React.FC<{
+  theme: RouteTheme;
+  /** Where the boat is, in XZ. Z alone slid the sky sideways on bends (#326). */
+  boatXZ: [number, number];
+  performanceMode: PerformanceMode;
+}> = ({ theme, boatXZ, performanceMode }) => {
+  const [boatX, boatZ] = boatXZ;
   const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
-  const cloudConfig = useMemo(() => getThemeConfig(theme).clouds, [theme]);
+  const cloudConfig = useMemo(() => cloudsFor(performanceMode, theme), [performanceMode, theme]);
 
   const cloudPositions = useMemo(() => {
     const positions: Array<{ x: number; y: number; z: number; scale: number; variation: number }> = [];
@@ -90,7 +101,12 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
       />
 
       {cloudConfig.enabled && (
-        <group ref={cloudGroupRef} position={[0, 0, boatZ]} scale={SKY_UNIT_METRES}>
+        <group
+          ref={cloudGroupRef}
+          name={CLOUD_LAYER_NAME}
+          position={[boatX, 0, boatZ]}
+          scale={SKY_UNIT_METRES}
+        >
           {cloudPositions.map((pos, i) => (
             <Cloud
               key={i}
@@ -108,7 +124,7 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
       {cloudConfig.enabled && (
         <group
           ref={layer2Ref}
-          position={[0, 160 * SKY_UNIT_METRES, boatZ - 350 * SKY_UNIT_METRES]}
+          position={[boatX, 160 * SKY_UNIT_METRES, boatZ - 350 * SKY_UNIT_METRES]}
           scale={SKY_UNIT_METRES}
         >
           {[...Array(Math.ceil(cloudConfig.count * 0.4))].map((_, i) => (
@@ -131,7 +147,7 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
 
       {cloudConfig.enabled && cloudConfig.depth > 0.7 && (
         <group
-          position={[0, 220 * SKY_UNIT_METRES, boatZ - 500 * SKY_UNIT_METRES]}
+          position={[boatX, 220 * SKY_UNIT_METRES, boatZ - 500 * SKY_UNIT_METRES]}
           scale={SKY_UNIT_METRES}
         >
           {[...Array(2)].map((_, i) => (
@@ -154,7 +170,12 @@ export const PhotorealisticSkydome: React.FC<{ theme: RouteTheme; boatZ: number 
 // ============================================================================
 // HORIZON SILHOUETTE — distant silhouette per theme using THREE.Shape (#131)
 // ============================================================================
-export const HorizonSilhouette: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+export const HorizonSilhouette: React.FC<{
+  /** Where the boat is, in XZ (#326). */
+  boatXZ: [number, number];
+  theme: RouteTheme;
+}> = ({ boatXZ, theme }) => {
+  const [boatX, boatZ] = boatXZ;
   const horizonConfig = useMemo(() => getThemeConfig(theme).horizon, [theme]);
 
   const silhouetteGeo = useMemo(() => {
@@ -235,10 +256,16 @@ export const HorizonSilhouette: React.FC<{ boatZ: number; theme: RouteTheme }> =
 
   return (
     <group
-      position={[0, 0, boatZ - horizonConfig.distance * SKY_UNIT_METRES]}
+      position={[boatX, 0, boatZ - horizonConfig.distance * SKY_UNIT_METRES]}
       scale={SKY_UNIT_METRES}
     >
-      <mesh geometry={silhouetteGeo} material={silhouetteMat} />
+      {/* Yawed to the camera, and only yawed: `lockX` and `lockZ` keep it
+          upright, so it turns about Y like a horizon does and never tips.
+          The shape is flat and a rower can come at it from any heading on a
+          bend or a loop, where an unturned silhouette shows its edge. */}
+      <Billboard lockX lockZ>
+        <mesh geometry={silhouetteGeo} material={silhouetteMat} />
+      </Billboard>
     </group>
   );
 };

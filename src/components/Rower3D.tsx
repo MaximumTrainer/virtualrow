@@ -210,8 +210,12 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   const boatRotationRef = useRef<number>(0);
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
-  const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatZ: 0 });
-  const { boatProgress, boatZ } = sceneryState;
+  // X as well as Z (#326). The route curve moves the boat in both, so anything
+  // that followed only Z slid sideways on every bend and ended up behind the
+  // boat on a looped course.
+  const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatX: 0, boatZ: 0 });
+  const { boatProgress, boatX, boatZ } = sceneryState;
+  const boatXZ = useMemo<[number, number]>(() => [boatX, boatZ], [boatX, boatZ]);
 
   const terrainProfile = useMemo(() => buildTerrainProfile(enrichment?.elevations), [enrichment?.elevations]);
   const terrainY = getTerrainReliefForProgress(terrainProfile, boatProgress);
@@ -314,10 +318,13 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
     if (elapsedTime - lastSceneryUpdateRef.current > 0.1) {
       lastSceneryUpdateRef.current = elapsedTime;
       const newProgress = boatProgressRef.current;
+      const newX = boatPositionRef.current.x;
       const newZ = boatPositionRef.current.z;
       setSceneryState(prev =>
-        Math.abs(newProgress - prev.boatProgress) > 0.0001 || Math.abs(newZ - prev.boatZ) > 1
-          ? { boatProgress: newProgress, boatZ: newZ }
+        Math.abs(newProgress - prev.boatProgress) > 0.0001 ||
+        Math.abs(newZ - prev.boatZ) > 1 ||
+        Math.abs(newX - prev.boatX) > 1
+          ? { boatProgress: newProgress, boatX: newX, boatZ: newZ }
           : prev
       );
     }
@@ -484,7 +491,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   return (
     <AnimationProvider>
       
-      <PhotorealisticSkydome theme={routeTheme} boatZ={boatZ} />
+      <PhotorealisticSkydome theme={routeTheme} boatXZ={boatXZ} performanceMode={performanceMode} />
       
       {/* Aerial perspective, and the thing that lets the world end.
           Linear rather than exponential: the chunk cull is a hard distance, so
@@ -677,7 +684,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <CausticsLight boatZ={boatZ} />
+        <CausticsLight boatXZ={boatXZ} />
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
@@ -685,7 +692,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       )}
 
       {!IS_TEST_MODE && (
-        <HorizonSilhouette boatZ={boatZ} theme={routeTheme} />
+        <HorizonSilhouette boatXZ={boatXZ} theme={routeTheme} />
       )}
     </AnimationProvider>
   );
