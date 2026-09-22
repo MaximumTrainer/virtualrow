@@ -2,6 +2,7 @@ import { test as base, type Page, type TestInfo } from '@playwright/test';
 import { describeCrashEvidence } from '../../src/utils/crashEvidence';
 import { formatTelemetry } from '../../src/utils/sceneTelemetryLog';
 import type { TelemetryEvent } from '../../src/utils/sceneTelemetryLog';
+import { simPortsForWorker } from '../utils/simPorts';
 
 /**
  * Fail a spec whose renderer died, whether or not the spec was looking.
@@ -54,6 +55,17 @@ const readTelemetry = async (page: Page): Promise<TelemetryEvent[]> => {
 
 type CrashWatchFixtures = {
   /**
+   * Tell the page which simulator to talk to, before any of its scripts run.
+   *
+   * Auto-use and installed here rather than in each spec, because
+   * twenty-six spec files inject `mock-bluetooth.js` and a port every one of
+   * them had to remember would be a port one of them forgot. The mock reads
+   * `window.__SIM_PORTS` and falls back to worker zero's, so nothing breaks if
+   * this ever fails to run.
+   */
+  simPorts: void;
+
+  /**
    * Installed for every test, whether or not the test mentions it.
    *
    * Auto-use, because a guard nobody remembers to switch on is not a guard.
@@ -62,6 +74,21 @@ type CrashWatchFixtures = {
 };
 
 export const test = base.extend<CrashWatchFixtures>({
+  simPorts: [
+    async ({ page }, use, testInfo: TestInfo) => {
+      // `parallelIndex`, not `workerIndex`: it stays inside [0, workers) even
+      // after a worker is restarted, so a crash mid-run cannot walk the ports
+      // off into a range nothing cleans up. It is the same value
+      // `utils/sim-server.ts` starts this worker's simulator on.
+      const ports = simPortsForWorker(testInfo.parallelIndex);
+      await page.addInitScript((value) => {
+        (window as unknown as { __SIM_PORTS?: unknown }).__SIM_PORTS = value;
+      }, ports);
+      await use();
+    },
+    { auto: true },
+  ],
+
   crashWatch: [
     async ({ page }, use, testInfo: TestInfo) => {
       let crashEventFired = false;

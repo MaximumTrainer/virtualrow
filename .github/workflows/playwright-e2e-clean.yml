@@ -79,14 +79,16 @@ jobs:
       - name: Install Playwright browsers
         run: npm run pretest:e2e
 
+      # No shared simulator any more.
+      #
+      # One server on 9001/9002 was what forced `workers: 1`: it broadcasts
+      # every message to every socket connected to it, so two tests sharing it
+      # would feed each other's rowers. Each worker starts its own on its own
+      # ports now (playwright/utils/simPorts.ts), which is what lets the
+      # workers below be more than one - and a server started here would be
+      # sitting on worker zero's ports when it tried.
       - name: Clean up simulator ports
-        run: node scripts/kill-ports.mjs 9001 9002
-
-      - name: Start simulator server
-        run: node scripts/start-sim-bg.mjs
-
-      - name: Wait for simulator to be ready
-        run: npx wait-on http://localhost:9002 --timeout 30000
+        run: node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008
 
       - name: Run E2E tests
         run: npm run test:e2e:ci -- --shard=${{ matrix.shard }}/8
@@ -115,9 +117,6 @@ jobs:
             test-results/**/video
             test-results/**/screenshot
 
-      - name: Cleanup simulator
-        if: always()
-        run: node scripts/stop-sim.mjs
 
   # The visual baselines (#340).
   #
@@ -261,14 +260,16 @@ jobs:
       - name: Install Playwright browsers
         run: npm run pretest:e2e
 
+      # No shared simulator any more.
+      #
+      # One server on 9001/9002 was what forced `workers: 1`: it broadcasts
+      # every message to every socket connected to it, so two tests sharing it
+      # would feed each other's rowers. Each worker starts its own on its own
+      # ports now (playwright/utils/simPorts.ts), which is what lets the
+      # workers below be more than one - and a server started here would be
+      # sitting on worker zero's ports when it tried.
       - name: Clean up simulator ports
-        run: node scripts/kill-ports.mjs 9001 9002
-
-      - name: Start simulator server
-        run: node scripts/start-sim-bg.mjs
-
-      - name: Wait for simulator to be ready
-        run: npx wait-on http://localhost:9002 --timeout 30000
+        run: node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008
 
       - name: Row the routes end to end
         run: npm run test:e2e:endurance
@@ -287,6 +288,3 @@ jobs:
             test-results
           if-no-files-found: warn
 
-      - name: Cleanup simulator
-        if: always()
-        run: node scripts/stop-sim.mjs

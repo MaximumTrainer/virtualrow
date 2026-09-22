@@ -16,8 +16,23 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   timeout: 160_000, // 160 seconds — CI machines are slower; route test has many async waits
   retries: 2,
-  // In CI, force single worker to avoid parallel servers and port conflicts
-  workers: process.env.CI ? 1 : undefined,
+  /**
+   * Two workers, where this was one for years.
+   *
+   * The reason it was one is in the header above - "single worker to avoid
+   * port conflicts" - and it was a real reason: the PM5 simulator broadcasts
+   * every message to every socket connected to it, so two tests sharing one
+   * server fed each other's rowers. That failure reads as a physics bug, not
+   * a test one, which is the worst kind to leave available.
+   *
+   * Each worker has its own simulator on its own ports now
+   * (playwright/utils/simPorts.ts), so the conflict is gone. Two rather than
+   * four because the 3D specs render through SwiftShader on the CPU, and a
+   * GitHub runner has four cores between the browsers, the simulators and the
+   * preview server - past two, workers mostly queue for the same cores and
+   * the timeouts start to matter.
+   */
+  workers: process.env.CI ? 2 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   // Same responsive matrix as the local config (issue #195). Rendering one
   // viewport in CI is what let the phone and short-landscape clipping through.

@@ -5,14 +5,25 @@ import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations, captureGameplayCanvas } from '../utils/screenshot-helper';
 import { expectSceneAlive } from '../utils/scene-health';
+import { simPortsForWorker } from '../utils/simPorts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const simServerPath = path.resolve(__dirname, '../simulators/sim-server.js');
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
-// Read ports from environment variables with defaults
-const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || '9001', 10);
-const SIM_HTTP_PORT = parseInt(process.env.SIM_HTTP_PORT || '9002', 10);
+// This worker's simulator ports, or whatever the environment insists on.
+//
+// This file still owns a second copy of the simulator's process management -
+// `utils/sim-server.ts` says as much in its own header - and consolidating it
+// is a change for its own commit. What matters here is that the copy agrees
+// with the original about which ports this worker owns, because a suite with
+// several workers has several simulators (playwright/utils/simPorts.ts).
+const workerSimPorts = simPortsForWorker(Number(process.env.TEST_PARALLEL_INDEX ?? 0));
+const SIM_WS_PORT = parseInt(process.env.SIM_WS_PORT || String(workerSimPorts.ws), 10);
+const SIM_HTTP_PORT = parseInt(
+  process.env.SIM_HTTP_PORT || String(workerSimPorts.http),
+  10,
+);
 
 let simProcess: child_process.ChildProcess;
 

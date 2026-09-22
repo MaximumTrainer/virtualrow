@@ -25,7 +25,7 @@
     "start:sim": "node ./playwright/simulators/sim-server.cjs",
     "start:sim:bg": "node scripts/start-sim-bg.mjs",
     "stop:sim": "node scripts/stop-sim.mjs",
-    "kill:ports": "node scripts/kill-ports.mjs 9001 9002",
+    "kill:ports": "node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008",
     "generate:environment-assets": "node scripts/generate-environment-assets.cjs",
     "prepare": "node scripts/install-hooks.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
