@@ -19,7 +19,7 @@ import {
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
 import { createShorelineTexture } from './shorelineTexture';
-import { groundPlaneFor } from './groundPlane';
+import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } from './groundPlane';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
@@ -56,6 +56,9 @@ export const GROUND_PLANE_NAME = 'GroundPlane';
  * and anything it did beyond being the right colour would draw the eye to a
  * surface nobody should notice.
  */
+/** Where the ground plane sits, just under the waterline. */
+const GROUND_PLANE_Y = BANK_WATERLINE_Y - GROUND_PLANE_DROP_METRES;
+
 export const GroundPlane: React.FC<{
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
@@ -67,12 +70,28 @@ export const GroundPlane: React.FC<{
   return (
     <mesh
       name={GROUND_PLANE_NAME}
-      position={[plan.centre[0], BANK_WATERLINE_Y - 0.05, plan.centre[1]]}
+      position={[plan.centre[0], GROUND_PLANE_Y, plan.centre[1]]}
       rotation={[-Math.PI / 2, 0, 0]}
       receiveShadow
     >
       <planeGeometry args={[plan.size, plan.size]} />
-      <meshStandardMaterial color={color} roughness={1} metalness={0} />
+      {/* Pushed away in depth as well as in space (#328).
+          It sat five centimetres under the waterline, which is nothing against
+          a depth buffer stretched from a 0.1 m near plane to a 12 km far one,
+          and which of the two won was decided by where the camera happened to
+          be. Moving the chase camera one metre back for #328 handed the whole
+          river to this plane: the boat rowed across grass, with the water
+          visible only as a thread at the horizon. A polygon offset settles the
+          tie in the water's favour wherever the camera stands, and moves
+          nothing a rower can see. */}
+      <meshStandardMaterial
+        color={color}
+        roughness={1}
+        metalness={0}
+        polygonOffset
+        polygonOffsetFactor={GROUND_PLANE_DEPTH_OFFSET}
+        polygonOffsetUnits={GROUND_PLANE_DEPTH_OFFSET}
+      />
     </mesh>
   );
 };

@@ -49,3 +49,26 @@ export const groundPlaneFor = (curve: THREE.CatmullRomCurve3 | null): GroundPlan
     size: Math.max(span, GROUND_PLANE_MINIMUM_METRES),
   };
 };
+
+/**
+ * How far below the waterline the ground plane sits, in metres.
+ *
+ * Far enough to be under the bank's inner edge, and no further: it is the
+ * absence of a hole, not a riverbed, and a deep one would show as a step where
+ * the bank strip runs out on a bend.
+ */
+export const GROUND_PLANE_DROP_METRES = 0.05;
+
+/**
+ * How hard to push the ground plane back in the depth buffer (#328).
+ *
+ * Five centimetres of separation is nothing against a depth buffer stretched
+ * from a 0.1 m near plane to a 12 km far one, so which of the plane and the
+ * water won a given pixel depended on where the camera was standing. Moving
+ * the chase camera one metre back handed it the whole river.
+ *
+ * The offset settles that tie in the water's favour at every distance, and
+ * costs nothing: the plane is flat, unlit and only ever seen where there is
+ * nothing else to see.
+ */
+export const GROUND_PLANE_DEPTH_OFFSET = 8;
