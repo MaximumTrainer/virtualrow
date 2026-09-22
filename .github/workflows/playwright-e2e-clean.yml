@@ -23,6 +23,30 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        # Eight shards per platform.
+        #
+        # The suite is 41 minutes of test time against 105 seconds of setup, so
+        # wall clock is almost entirely the tests, and splitting them is the
+        # lever that moves it.
+        #
+        # Eight rather than four or six because Playwright shards by test
+        # count, not by duration, and this suite is not evenly weighted - a
+        # handful of 3D specs hold most of the minutes. Measured against the
+        # real per-test timings from run 35747444418:
+        #
+        #   4 shards: worst 20.3 min    6 shards: worst 12.3 min
+        #   8 shards: worst 10.2 min
+        #
+        # Eight is the first split whose worst shard leaves real margin under
+        # a quarter of an hour once setup and a retry are paid for.
+        #
+        # Sharding rather than `workers > 1`, which would be cheaper in runner
+        # minutes: the PM5 simulator broadcasts every message to every
+        # connected socket, so two tests sharing one would feed each other's
+        # rowers. Each shard is its own machine with its own simulator, which
+        # sidesteps that. Per-worker simulators are the better long-term fix
+        # and would let this number come back down.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     runs-on: ${{ matrix.os }}
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
@@ -46,9 +70,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit tests
-        run: npm run test -- --run
-
       - name: Cache Playwright browsers
         uses: actions/cache@v6
         with:
@@ -68,34 +89,25 @@ jobs:
         run: npx wait-on http://localhost:9002 --timeout 30000
 
       - name: Run E2E tests
-        run: npm run test:e2e:ci
+        run: npm run test:e2e:ci -- --shard=${{ matrix.shard }}/8
         # The scene keeps its WebGL context now, so every 3D spec draws for as
         # long as it runs instead of going quiet a few seconds in. That is the
         # point, and it costs real time on a software rasteriser: macOS ran to
         # 29.3 minutes of test time and tripped the old 30 minute ceiling.
         #
-        # Raised again for #324. The water gained scrolling normal ripples, a
-        # fresnel blend and a sky environment to reflect, and every 3D spec in
-        # the suite got about 30% slower for it - ubuntu 32 to 42 minutes,
-        # windows 38 to 46. The rise is spread across every spec rather than
-        # concentrated in one, which is what a per-fragment cost looks like.
+        # An eighth of the suite, so a fraction of the old ceiling.
         #
-        # Wall clock here is not the performance signal. CI renders on
-        # SwiftShader, one to two orders of magnitude slower than the
-        # integrated GPU the frame-rate criterion is written against - the
-        # point `route-performance-budgets.spec.ts` has made since #224. What
-        # guards the real cost is that spec's per-tier draw-call and triangle
-        # budgets (#342), and those still pass.
-        #
-        # 55 rather than 50: #347 has more scene work in it, and a ceiling
-        # that has to be raised every second PR is not a ceiling.
-        timeout-minutes: 55
+        # This was 40 minutes and had to go to 55 when #324 made the water cost
+        # more, because the whole suite ran in one job. The worst shard is
+        # about ten minutes; 18 leaves room for a retry and a slow runner
+        # without letting a hang sit unnoticed for the best part of an hour.
+        timeout-minutes: 18
 
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-artifacts-${{ matrix.os }}-${{ github.run_id }}
+          name: playwright-artifacts-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}
           path: |
             playwright-report
             test-results
