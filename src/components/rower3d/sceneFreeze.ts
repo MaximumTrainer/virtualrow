@@ -71,3 +71,18 @@ export const frozenProgress = (freeze: SceneFreeze | null, liveProgress: number)
  */
 export const frozenStrokeCycle = (freeze: SceneFreeze | null, liveCycle: number): number =>
   freeze ? freeze.time % 1 : liveCycle;
+
+/**
+ * The speed the camera should frame a frozen scene at (#328, #340).
+ *
+ * The freeze pins the clock and the boat's progress so a visual shot is of the
+ * same water every run. It does not pin the physics, and the camera rig's
+ * field of view is coupled to velocity — so a frozen scene would still be
+ * photographed through a slightly different lens each time, and the baselines
+ * would drift for a reason that has nothing to do with the scene.
+ *
+ * Zero rather than a representative pace: a scene that is not moving has no
+ * speed, and the rig reads zero as its resting field of view.
+ */
+export const frozenVelocity = (freeze: SceneFreeze | null, liveVelocity: number): number =>
+  freeze ? 0 : liveVelocity;

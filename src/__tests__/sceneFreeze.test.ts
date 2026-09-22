@@ -4,6 +4,7 @@ import {
   frozenProgress,
   frozenStrokeCycle,
   readSceneFreeze,
+  frozenVelocity,
 } from '../components/rower3d/sceneFreeze';
 
 /**
@@ -69,5 +70,23 @@ describe('the frozen readings', () => {
   it('parks the stroke at the fraction of the second the clock stopped on', () => {
     expect(frozenStrokeCycle(freeze, 0.42)).toBe(0.5);
     expect(frozenStrokeCycle({ time: 12, progress: 0 }, 0.42)).toBe(0);
+  });
+});
+
+describe('frozenVelocity', () => {
+  /**
+   * Issue #328 put the camera's field of view on a velocity curve, and the
+   * freeze pins the clock and the boat's progress but not the physics. A
+   * frozen scene would still have been photographed through a slightly
+   * different lens each run, and the baselines would have drifted for a
+   * reason that has nothing to do with the scene.
+   */
+  it('reports no speed at all while the scene is frozen', () => {
+    expect(frozenVelocity({ time: 12.5, progress: 0.31 }, 4.17)).toBe(0);
+  });
+
+  it('reports the real speed while it is not', () => {
+    expect(frozenVelocity(null, 4.17)).toBe(4.17);
+    expect(frozenVelocity(null, 0)).toBe(0);
   });
 });

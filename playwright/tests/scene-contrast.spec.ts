@@ -30,6 +30,23 @@ import { expectSceneAlive } from '../utils/scene-health';
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * How far a pixel must sit from the water's colour to count as ground.
+ *
+ * Sixty, until #328 moved the chase camera a metre further back. That samples
+ * water further down the route, where the fog has lightened it: the bank reads
+ * rgb(20,59,17) and the water rgb(19,59,69) to rgb(19,59,79), a distance of 52
+ * to 62 — so the old threshold sat exactly on the margin and the verdict
+ * flipped between runs.
+ *
+ * Forty keeps the gate pointed at what it was written for. The failures it
+ * guards against are a bank drawn the colour of the river (#269) and no bank
+ * at all (#280), and both of those sit at a distance of nearly zero, not at
+ * fifty. The measurement is in the log line every run prints, so the next
+ * person to move the camera can see where the margin went.
+ */
+const GROUND_APART = 40;
+
 const mockBluetoothPath = path.resolve(__dirname, '../mock-bluetooth.js');
 
 async function waitForDeviceConnected(page: Page, label: string) {
@@ -81,7 +98,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
   await expectSceneAlive(page, 'the contrast scene');
   await page.waitForTimeout(6_000);
 
-  return page.evaluate(() => {
+  return page.evaluate((groundApart) => {
     window.__ROWER3D_FORCE_RENDER?.();
     const canvas = document.querySelector(
       '.rower3d-canvas-container canvas',
@@ -210,7 +227,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
           const [r, g, b] = at(x, y);
           if (isSky([r, g, b], y)) continue;
           nonSky += 1;
-          if (apart([r, g, b], water) > 60) ground += 1;
+          if (apart([r, g, b], water) > groundApart) ground += 1;
         }
       }
       return nonSky ? ground / nonSky : 0;
@@ -237,7 +254,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
       waterToLeft: apart(middle.colour, left.colour),
       waterToRight: apart(middle.colour, right.colour),
     };
-  });
+  }, GROUND_APART);
 }
 
 // Every tier, because the acceptance criterion says every tier and because they
