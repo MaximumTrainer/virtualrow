@@ -382,21 +382,33 @@ export const FinishSplash: React.FC<{
 // CAUSTICS LIGHT — animated SpotLight with caustics cookie texture (#123)
 // ============================================================================
 export const CausticsLight: React.FC<{
-  /** Where the boat is, in XZ. Z alone left the caustics behind on a bend (#326). */
-  boatXZ: [number, number];
-}> = ({ boatXZ }) => {
-  const [boatX, boatZ] = boatXZ;
+  /**
+   * Where the boat is. Z alone left the caustics behind on a bend (#326); a
+   * ref rather than a prop so following it costs no re-render (#331).
+   */
+  positionRef: React.RefObject<THREE.Vector3 | null>;
+}> = ({ positionRef }) => {
   const spotRef = useRef<THREE.SpotLight>(null);
   const targetRef = useRef<THREE.Object3D>(null);
   const causticsTexture = useMemo(() => createCausticsTexture(), []);
   useEffect(() => () => { causticsTexture.dispose(); }, [causticsTexture]);
 
   useAnimationFrame((time) => {
+    // The cookie still scrolls with no boat to follow; the light simply stays
+    // where it is rather than sliding to the origin.
+    const boat = positionRef.current;
+    const boatX = boat ? boat.x : spotRef.current?.position.x ?? 0;
+    const boatZ = boat ? boat.z : spotRef.current?.position.z ?? 0;
+
     if (spotRef.current) {
       const r = 2.0;
       spotRef.current.position.x = boatX + Math.sin(time * 0.4) * r;
       spotRef.current.position.z = boatZ + Math.cos(time * 0.4) * r;
     }
+    // The light aims at the boat, so its target has to travel with it. This
+    // was authored at x = 0 while the light followed `boatX`, which on a bend
+    // pointed the cookie at the middle of the route instead of at the hull.
+    if (targetRef.current) targetRef.current.position.set(boatX, 0, boatZ);
     if (causticsTexture) {
       // react-hooks/immutability: a THREE texture is a handle to GPU state and
       // is mutated in place by design — scrolling its offset is how the
@@ -412,10 +424,10 @@ export const CausticsLight: React.FC<{
 
   return (
     <>
-      <object3D ref={targetRef} position={[0, 0, boatZ]} />
+      <object3D ref={targetRef} />
       <spotLight
         ref={spotRef}
-        position={[0, 8, boatZ]}
+        position={[0, 8, 0]}
         color="#b0d8ff"
         intensity={0.6}
         angle={0.5}

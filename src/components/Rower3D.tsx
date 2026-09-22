@@ -16,6 +16,10 @@ import {
   getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
+import { chunkIndexFor, shouldRebuildScenery } from './rower3d/visibilityCull';
+import { useVector3Ref, useFollowZ } from './rower3d/followBoat';
+import { chunkCountForRoute, chunkProgressRanges } from './rower3d/geometryChunks';
+import { curveLengthMeters } from './rower3d/curve';
 import { bladeClearanceMeters, OAR_REACH_METERS } from './rower3d/navigableWidth';
 import {
   createRouteCurve,
@@ -76,7 +80,7 @@ import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
 import { frozenClock, frozenProgress, readSceneFreeze } from './rower3d/sceneFreeze';
 import { detectRouteTheme } from './rower3d/routeTheme';
-import { fogFor } from './rower3d/fogPlan';
+import { fogFor, chunkViewDistanceFor } from './rower3d/fogPlan';
 import './Rower3D.css';
 
 // The crewed sculls are preloaded in boatComponents, beside the component that
@@ -108,11 +112,16 @@ export interface Rower3DProps {
 // ============================================================================
 // THEMED RIVERBANKS - Ground color varies by route theme
 // ============================================================================
-const ThemedRiverbanks: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+const ThemedRiverbanks: React.FC<{
+  followRef: React.RefObject<THREE.Vector3 | null>;
+  theme: RouteTheme;
+}> = ({ followRef, theme }) => {
+  const banksRef = useRef<THREE.Group>(null);
+  useFollowZ(banksRef, followRef);
   const bankColor = useMemo(() => getThemeConfig(theme).bank.flatColor, [theme]);
   
   return (
-    <group position={[0, -0.5, boatZ]}>
+    <group ref={banksRef} position={[0, -0.5, 0]}>
       <mesh position={[-40, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[60, 1000]} />
         <meshStandardMaterial color={bankColor} roughness={0.95} />
@@ -211,20 +220,53 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   const boatRotationRef = useRef<number>(0);
   const boatPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const scratchTangentRef = useRef<THREE.Vector3>(new THREE.Vector3());
-  // X as well as Z (#326). The route curve moves the boat in both, so anything
-  // that followed only Z slid sideways on every bend and ended up behind the
-  // boat on a looped course.
-  const [sceneryState, setSceneryState] = useState({ boatProgress: 0, boatX: 0, boatZ: 0 });
-  const { boatProgress, boatX, boatZ } = sceneryState;
-  const boatXZ = useMemo<[number, number]>(() => [boatX, boatZ], [boatX, boatZ]);
+  /**
+   * The one thing about the boat that still changes the React tree: which
+   * chunk of the route it is on (#331).
+   *
+   * This used to be `{ boatProgress, boatX, boatZ }`, pushed ten times a
+   * second and read by nine components that each rebuilt hundreds of instances
+   * to move one group. Everything positional follows `sceneryFollowRef` or
+   * `boatPositionRef` in the frame loop now; what is left here is the set of
+   * placements, which genuinely does need a render to change.
+   */
+  const [sceneryChunk, setSceneryChunk] = useState(0);
+  const lastSceneryChunkRef = useRef(0);
 
   const terrainProfile = useMemo(() => buildTerrainProfile(enrichment?.elevations), [enrichment?.elevations]);
-  const terrainY = getTerrainReliefForProgress(terrainProfile, boatProgress);
+
+  /**
+   * Where the tiled bands sit: the boat's Z, lifted by the relief under it.
+   *
+   * Written once a frame here and copied by every follower, so the relief
+   * lookup happens once rather than in each of them.
+   */
+  const sceneryFollowRef = useVector3Ref();
+
+  /** How many chunks the route is cut into — the cadence the tree changes on. */
+  const geometryChunkCount = useMemo(
+    () => (routeCurve ? chunkCountForRoute(curveLengthMeters(routeCurve)) : 1),
+    [routeCurve],
+  );
+
+  /**
+   * Progress at the middle of the chunk the boat is in.
+   *
+   * The landscape's shadow band needs a progress, and this is the one that
+   * changes at a rate a render can afford.
+   */
+  const chunkProgress = useMemo(() => {
+    const ranges = chunkProgressRanges(geometryChunkCount);
+    const range = ranges[Math.min(sceneryChunk, ranges.length - 1)];
+    return (range.from + range.to) / 2;
+  }, [geometryChunkCount, sceneryChunk]);
 
   const boatGroupRef = useRef<THREE.Group>(null);
   /** Which five-second slot the last telemetry sample belonged to. */
   const lastTelemetrySlotRef = useRef<number>(-1);
   const lastSceneryUpdateRef = useRef<number>(0);
+  /** Seconds of rowing, accumulated from `delta` — see the scenery gate below. */
+  const sceneryClockRef = useRef<number>(0);
   
   const totalDistance = useMemo(() => {
     return routeTotalDistanceMeters(route.coordinates);
@@ -316,18 +358,34 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
 
     const liveTime = state.clock.elapsedTime;
     const elapsedTime = frozenClock(freeze, liveTime);
-    if (elapsedTime - lastSceneryUpdateRef.current > 0.1) {
-      lastSceneryUpdateRef.current = elapsedTime;
-      const newProgress = boatProgressRef.current;
-      const newX = boatPositionRef.current.x;
-      const newZ = boatPositionRef.current.z;
-      setSceneryState(prev =>
-        Math.abs(newProgress - prev.boatProgress) > 0.0001 ||
-        Math.abs(newZ - prev.boatZ) > 1 ||
-        Math.abs(newX - prev.boatX) > 1
-          ? { boatProgress: newProgress, boatX: newX, boatZ: newZ }
-          : prev
-      );
+
+    // The follow point, every frame and without a render: the tiled bands ride
+    // the boat's Z at the height of the ground beneath it.
+    sceneryFollowRef.current.set(
+      0,
+      getTerrainReliefForProgress(terrainProfile, boatProgressRef.current),
+      boatPositionRef.current.z,
+    );
+
+    // The tree only changes when the boat moves into a different chunk, and
+    // `shouldRebuildScenery` holds the rate down if it sits on a boundary.
+    //
+    // Timed on accumulated `delta` rather than on `state.clock`: the clock is
+    // the wall clock, which a hidden tab stops and #340's freeze pins, and a
+    // rate limiter that stops limiting when the scene is frozen is not one.
+    sceneryClockRef.current += delta;
+    const chunk = chunkIndexFor(boatProgressRef.current, geometryChunkCount);
+    if (
+      shouldRebuildScenery(
+        chunk,
+        lastSceneryChunkRef.current,
+        sceneryClockRef.current,
+        lastSceneryUpdateRef.current,
+      )
+    ) {
+      lastSceneryChunkRef.current = chunk;
+      lastSceneryUpdateRef.current = sceneryClockRef.current;
+      setSceneryChunk(chunk);
     }
     
     const cameraDistance = 6;
@@ -478,14 +536,14 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
    */
   const renderThemedLandscape = () => (
     <>
-      <ProceduralTerrain side="left" boatZ={boatZ} enrichment={enrichment} />
-      <ProceduralTerrain side="right" boatZ={boatZ} enrichment={enrichment} />
-      <PineTrees side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
-      <PineTrees side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} />
+      <ProceduralTerrain side="left" followRef={sceneryFollowRef} enrichment={enrichment} />
+      <ProceduralTerrain side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
+      <PineTrees side="left" followRef={sceneryFollowRef} theme={routeTheme} enrichment={enrichment} />
+      <PineTrees side="right" followRef={sceneryFollowRef} theme={routeTheme} enrichment={enrichment} />
       {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
         <Suspense fallback={null}>
-          <SceneryModels side="left" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
-          <SceneryModels side="right" boatZ={boatZ} theme={routeTheme} enrichment={enrichment} terrainY={terrainY} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+          <SceneryModels side="left" positionRef={boatPositionRef} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+          <SceneryModels side="right" positionRef={boatPositionRef} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
         </Suspense>
       )}
     </>
@@ -513,7 +571,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
   return (
     <AnimationProvider>
       
-      <PhotorealisticSkydome theme={routeTheme} boatXZ={boatXZ} performanceMode={performanceMode} />
+      <PhotorealisticSkydome theme={routeTheme} positionRef={boatPositionRef} performanceMode={performanceMode} />
       
       {/* Aerial perspective, and the thing that lets the world end.
           Linear rather than exponential: the chunk cull is a hard distance, so
@@ -563,11 +621,11 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       {routeCurve ? (
         <CurvedWaterChannel curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
       ) : (
-        <PhotorealisticWater boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} />
+        <PhotorealisticWater followRef={sceneryFollowRef} theme={routeTheme} performanceMode={performanceMode} />
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && !routeCurve && (
-        <WaterReflectionPlane boatZ={boatZ} theme={routeTheme} />
+        <WaterReflectionPlane followRef={sceneryFollowRef} theme={routeTheme} />
       )}
       
       {routeCurve && (
@@ -585,7 +643,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       )}
       
       {!routeCurve && (
-        <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
+        <ThemedRiverbanks followRef={sceneryFollowRef} theme={routeTheme} />
       )}
       
       {/* Behind everything, whether or not there is a curve to build banks
@@ -596,7 +654,9 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         <CurvedLandscapeElements
           curve={routeCurve}
           theme={routeTheme}
-          boatProgress={boatProgress}
+          positionRef={boatPositionRef}
+          chunkProgress={chunkProgress}
+          viewDistance={chunkViewDistanceFor(routeTheme)}
           enrichment={enrichment}
           track={sceneryTrack}
         />
@@ -608,7 +668,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}
-            boatProgress={boatProgress}
+            positionRef={boatPositionRef}
             theme={routeTheme}
             enrichment={enrichment}
             performanceMode={performanceMode}
@@ -709,15 +769,15 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <CausticsLight boatXZ={boatXZ} />
+        <CausticsLight positionRef={boatPositionRef} />
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <GroundCover boatZ={boatZ} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} terrainY={terrainY} />
+        <GroundCover followRef={sceneryFollowRef} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 
       {!IS_TEST_MODE && (
-        <HorizonSilhouette boatXZ={boatXZ} theme={routeTheme} />
+        <HorizonSilhouette positionRef={boatPositionRef} theme={routeTheme} />
       )}
     </AnimationProvider>
   );

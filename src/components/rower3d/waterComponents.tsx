@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useCubeCamera, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+import { useFollowZ } from './followBoat';
 import { IS_TEST_MODE } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
@@ -54,9 +55,15 @@ export const WaterReflectionProbe: React.FC<{
 // ============================================================================
 // HIGH-DEFINITION PHOTOREALISTIC WATER
 // ============================================================================
-export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; performanceMode?: PerformanceMode }> = ({ boatZ, theme, performanceMode }) => {
+export const PhotorealisticWater: React.FC<{
+  /** Where the flat water sits — the boat's Z, followed without a render (#331). */
+  followRef?: React.RefObject<THREE.Vector3 | null>;
+  theme: RouteTheme;
+  performanceMode?: PerformanceMode;
+}> = ({ followRef, theme, performanceMode }) => {
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
+  useFollowZ(meshRef, followRef);
   const timeUniformRef = useRef({ value: 0 });
   const waterNormalMapRef = useRef<THREE.Texture | null>(null);
 
@@ -100,7 +107,7 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
 
   return (
     <>
-      <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, boatZ]} receiveShadow>
+      <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[1000, 1000, performanceMode !== 'low' ? 64 : 32, performanceMode !== 'low' ? 64 : 32]} />
         <meshPhysicalMaterial
           ref={materialRef}
@@ -139,10 +146,16 @@ export const PhotorealisticWater: React.FC<{ boatZ: number; theme: RouteTheme; p
 // ============================================================================
 // WATER REFLECTION PLANE — flat plane with MeshReflectorMaterial (#119)
 // ============================================================================
-export const WaterReflectionPlane: React.FC<{ boatZ: number; theme: RouteTheme }> = ({ boatZ, theme }) => {
+export const WaterReflectionPlane: React.FC<{
+  /** Where the plane sits — the boat's Z, followed without a render (#331). */
+  followRef?: React.RefObject<THREE.Vector3 | null>;
+  theme: RouteTheme;
+}> = ({ followRef, theme }) => {
+  const planeRef = useRef<THREE.Mesh>(null);
+  useFollowZ(planeRef, followRef);
   const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, boatZ]}>
+    <mesh ref={planeRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, 0]}>
       <planeGeometry args={[1000, 1000]} />
       <MeshReflectorMaterial
         resolution={256}

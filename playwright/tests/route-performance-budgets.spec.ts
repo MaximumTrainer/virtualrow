@@ -156,6 +156,20 @@ test('reports frame telemetry while rowing a 5,000-point winding route', async (
 
   if (!software) {
     expect(stats!.p95Ms).toBeLessThanOrEqual(18);
+
+    // #331 — the shape of the distribution, not just its height.
+    //
+    // The scenery used to re-render ten times a second, which does not move
+    // the median at all: it adds a periodic 100-300 ms frame on top of an
+    // otherwise healthy one. A budget on p95 alone can be met by a scene that
+    // stutters twice a second, so what is asserted is the spread.
+    //
+    // Guarded like the budget above, and for the same reason: on SwiftShader
+    // this ratio describes the rasteriser rather than the engine.
+    expect(
+      stats!.p95Ms,
+      'frame times are spiking periodically, which is what a re-rendering scene looks like',
+    ).toBeLessThanOrEqual(stats!.p50Ms * 2);
   }
 
   expect(problems).toEqual([]);

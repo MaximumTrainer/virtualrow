@@ -31,11 +31,13 @@ export const CLOUD_LAYER_NAME = 'CloudLayer';
 // ============================================================================
 export const PhotorealisticSkydome: React.FC<{
   theme: RouteTheme;
-  /** Where the boat is, in XZ. Z alone slid the sky sideways on bends (#326). */
-  boatXZ: [number, number];
+  /**
+   * Where the boat is. Z alone slid the sky sideways on bends (#326); a ref
+   * rather than a prop so following it costs no re-render (#331).
+   */
+  positionRef: React.RefObject<THREE.Vector3 | null>;
   performanceMode: PerformanceMode;
-}> = ({ theme, boatXZ, performanceMode }) => {
-  const [boatX, boatZ] = boatXZ;
+}> = ({ theme, positionRef, performanceMode }) => {
   const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
   const cloudConfig = useMemo(() => cloudsFor(performanceMode, theme), [performanceMode, theme]);
 
@@ -76,15 +78,35 @@ export const PhotorealisticSkydome: React.FC<{
 
   const cloudGroupRef = useRef<THREE.Group>(null);
   const layer2Ref = useRef<THREE.Group>(null);
+  const wispyRef = useRef<THREE.Group>(null);
 
   useAnimationFrame((time) => {
+    // The sky follows the boat here rather than through a prop. It also has to
+    // be added to the drift below rather than set beside it: these two lines
+    // used to assign `position.x` outright, which overwrote the `boatX` #326
+    // put in the JSX - so the cloud layers followed the boat in Z and never in
+    // X, which is the bend #326 was about.
+    // Nothing to follow yet: the clouds drift and rotate where they are
+    // rather than snapping to the origin, which is not a place the boat has
+    // ever been.
+    const boat = positionRef.current;
+    if (!boat) return;
+    const { x: boatX, z: boatZ } = boat;
+
     if (cloudGroupRef.current) {
       cloudGroupRef.current.rotation.y = time * cloudConfig.speed * 0.008;
-      cloudGroupRef.current.position.x = Math.sin(time * 0.015) * 8;
+      cloudGroupRef.current.position.set(boatX + Math.sin(time * 0.015) * 8, 0, boatZ);
     }
     if (layer2Ref.current) {
       layer2Ref.current.rotation.y = time * cloudConfig.speed * 0.004;
-      layer2Ref.current.position.x = Math.sin(time * 0.012 + 1) * 12;
+      layer2Ref.current.position.set(
+        boatX + Math.sin(time * 0.012 + 1) * 12,
+        160 * SKY_UNIT_METRES,
+        boatZ - 350 * SKY_UNIT_METRES,
+      );
+    }
+    if (wispyRef.current) {
+      wispyRef.current.position.set(boatX, 220 * SKY_UNIT_METRES, boatZ - 500 * SKY_UNIT_METRES);
     }
   });
 
@@ -104,7 +126,6 @@ export const PhotorealisticSkydome: React.FC<{
         <group
           ref={cloudGroupRef}
           name={CLOUD_LAYER_NAME}
-          position={[boatX, 0, boatZ]}
           scale={SKY_UNIT_METRES}
         >
           {cloudPositions.map((pos, i) => (
@@ -124,7 +145,6 @@ export const PhotorealisticSkydome: React.FC<{
       {cloudConfig.enabled && (
         <group
           ref={layer2Ref}
-          position={[boatX, 160 * SKY_UNIT_METRES, boatZ - 350 * SKY_UNIT_METRES]}
           scale={SKY_UNIT_METRES}
         >
           {[...Array(Math.ceil(cloudConfig.count * 0.4))].map((_, i) => (
@@ -146,10 +166,7 @@ export const PhotorealisticSkydome: React.FC<{
       )}
 
       {cloudConfig.enabled && cloudConfig.depth > 0.7 && (
-        <group
-          position={[boatX, 220 * SKY_UNIT_METRES, boatZ - 500 * SKY_UNIT_METRES]}
-          scale={SKY_UNIT_METRES}
-        >
+        <group ref={wispyRef} scale={SKY_UNIT_METRES}>
           {[...Array(2)].map((_, i) => (
             <Cloud
               key={`wispy-${i}`}
@@ -171,11 +188,11 @@ export const PhotorealisticSkydome: React.FC<{
 // HORIZON SILHOUETTE — distant silhouette per theme using THREE.Shape (#131)
 // ============================================================================
 export const HorizonSilhouette: React.FC<{
-  /** Where the boat is, in XZ (#326). */
-  boatXZ: [number, number];
+  /** Where the boat is (#326), read in the frame loop rather than pushed (#331). */
+  positionRef: React.RefObject<THREE.Vector3 | null>;
   theme: RouteTheme;
-}> = ({ boatXZ, theme }) => {
-  const [boatX, boatZ] = boatXZ;
+}> = ({ positionRef, theme }) => {
+  const groupRef = useRef<THREE.Group>(null);
   const horizonConfig = useMemo(() => getThemeConfig(theme).horizon, [theme]);
 
   const silhouetteGeo = useMemo(() => {
@@ -254,11 +271,15 @@ export const HorizonSilhouette: React.FC<{
     fog: false,
   }), [horizonConfig.color]);
 
+  useAnimationFrame(() => {
+    const group = groupRef.current;
+    const boat = positionRef.current;
+    if (!group || !boat) return;
+    group.position.set(boat.x, 0, boat.z - horizonConfig.distance * SKY_UNIT_METRES);
+  });
+
   return (
-    <group
-      position={[boatX, 0, boatZ - horizonConfig.distance * SKY_UNIT_METRES]}
-      scale={SKY_UNIT_METRES}
-    >
+    <group ref={groupRef} scale={SKY_UNIT_METRES}>
       {/* Yawed to the camera, and only yawed: `lockX` and `lockZ` keep it
           upright, so it turns about Y like a horizon does and never tips.
           The shape is flat and a rower can come at it from any heading on a
