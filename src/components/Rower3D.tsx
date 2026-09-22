@@ -632,7 +632,7 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       <PMREMEnvironment theme={routeTheme} />
       
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
+        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} />
       ) : (
         <PhotorealisticWater followRef={sceneryFollowRef} theme={routeTheme} performanceMode={performanceMode} />
       )}

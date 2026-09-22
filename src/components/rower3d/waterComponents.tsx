@@ -1,14 +1,18 @@
 import React, { useCallback, useRef, useMemo, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useCubeCamera, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import { useFollowZ } from './followBoat';
-import { IS_TEST_MODE } from './constants';
+import { IS_TEST_MODE, SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { getThemeConfig } from './themeConfig';
 import type { RouteTheme } from './themeConfig';
-import { attachGerstnerShader, createWaterNormalMap } from './helpers';
+import { attachGerstnerShader, attachWaterSurface, createWaterNormalMap } from './helpers';
+import { createRippleNormalMap } from './rippleTexture';
+import { buildSkyEnvironment } from './skyEnvironment';
+import { rippleRepeat, rippleScroll, waterMaterialPlan } from './waterMaterial';
+import { curveLengthMeters } from './curve';
 import { createWaterChannelGeometry } from './waterGeometry';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
@@ -177,14 +181,41 @@ export interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
   theme: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
+  /** Which water the tier pays for (#324). */
+  performanceMode?: PerformanceMode;
 }
 
 export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   curve,
   theme,
   enrichment,
+  performanceMode = 'auto',
 }) => {
   const timeUniformRef = useRef({ value: 0 });
+  const { gl } = useThree();
+  const plan = useMemo(() => waterMaterialPlan(performanceMode), [performanceMode]);
+
+  // The chop, per-pixel. Two layers of the same tile scrolling at different
+  // rates: three takes one `normalMap`, and the second layer is the same
+  // texture sampled through its own offset in `attachRippleLayer`.
+  const rippleMap = useMemo(() => createRippleNormalMap(), []);
+  const ripple2Ref = useRef({
+    uRipple2Offset: { value: new THREE.Vector2() },
+    // A different scale as well as a different rate, so the two layers never
+    // settle into a moire with each other.
+    uRipple2Scale: { value: 1.7 },
+  });
+
+  // Built from a scene holding only the sky, once per theme (#324). The scene
+  // environment `PMREMEnvironment` builds is captured on mount, before `Sky`
+  // has drawn, so it is close to black — which is what "no environment map to
+  // reflect" meant.
+  const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
+  const environment = useMemo(
+    () => (IS_TEST_MODE ? null : buildSkyEnvironment(gl, skyConfig)),
+    [gl, skyConfig],
+  );
+  useEffect(() => () => environment?.dispose(), [environment]);
 
   const waterConfig = useMemo(() => {
     const baseConfig = getThemeConfig(theme).water;
@@ -208,20 +239,36 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
         // (#269). Its realism came from transmission, which needs a scene
         // behind the surface to refract and had none.
         color: waterConfig.color,
-        // Rough and non-metallic: with no environment map to reflect, metalness
-        // renders the surface near-black, which reads as a hole rather than a
-        // river. The lift comes from the theme's own emissive instead.
-        roughness: 0.55,
-        metalness: 0.0,
-        envMapIntensity: 0.4,
-        emissive: new THREE.Color(waterConfig.color),
-        emissiveIntensity: 0.35,
+        // Smooth, with ripples and a sky to reflect (#324). The old 0.55 and
+        // the emissive lift were both standing in for a reflection that was
+        // never there: an emissive surface is one that glows in its own right,
+        // which is the one thing water does not do.
+        roughness: plan.roughness,
+        metalness: plan.metalness,
+        envMapIntensity: plan.envMapIntensity,
+        normalMap: rippleMap ?? null,
+        normalScale: new THREE.Vector2(plan.normalScale, plan.normalScale),
+        envMap: environment,
         side: THREE.DoubleSide,
       }),
-    [waterConfig],
+    [waterConfig, plan, rippleMap, environment],
   );
 
   useEffect(() => () => material.dispose(), [material]);
+
+  // The channel's uv runs 0-1 across the water and 0-1 along the whole route,
+  // so a tile left at its default repeat covers kilometres and contributes
+  // nothing. The repeat is the route measured in tiles (#324).
+  useEffect(() => {
+    if (!rippleMap || !curve) return;
+    const { x, y } = rippleRepeat({
+      widthMetres: enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
+      lengthMetres: curveLengthMeters(curve),
+    });
+    // A THREE texture is a handle to GPU state; its repeat is written in
+    // place by design.
+    rippleMap.repeat.set(x, y);
+  }, [rippleMap, curve, enrichment?.waterWidthMeters]);
 
   useEffect(() => {
     if (IS_TEST_MODE) return;
@@ -233,6 +280,9 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
       waterConfig.waveAmplitude,
       waterConfig.waveFrequency,
     );
+    // The second ripple layer and the fresnel blend, chained onto the vertex
+    // hook the Gerstner shader just installed (#324).
+    attachWaterSurface(material, ripple2Ref.current);
     // react-hooks/immutability: a THREE material is a handle to a compiled
     // shader program, mutated in place by design. Recreating it per frame
     // would recompile the Gerstner shader on every tick.
@@ -243,9 +293,19 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
     const windVariation = Math.sin(time * 0.3) * 0.012 + Math.sin(time * 0.7) * 0.006;
-    // react-hooks/immutability: see above — the wind ripple is a uniform write.
-    // eslint-disable-next-line react-hooks/immutability
-    material.roughness = waterConfig.roughness + windVariation;
+    /* eslint-disable react-hooks/immutability */
+    // A THREE material and texture are handles to GPU state, written in place
+    // by design: the wind ripple and the scrolling chop are uniform writes.
+    //
+    // The roughness is the tier's, not the theme's. It was the theme's, which
+    // is 0.10 - so the per-frame write undid whatever the material was built
+    // with, and the tier plan would have had no effect past the first frame.
+    material.roughness = plan.roughness + windVariation;
+
+    const scroll = rippleScroll(time);
+    if (rippleMap) rippleMap.offset.set(scroll.first.x, scroll.first.y);
+    ripple2Ref.current.uRipple2Offset.value.set(scroll.second.x, scroll.second.y);
+    /* eslint-enable react-hooks/immutability */
   });
 
   const buildChunk = useCallback(
@@ -262,6 +322,25 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
       material={material}
       buildChunk={buildChunk}
       viewDistance={chunkViewDistanceFor(theme)}
+      renderMaterial={
+        plan.useMirror && !IS_TEST_MODE
+          ? () => (
+              <MeshReflectorMaterial
+                resolution={512}
+                mirror={0.6}
+                blur={[120, 40]}
+                mixBlur={0.6}
+                mixStrength={1.2}
+                color={waterConfig.color}
+                roughness={plan.roughness}
+                metalness={plan.metalness}
+                normalMap={rippleMap ?? undefined}
+                normalScale={new THREE.Vector2(plan.normalScale, plan.normalScale)}
+                side={THREE.DoubleSide}
+              />
+            )
+          : undefined
+      }
     />
   );
 };

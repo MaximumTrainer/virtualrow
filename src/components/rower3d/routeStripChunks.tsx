@@ -36,6 +36,17 @@ export interface RouteStripChunksProps {
    * drawing is decided by how far can be seen - which is the fog (#325).
    */
   viewDistance?: number;
+  /**
+   * A material element per chunk, instead of the shared `material` instance.
+   *
+   * The `high` water is drei's `MeshReflectorMaterial`, which is a component
+   * rather than a material class: it owns a render target and hooks its mesh's
+   * `onBeforeRender` to fill it. So it cannot be one instance shared across
+   * chunks, and it is only rendered for chunks the cull has left visible —
+   * an invisible mesh's `onBeforeRender` never runs, so a 20 km course pays
+   * for the one or two chunks in front of the boat and not for the rest (#324).
+   */
+  renderMaterial?: () => React.ReactNode;
 }
 
 export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
@@ -44,6 +55,7 @@ export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
   buildChunk,
   eagerChunks = 2,
   viewDistance = CHUNK_VIEW_DISTANCE_SCENE_UNITS,
+  renderMaterial,
 }) => {
   const ranges = useMemo(
     () => chunkProgressRanges(chunkCountForRoute(curveLengthMeters(curve))),
@@ -79,7 +91,11 @@ export const RouteStripChunks: React.FC<RouteStripChunksProps> = ({
         (geometry, index) =>
           geometry && (
             <mesh key={index} geometry={geometry} receiveShadow>
-              <primitive object={material} attach="material" />
+              {renderMaterial ? (
+                renderMaterial()
+              ) : (
+                <primitive object={material} attach="material" />
+              )}
             </mesh>
           ),
       )}

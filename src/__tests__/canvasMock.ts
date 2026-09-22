@@ -32,6 +32,16 @@ export function installCanvasMock(): () => void {
     clear: vi.fn(),
     createLinearGradient: vi.fn(() => gradient),
     createRadialGradient: vi.fn(() => gradient),
+    // Real pixels, because the normal-map builders write into them and read
+    // the result back. A spy returning undefined turns "the texture is the
+    // wrong size" into "cannot read properties of undefined", which says
+    // nothing about the code under test.
+    createImageData: vi.fn((width: number, height: number) => ({
+      width,
+      height,
+      colorSpace: 'srgb' as const,
+      data: new Uint8ClampedArray(width * height * 4),
+    })),
   };
   const context = new Proxy(baseContext as Record<string, unknown>, {
     get(target, prop) {
