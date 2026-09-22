@@ -69,7 +69,7 @@ import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { resolveRegion } from './rower3d/sceneryRegion';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
-import { CurvedRiverbanks, CurvedLandscapeElements, ProceduralTerrain } from './rower3d/bankComponents';
+import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
@@ -542,7 +542,10 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
       )}
       
       {routeCurve && (
-        <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
+        <>
+          <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
+          <Shoreline curve={routeCurve} enrichment={enrichment} />
+        </>
       )}
 
       {/* Yellow down the middle of the channel, red at each water edge. Only
@@ -556,6 +559,10 @@ export const RowerScene: React.FC<Rower3DProps & { gpuBackend: GPUBackend }> = (
         <ThemedRiverbanks boatZ={boatZ} theme={routeTheme} />
       )}
       
+      {/* Behind everything, whether or not there is a curve to build banks
+          from: it is the absence of a hole, not part of the landscape (#334). */}
+      <GroundPlane curve={routeCurve} theme={routeTheme} />
+
       {routeCurve ? (
         <CurvedLandscapeElements
           curve={routeCurve}
@@ -873,7 +880,14 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           dpr={surface.dpr}
           gl={{
             antialias: glSelection.antialias,
-            alpha: true,
+            // Opaque, so the page cannot show through the world.
+            //
+            // The bank is a strip whose outer reach is clamped on bends (#285),
+            // and past it there was nothing: the canvas cleared to transparent
+            // and `.rower3d-canvas-container`'s CSS gradient showed through.
+            // On any bend that is a tear of page background between the bank
+            // and the horizon (#334).
+            alpha: false,
             powerPreference: glSelection.powerPreference,
             failIfMajorPerformanceCaveat: false,
             preserveDrawingBuffer: !!window.__PLAYWRIGHT_TESTING,
@@ -882,8 +896,11 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             // frames before the effect runs.
             toneMappingExposure: 0.55,
           }}
-          onCreated={({ gl }) => {
+          onCreated={({ gl, scene }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
+            // Whatever the world does not cover is the distance, so it is the
+            // colour the distance fades to (#334, #325).
+            scene.background = new THREE.Color(fogFor(detectRouteTheme(props.route)).color);
             try {
               window.__ROWER3D_MAX_ANISOTROPY = gl.capabilities.getMaxAnisotropy();
             } catch { /* intentional */ }

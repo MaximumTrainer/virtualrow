@@ -53,6 +53,7 @@ vi.mock('@react-three/drei', async () => {
 const { renderScene, demoRoute } = await import('./sceneTestRenderer');
 const { BOAT_GROUP_NAME } = await import('../components/rower3d/constants');
 const { fogFor } = await import('../components/rower3d/fogPlan');
+const { GROUND_PLANE_NAME } = await import('../components/rower3d/bankComponents');
 
 /** 2:00/500m — 4.17 m/s, and a pace a test can do arithmetic on. */
 const PACE_S_PER_500 = 120;
@@ -104,6 +105,37 @@ describe('RowerScene', () => {
     const linear = fog as THREE.Fog;
     expect(linear.near).toBe(fogFor('willowbrook').near);
     expect(linear.far).toBe(fogFor('willowbrook').far);
+
+    await scene.unmount();
+  });
+
+  // Issue #334 — there is ground under the world.
+  //
+  // The banks are strips whose outer reach is clamped on bends (#285), and past
+  // that reach there was nothing: the canvas cleared to transparent and the
+  // page's own gradient showed through, as a tear of background between the
+  // bank and the horizon on every bend.
+  it('puts opaque ground under the whole world', async () => {
+    const scene = await renderScene({ performanceMode: 'low' });
+
+    const ground = scene.objects().find((o) => o.name === GROUND_PLANE_NAME);
+    expect(ground, 'nothing is behind the banks').toBeDefined();
+
+    await scene.unmount();
+  });
+
+  it('covers the route it was built for', async () => {
+    const scene = await renderScene({ performanceMode: 'low' });
+
+    const ground = scene.objects().find((o) => o.name === GROUND_PLANE_NAME) as THREE.Mesh;
+    const boat = scene.objects().find((o) => o.name === BOAT_GROUP_NAME)!;
+
+    // Measured off the plane the scene actually built, not off the minimum:
+    // it is sized from the route's own extent (groundPlane.test.ts covers that
+    // arithmetic), and the demo route runs a good way from the origin.
+    const { width } = (ground.geometry as THREE.PlaneGeometry).parameters;
+    expect(Math.abs(boat.position.x - ground.position.x)).toBeLessThan(width / 2);
+    expect(Math.abs(boat.position.z - ground.position.z)).toBeLessThan(width / 2);
 
     await scene.unmount();
   });

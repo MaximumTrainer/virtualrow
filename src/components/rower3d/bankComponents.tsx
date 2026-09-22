@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
@@ -15,7 +15,9 @@ import {
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
-import { createBankGeometry } from './bankGeometry';
+import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
+import { createShorelineTexture } from './shorelineTexture';
+import { groundPlaneFor } from './groundPlane';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
@@ -30,6 +32,102 @@ export interface CurvedRiverbanksProps {
   theme: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
 }
+
+/** The name on the ground plane, so a test can find it without counting meshes. */
+export const GROUND_PLANE_NAME = 'GroundPlane';
+
+/**
+ * Opaque ground under the whole world (#334).
+ *
+ * The banks are strips whose outer reach is clamped on bends (#285), and past
+ * that reach there was nothing at all - so on a bend the page background
+ * showed between the bank and the horizon, as the white tears down the left of
+ * `docs/screenshot-activity.png`.
+ *
+ * Sized and placed from the route once, rather than chased after the boat
+ * every frame. VR-14 proposed a follower, which is a per-frame write and a
+ * moving target for anything that reads it; a plane big enough to cover the
+ * route it was built for never needs to move, and two triangles are two
+ * triangles wherever they are.
+ *
+ * Flat and unlit by design. It is not scenery, it is the absence of a hole,
+ * and anything it did beyond being the right colour would draw the eye to a
+ * surface nobody should notice.
+ */
+export const GroundPlane: React.FC<{
+  curve: THREE.CatmullRomCurve3 | null;
+  theme: RouteTheme;
+}> = ({ curve, theme }) => {
+  const color = useMemo(() => getThemeConfig(theme).bank.flatColor, [theme]);
+
+  const plan = useMemo(() => groundPlaneFor(curve), [curve]);
+
+  return (
+    <mesh
+      name={GROUND_PLANE_NAME}
+      position={[plan.centre[0], BANK_WATERLINE_Y - 0.05, plan.centre[1]]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      receiveShadow
+    >
+      <planeGeometry args={[plan.size, plan.size]} />
+      <meshStandardMaterial color={color} roughness={1} metalness={0} />
+    </mesh>
+  );
+};
+
+/** The name on each shoreline strip, so a test can find them. */
+export const SHORELINE_NAME = 'Shoreline';
+
+/**
+ * The foam line where the water meets the bank (#334).
+ *
+ * Drawn as its own strip rather than folded into the bank, because it belongs
+ * to neither surface: it straddles the water's edge, is transparent at one end,
+ * and must not write depth or it would punch a hole in the water behind it.
+ */
+export const Shoreline: React.FC<{
+  curve: THREE.CatmullRomCurve3;
+  enrichment?: RouteEnrichmentData | null;
+}> = ({ curve, enrichment }) => {
+  const texture = useMemo(() => createShorelineTexture(), []);
+  useEffect(() => () => texture?.dispose(), [texture]);
+
+  const material = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        map: texture ?? undefined,
+        transparent: true,
+        // Over the water, not carved into it.
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        // The strip lies on the surface; without this it z-fights the water.
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      }),
+    [texture],
+  );
+  useEffect(() => () => material.dispose(), [material]);
+
+  const buildLeft = useCallback(
+    (range: ProgressRange) => createShorelineGeometry(curve, 'left', { enrichment, range }),
+    [curve, enrichment],
+  );
+  const buildRight = useCallback(
+    (range: ProgressRange) => createShorelineGeometry(curve, 'right', { enrichment, range }),
+    [curve, enrichment],
+  );
+
+  // No texture means no context to draw one in; the scene keeps its river.
+  if (!texture) return null;
+
+  return (
+    <group name={SHORELINE_NAME}>
+      <RouteStripChunks curve={curve} material={material} buildChunk={buildLeft} />
+      <RouteStripChunks curve={curve} material={material} buildChunk={buildRight} />
+    </group>
+  );
+};
 
 export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   curve,
