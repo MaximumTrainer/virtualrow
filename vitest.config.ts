@@ -114,6 +114,10 @@ export default defineConfig({
         // ratio fell because the denominator grew - 12 of 17 covered where it
         // was 10 of 13 - which is the same shape as admitting a file to the
         // measurement, one file down. Two axes up, one recorded where it lands.
+        // #323's wake module is pure and canvas-only, so all of it is reachable
+        // from jsdom and all of it is reached. Pinned at the reading so the
+        // scene's one testable-in-full module cannot quietly stop being one.
+        '**/wakeTexture.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
         '**/boatComponents.tsx': { lines: 85, statements: 85, branches: 70, functions: 75 },
         // skyComponents was 60 / 100 / 50 when #343 admitted it. #325 mounts it
         // directly to prove the sky stays out of the fog, taking lines to 88.52

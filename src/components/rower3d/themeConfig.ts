@@ -44,6 +44,14 @@ export interface WaterConfig {
   waveFrequency: number;
   /** 0–1: blade-entry foam opacity ceiling */
   foamIntensity: number;
+  /**
+   * Hex colour of the wake and the blade-entry foam.
+   *
+   * Passed through `bloomSafeFoamColor` before it reaches a material, so a
+   * theme can author the colour it wants without having to know where the
+   * bloom pass's threshold sits (#323).
+   */
+  foamColor: string;
   /** Hex colour used for underwater murk tint */
   underwaterFog: string;
 }
@@ -225,7 +233,7 @@ export const THEME_CONFIG: Record<RouteTheme, ThemeConfig> = {
       emissive: '#2a4a40', emissiveIntensity: 0.008, attenuationColor: '#2a4a45',
       attenuationDistance: 4.0, specularIntensity: 0.9, sheenColor: '#4a6a60',
       turbidity: 0.3, waveAmplitude: 1.0, waveFrequency: 1.0,
-      foamIntensity: 0.35, underwaterFog: '#2a4a40',
+      foamIntensity: 0.35, foamColor: '#dfe9ee', underwaterFog: '#2a4a40',
     },
     bank: {
       color: '#4a7a32', roughness: 0.9, metalness: 0.0,

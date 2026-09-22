@@ -4,6 +4,11 @@ import {
   getThemeConfig,
   type RouteTheme,
 } from '../components/rower3d/themeConfig';
+import {
+  BLOOM_SAFE_LUMINANCE,
+  bloomSafeFoamColor,
+  foamLuminance,
+} from '../components/rower3d/wakeTexture';
 
 const ALL_THEMES: RouteTheme[] = [
   'willowbrook',
@@ -58,6 +63,13 @@ describe('THEME_CONFIG', () => {
       expect(typeof w.foamIntensity).toBe('number');
       expect(w.foamIntensity).toBeGreaterThanOrEqual(0);
       expect(w.foamIntensity).toBeLessThanOrEqual(1);
+      // #323 — the foam colour a theme authors reaches a material only after
+      // `bloomSafeFoamColor` caps it, so what it is capped *to* is what has to
+      // stay under the bloom pass's threshold.
+      expect(w.foamColor).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(foamLuminance(bloomSafeFoamColor(w.foamColor))).toBeLessThanOrEqual(
+        BLOOM_SAFE_LUMINANCE,
+      );
       expect(typeof w.underwaterFog).toBe('string');
     }
   });

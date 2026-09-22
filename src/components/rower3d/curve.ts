@@ -274,9 +274,12 @@ export const getRoutePositionAtProgress = (
   curve.getPointAt(clampedProgress, position);
   curve.getTangentAt(clampedProgress, tangent).normalize();
 
-  // The boat's bow (front) is at local -Z, so we rotate to align local -Z
-  // with the tangent. `atan2(x, z)` gives the Y-axis rotation that achieves
-  // that alignment.
+  // `atan2(x, z)` aligns the boat's local **+Z** with the tangent, which is
+  // why the chase camera above sits at `-tangent * distance` and lands at
+  // local z = -6. The comment here used to say -Z, and #323 found the wake
+  // built to match it: drawn forward from the boat's centre, under the hull,
+  // instead of back from the stern. Anything placed relative to the boat
+  // trails at negative local Z.
   const angle = Math.atan2(tangent.x, tangent.z);
 
   return { position, tangent, angle };
