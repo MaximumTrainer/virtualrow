@@ -1,4 +1,4 @@
-# TEMPORARY - foliage cost benchmark for #333 on the runners that regressed. Never merged.
+# TEMPORARY - which part of #333 fails the windows shards. Never merged.
 name: Playwright E2E Tests
 on:
   pull_request:
@@ -6,16 +6,17 @@ on:
 permissions:
   contents: read
 jobs:
-  bench:
+  ab:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+        variant: [head, nofoliage, oldmount]
+    runs-on: windows-latest
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       CI: true
       VITE_INTERVALS_CLIENT_ID: "playwright-e2e-client"
+      VITE_BENCH_VARIANT: ${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -24,6 +25,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run pretest:e2e
-      - name: Benchmark
-        run: npx playwright test --config=playwright/playwright.config.ci.ts --project=default playwright/tests/bench/foliage.bench.spec.ts --workers=1 --retries=0 --reporter=list
+      - run: node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008
+      - name: Failing specs
+        run: npx playwright test --config=playwright/playwright.config.ci.ts --project=default playwright/tests/world-scale.spec.ts playwright/tests/default-route-performance.spec.ts playwright/tests/virtualrow.spec.ts -g "covers the ground|holds up at auto across|plays a single route" --workers=2 --retries=0 --repeat-each=2 --reporter=list
         timeout-minutes: 40
