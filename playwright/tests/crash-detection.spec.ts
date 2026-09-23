@@ -49,24 +49,25 @@ base('a renderer killed outright raises a crash event here', async ({ page }) =>
   const before = await readTelemetry(page);
   expect(before.map((e) => e.kind)).toContain('run-start');
 
-  // Take the scene down before killing the renderer. chrome://crash is
-  // carried out by the renderer's main thread, and on a CI runner that thread
-  // spends long stretches inside a single SwiftShader frame of the scene: the
-  // kill then waited behind the frame, the event arrived after the poll had
-  // given up, and the first attempt failed on every run while the retry
-  // passed minutes later, depending on how busy the runner happened to be.
-  // What this test proves is that Chromium under these flags raises `crash`
-  // for this tab at all; the evidence it hands the rule was read above.
-  await page.goto('about:blank');
-
-  // chrome://crash kills the renderer for this tab and nothing else. Its
-  // navigation never resolves, because the thing meant to answer it is dead,
-  // so the event is what is waited on rather than the navigation.
+  // Killed through the DevTools protocol rather than by navigating to
+  // chrome://crash. That navigation first-attempt-failed on every CI run
+  // checked, main included: the event did not arrive within 30 s, and the
+  // retries that passed took minutes - a debug URL's kill depends on how the
+  // navigation to it is carried out, and on a loaded runner that was not
+  // prompt. `Page.crash` is one command to this tab's renderer and nothing
+  // else. What the test proves is unchanged: that Chromium under these launch
+  // flags raises `crash` for the tab, and the evidence was read above.
+  const cdp = await page.context().newCDPSession(page);
   const crashed = page.waitForEvent('crash', { timeout: 30_000 });
-  void page.goto('chrome://crash').catch(() => {
-    // Rejected with the crash. That is the success path.
+  const started = Date.now();
+  let sent = 'Page.crash never answered, which is expected: the renderer died';
+  void cdp.send('Page.crash').then(
+    () => { sent = `Page.crash answered after ${Date.now() - started} ms without crashing`; },
+    (error: Error) => { sent = `Page.crash rejected after ${Date.now() - started} ms: ${error.message}`; },
+  );
+  await crashed.catch((error: Error) => {
+    throw new Error(`${error.message} (${sent})`);
   });
-  await crashed;
 
   // And the rule agrees, on the evidence a real run would hand it.
   const verdict = describeCrashEvidence({ crashEventFired, events: before });
