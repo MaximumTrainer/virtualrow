@@ -68,7 +68,26 @@ const VIEWPORTS = [
  * the scene, so an element screenshot of the canvas includes whatever is
  * painted over it.
  */
-const HUD_SELECTORS = ['.activity-route-summary', '.activity-map-overlay'] as const;
+/**
+ * The DOM that sits over the stage, kept out of the shot.
+ *
+ * The HUD's two visible pieces joined them with #335, which moved the metric
+ * strip onto the stage. Same argument as the other two: the numbers on the
+ * strip are a live split and a live stroke count, so a baseline that
+ * photographed them would fail on its second run for reasons that have nothing
+ * to do with how the world is drawn.
+ *
+ * `.row-hud-strip` and `.row-hud-actions`, and deliberately not `.row-hud`
+ * itself - that is a full-stage layer with `pointer-events: none` and nothing
+ * drawn on it, so masking it would put a magenta rectangle over every pixel of
+ * the scene and leave a suite of four identical blank shots.
+ */
+const HUD_SELECTORS = [
+  '.activity-route-summary',
+  '.activity-map-overlay',
+  '.row-hud-strip',
+  '.row-hud-actions',
+] as const;
 
 /** Where on the route, and at what second, every shot is taken. */
 const FREEZE = { time: 12.5, progress: 0.31 };

@@ -1,0 +1,286 @@
+/* ============================================================================
+   THE ROW HUD (#335)
+
+   Everything a rower needs while rowing, on the stage rather than under it.
+
+   The rules the layout has to keep, all of them already enforced somewhere:
+     - every control is at least 44x44 (responsive.spec.ts)
+     - no text below 11px (responsive.spec.ts)
+     - the stage is the majority of the main panel (responsive.spec.ts) - which
+       this helps rather than hinders, since the panel below the stage is gone
+     - the numbers read at a glance from an erg, which is what the 2rem value
+       and `tabular-nums` are for: a digit that changes width makes the whole
+       split jitter every stroke.
+   ============================================================================ */
+
+/* How much of the stage's bottom edge the strip owns.
+   Declared on the stage rather than on the HUD because the camera rig's button
+   is the HUD's sibling, not its child, and has to clear the same band. The
+   strip takes it as a `min-height`, so the two cannot disagree by construction
+   - the only way to move one is to move the other. */
+.activity-route-stage {
+  --row-hud-strip-height: 9.5rem;
+}
+
+.row-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* The stage underneath still has to receive drags for the camera, so the
+     layer itself is transparent to the pointer and only the controls in it are
+     not. Without this the HUD would swallow the whole canvas. */
+  pointer-events: none;
+}
+
+.row-hud > * {
+  pointer-events: auto;
+}
+
+/* The strip's top is a transparent fade into the river, and a transparent
+   thing that eats clicks is a dead zone over the water. The tiles and the
+   controls take the pointer; the band they sit in does not. */
+.row-hud-strip {
+  pointer-events: none;
+}
+
+.row-hud-strip > * {
+  pointer-events: auto;
+}
+
+/* --- the corner actions ---------------------------------------------------
+   Left of the minimap, which keeps its own top-right corner. */
+.row-hud-actions {
+  position: absolute;
+  top: var(--space-lg);
+  right: calc(var(--space-lg) + clamp(120px, 22%, 280px) + var(--space-sm));
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.btn-hud-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-hud-action:hover,
+.btn-hud-action:focus-visible {
+  background: rgba(10, 14, 20, 0.78);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- the metric strip and the controls under it --------------------------- */
+.row-hud-strip {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: var(--row-hud-strip-height);
+  gap: var(--space-sm);
+  /* `env()` with a zero fallback: on a notched phone in landscape the home
+     indicator sits exactly where the End button would be. */
+  padding: var(--space-sm) calc(var(--space-md) + env(safe-area-inset-right, 0px))
+    calc(var(--space-md) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-md) + env(safe-area-inset-left, 0px));
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0) 0%, rgba(10, 14, 20, 0.72) 38%);
+}
+
+.row-hud .activity-stats-grid {
+  width: 100%;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--space-2xs);
+}
+
+.row-hud .activity-stat-card {
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-control);
+  /* The design's backdrop. Against it the label below clears 4.5:1 and the
+     value clears 7:1, which is what `scene-contrast.spec.ts` and #344 check. */
+  background: rgba(10, 14, 20, 0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-align: center;
+  min-width: 0;
+}
+
+.row-hud .activity-stat-label {
+  display: block;
+  font-size: 0.6875rem; /* the 11px floor, not a pixel under it */
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-hud .activity-stat-value {
+  display: block;
+  /* Big, and the same width every stroke. Proportional digits made the split
+     twitch sideways once a second, which is the one number a rower stares at. */
+  font-size: clamp(1.25rem, 2.4vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-hud .activity-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+/* Over a river rather than over the page, so the panel's card colours would
+   vanish into it; these are the stage's own. */
+.row-hud .btn-activity-control {
+  flex: 0 1 auto;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  backdrop-filter: blur(6px);
+}
+
+.row-hud .btn-activity-control--subtle {
+  background: rgba(10, 14, 20, 0.55);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.row-hud .btn-activity-control--subtle:hover {
+  background: rgba(10, 14, 20, 0.78);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- phones ---------------------------------------------------------------
+   Four tiles, and they wrap to 2x2 rather than shrinking to four unreadable
+   columns. `metricTiles` has already dropped power and time by this width. */
+@media (max-width: 599px) {
+  /* Two rows of tiles and two of controls, so the band is taller. */
+  .activity-route-stage {
+    --row-hud-strip-height: 15.5rem;
+  }
+
+  .row-hud .activity-stats-grid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .row-hud .activity-controls {
+    flex-wrap: wrap;
+  }
+
+  .row-hud .btn-activity-control {
+    flex: 1 1 40%;
+  }
+
+  /* The minimap is not there to be shared with at this width, so the button
+     takes the corner. */
+  .row-hud-actions {
+    right: var(--space-sm);
+    top: calc(var(--space-sm) + clamp(120px, 22%, 280px) * 17 / 25 + var(--space-sm));
+  }
+}
+
+/* --- short landscape -------------------------------------------------------
+   A phone on its side gives the stage about 180px of height, and a strip laid
+   out in two rows takes 152 of them - it covered the river, the route name and
+   the minimap, and pushed the camera button off the top of the stage entirely.
+
+   The old panel handled this width by moving the stats into a column beside the
+   stage. There is no beside any more, so the strip lies down instead: tiles and
+   controls in one row, along the bottom, at the smallest type the 11px floor
+   allows. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .activity-route-stage {
+    --row-hud-strip-height: 4.5rem;
+  }
+
+  .row-hud-strip {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: var(--space-xs);
+    padding: var(--space-2xs) calc(var(--space-sm) + env(safe-area-inset-right, 0px))
+      calc(var(--space-2xs) + env(safe-area-inset-bottom, 0px))
+      calc(var(--space-sm) + env(safe-area-inset-left, 0px));
+  }
+
+  .row-hud .activity-stats-grid {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .row-hud .activity-stat-value {
+    font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+  }
+
+  .row-hud .activity-controls {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .row-hud .btn-activity-control {
+    padding: var(--space-2xs) var(--space-sm);
+    font-size: 0.8rem;
+  }
+
+  /* 180px of stage is not enough for a route panel, a minimap, a camera
+     control and a strip to each have their own space, so two of them give
+     way. The minimap shrinks to clear the strip, and the camera button - which
+     carries its own dark pill and is the only way to reach the other three
+     views - is lifted over the route panel rather than left underneath it. */
+  /* Scoped to the stage so it outranks the base rule in `App.css`, which the
+     bundler happens to emit after this file. */
+  .activity-route-stage .activity-map-overlay {
+    width: clamp(90px, 14%, 126px);
+  }
+
+  .activity-route-stage .btn-camera-view {
+    z-index: 26;
+  }
+}
+
+/* The camera rig's own control sits bottom-left, where the strip now is
+   (#328). Lifted clear of it rather than moved, because bottom-left beside the
+   other stage controls is still where it belongs. */
+.activity-route-stage .btn-camera-view {
+  bottom: calc(var(--space-sm) + var(--row-hud-strip-height, 9.5rem));
+}
+
+/* --- fullscreen -----------------------------------------------------------
+   Real fullscreen makes the stage the whole screen by itself; this is the CSS
+   fallback for iOS Safari, which has no Fullscreen API outside <video>. */
+.activity-view--fullscreen .activity-route-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
+  border: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-hud,
+  .row-hud * {
+    transition: none !important;
+  }
+}
