@@ -49,6 +49,14 @@ jobs:
         # number, and not worth it until there is a second reason to treat the
         # platforms differently.
         #
+        # Split by measured time, not by Playwright's `--shard`, which cuts
+        # equal test *counts* in file order. The heavy 3D specs sort together - `route-performance*`, `rower-*`,
+        # `rower3d-*` - so they shared one shard: on main at 858b45b windows
+        # shard 3 held 1,994 s of tests and hit the 18 minute limit while
+        # shard 12 ran 59 s. `scripts/e2e-shards.mjs` packs (project, spec)
+        # pairs by `playwright/shard-weights.json`, windows first-attempt
+        # seconds, so the heaviest shard is about one heavy spec on its own.
+        #
         # Sharding rather than `workers > 1`, which would be cheaper in runner
         # minutes: the PM5 simulator broadcasts every message to every
         # connected socket, so two tests sharing one would feed each other's
@@ -100,7 +108,7 @@ jobs:
         run: node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008
 
       - name: Run E2E tests
-        run: npm run test:e2e:ci -- --shard=${{ matrix.shard }}/12
+        run: node scripts/e2e-shards.mjs ${{ matrix.shard }}/12 --retries=2
         # The scene keeps its WebGL context now, so every 3D spec draws for as
         # long as it runs instead of going quiet a few seconds in. That is the
         # point, and it costs real time on a software rasteriser: macOS ran to
