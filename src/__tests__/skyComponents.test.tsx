@@ -68,7 +68,7 @@ describe('the sky stands outside the fog', () => {
 
   it('keeps the skydome out of it', async () => {
     const { renderer, found } = await materialsOf(
-      <PhotorealisticSkydome theme="willowbrook" positionRef={boatAt(0, 0)} performanceMode="high" />,
+      <PhotorealisticSkydome positionRef={boatAt(0, 0)} performanceMode="high" />,
     );
 
     expect(found.length, 'the skydome drew nothing').toBeGreaterThan(0);
@@ -82,7 +82,7 @@ describe('the sky stands outside the fog', () => {
 
   it('keeps the horizon silhouette out of it', async () => {
     const { renderer, found } = await materialsOf(
-      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
+      <HorizonSilhouette positionRef={boatAt(0, 0)} />,
     );
 
     expect(found.length, 'the silhouette drew nothing').toBeGreaterThan(0);
@@ -118,7 +118,7 @@ describe('the sky follows the boat', () => {
   const skyAt = async (x: number, z: number, mode: 'low' | 'auto' | 'high' = 'high') => {
     const renderer = await ReactThreeTestRenderer.create(
       <AnimationProvider>
-        <PhotorealisticSkydome theme="willowbrook" positionRef={boatAt(x, z)} performanceMode={mode} />
+        <PhotorealisticSkydome positionRef={boatAt(x, z)} performanceMode={mode} />
       </AnimationProvider>,
     );
     await renderer.advanceFrames(2, 1 / 60);
@@ -151,7 +151,6 @@ describe('the sky follows the boat', () => {
     const renderer = await ReactThreeTestRenderer.create(
       <AnimationProvider>
         <PhotorealisticSkydome
-          theme="willowbrook"
           positionRef={{ current: null }}
           performanceMode="high"
         />
@@ -203,7 +202,7 @@ describe('the horizon silhouette', () => {
 
   it('is billboarded to the camera, and only about Y', async () => {
     const renderer = await ReactThreeTestRenderer.create(
-      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
+      <HorizonSilhouette positionRef={boatAt(0, 0)} />,
     );
 
     const billboards: string[] = [];
@@ -220,7 +219,7 @@ describe('the horizon silhouette', () => {
 
   it('keeps the shape inside the billboard, not beside it', async () => {
     const renderer = await ReactThreeTestRenderer.create(
-      <HorizonSilhouette theme="willowbrook" positionRef={boatAt(0, 0)} />,
+      <HorizonSilhouette positionRef={boatAt(0, 0)} />,
     );
 
     let billboard: THREE.Object3D | undefined;

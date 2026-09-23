@@ -6,9 +6,8 @@ import { withinMountRange } from './visibilityCull';
 import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
-import { getThemeConfig } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 import { createBankTexture } from './bankTexture';
-import type { RouteTheme } from './themeConfig';
 import { makeSwayFoliageMaterial } from './foliageMaterial';
 import {
   buildTerrainProfile,
@@ -31,7 +30,6 @@ import type { SceneryTrack } from './sceneryTrack';
 // ============================================================================
 export interface CurvedRiverbanksProps {
   curve: THREE.CatmullRomCurve3 | null;
-  theme: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
 }
 
@@ -61,9 +59,8 @@ const GROUND_PLANE_Y = BANK_WATERLINE_Y - GROUND_PLANE_DROP_METRES;
 
 export const GroundPlane: React.FC<{
   curve: THREE.CatmullRomCurve3 | null;
-  theme: RouteTheme;
-}> = ({ curve, theme }) => {
-  const color = useMemo(() => getThemeConfig(theme).bank.flatColor, [theme]);
+}> = ({ curve }) => {
+  const color = SCENE_CONFIG.bank.flatColor;
 
   const plan = useMemo(() => groundPlaneFor(curve), [curve]);
 
@@ -152,10 +149,9 @@ export const Shoreline: React.FC<{
 
 export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   curve,
-  theme,
   enrichment,
 }) => {
-  const bankConfig = useMemo(() => getThemeConfig(theme).bank, [theme]);
+  const bankConfig = SCENE_CONFIG.bank;
 
   // Both banks and all their chunks share one material — they are the same
   // ground, and one upload is cheaper than thirty-two (#224).
@@ -168,8 +164,8 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
       new THREE.MeshPhysicalMaterial({
         color: bankConfig.color,
         // Ground, rather than a field of one colour (#292). The map multiplies
-        // the theme's own bank colour, so each theme keeps its palette and
-        // gains a surface.
+        // the configured bank colour, so the bank keeps its palette and gains
+        // a surface.
         map: surface,
         roughness: bankConfig.roughness,
         metalness: bankConfig.metalness,
@@ -218,13 +214,13 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
         curve={curve}
         material={material}
         buildChunk={buildLeft}
-        viewDistance={chunkViewDistanceFor(theme)}
+        viewDistance={chunkViewDistanceFor()}
       />
       <RouteStripChunks
         curve={curve}
         material={material}
         buildChunk={buildRight}
-        viewDistance={chunkViewDistanceFor(theme)}
+        viewDistance={chunkViewDistanceFor()}
       />
     </group>
   );
@@ -240,7 +236,6 @@ export const LANDSCAPE_CULL_FRAME_INTERVAL = 6;
 
 interface CurvedLandscapeProps {
   curve: THREE.CatmullRomCurve3 | null;
-  theme: RouteTheme;
   /** Where the boat is, read in the frame loop to decide what is drawn (#331). */
   positionRef?: React.RefObject<THREE.Vector3 | null>;
   /** Progress at the centre of the boat's chunk, for the shadow band (#331). */
@@ -299,7 +294,6 @@ const getSegmentStyle = (
 
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
-  theme,
   positionRef,
   chunkProgress,
   mountProgress,
@@ -378,8 +372,8 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     return { leftElements, rightElements };
   }, [curve, enrichment, track]);
   
-  const colors = useMemo(() => getThemeConfig(theme).landscapeColors, [theme]);
-  const archConfig = useMemo(() => getThemeConfig(theme).architecture, [theme]);
+  const colors = SCENE_CONFIG.landscapeColors;
+  const archConfig = SCENE_CONFIG.architecture;
   const { camera } = useThree();
 
   const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
@@ -494,28 +488,11 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
               <boxGeometry args={[4.2 * el.scale, buildingHeight * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial color={archConfig.wallMaterial.color} roughness={archConfig.wallMaterial.roughness} metalness={0.08} clearcoat={0.12} clearcoatRoughness={0.75} sheen={0.1} sheenColor={colors.buildingAccent} />
             </mesh>
-            {archConfig.roofStyle === 'pointed' ? (
-              <mesh position={[0, roofY * el.scale, 0]} castShadow={castNearShadow}>
-                <coneGeometry args={[3 * el.scale, 4 * el.scale, 4]} />
-                <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.65} metalness={0.12} clearcoat={0.1} />
-              </mesh>
-            ) : archConfig.roofStyle === 'gabled' ? (
-              <mesh position={[0, roofY * el.scale, 0]} castShadow={castNearShadow}>
-                <coneGeometry args={[3.5 * el.scale, 3 * el.scale, 3]} />
-                <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.7} metalness={0.1} />
-              </mesh>
-            ) : (
-              <>
-                <mesh position={[0, buildingHeight * el.scale, 0]} castShadow={castNearShadow}>
-                  <boxGeometry args={[4.5 * el.scale, 0.5 * el.scale, 4.5 * el.scale]} />
-                  <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.78} metalness={0.12} clearcoat={0.08} />
-                </mesh>
-                <mesh position={[0, (buildingHeight + 0.3) * el.scale, 0]} castShadow={castNearShadow}>
-                  <boxGeometry args={[3.8 * el.scale, 0.3 * el.scale, 3.8 * el.scale]} />
-                  <meshPhysicalMaterial color="#2a2a2a" roughness={0.88} metalness={0.1} />
-                </mesh>
-              </>
-            )}
+            {/* Gabled: the only roof the village has since #361 (#364). */}
+            <mesh position={[0, roofY * el.scale, 0]} castShadow={castNearShadow}>
+              <coneGeometry args={[3.5 * el.scale, 3 * el.scale, 3]} />
+              <meshPhysicalMaterial color={archConfig.roofColor} roughness={0.7} metalness={0.1} />
+            </mesh>
             {isNearBuilding && [0.22, 0.42, 0.62, 0.82].map((yPos, j) => (
               <React.Fragment key={j}>
                 <mesh position={[2.12 * el.scale, buildingHeight * el.scale * yPos, 0]} castShadow={castNearShadow}>

@@ -2,8 +2,8 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFollowPoint } from './followBoat';
 import { useAnimationFrame } from './animationFrame';
-import { getThemeConfig } from './themeConfig';
-import type { RouteTheme, TreeSpeciesEntry } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
+import type { TreeSpeciesEntry } from './themeConfig';
 import { RENDER_CONFIG } from './constants';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
@@ -18,9 +18,8 @@ export const PineTrees: React.FC<{
   side: 'left' | 'right';
   /** Where the tiled band sits: the boat's Z, lifted by the local relief (#331). */
   followRef?: React.RefObject<THREE.Vector3 | null>;
-  theme?: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
-}> = ({ side, followRef, theme = 'willowbrook', enrichment }) => {
+}> = ({ side, followRef, enrichment }) => {
   const groupRef = useRef<THREE.Group>(null);
   useFollowPoint(groupRef, followRef);
 
@@ -33,10 +32,10 @@ export const PineTrees: React.FC<{
   const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
   const profileConfig = SCENERY_PROFILES[sceneryProfile];
 
-  const allSpeciesList = useMemo(() => getThemeConfig(theme).trees.species, [theme]);
+  const allSpeciesList = SCENE_CONFIG.trees.species;
 
   // Filter to only those species types allowed by the profile; fall back to
-  // the full theme list when the profile's species aren't represented.
+  // the full species list when the profile's species aren't represented.
   const speciesList = useMemo<TreeSpeciesEntry[]>(() => {
     const allowed = new Set(profileConfig.trees.species);
     const filtered = allSpeciesList.filter(s => allowed.has(s.type));
@@ -193,14 +192,13 @@ export const PineTrees: React.FC<{
 export const GroundCover: React.FC<{
   /** Where the tiled band sits: the boat's Z, lifted by the local relief (#331). */
   followRef?: React.RefObject<THREE.Vector3 | null>;
-  theme: RouteTheme;
   performanceMode?: PerformanceMode;
   enrichment?: RouteEnrichmentData | null;
-}> = ({ followRef, theme, enrichment }) => {
+}> = ({ followRef, enrichment }) => {
   const coverRef = useRef<THREE.Group>(null);
   useFollowPoint(coverRef, followRef);
 
-  const gcConfig = useMemo(() => getThemeConfig(theme).groundCover, [theme]);
+  const gcConfig = SCENE_CONFIG.groundCover;
 
   // GroundCover is a global component that spans the full scene on the
   // non-curve path.  Using the first segment's profile gives a consistent,
@@ -208,7 +206,7 @@ export const GroundCover: React.FC<{
   const sceneryProfile = enrichment?.segmentProfiles?.[0]?.sceneryProfile ?? 'fallback';
   const profileConfig = SCENERY_PROFILES[sceneryProfile];
 
-  // Filter the theme's ground cover types to those permitted by the profile.
+  // Filter the configured ground cover types to those permitted by the profile.
   const filteredTypes = useMemo(
     () => {
       const allowedTypes = new Set(profileConfig.groundCover.types);
@@ -315,7 +313,7 @@ export const GroundCover: React.FC<{
       grassMeshRef.current.count = grassCount;
       grassMeshRef.current.instanceMatrix.needsUpdate = true;
     }
-  }, [theme, reedEntry, rockEntry, grassEntry, reedCount, rockCount, grassCount]);
+  }, [reedEntry, rockEntry, grassEntry, reedCount, rockCount, grassCount]);
 
   return (
     <group ref={coverRef}>

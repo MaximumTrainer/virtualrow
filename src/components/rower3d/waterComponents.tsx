@@ -6,8 +6,7 @@ import { useFollowZ } from './followBoat';
 import { IS_TEST_MODE, SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
-import { getThemeConfig } from './themeConfig';
-import type { RouteTheme } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 import { attachGerstnerShader, attachWaterSurface, createWaterNormalMap } from './helpers';
 import { createRippleNormalMap } from './rippleTexture';
 import { buildSkyEnvironment } from './skyEnvironment';
@@ -62,16 +61,15 @@ export const WaterReflectionProbe: React.FC<{
 export const PhotorealisticWater: React.FC<{
   /** Where the flat water sits — the boat's Z, followed without a render (#331). */
   followRef?: React.RefObject<THREE.Vector3 | null>;
-  theme: RouteTheme;
   performanceMode?: PerformanceMode;
-}> = ({ followRef, theme, performanceMode }) => {
+}> = ({ followRef, performanceMode }) => {
   const materialRef    = useRef<THREE.MeshPhysicalMaterial>(null);
   const meshRef        = useRef<THREE.Mesh>(null);
   useFollowZ(meshRef, followRef);
   const timeUniformRef = useRef({ value: 0 });
   const waterNormalMapRef = useRef<THREE.Texture | null>(null);
 
-  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
+  const waterConfig = SCENE_CONFIG.water;
 
   const waterNormalMap = useMemo(() => createWaterNormalMap(3.0), []);
   useEffect(() => {
@@ -86,9 +84,9 @@ export const PhotorealisticWater: React.FC<{
     if (IS_TEST_MODE) return;
     const mat = materialRef.current;
     if (!mat) return;
-    attachGerstnerShader(mat, timeUniformRef.current, 'z', theme, waterConfig.waveAmplitude, waterConfig.waveFrequency);
+    attachGerstnerShader(mat, timeUniformRef.current, 'z', 'flat', waterConfig.waveAmplitude, waterConfig.waveFrequency);
     mat.needsUpdate = true;
-  }, [theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
+  }, [waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
@@ -153,11 +151,10 @@ export const PhotorealisticWater: React.FC<{
 export const WaterReflectionPlane: React.FC<{
   /** Where the plane sits — the boat's Z, followed without a render (#331). */
   followRef?: React.RefObject<THREE.Vector3 | null>;
-  theme: RouteTheme;
-}> = ({ followRef, theme }) => {
+}> = ({ followRef }) => {
   const planeRef = useRef<THREE.Mesh>(null);
   useFollowZ(planeRef, followRef);
-  const waterConfig = useMemo(() => getThemeConfig(theme).water, [theme]);
+  const waterConfig = SCENE_CONFIG.water;
   return (
     <mesh ref={planeRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, 0]}>
       <planeGeometry args={[1000, 1000]} />
@@ -179,7 +176,6 @@ export const WaterReflectionPlane: React.FC<{
 // ============================================================================
 export interface CurvedWaterChannelProps {
   curve: THREE.CatmullRomCurve3 | null;
-  theme: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
   /** Which water the tier pays for (#324). */
   performanceMode?: PerformanceMode;
@@ -187,7 +183,6 @@ export interface CurvedWaterChannelProps {
 
 export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   curve,
-  theme,
   enrichment,
   performanceMode = 'auto',
 }) => {
@@ -206,11 +201,11 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
     uRipple2Scale: { value: 1.7 },
   });
 
-  // Built from a scene holding only the sky, once per theme (#324). The scene
+  // Built from a scene holding only the sky, once (#324). The scene
   // environment `PMREMEnvironment` builds is captured on mount, before `Sky`
   // has drawn, so it is close to black — which is what "no environment map to
   // reflect" meant.
-  const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
+  const skyConfig = SCENE_CONFIG.sky;
   const environment = useMemo(
     () => (IS_TEST_MODE ? null : buildSkyEnvironment(gl, skyConfig)),
     [gl, skyConfig],
@@ -218,14 +213,14 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   useEffect(() => () => environment?.dispose(), [environment]);
 
   const waterConfig = useMemo(() => {
-    const baseConfig = getThemeConfig(theme).water;
+    const baseConfig = SCENE_CONFIG.water;
     return {
       ...baseConfig,
       color: enrichment?.waterColor ?? baseConfig.color,
       waveAmplitude: baseConfig.waveAmplitude * (enrichment?.waveIntensity ?? 1),
       waveFrequency: baseConfig.waveFrequency * (enrichment?.waveIntensity ?? 1),
     };
-  }, [enrichment?.waterColor, enrichment?.waveIntensity, theme]);
+  }, [enrichment?.waterColor, enrichment?.waveIntensity]);
 
   // One material for every chunk of the channel: the Gerstner shader is
   // compiled once and the per-frame roughness is written once (#224).
@@ -276,7 +271,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
       material,
       timeUniformRef.current,
       'y',
-      `curved-${theme}`,
+      'curved',
       waterConfig.waveAmplitude,
       waterConfig.waveFrequency,
     );
@@ -288,7 +283,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
     // would recompile the Gerstner shader on every tick.
     // eslint-disable-next-line react-hooks/immutability
     material.needsUpdate = true;
-  }, [material, theme, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
+  }, [material, waterConfig.waveAmplitude, waterConfig.waveFrequency]);
 
   useAnimationFrame((time) => {
     timeUniformRef.current.value = time;
@@ -297,7 +292,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
     // A THREE material and texture are handles to GPU state, written in place
     // by design: the wind ripple and the scrolling chop are uniform writes.
     //
-    // The roughness is the tier's, not the theme's. It was the theme's, which
+    // The roughness is the tier's, not the config's. It was the config's, which
     // is 0.10 - so the per-frame write undid whatever the material was built
     // with, and the tier plan would have had no effect past the first frame.
     material.roughness = plan.roughness + windVariation;
@@ -321,7 +316,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
       curve={curve}
       material={material}
       buildChunk={buildChunk}
-      viewDistance={chunkViewDistanceFor(theme)}
+      viewDistance={chunkViewDistanceFor()}
       renderMaterial={
         plan.useMirror && !IS_TEST_MODE
           ? () => (

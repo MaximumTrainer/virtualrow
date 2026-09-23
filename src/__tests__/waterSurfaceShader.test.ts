@@ -11,7 +11,7 @@ import {
   buildSkyEnvironment,
   buildSkyScene,
 } from '../components/rower3d/skyEnvironment';
-import { getThemeConfig } from '../components/rower3d/themeConfig';
+import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
 
 /**
  * Issue #324 — the water's fragment half.
@@ -134,7 +134,7 @@ describe('buildSkyEnvironment', () => {
   // mount because `PMREMGenerator` could not convolve a cube map is not.
   it('returns nothing rather than throwing where there is no GL to convolve with', () => {
     const renderer = {} as THREE.WebGLRenderer;
-    const sky = getThemeConfig('willowbrook').sky;
+    const sky = SCENE_CONFIG.sky;
 
     expect(() => buildSkyEnvironment(renderer, sky)).not.toThrow();
     expect(buildSkyEnvironment(renderer, sky)).toBeNull();
@@ -146,14 +146,14 @@ describe('buildSkyEnvironment', () => {
     // and the water material's "no environment map to reflect" was describing
     // a state that code had created. This one cannot depend on load order,
     // because the only thing in the scene it captures is the sky it just made.
-    const { scene, mesh } = buildSkyScene(getThemeConfig('willowbrook').sky);
+    const { scene, mesh } = buildSkyScene(SCENE_CONFIG.sky);
 
     expect(scene.children, 'the captured scene is not just the sky').toHaveLength(1);
     expect(scene.children[0]).toBe(mesh);
   });
 
   it('lights the sky the way the theme asks', () => {
-    const sky = getThemeConfig('willowbrook').sky;
+    const sky = SCENE_CONFIG.sky;
     const { mesh } = buildSkyScene(sky);
     const uniforms = mesh.material.uniforms;
 
@@ -165,7 +165,7 @@ describe('buildSkyEnvironment', () => {
   });
 
   it('builds a dome big enough to be a sky rather than a ball over the boat', () => {
-    const { mesh } = buildSkyScene(getThemeConfig('willowbrook').sky);
+    const { mesh } = buildSkyScene(SCENE_CONFIG.sky);
     expect(mesh.scale.x).toBe(SKY_ENVIRONMENT_SCALE);
   });
 });

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { chunkViewDistanceFor, fogFor } from '../components/rower3d/fogPlan';
-import { getThemeConfig, type RouteTheme } from '../components/rower3d/themeConfig';
+import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
 
 /**
  * Issue #325 — the distance fades instead of ending.
  *
- * Every theme has carried `fogColor`, `fogNear` and `fogFar` since the theme
+ * The scene config has carried `fogColor`, `fogNear` and `fogFar` since the theme
  * table was written, and nothing has ever read them. Without fog the water
  * strip simply stops: `geometryChunks.ts` records that the cut used to be
  * hidden by `fogExp2` and has been bare ever since, and #321 had to hold the
@@ -16,11 +16,9 @@ import { getThemeConfig, type RouteTheme } from '../components/rower3d/themeConf
  * because nothing past it can be seen.
  */
 
-const THEMES: RouteTheme[] = ['willowbrook'];
-
 describe('fogFor', () => {
-  it.each(THEMES)('gives %s a fog it can actually see through', (theme) => {
-    const fog = fogFor(theme);
+  it('gives a fog it can actually see through', () => {
+    const fog = fogFor();
 
     expect(Number.isFinite(fog.near), 'fogNear is not a number').toBe(true);
     expect(Number.isFinite(fog.far), 'fogFar is not a number').toBe(true);
@@ -28,27 +26,30 @@ describe('fogFor', () => {
     expect(fog.far, 'fog is fully opaque before it begins').toBeGreaterThan(fog.near);
   });
 
-  it('takes the colour the theme authored', () => {
-    expect(fogFor('willowbrook').color).toBe(
-      getThemeConfig('willowbrook').atmosphere.fogColor,
-    );
+  it('takes the colour the config authored', () => {
+    expect(fogFor().color).toBe(SCENE_CONFIG.atmosphere.fogColor);
+  });
+
+  // #364 names these numbers as the thing the refactor must not move.
+  it('fades from 80 m to 550 m', () => {
+    expect(fogFor()).toMatchObject({ near: 80, far: 550 });
   });
 
   // Scenery is placed out to 240 m from the centreline (#321), and a fog that
   // closes before the far bank turns the world into a corridor.
-  it.each(THEMES)('reaches past the furthest scenery on %s', (theme) => {
-    expect(fogFor(theme).far).toBeGreaterThan(300);
+  it('reaches past the furthest scenery', () => {
+    expect(fogFor().far).toBeGreaterThan(300);
   });
 });
 
 describe('chunkViewDistanceFor', () => {
-  it.each(THEMES)('stops drawing %s past the point it can be seen', (theme) => {
-    expect(chunkViewDistanceFor(theme)).toBeGreaterThan(fogFor(theme).far);
+  it('stops drawing past the point it can be seen', () => {
+    expect(chunkViewDistanceFor()).toBeGreaterThan(fogFor().far);
   });
 
   // Not much past it. The whole point is that the cut is hidden, and every
   // metre beyond the fog is geometry built, uploaded and drawn into opacity.
-  it.each(THEMES)('does not draw %s far past it either', (theme) => {
-    expect(chunkViewDistanceFor(theme)).toBeLessThan(fogFor(theme).far * 1.5);
+  it('does not draw far past it either', () => {
+    expect(chunkViewDistanceFor()).toBeLessThan(fogFor().far * 1.5);
   });
 });

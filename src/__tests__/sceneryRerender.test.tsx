@@ -69,7 +69,6 @@ describe('steady rowing', () => {
         >
           <CurvedLandscapeElements
             curve={straightRoute()}
-            theme="willowbrook"
             positionRef={boat}
             chunkProgress={0}
             mountProgress={0.1}

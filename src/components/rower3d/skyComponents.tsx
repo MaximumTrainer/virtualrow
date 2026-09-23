@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Billboard, Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
-import { getThemeConfig } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
-import type { RouteTheme } from './themeConfig';
 import { seededRandom } from './helpers';
 
 /**
@@ -30,16 +29,15 @@ export const CLOUD_LAYER_NAME = 'CloudLayer';
 // HD PHOTOREALISTIC SKYDOME - Enhanced sky with volumetric clouds and HDR lighting
 // ============================================================================
 export const PhotorealisticSkydome: React.FC<{
-  theme: RouteTheme;
   /**
    * Where the boat is. Z alone slid the sky sideways on bends (#326); a ref
    * rather than a prop so following it costs no re-render (#331).
    */
   positionRef: React.RefObject<THREE.Vector3 | null>;
   performanceMode: PerformanceMode;
-}> = ({ theme, positionRef, performanceMode }) => {
-  const skyConfig = useMemo(() => getThemeConfig(theme).sky, [theme]);
-  const cloudConfig = useMemo(() => cloudsFor(performanceMode, theme), [performanceMode, theme]);
+}> = ({ positionRef, performanceMode }) => {
+  const skyConfig = SCENE_CONFIG.sky;
+  const cloudConfig = useMemo(() => cloudsFor(performanceMode), [performanceMode]);
 
   const cloudPositions = useMemo(() => {
     const positions: Array<{ x: number; y: number; z: number; scale: number; variation: number }> = [];
@@ -185,15 +183,14 @@ export const PhotorealisticSkydome: React.FC<{
 };
 
 // ============================================================================
-// HORIZON SILHOUETTE — distant silhouette per theme using THREE.Shape (#131)
+// HORIZON SILHOUETTE — distant silhouette using THREE.Shape (#131)
 // ============================================================================
 export const HorizonSilhouette: React.FC<{
   /** Where the boat is (#326), read in the frame loop rather than pushed (#331). */
   positionRef: React.RefObject<THREE.Vector3 | null>;
-  theme: RouteTheme;
-}> = ({ positionRef, theme }) => {
+}> = ({ positionRef }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const horizonConfig = useMemo(() => getThemeConfig(theme).horizon, [theme]);
+  const horizonConfig = SCENE_CONFIG.horizon;
 
   const silhouetteGeo = useMemo(() => {
     const shape = new THREE.Shape();
@@ -205,52 +202,11 @@ export const HorizonSilhouette: React.FC<{
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
       const x = -width / 2 + t * width;
-      let y = 0;
-
-      switch (horizonConfig.type) {
-        case 'mountains': {
-          y = Math.max(0,
-            seededRandom(i * 3 + 1) * 0.4 * horizonConfig.height
-            + Math.sin(t * Math.PI * 4) * 0.5 * horizonConfig.height
-            + Math.sin(t * Math.PI * 7 + 1.2) * 0.3 * horizonConfig.height
-          );
-          break;
-        }
-        case 'city': {
-          const buildingIdx = Math.floor(t * 20);
-          const buildingH = seededRandom(buildingIdx * 5 + 2) * horizonConfig.height;
-          y = buildingH;
-          break;
-        }
-        case 'hills': {
-          y = Math.max(0,
-            horizonConfig.height * 0.5
-            + Math.sin(t * Math.PI * 10) * horizonConfig.height * 0.3
-            + seededRandom(i * 3 + 3) * horizonConfig.height * 0.2
-          );
-          break;
-        }
-        case 'industrial': {
-          const segIdx = Math.floor(t * 15);
-          const isChimney = seededRandom(segIdx * 7 + 4) > 0.75;
-          y = isChimney
-            ? horizonConfig.height * (0.6 + seededRandom(segIdx * 7 + 5) * 0.6)
-            : seededRandom(segIdx * 7 + 6) * horizonConfig.height * 0.5;
-          break;
-        }
-        case 'islands': {
-          const islandIdx = Math.floor(t * 8);
-          const isIsland = seededRandom(islandIdx * 9 + 7) > 0.4;
-          y = isIsland
-            ? horizonConfig.height * (0.2 + seededRandom(islandIdx * 9 + 8) * 0.5)
-            : 0;
-          break;
-        }
-        default:
-          y = horizonConfig.height * 0.15;
-          break;
-      }
-
+      const y = Math.max(0,
+        horizonConfig.height * 0.5
+        + Math.sin(t * Math.PI * 10) * horizonConfig.height * 0.3
+        + seededRandom(i * 3 + 3) * horizonConfig.height * 0.2
+      );
       shape.lineTo(x, y);
     }
 

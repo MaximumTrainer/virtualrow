@@ -1,8 +1,8 @@
 // ============================================================================
 // HOW BRIGHT THE SCENE IS EXPOSED
 //
-// Every theme authors a sky exposure — 0.55 for the temperate river — and
-// nothing read it. The canvas hardcoded `toneMappingExposure: 1.0`, and the
+// The scene config authors a sky exposure, and for a long time nothing read
+// it. The canvas hardcoded `toneMappingExposure: 1.0`, and the
 // only other writer lerped towards 1.0 as well.
 //
 // drei's <Sky> is a physically based atmosphere and outputs high dynamic range.
@@ -10,26 +10,25 @@
 // sky back: 79% of a captured frame came back near-white, with the channel
 // indistinguishable from the bank (#269).
 //
-// The themes already knew the answer. This reads it.
+// The config already knew the answer. This reads it.
 // ============================================================================
 
-import { getThemeConfig, type RouteTheme } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 
 /** Speed above which the scene is exposed a little darker, for contrast. */
 const FAST_MPS = 3;
 
-/** How much darker at speed. Applied to the theme's exposure, not to 1.0. */
+/** How much darker at speed. Applied to the authored exposure, not to 1.0. */
 const FAST_FACTOR = 0.85;
 
 /**
- * Tone-mapping exposure for a theme at a given boat speed.
+ * Tone-mapping exposure at a given boat speed.
  *
- * Relative to what the theme asked for, so a darker theme stays darker and the
- * speed response does not quietly re-brighten everything to 1.0.
+ * Relative to what the config asked for, so the speed response does not
+ * quietly re-brighten everything to 1.0.
  */
-export const sceneExposure = (theme: RouteTheme, velocityMps: number): number => {
-  const authored = getThemeConfig(theme).sky.exposure;
-  const base = Number.isFinite(authored) && authored > 0 ? authored : 0.55;
+export const sceneExposure = (velocityMps: number): number => {
+  const base = SCENE_CONFIG.sky.exposure;
   const speed = Number.isFinite(velocityMps) ? velocityMps : 0;
   return speed > FAST_MPS ? base * FAST_FACTOR : base;
 };
