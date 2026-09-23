@@ -179,7 +179,7 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
             // The instances move about the buffer as the cull packs it, so a
             // bounding sphere computed once would be wrong by the next cull.
             frustumCulled={false}
-            castShadow
+            castShadow={!(window as unknown as { __BENCH?: { noshadow?: boolean } }).__BENCH?.noshadow}
           />
         ),
       )}
