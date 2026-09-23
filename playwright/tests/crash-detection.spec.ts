@@ -49,24 +49,39 @@ base('a renderer killed outright raises a crash event here', async ({ page }) =>
   const before = await readTelemetry(page);
   expect(before.map((e) => e.kind)).toContain('run-start');
 
-  // Take the scene down before killing the renderer. chrome://crash is
-  // carried out by the renderer's main thread, and on a CI runner that thread
-  // spends long stretches inside a single SwiftShader frame of the scene: the
-  // kill then waited behind the frame, the event arrived after the poll had
-  // given up, and the first attempt failed on every run while the retry
-  // passed minutes later, depending on how busy the runner happened to be.
-  // What this test proves is that Chromium under these flags raises `crash`
-  // for this tab at all; the evidence it hands the rule was read above.
-  await page.goto('about:blank');
+  // Killed with SIGKILL, from outside, the way the OOM killer takes a tab.
+  //
+  // This used to navigate to chrome://crash, and then send `Page.crash`. Both
+  // crash the renderer from inside, and a crashing process dumps core before
+  // it is gone - so the browser cannot report the crash until the dump is
+  // written. A renderer drawing this scene reserves about 1.3 TB of address
+  // space; locally, with core dumps on, that took the event from 12 ms to
+  // 17 s, and on CI, where the dump goes to a pipe that cannot skip the holes,
+  // it took minutes. The first attempt failed on every run and main went red
+  // (#386). SIGKILL dumps nothing, so the event depends on the browser alone,
+  // which is the thing this test is about.
+  const browserSession = await page.context().browser()!.newBrowserCDPSession();
+  const { processInfo } = (await browserSession.send('SystemInfo.getProcessInfo')) as {
+    processInfo: { type: string; id: number }[];
+  };
+  await browserSession.detach();
+  // Each test has its own context and each worker its own browser, so the
+  // renderers here are this page's (and at most a spare, which is harmless
+  // to kill).
+  const renderers = processInfo.filter((p) => p.type === 'renderer').map((p) => p.id);
+  expect(renderers.length, 'the browser reported no renderer process to kill').toBeGreaterThan(0);
 
-  // chrome://crash kills the renderer for this tab and nothing else. Its
-  // navigation never resolves, because the thing meant to answer it is dead,
-  // so the event is what is waited on rather than the navigation.
   const crashed = page.waitForEvent('crash', { timeout: 30_000 });
-  void page.goto('chrome://crash').catch(() => {
-    // Rejected with the crash. That is the success path.
-  });
+  const killStarted = Date.now();
+  for (const pid of renderers) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // Already gone - a spare renderer can exit on its own.
+    }
+  }
   await crashed;
+  console.log(`[crash-detection] crash event ${Date.now() - killStarted} ms after SIGKILL`);
 
   // And the rule agrees, on the evidence a real run would hand it.
   const verdict = describeCrashEvidence({ crashEventFired, events: before });
