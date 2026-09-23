@@ -104,9 +104,15 @@ export default defineConfig({
         // Canvas3DErrorBoundary for the first time, put the reading at
         // 91.23 / 83.80 / 87.32. Lines and functions go up; branches stay,
         // being only 0.80 clear of 84 and not worth a floor that flaps.
+        // #379 took the reading from 92.69 / 84.71 / 88.58 on main to
+        // 92.81 / 84.93 / 88.74 (lines / branches / functions), by moving the
+        // procedural landscape's layout out of the excluded bankComponents.tsx
+        // into a tested module. Branches go up, now 0.93 clear of 84; lines
+        // (0.81 clear of 92) and functions (0.74 clear of 88) stay, by the
+        // same rule as above.
         lines: 91,
         statements: 91,
-        branches: 83,
+        branches: 84,
         functions: 87,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
@@ -118,6 +124,13 @@ export default defineConfig({
         // from jsdom and all of it is reached. Pinned at the reading so the
         // scene's one testable-in-full module cannot quietly stop being one.
         '**/wakeTexture.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        // #379's two new modules decide where the water ends and where the
+        // procedural landscape stands, and both are pure and reached in full.
+        // Pinned for the same reason as the wake: the layout slipped out of
+        // measurement once, inside an excluded component, and kept measuring
+        // from the centreline while the water beside it widened.
+        '**/sceneryClearance.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/landscapeLayout.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
         '**/boatComponents.tsx': { lines: 85, statements: 85, branches: 70, functions: 75 },
         // skyComponents was 60 / 100 / 50 when #343 admitted it. #325 mounts it
         // directly to prove the sky stays out of the fog, taking lines to 88.52

@@ -109,6 +109,87 @@ test('the blades stay over water for the whole demo row', async ({ page }) => {
 });
 
 /**
+ * Issue #379 — nothing on the demo row stands in the river.
+ *
+ * The scenery was placed at absolute offsets from the centreline, authored for
+ * a narrow channel, so on a wide river the bank dressing and the landmarks
+ * stood in the water. Each placement path now reads the water's width at its
+ * own progress and stands clear of it by `SCENERY_WATER_MARGIN_METRES`.
+ *
+ * Unit tests lay the demo route out and measure every placement. What this
+ * adds is the running scene: that the components the rower sees are the ones
+ * doing the laying out, with the enrichment the game actually loaded. Each
+ * path publishes the clearance of its nearest placement - measured across the
+ * route against the same width function the water is built from - and this
+ * reads them. The GLB kit is switched on at the high tier, as
+ * scenery-kit-budgets.spec.ts does, because the low tier automation defaults
+ * to does not mount it.
+ */
+const readSceneryClearance = (page: Page) =>
+  page.evaluate(() => window.__ROWER3D_SCENERY_CLEARANCE ?? null);
+
+/** Every path that places something beside the demo route. */
+const SCENERY_PATHS = ['landscape', 'scenery-left', 'structures'] as const;
+
+test('nothing on the demo row stands in the river', async ({ page }) => {
+  test.slow();
+
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __PLAYWRIGHT_TESTING?: boolean;
+      __VIRTUALROW_SCENERY_MODELS?: boolean;
+      __VIRTUALROW_PERFORMANCE_MODE?: string;
+    };
+    w.__PLAYWRIGHT_TESTING = true;
+    w.__VIRTUALROW_SCENERY_MODELS = true;
+    w.__VIRTUALROW_PERFORMANCE_MODE = 'high';
+  });
+  await page.goto('./');
+  await page.locator('.btn-try-demo').click();
+  await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
+  await expectSceneAlive(page, 'the demo row with its scenery');
+
+  // The GLB paths publish once their first models have loaded, which on a
+  // software rasteriser in CI is the slow part.
+  await expect
+    .poll(
+      async () => {
+        const readings = await readSceneryClearance(page);
+        return SCENERY_PATHS.filter((path) => !readings?.[path]);
+      },
+      { timeout: 90_000, intervals: [1_000], message: 'a scenery path never reported its clearance' },
+    )
+    .toEqual([]);
+
+  const readings = (await readSceneryClearance(page))!;
+  for (const [path, reading] of Object.entries(readings)) {
+    console.log(
+      `[scenery-clearance] ${path}: nearest ${reading.nearestM.toFixed(2)} m past the waterline ` +
+        `at progress ${reading.progress.toFixed(4)} over ${reading.count} placements`,
+    );
+
+    expect(reading.count, `${path} placed nothing, so it proved nothing`).toBeGreaterThan(0);
+    expect(
+      Number.isFinite(reading.nearestM),
+      `${path} stopped measuring its own clearance`,
+    ).toBe(true);
+    // Held to the margin within a centimetre: the check re-samples the curve
+    // at each placement's progress rather than reusing the placement's frame.
+    expect(
+      reading.nearestM,
+      `${path} put something ${reading.nearestM.toFixed(2)} m from the waterline at progress ` +
+        `${reading.progress.toFixed(4)}, inside the ${reading.marginM} m margin` +
+        (reading.nearestM < 0 ? ' - it is standing in the river' : ''),
+    ).toBeGreaterThanOrEqual(reading.marginM - 0.01);
+  }
+
+  expect(errors, 'the page reported errors while the scenery loaded').toEqual([]);
+});
+
+/**
  * Issue #329 — the blades go in the water and come out again.
  *
  * `strokePose` swept the oars with `sin(phase * 2pi) * 0.5` and nothing else:

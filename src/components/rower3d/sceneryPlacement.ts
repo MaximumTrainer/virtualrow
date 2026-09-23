@@ -17,6 +17,7 @@ import {
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 import type { ResolvedScenery, SceneryModelId } from './sceneryAssets';
+import { nearestBankOffset, waterHalfWidthAt } from './sceneryClearance';
 
 /**
  * mm -> metres. A 22 000 mm tree is 22 units tall (#321).
@@ -35,6 +36,10 @@ export type Category = keyof ResolvedScenery;
  * against, which ran at roughly 1 unit = 2.5 m (#321). Each band keeps the
  * place it held relative to the others, so the bank still reads bank, scatter,
  * trees, buildings, landform, backdrop - it is now that far out in metres.
+ *
+ * These are the bands as authored, for a narrow channel. What a placement uses
+ * is `bandsClearOf` the water it stands beside, which pushes the bank bands
+ * out wherever the water is wider than they allow for (#379).
  */
 export const CATEGORY_OFFSET: Record<Category, [number, number]> = {
   surface: [0, 6],
@@ -48,6 +53,52 @@ export const CATEGORY_OFFSET: Record<Category, [number, number]> = {
   backdrop: [195, 240],
 };
 
+/**
+ * The categories that stand on the bank, innermost authored band first.
+ *
+ * `surface` and `inWater` are not here: they are dressing for the water
+ * itself, and keep their authored bands however wide it is (#379).
+ */
+export const LAND_BANDS: readonly Category[] = [
+  'bankEdge', 'furniture', 'scatter', 'trees', 'buildings', 'landform', 'backdrop',
+];
+
+/**
+ * The least a pushed band starts beyond the band inside it.
+ *
+ * Without it, water wide enough to push every band would line them all up on
+ * the same metre of bank: the bank edge, the scatter and the buildings all
+ * beginning at the waterline, which is the pile-up #379's R5 rules out.
+ */
+const MIN_BAND_STEP_METRES = 1;
+
+/**
+ * Each category's band for water of the given half-width (#379).
+ *
+ * Walked from the water outwards. A band starts no nearer than the waterline
+ * plus the margin, and no nearer than a step beyond the band inside it; if
+ * that means moving, it moves out whole, keeping its authored depth, rather
+ * than being squashed against the bank. A band already clear of both stays
+ * where it was authored, so the push stops at the first band with room - on a
+ * narrow channel only the bank edge moves, and on a wide one the whole
+ * arrangement goes out together, still in order.
+ */
+export const bandsClearOf = (halfWidth: number): Record<Category, [number, number]> => {
+  const bands = { ...CATEGORY_OFFSET };
+  let previousInner = Number.NEGATIVE_INFINITY;
+  for (const cat of LAND_BANDS) {
+    const [oMin, oMax] = CATEGORY_OFFSET[cat];
+    const inner = Math.max(oMin, nearestBankOffset(halfWidth), previousInner + MIN_BAND_STEP_METRES);
+    bands[cat] = [inner, oMax + (inner - oMin)];
+    previousInner = inner;
+  }
+  return bands;
+};
+
+/** Whether a category's placements stand on the water or on the bank. */
+const footingOf = (cat: Category): Footing =>
+  cat === 'surface' || cat === 'inWater' ? 'water' : 'bank';
+
 /** Whether a category should yaw to face the water. */
 export const CATEGORY_FACE: Record<Category, boolean> = {
   surface: false, inWater: false, bankEdge: true, furniture: true, scatter: false,
@@ -59,6 +110,12 @@ export const SCHEDULE: Category[] = [
   'bankEdge', 'scatter', 'trees', 'scatter', 'bankEdge', 'trees', 'surface', 'scatter',
 ];
 
+/**
+ * What a placement stands on. Dressing on the water and a bridge across it are
+ * placed there on purpose; everything else must be on the bank (#379).
+ */
+export type Footing = 'bank' | 'water';
+
 export interface Placement {
   id: SceneryModelId;
   position: [number, number, number];
@@ -66,6 +123,7 @@ export interface Placement {
   scale: number;
   /** 0..1 along the route, for visibility culling in curve mode. */
   progress: number;
+  footing: Footing;
 }
 
 /**
@@ -156,7 +214,9 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
   ) => {
     const id = pick(resolved[cat] as SceneryModelId[], seed);
     if (!id) return;
-    const [oMin, oMax] = CATEGORY_OFFSET[cat];
+    // Measured from the water this point actually has, not the narrow channel
+    // the bands were authored against (#379).
+    const [oMin, oMax] = bandsClearOf(waterHalfWidthAt(enrichment, t))[cat];
     const offset = sign * (oMin + seededRandom(seed + 1) * (oMax - oMin));
     const x = px + perpX * offset;
     const z = pz + perpZ * offset;
@@ -166,7 +226,7 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
       ? baseRot + faceWater + (seededRandom(seed + 2) - 0.5) * 0.4
       : seededRandom(seed + 2) * Math.PI * 2;
     const scale = ASSET_SCALE * (0.8 + seededRandom(seed + 3) * 0.5);
-    out.push({ id, position: [x, y, z], rotationY, scale, progress: t });
+    out.push({ id, position: [x, y, z], rotationY, scale, progress: t, footing: footingOf(cat) });
   };
 
   if (curve) {

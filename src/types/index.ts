@@ -378,6 +378,18 @@ declare global {
       clearanceM: number;
       progress: number;
     };
+    /**
+     * How far past the waterline the nearest scenery stands, per placement
+     * path (#379): `scenery-left`/`scenery-right` for the GLB scatter,
+     * `structures` for the pinned course structures, `landscape` for the
+     * procedural trees, buildings and mountains. `nearestM` below `marginM`
+     * means something is closer to the water than it was meant to be; below
+     * zero, it is standing in it.
+     */
+    __ROWER3D_SCENERY_CLEARANCE?: Record<
+      string,
+      { nearestM: number; marginM: number; count: number; progress: number }
+    >;
     __ROWER3D_ROUTE?: { hasCurve: boolean; totalDistance: number; curveLength: number; builds?: number };
     /**
      * The fog the scene is actually drawing with (#325).
