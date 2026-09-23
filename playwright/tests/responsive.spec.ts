@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page } from '../fixtures/crash-watch';
 import { expectSceneAlive } from '../utils/scene-health';
 
@@ -363,6 +364,212 @@ test.describe('responsive layout', () => {
     await page.keyboard.press('f');
     await expect(page.locator('.activity-view--fullscreen')).toHaveCount(0);
     await expect(button).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  /**
+   * Issue #344 — the numbers are the most legible thing on the screen.
+   *
+   * The HUD is text over a river, which is the hardest background there is:
+   * the water is bright, the banks are dark, and the rower is looking at it
+   * from an erg while out of breath. A contrast ratio is the only way to hold
+   * that to something, and axe is the only way to check the rendered result
+   * rather than the colours somebody intended.
+   *
+   * `color-contrast` alone, deliberately. This is the rule #344 names, and a
+   * whole-page audit here would make every unrelated ticket answerable for
+   * findings it did not cause - that belongs in its own gate, not smuggled in
+   * behind a HUD change.
+   */
+  test('the HUD clears 4.5:1 over the river', async ({ page }, testInfo) => {
+    // Two viewports, the two the issue names: six tiles and four. The others
+    // would re-measure the same colours at a different width.
+    test.skip(
+      !['laptop', 'phone-portrait'].includes(testInfo.project.name),
+      'contrast is specified at a wide and a narrow viewport',
+    );
+
+    // Set deliberately, as `scene-contrast.spec.ts` sets it: it is what turns
+    // on `preserveDrawingBuffer`, and without that the scene's canvas reads
+    // back as entirely transparent and there is nothing to measure the strip
+    // against. It also swaps the GLB scull for the procedural one, which is
+    // not a background this cares about - the water is.
+    await page.addInitScript(() => {
+      window.__PLAYWRIGHT_TESTING = true;
+    });
+    await page.goto('./');
+    await startDemo(page);
+    await expect(page.locator('.row-hud .activity-stat-card').first()).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const audit = await new AxeBuilder({ page })
+      .include('.row-hud')
+      .withRules(['color-contrast'])
+      .analyze();
+
+    console.log(
+      `[axe] violations=${audit.violations.length} incomplete=${audit.incomplete.length} ` +
+        `passes=${audit.passes.flatMap((p) => p.nodes).length}`,
+    );
+    expect(
+      audit.violations.flatMap((violation) =>
+        violation.nodes.map((node) => `${node.target.join(' ')} — ${node.failureSummary ?? ''}`),
+      ),
+      'HUD text does not clear 4.5:1 over the scene',
+    ).toEqual([]);
+
+    // And the part axe cannot answer.
+    //
+    // The tiles are translucent over a WebGL canvas, and axe resolves contrast
+    // by walking up the DOM for a background - it cannot see through a canvas,
+    // so it returns `incomplete` for exactly the nodes that matter most and the
+    // assertion above would pass over a strip that had gone unreadable. This
+    // composites the tile's own background over the *brightest* pixel of the
+    // scene beneath it and measures the text against that: the worst case the
+    // river can present, rather than the one that happened to be on screen.
+    const measureContrast = () =>
+      page.evaluate(() => {
+      // A complete frame before the readback. The renderer clears to a
+      // transparent buffer, so a capture on its own schedule usually lands
+      // between two frames and every pixel reads alpha 0 (#261).
+      window.__ROWER3D_FORCE_RENDER?.();
+      const parseRgb = (value: string): [number, number, number, number] => {
+        const parts = value.match(/[\d.]+/g)?.map(Number) ?? [];
+        return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0, parts[3] ?? 1];
+      };
+      const over = (
+        fg: [number, number, number, number],
+        bg: [number, number, number],
+      ): [number, number, number] => [
+        fg[3] * fg[0] + (1 - fg[3]) * bg[0],
+        fg[3] * fg[1] + (1 - fg[3]) * bg[1],
+        fg[3] * fg[2] + (1 - fg[3]) * bg[2],
+      ];
+      const luminance = ([r, g, b]: [number, number, number]) => {
+        const channel = (c: number) => {
+          const v = c / 255;
+          return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      };
+      const ratio = (a: [number, number, number], b: [number, number, number]) => {
+        const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      const source = document.querySelector('.rower3d-canvas-container canvas') as
+        | HTMLCanvasElement
+        | null;
+      const strip = document.querySelector('.row-hud-strip');
+      const card = document.querySelector('.row-hud .activity-stat-card');
+      const label = card?.querySelector('.activity-stat-label');
+      const value = card?.querySelector('.activity-stat-value');
+      if (!source || !strip || !label || !value) return null;
+
+      // The scene as pixels. Drawn into a 2D canvas because a WebGL context's
+      // own buffer is not readable after the frame it was drawn in.
+      const flat = document.createElement('canvas');
+      flat.width = source.width;
+      flat.height = source.height;
+      const ctx = flat.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(source, 0, 0);
+
+      const canvasBox = source.getBoundingClientRect();
+      const stripBox = strip.getBoundingClientRect();
+      const scaleX = source.width / canvasBox.width;
+      const scaleY = source.height / canvasBox.height;
+      const x = Math.max(0, Math.round((stripBox.left - canvasBox.left) * scaleX));
+      const y = Math.max(0, Math.round((stripBox.top - canvasBox.top) * scaleY));
+      const w = Math.min(source.width - x, Math.round(stripBox.width * scaleX));
+      const h = Math.min(source.height - y, Math.round(stripBox.height * scaleY));
+      if (w <= 0 || h <= 0) return null;
+
+      const { data } = ctx.getImageData(x, y, w, h);
+      let brightest: [number, number, number] = [0, 0, 0];
+      let brightestLuminance = -1;
+      for (let i = 0; i < data.length; i += 4) {
+        // A transparent pixel is the page behind the canvas, not the scene.
+        if (data[i + 3] === 0) continue;
+        const pixel: [number, number, number] = [data[i], data[i + 1], data[i + 2]];
+        const l = luminance(pixel);
+        if (l > brightestLuminance) {
+          brightestLuminance = l;
+          brightest = pixel;
+        }
+      }
+      if (brightestLuminance < 0) return null;
+
+      const tile = over(parseRgb(getComputedStyle(card!).backgroundColor), brightest);
+      return {
+        brightest,
+        label: ratio(over(parseRgb(getComputedStyle(label).color), tile), tile),
+        value: ratio(over(parseRgb(getComputedStyle(value).color), tile), tile),
+      };
+      });
+
+    // Polled, because the frame the strip sits over has to have been drawn.
+    await expect
+      .poll(async () => (await measureContrast()) !== null, {
+        timeout: 30_000,
+        message: 'the scene never drew a frame under the strip to measure against',
+      })
+      .toBe(true);
+    const measured = await measureContrast();
+    expect(measured, 'the scene had no pixels to measure the strip against').not.toBeNull();
+    console.log(
+      `[contrast] over rgb(${measured!.brightest.join(',')}) — ` +
+        `label ${measured!.label.toFixed(2)}:1 value ${measured!.value.toFixed(2)}:1`,
+    );
+    expect(measured!.label, 'the tile labels do not clear 4.5:1 over the brightest water').
+      toBeGreaterThanOrEqual(4.5);
+    expect(measured!.value, 'the tile values do not clear 4.5:1 over the brightest water').
+      toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * Issue #344 — a rower who asked for less motion gets a still camera.
+   *
+   * The rig couples field of view to speed, which is the effect most likely to
+   * make someone unwell and the one the setting exists to stop. `cameraTarget`
+   * has honoured it since #328; what this adds is that the preference reaches
+   * the rig in a running scene, rather than being a parameter nothing passes.
+   */
+  test('reduced motion holds the camera still', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'laptop', 'not a per-viewport question');
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(() => {
+      // `__ROWER3D_POS` and the camera telemetry are automation scaffolding
+      // behind the test flag, and the camera is what this reads.
+      window.__PLAYWRIGHT_TESTING = true;
+    });
+    await page.goto('./');
+    await startDemo(page);
+
+    await expect
+      .poll(() => page.evaluate(() => window.__ROWER3D_CAMERA?.fov ?? null), {
+        timeout: 30_000,
+        message: 'the camera never reported a field of view',
+      })
+      .not.toBeNull();
+
+    // Five seconds of a boat that is still accelerating - which is exactly
+    // when the speed coupling would open the lens if it were running.
+    const seen: number[] = [];
+    for (let i = 0; i < 25; i += 1) {
+      const fov = await page.evaluate(() => window.__ROWER3D_CAMERA?.fov ?? null);
+      if (fov !== null) seen.push(fov);
+      await page.waitForTimeout(200);
+    }
+
+    expect(seen.length, 'no field of view was sampled').toBeGreaterThan(12);
+    const spread = Math.max(...seen) - Math.min(...seen);
+    console.log(`[reduced-motion] fov ${Math.min(...seen).toFixed(2)}..${Math.max(...seen).toFixed(2)}`);
+    // A degree of slack for the portrait correction, which is a function of the
+    // viewport rather than of speed and does not move while the viewport does
+    // not. Uncoupled this is flat; coupled it opens by ten.
+    expect(spread, 'the camera is still coupling its lens to speed').toBeLessThan(1);
   });
 
   test('no console errors when the viewport is resized or rotated', async ({ page }) => {

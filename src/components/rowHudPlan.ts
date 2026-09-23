@@ -44,18 +44,22 @@ export const metricTiles = (viewportWidth: number): readonly HudMetric[] =>
   viewportWidth >= WIDE_HUD_MIN_PX ? WIDE : NARROW;
 
 /**
- * What each tile is called on screen.
+ * What each tile is called on screen, and what it is measured in.
  *
- * The wording is the wording the panel below the stage had. It reads as a
- * label rather than an abbreviation - "Heart Rate", not "bpm" - and a rower
- * who has used the app before does not have to re-learn the screen to find the
- * number they were watching.
+ * The wording is the wording the panel below the stage had - it reads as a
+ * label rather than an abbreviation, so a rower who has used the app before
+ * does not have to re-learn the screen to find the number they were watching.
+ *
+ * The unit is here rather than beside the number because #344 puts the values
+ * at 32px, and at that size `187 W` does not fit a tile on a 320px phone. Said
+ * once, in the label, it is also said to a screen reader once - where `187 W`
+ * under a heading of `Power` said watts twice and `3 m` said metres twice.
  */
 export const HUD_METRIC_LABEL: Record<HudMetric, string> = {
   split: 'Split (/500m)',
   spm: 'SPM',
-  power: 'Power',
-  hr: 'Heart Rate',
+  power: 'Power (W)',
+  hr: 'Heart Rate (bpm)',
   distance: 'Meters',
   time: 'Time',
 };

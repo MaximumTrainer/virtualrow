@@ -9,6 +9,7 @@ import {
   recommendPerformanceMode,
 } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
+import { useReducedMotionRef } from '../hooks/useReducedMotion';
 import {
   buildTerrainProfile,
   getDragMultiplierForProgress,
@@ -273,20 +274,11 @@ export const RowerScene: React.FC<
   cameraViewRef.current = cameraView;
   const bendSignRef = useRef(0);
   const previousTangentRef = useVector3Ref();
-  const reducedMotionRef = useRef(false);
-
-  // Read once and watched: a rower can turn the setting on mid-row, and the
-  // field-of-view coupling is exactly the motion it is meant to stop.
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    reducedMotionRef.current = query.matches;
-    const onChange = (event: MediaQueryListEvent) => {
-      reducedMotionRef.current = event.matches;
-    };
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, []);
+  // A rower can turn the setting on mid-row, and the field-of-view coupling is
+  // exactly the motion it is meant to stop. This was a `matchMedia` effect
+  // written out here, which meant the effect stack could not see the answer and
+  // nothing else could either (#344).
+  const reducedMotionRef = useReducedMotionRef();
 
   /** How many chunks the route is cut into — the cadence the tree changes on. */
   const geometryChunkCount = useMemo(
