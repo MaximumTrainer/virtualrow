@@ -110,8 +110,18 @@ export default defineConfig({
         // into a tested module. Branches go up, now 0.93 clear of 84; lines
         // (0.81 clear of 92) and functions (0.74 clear of 88) stay, by the
         // same rule as above.
-        lines: 91,
-        statements: 91,
+        // #335 took it to 92.9 / 85.1 / 88.9 by moving the metric strip out of
+        // App.tsx and onto the stage: ~90 lines of untested JSX in a 1600-line
+        // component became a component and a plan module that are covered
+        // outright. Lines and statements go up - about 0.9 clear of 92, which
+        // is the headroom this file asks for. Branches (0.1 clear of 85) and
+        // functions (0.9 clear of 89) stay, by the same rule as above.
+        //
+        // Read to two decimals these move by a few hundredths between runs
+        // (92.96 and 92.91 on two runs of the same tree), which is the other
+        // reason a floor sits a point below rather than beside the reading.
+        lines: 92,
+        statements: 92,
         branches: 84,
         functions: 87,
         // boatComponents moved on every axis when #322 took the physics engine

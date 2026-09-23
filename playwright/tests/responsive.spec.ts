@@ -101,7 +101,16 @@ async function startDemo(page: Page) {
   // Playwright's interception retry loop on a loaded machine.
   await expect(page.locator('.map-container canvas')).toBeVisible({ timeout: 20_000 });
   await expectHitTestable(page, '.btn-try-demo', 'Try a demo row');
-  await page.locator('.btn-try-demo').click();
+  // Whether the button is tappable is the assertion above, and it is the one
+  // this file exists for. Delivering the click is not: `locator.click()` is
+  // bound by the 10s `actionTimeout`, and on a runner drawing this scene
+  // through SwiftShader the renderer's main thread is busy for longer than
+  // that at a stretch, so a synthesised input waits in a queue and the click
+  // times out on a perfectly reachable control. A DOM click is delivered
+  // against the test timeout instead.
+  await page.evaluate(() =>
+    (document.querySelector('.btn-try-demo') as HTMLButtonElement | null)?.click(),
+  );
   await expect(page.locator('.activity-view')).toBeVisible({ timeout: 25_000 });
   await expectSceneAlive(page, 'the responsive workout scene');
 }
@@ -238,11 +247,62 @@ test.describe('responsive layout', () => {
     }
   });
 
-  test('workout controls are reachable, and the session can be ended', async ({ page }) => {
+  /**
+   * The row screen's controls and its numbers, at every viewport.
+   *
+   * The metric strip is checked here rather than in a case of its own because
+   * a case of its own is a demo row of its own, at nine viewports, in the
+   * heaviest file in the suite - and a demo row on a software rasteriser is
+   * what the 3D specs spend their minutes on. The row is already running at
+   * this point; the numbers are on the screen or they are not.
+   */
+  test('workout controls and metrics are reachable, and the session can be ended', async ({ page }) => {
     await page.goto('./');
     await startDemo(page);
 
     await expect(page.locator('.btn-activity-control').first()).toBeVisible({ timeout: 20_000 });
+
+    // Issue #335 — the numbers are on the stage, so they are on the screen.
+    //
+    // They used to be in a panel below the canvas. On a phone propped against
+    // an erg that panel was below the fold: a rower could see the river and
+    // not the split they were rowing to. This is the assertion that would have
+    // failed then and passes now - every tile inside the viewport, with the
+    // page unscrolled.
+    await expect(page.locator('.row-hud .activity-stat-card').first()).toBeVisible({
+      timeout: 20_000,
+    });
+    const hud = await page.evaluate(() => {
+      const stage = document.querySelector('.activity-route-stage')!.getBoundingClientRect();
+      const cards = Array.from(document.querySelectorAll('.row-hud .activity-stat-card'));
+      const strip = document.querySelector('.row-hud-strip')?.getBoundingClientRect();
+      return {
+        scrollY: window.scrollY,
+        labels: cards.map((c) => c.querySelector('.activity-stat-label')?.textContent ?? ''),
+        outside: cards
+          .map((c) => ({
+            label: c.querySelector('.activity-stat-label')?.textContent,
+            r: c.getBoundingClientRect(),
+          }))
+          .filter(
+            ({ r }) =>
+              r.top < 0 || r.bottom > window.innerHeight || r.left < 0 || r.right > window.innerWidth,
+          )
+          .map(({ label, r }) => `${label} at ${Math.round(r.top)}..${Math.round(r.bottom)}`),
+        // On the stage, not under it - which is what "in-canvas HUD" means, and
+        // what a panel below the canvas could never satisfy.
+        onStage: !!strip && strip.bottom <= stage.bottom + 1 && strip.top >= stage.top - 1,
+      };
+    });
+
+    expect(hud.scrollY, 'the page had to scroll before the strip was measured').toBe(0);
+    expect(hud.outside, 'metric tiles fall outside the viewport').toEqual([]);
+    expect(hud.onStage, 'the metric strip is not on the stage').toBe(true);
+    // Four on a phone, six above 900px — `rowHudPlan.ts` owns which.
+    expect(hud.labels).toHaveLength((page.viewportSize()?.width ?? 0) >= 900 ? 6 : 4);
+    expect(hud.labels, 'the split is the one number that must always be there').toContain(
+      'Split (/500m)',
+    );
 
     await expectHitTestable(page, '.btn-end-workout', 'End Workout');
     // DOM click: the WebGL canvas can still intercept pointer events in
@@ -253,6 +313,56 @@ test.describe('responsive layout', () => {
     // The summary's own actions must be reachable too.
     await expect(page.locator('.guest-summary-modal')).toBeVisible({ timeout: 20_000 });
     await expectHitTestable(page, '.btn-guest-row-again', 'Row Again');
+  });
+
+  /**
+   * Issue #335 — `F` fills the screen with the row.
+   *
+   * Against the path iOS Safari takes, which is the one a rower on a tablet
+   * propped against an erg actually gets: no Fullscreen API outside <video>, so
+   * the app hides its own chrome instead. Removing `requestFullscreen` before
+   * the page loads is how that device is reproduced here.
+   *
+   * It is also the only version of this case that does not flake. The real API
+   * is granted to the focused window, and this file runs two workers against
+   * one browser, so a spec that waits on `document.fullscreenElement` passes
+   * alone and fails beside anything else - a stopwatch, not a test. Which
+   * element the API path asks for, and what it does when the screen is taken
+   * back by something it never heard from, are both in `useFullscreen.test.tsx`.
+   */
+  test('F fills the screen with the row', async ({ page }, testInfo) => {
+    // Once, not nine times. Whether the key is wired up is not a question about
+    // the viewport, and every case in this file that reaches the stage costs a
+    // demo row on a software rasteriser.
+    test.skip(testInfo.project.name !== 'laptop', 'fullscreen is not a per-viewport question');
+
+    await page.addInitScript(() => {
+      Reflect.deleteProperty(Element.prototype, 'requestFullscreen');
+    });
+
+    await page.goto('./');
+    await startDemo(page);
+    const button = page.locator('.btn-hud-fullscreen');
+    await expect(button).toBeVisible({ timeout: 20_000 });
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.activity-view--fullscreen')).toHaveCount(0);
+
+    // A real keypress. The handler is on the window, and this is the gesture a
+    // rower makes.
+    await page.keyboard.press('f');
+
+    await expect(page.locator('.activity-view--fullscreen')).toHaveCount(1);
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    // The stage is the whole viewport, which is the point of the class.
+    const filled = await page.evaluate(() => {
+      const stage = document.querySelector('.activity-route-stage')!.getBoundingClientRect();
+      return stage.width >= window.innerWidth - 1 && stage.height >= window.innerHeight - 1;
+    });
+    expect(filled, 'the stage did not fill the viewport').toBe(true);
+
+    await page.keyboard.press('f');
+    await expect(page.locator('.activity-view--fullscreen')).toHaveCount(0);
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('no console errors when the viewport is resized or rotated', async ({ page }) => {

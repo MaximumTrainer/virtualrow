@@ -44,7 +44,8 @@ import type { PerformanceMode } from './components/rower3d/constants';
 import { useStructuredWorkout } from './hooks/useStructuredWorkout';
 import { WorkoutLibrary } from './components/WorkoutLibrary';
 import { WorkoutOverlay } from './components/WorkoutOverlay';
-import { formatPace } from './utils/formatters';
+import { RowHud } from './components/RowHud';
+import { useFullscreen } from './hooks/useFullscreen';
 import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -117,6 +118,15 @@ function App() {
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
   const activityTimerRef = useRef<number | null>(null);
+  /**
+   * The stage, and whether it is filling the screen (#335).
+   *
+   * Declared here rather than in `RowHud` because the element that goes
+   * fullscreen is the stage, and on iOS Safari - which has no Fullscreen API -
+   * the fallback is a class on the view around it. Both are outside the HUD.
+   */
+  const rowStageRef = useRef<HTMLDivElement | null>(null);
+  const rowFullscreen = useFullscreen(rowStageRef);
   // Re-entrancy guards — prevent recursive session start or HR update loops
   const isStartingSessionRef = useRef(false);
   const isProcessingHrUpdateRef = useRef(false);
@@ -804,26 +814,6 @@ function App() {
       ? heartRateSamples[heartRateSamples.length - 1].bpm
       : (pm5Data?.heartRate ?? null)
   ), [heartRateSamples, pm5Data]);
-  const averageHeartRate = useMemo(() => {
-    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
-      return null;
-    }
-
-    return Math.round(
-      currentSession.heartRateSamples.reduce((sum, sample) => sum + sample.bpm, 0)
-      / currentSession.heartRateSamples.length
-    );
-  }, [currentSession]);
-  const maxHeartRate = useMemo(() => {
-    if (!currentSession?.heartRateSamples || currentSession.heartRateSamples.length === 0) {
-      return null;
-    }
-
-    return currentSession.heartRateSamples.reduce(
-      (max, sample) => Math.max(max, sample.bpm),
-      currentSession.heartRateSamples[0].bpm
-    );
-  }, [currentSession]);
   const workoutElapsedTimeMs = useMemo(() => (
     pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs
   ), [activityElapsedMs, pm5Data]);
@@ -1276,9 +1266,13 @@ function App() {
           )}
 
           {currentView === 'workout' && isWorkoutActive && currentSession && (
-            <div className="view-container activity-view">
+            <div
+              className={`view-container activity-view${
+                rowFullscreen.active && !rowFullscreen.supported ? ' activity-view--fullscreen' : ''
+              }`}
+            >
               <div className="activity-screen">
-                <div className="activity-route-stage">
+                <div className="activity-route-stage" ref={rowStageRef}>
                   {/* How much of the wait is done, and gone when it really
                       is (#318). The Suspense fallback below covers only the
                       code chunk, which arrives 0.7s into a 3.2s load; the bar
@@ -1328,68 +1322,26 @@ function App() {
                       progressPercent={activityProgressPercent}
                     />
                   </div>
+
+                  {/* On the stage, not under it (#335). Last inside the stage
+                      so it layers over the canvas and the two overlays without
+                      needing a z-index taller than either. */}
+                  <RowHud
+                    paceSecondsPer500={pm5Data?.pace ?? null}
+                    strokeRate={pm5Data?.cadence ?? null}
+                    power={pm5Data?.power ?? null}
+                    heartRate={latestHeartRate ?? null}
+                    distanceMeters={currentSession.distance}
+                    elapsedMs={workoutElapsedTimeMs}
+                    paused={sessionState === 'paused'}
+                    onPause={handlePauseWorkout}
+                    onResume={handleResumeWorkout}
+                    onReset={handleResetWorkout}
+                    onEnd={handleEndWorkout}
+                    fullscreen={rowFullscreen}
+                  />
                 </div>
 
-                <div className="activity-stats-panel">
-                  <div className="activity-stats-grid">
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Time</span>
-                      <span className="activity-stat-value">{formatTime(workoutElapsedTimeMs)}</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Meters</span>
-                      <span className="activity-stat-value">{Math.round(currentSession.distance)} m</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Split (/500m)</span>
-                      <span className="activity-stat-value">{formatPace(pm5Data?.pace ?? null)}</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">SPM</span>
-                      <span className="activity-stat-value">{pm5Data?.cadence ?? '--'} spm</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Power</span>
-                      <span className="activity-stat-value">{pm5Data?.power ?? '--'} W</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Heart Rate</span>
-                      <span className="activity-stat-value">{latestHeartRate ?? '--'} bpm</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Avg HR</span>
-                      <span className="activity-stat-value">{averageHeartRate ?? '--'} bpm</span>
-                    </div>
-                    <div className="activity-stat-card">
-                      <span className="activity-stat-label">Max HR</span>
-                      <span className="activity-stat-value">{maxHeartRate ?? '--'} bpm</span>
-                    </div>
-                  </div>
-
-                  <div className="activity-controls">
-                    <button
-                      className="btn btn-activity-control"
-                      onClick={sessionState === 'paused' ? handleResumeWorkout : handlePauseWorkout}
-                      type="button"
-                    >
-                      {sessionState === 'paused' ? '▶ Resume' : '⏸ Pause'}
-                    </button>
-                    <button
-                      className="btn btn-activity-control btn-activity-control--subtle"
-                      onClick={handleResetWorkout}
-                      type="button"
-                    >
-                      ↺ Reset
-                    </button>
-                    <button
-                      className="btn btn-activity-control btn-activity-control--danger btn-end-workout"
-                      onClick={handleEndWorkout}
-                      type="button"
-                    >
-                      ⏹ End Workout
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1608,17 +1560,6 @@ function App() {
       )}
     </div>
   );
-}
-
-function formatTime(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 export default App;
