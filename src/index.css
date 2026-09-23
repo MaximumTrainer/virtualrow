@@ -116,7 +116,7 @@
      The 3D scene and the overlays that sit on top of it keep their dark
      treatment so the render keeps its contrast against the light chrome
      (issue #219, R1 "dark-stage exception"). Nothing outside
-     .activity-route-stage may use these. */
+     .activity-route-stage and the row HUD over it (#335) may use these. */
   --stage-bg-start: rgba(10, 18, 29, 0.95);
   --stage-bg-end: rgba(10, 18, 29, 0.75);
   --stage-border: rgba(255, 255, 255, 0.08);

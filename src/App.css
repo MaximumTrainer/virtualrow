@@ -1154,6 +1154,8 @@ body {
 }
 
 .activity-screen {
+  /* The containing block for the HUD, which overlays the stage (#335). */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -1193,7 +1195,7 @@ body {
   z-index: 20;
   /* Leaves room for .activity-map-overlay opposite it: both insets plus one
      gap, and the map's own width (issue #195, Phase 3). */
-  max-width: calc(100% - clamp(120px, 22%, 280px) - 66px);
+  max-width: calc(100% - clamp(120px, 22%, 280px) - 66px - 52px - 7.5rem - var(--space-sm));
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-inset);
   background: var(--stage-overlay-bg);
@@ -1216,7 +1218,9 @@ body {
 .activity-map-overlay {
   position: absolute;
   top: var(--space-lg);
-  right: var(--space-lg);
+  /* Beside the camera and fullscreen buttons: the inset, the 44px button, the
+     7.5rem camera control and a gap after each (#335). */
+  right: calc(var(--space-lg) + 44px + 7.5rem + 2 * var(--space-sm));
   z-index: 20;
   /* Scales with the stage rather than staying 250px wide on a 320px phone; the
      aspect ratio is the old 250x170 (issue #195, Phase 3). */
@@ -1248,48 +1252,79 @@ body {
   font-weight: 600;
 }
 
-/* Stats: a compact strip, not a slab. At laptop and above the eight cards fit
-   in one row (issue #219, AC4.4). */
-.activity-stats-panel {
+/* ============================================================================
+   ROW HUD (issue #335)
+   The metrics a rower reads mid-stroke, on the stage rather than below it: a
+   phone propped on the erg had them below the fold. Positioned against
+   .activity-screen, which the stage fills, so the same markup can sit on the
+   stage here and below it on a portrait phone.
+   ============================================================================ */
+.row-hud {
+  position: absolute;
+  left: var(--space-lg);
+  right: var(--space-lg);
+  bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: var(--space-sm);
-  padding: 0;
-  flex: 0 0 auto;
+  /* The strip lets taps through to nothing but its own tiles and buttons. */
+  pointer-events: none;
 }
 
+.row-hud > * {
+  pointer-events: auto;
+}
+
+/* The --stage-overlay-bg the other stage overlays use, not a lighter glass:
+   white type on it keeps 4.5:1 over the brightest sky the scene draws. No
+   backdrop-filter either - a blur over a live WebGL canvas is re-run every
+   frame, and on a software rasteriser that is most of a frame. */
 .activity-stats-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(clamp(96px, 11vw, 150px), 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-2xs);
+  padding: var(--space-xs);
+  border-radius: var(--radius-inset);
+  background: var(--stage-overlay-bg);
+  border: 1px solid var(--stage-overlay-border);
+}
+
+.activity-stats-grid[data-tiles="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .activity-stat-card {
-  padding: var(--space-sm) var(--space-2xs);
-  border-radius: var(--radius-control);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  padding: var(--space-2xs);
   text-align: center;
-}
-
-.activity-stat-label {
-  display: block;
-  margin-bottom: 0.1rem;
-  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
+  color: var(--stage-text);
 }
 
 .activity-stat-value {
   display: block;
-  font-size: 1.1rem;
+  font-size: 2rem; /* 32px: read from the seat, an arm's length and more away */
   font-weight: 700;
-  color: var(--color-text-primary);
   line-height: 1.1;
+  /* Every digit one width, so a split ticking 1:59 -> 2:00 does not jitter. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--stage-text);
+}
+
+.activity-stat-label {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.6875rem; /* 11px legibility floor (issue #195) */
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stage-text-muted);
 }
 
 .activity-controls {
@@ -1299,6 +1334,61 @@ body {
   flex-wrap: wrap;
   gap: var(--space-sm);
   width: 100%;
+}
+
+.row-hud-fullscreen {
+  position: absolute;
+  top: calc(var(--space-lg) + env(safe-area-inset-top, 0px));
+  right: var(--space-lg);
+  z-index: 21;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-inset);
+  background: var(--stage-overlay-bg);
+  border: 1px solid var(--stage-overlay-border);
+  color: var(--stage-text);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Where the HUD covers the foot of the stage, the camera view control (#328)
+   moves from the bottom-left corner into the top bar, beside the fullscreen
+   button: [map] [CAM view] [fullscreen]. Fixed width, so the map beside it
+   does not shift as the view's name changes. */
+.activity-screen .btn-camera-view {
+  top: var(--space-lg);
+  bottom: auto;
+  left: auto;
+  right: calc(var(--space-lg) + 44px + var(--space-sm));
+  width: 7.5rem;
+}
+
+/* Fullscreen: the Fullscreen API's, and the page's own where there is none
+   (iOS Safari) or the browser refused - see useFullscreen. */
+.activity-screen:fullscreen,
+.activity-screen--fullscreen {
+  background: var(--stage-bg-end);
+  padding: 0;
+  gap: 0;
+}
+
+.activity-screen--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.activity-screen:fullscreen .activity-route-stage,
+.activity-screen--fullscreen .activity-route-stage {
+  min-height: 0;
+  border-radius: 0;
+  border: 0;
 }
 
 .btn-activity-control {
@@ -1769,13 +1859,80 @@ body {
   .activity-route-summary {
     top: var(--space-sm);
     left: var(--space-sm);
-    max-width: calc(100% - clamp(120px, 22%, 280px) - 42px);
+    max-width: calc(100% - clamp(120px, 22%, 280px) - 42px - 52px);
     padding: var(--space-2xs) var(--space-sm);
   }
 
   .activity-map-overlay {
     top: var(--space-sm);
+    right: calc(var(--space-sm) + 44px + var(--space-sm));
+  }
+
+  /* The HUD is below the stage here, so the corner is free again. */
+  .activity-screen .btn-camera-view {
+    top: auto;
+    bottom: var(--space-sm);
+    left: var(--space-sm);
+    right: auto;
+    width: auto;
+  }
+
+  .row-hud-fullscreen {
+    top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
     right: var(--space-sm);
+  }
+
+  .row-hud {
+    left: var(--space-sm);
+    right: var(--space-sm);
+    bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .activity-stat-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* Portrait phone (#335): the tiles sit below the stage in a 2x2 grid, where
+   they cover none of the river. The stage has up to 60% of the height and
+   gives way first: the header above it is over 100px tall for a guest, and
+   the tiles being on screen is the point. */
+@media (max-width: 600px) and (orientation: portrait) {
+  .activity-route-stage {
+    flex: 1 1 60vh;
+    max-height: 60vh;
+    min-height: 160px;
+  }
+
+  .row-hud {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  /* One row of three, not two rows of two and one. */
+  .row-hud-controls {
+    flex-wrap: nowrap;
+  }
+
+  .row-hud-controls .btn-activity-control {
+    flex: 1 1 0;
+    padding: var(--space-sm) var(--space-xs);
+    white-space: nowrap;
+  }
+
+  /* Off the stage, on the light page: the stage's own dark, not a glass. */
+  .activity-stats-grid,
+  .activity-stats-grid[data-tiles="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    background: var(--stage-bg-start);
+  }
+
+  .activity-stat-card {
+    min-height: 56px;
+  }
+
+  .activity-stat-value {
+    font-size: 1.5rem;
   }
 }
 
@@ -1796,16 +1953,44 @@ body {
     min-height: 0;
   }
 
-  .activity-stats-panel {
-    padding: 0;
-    gap: var(--space-sm);
+  /* The HUD takes the side column rather than covering a stage this short;
+     its top clears the fullscreen button, which sits over the column. */
+  .row-hud {
+    position: static;
+    margin-top: calc(44px + var(--space-sm));
     overflow-y: auto;
     min-height: 0;
   }
 
-  .activity-stats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-    gap: var(--space-2xs);
+  .row-hud-fullscreen {
+    top: 0;
+    right: 0;
+  }
+
+  .activity-map-overlay {
+    right: var(--space-lg);
+  }
+
+  /* Beside the stage here, so the camera control has its corner back. */
+  .activity-screen .btn-camera-view {
+    top: auto;
+    bottom: var(--space-sm);
+    left: var(--space-sm);
+    right: auto;
+    width: auto;
+  }
+
+  .activity-stats-grid,
+  .activity-stats-grid[data-tiles="4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-stat-card {
+    min-height: 56px;
+  }
+
+  .activity-stat-value {
+    font-size: 1.375rem;
   }
 
   .activity-controls {
@@ -1936,6 +2121,12 @@ body {
   background: var(--color-bg-card);
   padding: var(--space-panel);
   margin-bottom: var(--space-md);
+}
+/* On the stage, centred above the HUD's tiles (#335). */
+.row-hud .workout-overlay {
+  align-self: center;
+  width: min(640px, 100%);
+  margin: 0;
 }
 .workout-overlay-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
 .workout-overlay-name { margin: 0; font-size: 1rem; }

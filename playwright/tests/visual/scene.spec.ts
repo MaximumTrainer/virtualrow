@@ -68,7 +68,12 @@ const VIEWPORTS = [
  * the scene, so an element screenshot of the canvas includes whatever is
  * painted over it.
  */
-const HUD_SELECTORS = ['.activity-route-summary', '.activity-map-overlay'] as const;
+const HUD_SELECTORS = [
+  '.activity-route-summary',
+  '.activity-map-overlay',
+  '.row-hud',
+  '.row-hud-fullscreen',
+] as const;
 
 /** Where on the route, and at what second, every shot is taken. */
 const FREEZE = { time: 12.5, progress: 0.31 };

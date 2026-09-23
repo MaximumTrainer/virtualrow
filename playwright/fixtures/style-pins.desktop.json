@@ -340,13 +340,27 @@
       "letterSpacing": "normal",
       "textTransform": "none"
     },
-    ".activity-stat-card": {
-      "backgroundColor": "rgb(240, 244, 248)",
+    ".activity-stats-grid": {
+      "backgroundColor": "rgba(9, 21, 34, 0.72)",
       "backgroundImage": "none",
       "color": "rgb(51, 51, 51)",
-      "borderRadius": "4px",
-      "borderColor": "rgb(226, 232, 240)",
+      "borderRadius": "6px",
+      "borderColor": "rgba(255, 255, 255, 0.18)",
       "borderWidth": "1px",
+      "boxShadow": "none",
+      "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "letterSpacing": "normal",
+      "textTransform": "none"
+    },
+    ".activity-stat-card": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none",
+      "color": "rgb(244, 248, 252)",
+      "borderRadius": "0px",
+      "borderColor": "rgb(244, 248, 252)",
+      "borderWidth": "0px",
       "boxShadow": "none",
       "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
       "fontSize": "16px",
@@ -357,9 +371,9 @@
     ".activity-stat-label": {
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "backgroundImage": "none",
-      "color": "rgb(85, 85, 85)",
+      "color": "rgba(244, 248, 252, 0.82)",
       "borderRadius": "0px",
-      "borderColor": "rgb(85, 85, 85)",
+      "borderColor": "rgba(244, 248, 252, 0.82)",
       "borderWidth": "0px",
       "boxShadow": "none",
       "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
@@ -371,13 +385,13 @@
     ".activity-stat-value": {
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "backgroundImage": "none",
-      "color": "rgb(51, 51, 51)",
+      "color": "rgb(244, 248, 252)",
       "borderRadius": "0px",
-      "borderColor": "rgb(51, 51, 51)",
+      "borderColor": "rgb(244, 248, 252)",
       "borderWidth": "0px",
       "boxShadow": "none",
       "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
-      "fontSize": "17.6px",
+      "fontSize": "32px",
       "fontWeight": "700",
       "letterSpacing": "normal",
       "textTransform": "none"
@@ -421,6 +435,20 @@
       "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
       "fontSize": "16px",
       "fontWeight": "400",
+      "letterSpacing": "normal",
+      "textTransform": "none"
+    },
+    ".row-hud-fullscreen": {
+      "backgroundColor": "rgba(9, 21, 34, 0.72)",
+      "backgroundImage": "none",
+      "color": "rgb(244, 248, 252)",
+      "borderRadius": "6px",
+      "borderColor": "rgba(255, 255, 255, 0.18)",
+      "borderWidth": "1px",
+      "boxShadow": "none",
+      "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
+      "fontSize": "20px",
+      "fontWeight": "500",
       "letterSpacing": "normal",
       "textTransform": "none"
     }

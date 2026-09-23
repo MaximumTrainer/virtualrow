@@ -4,6 +4,7 @@ import {
   nextView,
   type CameraView,
 } from '../components/rower3d/cameraRig';
+import { isShortcutKey } from '../utils/keyboardShortcut';
 
 /**
  * Which camera the rower is looking through, and remembering it (#328).
@@ -52,20 +53,7 @@ export const useCameraView = (): CameraViewControl => {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== CAMERA_VIEW_KEY) return;
-      // Not while someone is typing: the view key is a single letter, and a
-      // route name with a V in it should not move the camera.
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.isContentEditable ||
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT'
-      ) {
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      cycle();
+      if (isShortcutKey(event, CAMERA_VIEW_KEY)) cycle();
     };
 
     window.addEventListener('keydown', onKeyDown);

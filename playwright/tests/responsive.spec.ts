@@ -255,6 +255,129 @@ test.describe('responsive layout', () => {
     await expectHitTestable(page, '.btn-guest-row-again', 'Row Again');
   });
 
+  test('the metrics a rower steers by are on screen, without scrolling (#335)', async ({ page }) => {
+    await page.goto('./');
+    await startDemo(page);
+    await expect(page.locator('.row-hud-tile').first()).toBeVisible({ timeout: 20_000 });
+
+    // Poll: the canvas mounts lazily and the layout settles after it.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const view = document.querySelector('.activity-view');
+            const scrolled = (document.scrollingElement?.scrollTop ?? 0) + (view?.scrollTop ?? 0);
+            const offscreen = Array.from(document.querySelectorAll('.row-hud-tile'))
+              .map((tile) => ({ label: tile.querySelector('.activity-stat-label')?.textContent, r: tile.getBoundingClientRect() }))
+              .filter(({ r }) => r.top < 0 || r.left < 0 || r.bottom > window.innerHeight + 0.5 || r.right > window.innerWidth + 0.5)
+              .map(({ label, r }) => `${label} at ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}`);
+            return { scrolled, offscreen };
+          }),
+        { timeout: 15_000 },
+      )
+      .toEqual({ scrolled: 0, offscreen: [] });
+
+    const labels = await page.locator('.row-hud-tile .activity-stat-label').allTextContents();
+    expect(labels).toEqual(expect.arrayContaining(['Split', 'SPM', 'Heart Rate', 'Meters']));
+    const width = page.viewportSize()!.width;
+    expect(labels, 'six tiles from 900px, four below').toHaveLength(width >= 900 ? 6 : 4);
+
+    // Every digit one width, so a changing split does not jitter.
+    const numeric = await page
+      .locator('.row-hud-tile .activity-stat-value')
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontVariantNumeric);
+    expect(numeric).toContain('tabular-nums');
+  });
+
+  test('the HUD is legible over the brightest sky (#335)', async ({ page }) => {
+    // What is behind the tiles is a live 3D scene, which an accessibility
+    // checker cannot see through - axe reports text over a canvas as
+    // "incomplete", never as a failure. So the contrast is computed against
+    // the worst the scene can put there: the tiles' own backdrop laid over
+    // pure white, and over pure black.
+    await page.goto('./');
+    await startDemo(page);
+    await expect(page.locator('.row-hud-tile').first()).toBeVisible({ timeout: 20_000 });
+
+    const failures = await page.evaluate(() => {
+      const rgba = (css: string) => {
+        const [r, g, b, a = 1] = (css.match(/[\d.]+/g) ?? []).map(Number);
+        return { r, g, b, a };
+      };
+      const over = (top: ReturnType<typeof rgba>, bottom: { r: number; g: number; b: number }) => ({
+        r: top.r * top.a + bottom.r * (1 - top.a),
+        g: top.g * top.a + bottom.g * (1 - top.a),
+        b: top.b * top.a + bottom.b * (1 - top.a),
+      });
+      const luminance = ({ r, g, b }: { r: number; g: number; b: number }) => {
+        const lin = (c: number) => {
+          const s = c / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      };
+      const ratio = (x: { r: number; g: number; b: number }, y: { r: number; g: number; b: number }) => {
+        const [hi, lo] = [luminance(x), luminance(y)].sort((a, b) => b - a);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      const out: string[] = [];
+      for (const text of document.querySelectorAll<HTMLElement>('.row-hud-tile .activity-stat-value, .row-hud-tile .activity-stat-label')) {
+        // The backdrops between the text and the scene, innermost first.
+        const layers: ReturnType<typeof rgba>[] = [];
+        for (let el: HTMLElement | null = text; el && !el.classList.contains('activity-screen'); el = el.parentElement) {
+          const bg = rgba(getComputedStyle(el).backgroundColor);
+          if (bg.a > 0) layers.push(bg);
+        }
+        for (const scene of [{ r: 255, g: 255, b: 255 }, { r: 0, g: 0, b: 0 }]) {
+          const backdrop = layers.reduceRight((below, layer) => over(layer, below), scene);
+          const colour = over(rgba(getComputedStyle(text).color), backdrop);
+          const contrast = ratio(colour, backdrop);
+          if (contrast < 4.5) {
+            out.push(`${text.className} "${text.textContent}" ${contrast.toFixed(2)}:1 over ${scene.r ? 'white' : 'black'}`);
+          }
+        }
+      }
+      return out;
+    });
+
+    expect(failures, 'HUD text under 4.5:1').toEqual([]);
+  });
+
+  test('F fills the screen with the stage and hides the page header (#335)', async ({ page }) => {
+    await page.goto('./');
+    await startDemo(page);
+    await expect(page.locator('.row-hud-tile').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.app-header')).toBeVisible();
+
+    // Nothing focused that would take the key for itself.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('f');
+
+    const viewport = page.viewportSize()!;
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const r = document.querySelector('.activity-screen')!.getBoundingClientRect();
+          const header = document.querySelector('.app-header')!.getBoundingClientRect();
+          const onHeader = document.elementFromPoint(header.left + header.width / 2, header.top + header.height / 2);
+          return {
+            box: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+            headerCovered: !!onHeader?.closest('.activity-screen'),
+          };
+        }),
+      )
+      .toEqual({ box: [0, 0, viewport.width, viewport.height], headerCovered: true });
+    await expect(page.getByRole('button', { name: 'Exit fullscreen' })).toBeVisible();
+
+    await page.keyboard.press('f');
+    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.querySelector('.activity-screen')!.getBoundingClientRect().top))
+      .toBeGreaterThan(0);
+  });
+
   test('no console errors when the viewport is resized or rotated', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -469,12 +592,14 @@ const PINNED_SELECTORS = {
     '.activity-route-stage',
     '.activity-route-summary',
     '.activity-route-summary h2',
+    '.activity-stats-grid',
     '.activity-stat-card',
     '.activity-stat-label',
     '.activity-stat-value',
     '.btn-activity-control',
     '.btn-activity-control--danger',
     '.activity-map-overlay',
+    '.row-hud-fullscreen',
   ],
   summary: [
     '.guest-summary-modal',

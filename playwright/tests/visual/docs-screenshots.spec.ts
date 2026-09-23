@@ -73,7 +73,13 @@ const COMPARISON = {
 } as const;
 
 /** The panels the hero hides so the scull is centre-stage. */
-const HERO_HIDDEN_OVERLAYS = ['.activity-route-summary', '.activity-map-overlay'] as const;
+// The row HUD (#335) sits on the stage too: its tiles and the fullscreen button.
+const HERO_HIDDEN_OVERLAYS = [
+  '.activity-route-summary',
+  '.activity-map-overlay',
+  '.row-hud',
+  '.row-hud-fullscreen',
+] as const;
 
 async function waitForRowScreen(page: Page) {
   await page.waitForSelector('.route-info-overlay h2', { timeout: 10_000 });
