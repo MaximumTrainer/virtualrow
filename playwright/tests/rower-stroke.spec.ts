@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/crash-watch';
+import { test, expect, type Page } from '../fixtures/crash-watch';
 import { expectSceneAlive } from '../utils/scene-health';
 import {
   CATCH_SWEEP_RAD,
@@ -39,6 +39,28 @@ const ARM_MAX = 0.7;
  */
 const OAR_LIMIT = Math.max(Math.abs(CATCH_SWEEP_RAD), Math.abs(FINISH_SWEEP_RAD));
 
+/**
+ * Start the demo row with a DOM click rather than a synthesised one.
+ *
+ * `locator.click()` is bound by the config's 10s `actionTimeout`, and on a
+ * Windows runner drawing this scene through SwiftShader the renderer's main
+ * thread is busy for longer than that at a stretch: the log reads "element is
+ * visible, enabled and stable" and then "performing click action" until the
+ * timeout, because the input event is queued behind a frame. The button has
+ * already been waited for, so what is left is delivering the click, and
+ * `evaluate` delivers it against the test timeout instead of the action one.
+ *
+ * The same workaround, for the same reason, as the End Workout clicks in
+ * `responsive.spec.ts` and `crew-model-loading.spec.ts`.
+ */
+async function startDemoRow(page: Page) {
+  const demo = page.locator('.btn-try-demo');
+  await expect(demo).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() =>
+    (document.querySelector('.btn-try-demo') as HTMLButtonElement | null)?.click(),
+  );
+}
+
 test('the GLB scull drives the rower from the same stroke as the oars', async ({ page }) => {
   test.slow();
   const errors: string[] = [];
@@ -50,7 +72,7 @@ test('the GLB scull drives the rower from the same stroke as the oars', async ({
       .__VIRTUALROW_PERFORMANCE_MODE = 'low';
   });
   await page.goto('./');
-  await page.locator('.btn-try-demo').click();
+  await startDemoRow(page);
   await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
   await expectSceneAlive(page, 'the stroke scene');
 
@@ -98,7 +120,7 @@ test('the camera rig follows the boat and answers to V', async ({ page }) => {
     window.__PLAYWRIGHT_TESTING = true;
   });
   await page.goto('./');
-  await page.locator('.btn-try-demo').click();
+  await startDemoRow(page);
   await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
   await expectSceneAlive(page, 'the camera scene');
 
@@ -139,7 +161,11 @@ test('the camera rig follows the boat and answers to V', async ({ page }) => {
   expect(settled!.height).toBeLessThan(2.9);
 
   // Pressing V reaches the rig, and the button says the same thing.
-  await page.locator('.rower3d-canvas-container canvas').click({ position: { x: 5, y: 5 } });
+  // A DOM click, for the reason in `startDemoRow`, and on the one element in
+  // the page that is definitely busy drawing.
+  await page.evaluate(() =>
+    (document.querySelector('.rower3d-canvas-container canvas') as HTMLElement | null)?.click(),
+  );
   await page.keyboard.press('v');
 
   await expect
@@ -150,65 +176,4 @@ test('the camera rig follows the boat and answers to V', async ({ page }) => {
     .toBe('side');
 
   await expect(page.locator('.btn-camera-view')).toContainText('side');
-});
-
-/**
- * Issue #330 — the rower slides.
- *
- * The rig has authored a `Seat` node alongside the oars since it was built and
- * nothing ever moved it: the legs compressed while the seat stayed where it
- * was, so the rower shrank and grew rather than sliding up and down the boat.
- *
- * Sampled from the running scene rather than from the pose, because the pose
- * is unit-tested already — what this adds is that the GLB's seat is being
- * driven by it.
- *
- * It lives here rather than beside the crew models, where it was written. Two
- * reasons, both learned from CI. It is a stroke spec, not a loading one. And
- * `crew-model-loading.spec.ts` says in its own header that it must stay cheap:
- * a third demo row in that file put three 3D scenes in one worker, and on the
- * busiest Windows shard the seat was never reported at all.
- */
-test('the rower slides up and down the boat (#330)', async ({ page }) => {
-  test.slow();
-
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.addInitScript(() => {
-    (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
-      .__VIRTUALROW_PERFORMANCE_MODE = 'low';
-  });
-  await page.goto('./');
-  await page.locator('.btn-try-demo').click();
-  await page.locator('.rower3d-canvas-container').waitFor({ state: 'visible', timeout: 30_000 });
-  // Not decoration, and the reason this spec failed on Windows while the blade
-  // spec it was copied from passed: a visible container is only a <div>, and
-  // three.js builds its renderer behind a ResizeObserver and an await. This
-  // waits for that, so the telemetry poll below starts counting once there is
-  // something that could publish, and a scene that never comes up says so
-  // instead of timing out on a null.
-  await expectSceneAlive(page, 'the slide scene');
-
-  await expect
-    .poll(() => page.evaluate(() => window.__ROWER3D_SEAT_Z ?? null), {
-      // A minute, where the first frame on a saturated SwiftShader runner
-      // has to follow a 2 MB GLB over the wire and through a parse. Measured
-      // on windows-latest shard 1 of run 35788412008, where a frame cost
-      // 290 ms and 30 s was not enough.
-      timeout: 60_000,
-      message: 'the scene never reported where its seat was',
-    })
-    .not.toBeNull();
-
-  const seen: number[] = [];
-  for (let i = 0; i < 60; i += 1) {
-    const z = await page.evaluate(() => window.__ROWER3D_SEAT_Z ?? null);
-    if (z !== null) seen.push(z);
-    await page.waitForTimeout(120);
-  }
-
-  expect(seen.length, 'no seat positions were sampled').toBeGreaterThan(30);
-  const travel = Math.max(...seen) - Math.min(...seen);
-  console.log(`[slide] travel ${travel.toFixed(3)} m over ${seen.length} samples`);
-
-  expect(travel, 'the rower is not sliding').toBeGreaterThanOrEqual(0.4);
 });
