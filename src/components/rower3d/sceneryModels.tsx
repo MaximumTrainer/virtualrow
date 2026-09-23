@@ -48,6 +48,7 @@ import {
   computePlacements,
   type Placement,
 } from './sceneryPlacement';
+import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import { useAnimationFrame } from './animationFrame';
 import { cullByDistance, withinMountRange } from './visibilityCull';
 import { chunkViewDistanceFor } from './fogPlan';
@@ -190,9 +191,24 @@ const SceneryModelsChunk: React.FC<
   );
 
   const structurePlacements = useMemo<Placement[]>(
-    () => computeStructurePlacements(curve, structures, structureTerrain),
-    [curve, structures, structureTerrain],
+    () => computeStructurePlacements(curve, structures, structureTerrain, enrichment),
+    [curve, structures, structureTerrain, enrichment],
   );
+
+  // How near the water the nearest bank placement stands, per path, for the
+  // E2E that walks the demo row (#379). What stands on the water on purpose -
+  // surface dressing, a bridge - is not measured.
+  useEffect(() => {
+    if (!curve) return;
+    const onBank = (placed: Placement[]) => placed.filter((p) => p.footing === 'bank');
+    publishSceneryClearance(`scenery-${side}`, landClearance(onBank(placements), curve, enrichment));
+    if (structurePlacements.length > 0) {
+      publishSceneryClearance(
+        'structures',
+        landClearance(onBank(structurePlacements), curve, enrichment),
+      );
+    }
+  }, [curve, enrichment, placements, side, structurePlacements]);
 
   const instances = useMemo(
     () =>

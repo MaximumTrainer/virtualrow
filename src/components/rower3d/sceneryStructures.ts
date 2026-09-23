@@ -16,8 +16,10 @@ import { distanceBetweenLatLng } from '../../utils/geoUtils';
 import type { Crossing } from '../../utils/bridgeCrossings';
 import {
   getTerrainReliefForProgress,
+  type RouteEnrichmentData,
   type TerrainProfile,
 } from '../../services/routeEnrichmentService';
+import { nearestBankOffset, waterHalfWidthAt } from './sceneryClearance';
 import { bridgeModelFor } from './sceneryCrossings';
 import type { SceneryModelId } from './sceneryAssets';
 import { ASSET_SCALE, type Placement } from './sceneryPlacement';
@@ -31,7 +33,15 @@ export interface StructureRequest {
   kind: StructureKind;
 }
 
-/** How far off the rowed line each kind sits, in scene units. */
+/**
+ * How far off the rowed line each kind sits, in scene units, where the water
+ * is narrow enough to allow it.
+ *
+ * This is the nearest a structure is authored to stand, not where it ends up:
+ * seven metres is inside anything wider than a stream, and on a 55 m river it
+ * stood a landmark 20.5 m out in the water. Anything that does not span the
+ * water is pushed out to the bank as well (#379).
+ */
 const KIND_OFFSET: Record<StructureKind, number> = {
   // A bridge spans the water, so it stands on the line the boat rows.
   bridge: 0,
@@ -154,6 +164,8 @@ export const computeStructurePlacements = (
   curve: THREE.Curve<THREE.Vector3> | null | undefined,
   structures: StructureRequest[],
   terrain?: TerrainProfile | null,
+  /** The water the structures stand beside; its width decides where the bank is (#379). */
+  enrichment?: RouteEnrichmentData | null,
 ): Placement[] => {
   if (!curve) return [];
   const up = new THREE.Vector3(0, 1, 0);
@@ -164,7 +176,9 @@ export const computeStructurePlacements = (
     const tangent = curve.getTangentAt(t).normalize();
     const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
     const spans = KIND_SPANS_WATER[kind];
-    const offset = KIND_OFFSET[kind];
+    const offset = spans
+      ? KIND_OFFSET[kind]
+      : Math.max(KIND_OFFSET[kind], nearestBankOffset(waterHalfWidthAt(enrichment, t)));
     // Anything standing on a bank rises with it, the way the scatter in
     // sceneryPlacement.ts and the bank strips already do. A deck that spans the
     // water is placed relative to the water, so it stays on the waterline
@@ -178,6 +192,7 @@ export const computeStructurePlacements = (
       rotationY: Math.atan2(tangent.x, tangent.z) + (spans ? 0 : Math.PI / 2),
       scale: KIND_SCALE[kind],
       progress: t,
+      footing: spans ? ('water' as const) : ('bank' as const),
     };
   });
 };

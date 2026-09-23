@@ -136,6 +136,23 @@ describe('RowerScene', () => {
       expect(mountedScenery(scene)).toHaveLength(0);
       await scene.unmount();
     });
+
+    // Issue #379 — the mounted scene reports every placement path standing
+    // clear of the water, which is what oar-clearance.spec.ts reads in a
+    // browser.
+    it('reports every placement path standing clear of the water', async () => {
+      delete window.__ROWER3D_SCENERY_CLEARANCE;
+      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: true });
+      const readings: NonNullable<Window['__ROWER3D_SCENERY_CLEARANCE']> =
+        window.__ROWER3D_SCENERY_CLEARANCE ?? {};
+
+      expect(Object.keys(readings).sort()).toEqual(['landscape', 'scenery-left', 'structures']);
+      for (const [path, reading] of Object.entries(readings)) {
+        expect(reading.count, path).toBeGreaterThan(0);
+        expect(reading.nearestM, path).toBeGreaterThanOrEqual(reading.marginM - 0.01);
+      }
+      await scene.unmount();
+    });
   });
 
   // Issue #334 — there is ground under the world.

@@ -75,7 +75,10 @@ export function hasExplicitPerformanceMode(): boolean {
 export const WATER_CHANNEL_WIDTH = 20;
 /** Metres of bank either side of the water. */
 export const RIVERBANK_WIDTH = 60;
-/** Metres from the centre of the water to the first landscape object. */
+/**
+ * Least metres from the centre of the water to the first landscape object.
+ * Wider water pushes it out to the bank plus the scenery margin (#379).
+ */
 export const LANDSCAPE_OFFSET = 50;
 
 export const RENDER_CONFIG = {
