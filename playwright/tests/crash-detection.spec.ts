@@ -49,13 +49,24 @@ base('a renderer killed outright raises a crash event here', async ({ page }) =>
   const before = await readTelemetry(page);
   expect(before.map((e) => e.kind)).toContain('run-start');
 
-  // chrome://crash kills the renderer for this tab and nothing else.
-  await page.goto('chrome://crash').catch(() => {
-    // The navigation never resolves, because the thing meant to answer it is
-    // dead. That is the success path.
-  });
+  // Take the scene down before killing the renderer. chrome://crash is
+  // carried out by the renderer's main thread, and on a CI runner that thread
+  // spends long stretches inside a single SwiftShader frame of the scene: the
+  // kill then waited behind the frame, the event arrived after the poll had
+  // given up, and the first attempt failed on every run while the retry
+  // passed minutes later, depending on how busy the runner happened to be.
+  // What this test proves is that Chromium under these flags raises `crash`
+  // for this tab at all; the evidence it hands the rule was read above.
+  await page.goto('about:blank');
 
-  await expect.poll(() => crashEventFired, { timeout: 30_000, intervals: [500] }).toBe(true);
+  // chrome://crash kills the renderer for this tab and nothing else. Its
+  // navigation never resolves, because the thing meant to answer it is dead,
+  // so the event is what is waited on rather than the navigation.
+  const crashed = page.waitForEvent('crash', { timeout: 30_000 });
+  void page.goto('chrome://crash').catch(() => {
+    // Rejected with the crash. That is the success path.
+  });
+  await crashed;
 
   // And the rule agrees, on the evidence a real run would hand it.
   const verdict = describeCrashEvidence({ crashEventFired, events: before });
