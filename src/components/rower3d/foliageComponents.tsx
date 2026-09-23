@@ -112,7 +112,11 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
         return {
           name: `${BANK_FOLIAGE_NAME}:${entry.type}`,
           geometry: createFoliageGeometry(FOLIAGE_SHAPE_SIZE[shape].aspect),
-          material: makeFoliageBillboardMaterial({ map: textures.get(shape)!, color: entry.color }, swayTime),
+          material: (() => {
+            const m = makeFoliageBillboardMaterial({ map: textures.get(shape)!, color: entry.color }, swayTime);
+            if ((window as unknown as { __BENCH?: { opaque?: boolean } }).__BENCH?.opaque) m.alphaTest = 0;
+            return m;
+          })(),
         };
       }),
     [species, textures, swayTime],
@@ -158,7 +162,8 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
     let drawn = 0;
     batches.forEach((batch, i) => {
       const mesh = meshRefs.current[i];
-      if (mesh) drawn += cullTo(mesh, batch, boat, viewDistance);
+      const bench = (window as unknown as { __BENCH?: { vd?: number } }).__BENCH;
+      if (mesh) drawn += cullTo(mesh, batch, boat, bench?.vd ?? viewDistance);
     });
     if (window.__ROWER3D_FOLIAGE && window.__ROWER3D_FOLIAGE.drawn !== drawn) {
       publishFoliage({ ...window.__ROWER3D_FOLIAGE, drawn });

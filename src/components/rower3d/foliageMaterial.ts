@@ -71,14 +71,17 @@ export function makeFoliageBillboardMaterial(
   { map, color }: FoliageBillboardParameters,
   uTime: THREE.IUniform<number>,
 ): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({
-    map,
-    color,
-    alphaTest: 0.5,
-    side: THREE.FrontSide,
-    roughness: 0.9,
-    metalness: 0,
-  });
+  const lambert = (globalThis as unknown as { __BENCH?: { lambert?: boolean } }).__BENCH?.lambert;
+  const material = (lambert
+    ? new THREE.MeshLambertMaterial({ map, color, alphaTest: 0.5, side: THREE.FrontSide })
+    : new THREE.MeshStandardMaterial({
+        map,
+        color,
+        alphaTest: 0.5,
+        side: THREE.FrontSide,
+        roughness: 0.9,
+        metalness: 0,
+      })) as THREE.MeshStandardMaterial;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
     shader.vertexShader =
