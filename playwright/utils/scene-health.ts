@@ -21,8 +21,19 @@ import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../../src/utils/sceneHea
  * appeared, this reported "there is no canvas" 326 times across CI: an
  * assertion racing the mount, not a defect. It waits now, and a context that is
  * lost and never restored still fails, because the wait ends.
+ *
+ * Longer on CI, because the wait is for work whose cost is the machine's
+ * rather than the app's: a 1.2 MB lazy chunk, the route geometry, and three.js
+ * building a renderer, on a runner drawing through SwiftShader with another
+ * worker doing the same on the other core. Windows is where that lands - a
+ * frame there has been measured at 290 ms, and 25 s took out three separate
+ * specs on one shard of run 35904598815 with "the 3D renderer never came up".
+ *
+ * Sixty seconds is still well inside the 160 s test timeout the CI config
+ * allows, so a scene that genuinely never comes up is still reported as such,
+ * by this assertion, with its own message.
  */
-const SCENE_READY_TIMEOUT_MS = 25_000;
+export const SCENE_READY_TIMEOUT_MS = process.env.CI ? 60_000 : 25_000;
 
 async function observe(page: Page) {
   return page.evaluate(() => {

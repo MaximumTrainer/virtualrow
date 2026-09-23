@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations, captureGameplayCanvas } from '../utils/screenshot-helper';
-import { expectSceneAlive } from '../utils/scene-health';
+import { expectSceneAlive, SCENE_READY_TIMEOUT_MS } from '../utils/scene-health';
 import { simPortsForWorker } from '../utils/simPorts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -632,7 +632,16 @@ test.describe('Simulated e2e route playback', () => {
     // 3D canvas checks
     let canvasHandle = null;
     try {
-      canvasHandle = await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 5000, state: 'attached' });
+      // The same budget `expectSceneAlive` gives it two lines below, rather
+      // than five seconds. The two disagreed, and the impatient one was first:
+      // it took this spec out on windows shard 4 of run 35904598815 while the
+      // check that follows - which allows the scene twenty-five seconds, and
+      // sixty on CI - would have been satisfied. A canvas that never attaches
+      // still fails here; it is no longer a race against the lazy 3D chunk.
+      canvasHandle = await page.waitForSelector('.rower3d-canvas-container canvas', {
+        timeout: SCENE_READY_TIMEOUT_MS,
+        state: 'attached',
+      });
       await annotateElement(page, '.rower3d-canvas-container canvas', '3D View Canvas', 'top');
       await captureTestEvidence(page, testInfo, '10-3d-canvas-visible');
       await clearAnnotations(page);
