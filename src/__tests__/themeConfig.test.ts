@@ -66,9 +66,6 @@ describe('SCENE_CONFIG', () => {
 
   it('landscapeColors has all required fields', () => {
     const lc = SCENE_CONFIG.landscapeColors;
-    expect(typeof lc.tree).toBe('string');
-    expect(typeof lc.treeBark).toBe('string');
-    expect(typeof lc.treeHighlight).toBe('string');
     expect(typeof lc.mountain).toBe('string');
     expect(typeof lc.mountainSnow).toBe('string');
     expect(typeof lc.buildingAccent).toBe('string');
