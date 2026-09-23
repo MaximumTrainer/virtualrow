@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { metricTiles, HUD_METRIC_LABEL, type HudMetric } from './rowHudPlan';
-import { formatPace, formatTime } from '../utils/formatters';
+import { formatSplit, formatTime } from '../utils/formatters';
 import type { FullscreenControl } from '../hooks/useFullscreen';
 import './RowHud.css';
 
@@ -92,17 +92,20 @@ const valueFor = (
     'paceSecondsPer500' | 'strokeRate' | 'power' | 'heartRate' | 'distanceMeters' | 'elapsedMs'
   >,
 ): string => {
+  // The number, and only the number. Its unit is in the label above it
+  // (#344): at 32px `187 W` does not fit a tile on a 320px phone, and a
+  // truncated reading is worse than a small one.
   switch (metric) {
     case 'split':
-      return formatPace(props.paceSecondsPer500);
+      return formatSplit(props.paceSecondsPer500);
     case 'spm':
-      return `${props.strokeRate ?? '--'} spm`;
+      return `${props.strokeRate ?? '--'}`;
     case 'power':
-      return `${props.power ?? '--'} W`;
+      return `${props.power ?? '--'}`;
     case 'hr':
-      return `${props.heartRate ?? '--'} bpm`;
+      return `${props.heartRate ?? '--'}`;
     case 'distance':
-      return `${Math.round(props.distanceMeters)} m`;
+      return `${Math.round(props.distanceMeters)}`;
     case 'time':
       return formatTime(props.elapsedMs);
   }

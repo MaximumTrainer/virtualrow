@@ -19,7 +19,7 @@
    strip takes it as a `min-height`, so the two cannot disagree by construction
    - the only way to move one is to move the other. */
 .activity-route-stage {
-  --row-hud-strip-height: 9.5rem;
+  --row-hud-strip-height: 11rem;
 }
 
 .row-hud {
@@ -69,7 +69,7 @@
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
-  background: rgba(10, 14, 20, 0.55);
+  background: rgba(10, 14, 20, 0.7);
   backdrop-filter: blur(6px);
   color: #fff;
   font-size: 1.1rem;
@@ -109,9 +109,12 @@
 .row-hud .activity-stat-card {
   padding: var(--space-2xs) var(--space-xs);
   border-radius: var(--radius-control);
-  /* The design's backdrop. Against it the label below clears 4.5:1 and the
-     value clears 7:1, which is what `scene-contrast.spec.ts` and #344 check. */
-  background: rgba(10, 14, 20, 0.55);
+  /* The backdrop, at 0.7 rather than the 0.55 the design sketched (#344).
+     Measured against the brightest water the strip sits over - rgb(226,225,223)
+     on the demo route - 0.55 put the labels at 4.69:1, which clears 4.5 and
+     would stop clearing it the first time the sun came out. 0.7 puts them at
+     about 7.6:1, which is a margin rather than a coin toss. */
+  background: rgba(10, 14, 20, 0.7);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.14);
   text-align: center;
@@ -120,24 +123,36 @@
 
 .row-hud .activity-stat-label {
   display: block;
-  font-size: 0.6875rem; /* the 11px floor, not a pixel under it */
+  /* 16px, not the 11px legibility floor (#344). The floor is what no text may
+     go below; a label a rower reads at arm's length while rowing hard is not a
+     place to sit on it. Wraps rather than truncating - "Heart Rate (bpm)" is
+     sixteen characters and a phone tile is not that wide, and half a word is
+     worse than two lines. */
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 0.92 white on rgba(10,14,20,0.55) over the river clears 4.5:1 against
+     every part of the scene the strip sits on; 0.82 did not clear it against
+     the brightest water. */
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .row-hud .activity-stat-value {
   display: block;
-  /* Big, and the same width every stroke. Proportional digits made the split
+  /* 32px, flat rather than clamped (#344). It used to scale down to 20px on a
+     phone, which is the screen most likely to be propped against an erg and
+     the one that could least afford it. It fits at that size because the unit
+     moved to the label - the value is `2:00`, not `2:00/500m`.
+
+     The same width every stroke, too: proportional digits made the split
      twitch sideways once a second, which is the one number a rower stares at. */
-  font-size: clamp(1.25rem, 2.4vw, 2rem);
+  font-size: 2rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
@@ -162,7 +177,7 @@
 }
 
 .row-hud .btn-activity-control--subtle {
-  background: rgba(10, 14, 20, 0.55);
+  background: rgba(10, 14, 20, 0.7);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.25);
 }
@@ -178,7 +193,7 @@
 @media (max-width: 599px) {
   /* Two rows of tiles and two of controls, so the band is taller. */
   .activity-route-stage {
-    --row-hud-strip-height: 15.5rem;
+    --row-hud-strip-height: 18rem;
   }
 
   .row-hud .activity-stats-grid {
@@ -213,7 +228,7 @@
    allows. */
 @media (max-height: 560px) and (orientation: landscape) {
   .activity-route-stage {
-    --row-hud-strip-height: 4.5rem;
+    --row-hud-strip-height: 5.5rem;
   }
 
   .row-hud-strip {
@@ -230,8 +245,15 @@
     min-width: 0;
   }
 
+  /* The one place the 32px floor gives way: 180px of stage cannot hold a
+     32px number, a 16px label and a 44px control at once, and the numbers
+     being on screen at all is what #335 was for. */
   .row-hud .activity-stat-value {
-    font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+    font-size: 1.5rem;
+  }
+
+  .row-hud .activity-stat-label {
+    font-size: 0.8125rem;
   }
 
   .row-hud .activity-controls {

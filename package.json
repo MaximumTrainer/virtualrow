@@ -45,6 +45,7 @@
     "three": "^0.181.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.39.1",
     "@garmin/fitsdk": "^21.214.0",
     "@playwright/test": "^1.46.0",

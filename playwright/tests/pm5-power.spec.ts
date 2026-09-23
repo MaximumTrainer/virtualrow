@@ -51,7 +51,9 @@ const powerCardText = (page: Page) =>
   page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('.activity-stat-card'));
     const card = cards.find((c) =>
-      c.querySelector('.activity-stat-label')?.textContent?.trim() === 'Power',
+      // `startsWith`, because the label carries the unit since #344:
+      // "Power (W)" over a value of "187".
+      c.querySelector('.activity-stat-label')?.textContent?.trim().startsWith('Power'),
     );
     return card?.querySelector('.activity-stat-value')?.textContent?.trim() ?? '';
   });
@@ -94,11 +96,12 @@ test('a PM5 rower sees their power, live and in the summary', async ({ page }) =
     await page.waitForTimeout(400);
   }
 
-  // The card the rower is looking at. Read as text, because "0 W" and "187 W"
-  // are what they actually see and the fault was a plausible-looking zero.
+  // The card the rower is looking at. Read as text, because "0" and "187"
+  // under a heading of "Power (W)" are what they actually see and the fault
+  // was a plausible-looking zero.
   await expect
     .poll(() => powerCardText(page), { timeout: 20_000, intervals: [500] })
-    .toBe(`${STEADY_WATTS} W`);
+    .toBe(`${STEADY_WATTS}`);
 
   // And it reached the session, which is what the summary averages and what
   // the FIT export and the intervals.icu upload carry.

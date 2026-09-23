@@ -55,7 +55,7 @@ describe('the row HUD', () => {
     expect(tiles().map((t) => t.label)).toEqual([
       'Split (/500m)',
       'SPM',
-      'Heart Rate',
+      'Heart Rate (bpm)',
       'Meters',
     ]);
   });
@@ -84,12 +84,13 @@ describe('the row HUD', () => {
   it('reads the numbers out the way the monitor does', () => {
     render(<RowHud {...props()} />);
 
+    // The number alone; its unit is the label above it (#344).
     expect(tiles()).toEqual([
-      { label: 'Split (/500m)', value: '1:58/500m' },
-      { label: 'SPM', value: '24 spm' },
-      { label: 'Power', value: '187 W' },
-      { label: 'Heart Rate', value: '148 bpm' },
-      { label: 'Meters', value: '1000 m' },
+      { label: 'Split (/500m)', value: '1:58' },
+      { label: 'SPM', value: '24' },
+      { label: 'Power (W)', value: '187' },
+      { label: 'Heart Rate (bpm)', value: '148' },
+      { label: 'Meters', value: '1000' },
       { label: 'Time', value: '4:12' },
     ]);
   });
@@ -105,8 +106,8 @@ describe('the row HUD', () => {
     const values = tiles().map((t) => t.value);
 
     expect(values).toContain('--:--');
-    expect(values).toContain('-- spm');
-    expect(values).toContain('-- bpm');
+    expect(values.filter((v) => v === '--'), 'rate, power and heart rate all say nothing')
+      .toHaveLength(3);
   });
 
   it('holds every digit to the same width', () => {

@@ -341,7 +341,7 @@
       "textTransform": "none"
     },
     ".activity-stat-card": {
-      "backgroundColor": "rgba(10, 14, 20, 0.55)",
+      "backgroundColor": "rgba(10, 14, 20, 0.7)",
       "backgroundImage": "none",
       "color": "rgb(51, 51, 51)",
       "borderRadius": "4px",
@@ -357,15 +357,15 @@
     ".activity-stat-label": {
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "backgroundImage": "none",
-      "color": "rgba(255, 255, 255, 0.82)",
+      "color": "rgba(255, 255, 255, 0.92)",
       "borderRadius": "0px",
-      "borderColor": "rgba(255, 255, 255, 0.82)",
+      "borderColor": "rgba(255, 255, 255, 0.92)",
       "borderWidth": "0px",
       "boxShadow": "none",
       "fontFamily": "-apple-system, system-ui, segoe ui, roboto, sans-serif",
-      "fontSize": "11px",
+      "fontSize": "16px",
       "fontWeight": "600",
-      "letterSpacing": "0.66px",
+      "letterSpacing": "0.64px",
       "textTransform": "uppercase"
     },
     ".activity-stat-value": {

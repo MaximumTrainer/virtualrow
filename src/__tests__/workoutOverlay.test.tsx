@@ -193,3 +193,60 @@ describe('WorkoutOverlay', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+/**
+ * Issue #344 — the zone is never colour alone.
+ *
+ * The timeline was a row of coloured bars with a `title`. A `title` is a
+ * tooltip, which a touchscreen has no way to ask for, and about one man in
+ * twelve cannot tell #d4b13a from #e08733 - so the ramp that tells a rower
+ * where the hard bits are told some of them nothing at all.
+ */
+describe('the zone is readable without the colour', () => {
+  it('marks every step on the timeline', () => {
+    render(<WorkoutOverlay {...props()} />);
+
+    const steps = screen.getAllByRole('listitem');
+    expect(steps).toHaveLength(segments.length);
+    // zone1, zone4, recovery — the digits and the below-zone-one mark.
+    expect(steps.map((step) => step.querySelector('.workout-timeline-mark')?.textContent)).toEqual([
+      '1',
+      '4',
+      '~',
+    ]);
+  });
+
+  it('says the segment and its zone to a screen reader', () => {
+    render(<WorkoutOverlay {...props()} />);
+
+    const steps = screen.getAllByRole('listitem');
+    expect(within(steps[1]).getByText(/Zone 4/)).toBeInTheDocument();
+  });
+
+  // A workout can carry a segment with no zone at all, and a blank bar is the
+  // same problem one step further on.
+  it('marks an unzoned step too', () => {
+    const unzoned = [segment({ id: 'z', intensity: undefined })];
+    render(
+      <WorkoutOverlay
+        {...props({
+          workout: workout(unzoned),
+          segments: unzoned,
+          progress: progress({ currentSegment: unzoned[0] }),
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole('listitem').querySelector('.workout-timeline-mark')?.textContent,
+    ).toBe('–');
+  });
+
+  // The badge above the timeline already said its zone in words; this pins it,
+  // because it is the other half of the same claim.
+  it('keeps naming the current segment zone in words', () => {
+    render(<WorkoutOverlay {...props()} />);
+
+    expect(screen.getByText('Zone 3')).toBeInTheDocument();
+  });
+});

@@ -166,6 +166,32 @@ export const intensityLabel = (intensity: WorkoutSegment['intensity']): string =
   return `Zone ${intensity.replace('zone', '')}`;
 };
 
+/**
+ * A mark that says the same thing the colour says (#344).
+ *
+ * The timeline was colour and a `title` attribute: a rower who cannot tell
+ * #d4b13a from #e08733 - and about one man in twelve cannot - had a row of
+ * identical bars, and a `title` is a tooltip, which a touchscreen has no way to
+ * ask for. These are the ramp written down, so the timeline reads as a shape
+ * as well as a gradient.
+ *
+ * Digits for the numbered zones, because that is what they are called;
+ * `~` for recovery, which is below zone one, and `!` for max, above zone five.
+ */
+export const INTENSITY_MARKS: Record<NonNullable<WorkoutSegment['intensity']>, string> = {
+  recovery: '~',
+  zone1: '1',
+  zone2: '2',
+  zone3: '3',
+  zone4: '4',
+  zone5: '5',
+  max: '!',
+};
+
+/** The mark for a segment, or a dash for one with no zone at all. */
+export const intensityMark = (intensity: WorkoutSegment['intensity']): string =>
+  intensity ? INTENSITY_MARKS[intensity] : '–';
+
 /** Segment type as a heading: `work` → `Work`. */
 export const segmentTypeLabel = (type: WorkoutSegment['type']): string =>
   type.charAt(0).toUpperCase() + type.slice(1);

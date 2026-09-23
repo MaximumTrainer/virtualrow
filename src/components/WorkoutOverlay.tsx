@@ -6,6 +6,7 @@ import {
   describeTargets,
   intensityColor,
   intensityLabel,
+  intensityMark,
   segmentTypeLabel,
 } from '../utils/workoutPlan';
 
@@ -122,7 +123,20 @@ export const WorkoutOverlay: React.FC<WorkoutOverlayProps> = ({
               backgroundColor: intensityColor(step.intensity),
             }}
             title={`${segmentTitle(step)} — ${intensityLabel(step.intensity)}`}
-          />
+          >
+            {/* The zone as a mark as well as a colour (#344). A `title` is a
+                tooltip, which a touchscreen cannot ask for, and the colour
+                ramp alone leaves a rower with a red-green deficiency looking
+                at a row of identical bars. `aria-label` on the item rather
+                than the mark, so a screen reader hears the segment and its
+                zone rather than a bare digit. */}
+            <span className="workout-timeline-mark" aria-hidden="true">
+              {intensityMark(step.intensity)}
+            </span>
+            <span className="sr-only">
+              {`${segmentTitle(step)} — ${intensityLabel(step.intensity)}`}
+            </span>
+          </li>
         ))}
       </ol>
     </section>

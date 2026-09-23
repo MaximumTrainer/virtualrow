@@ -78,15 +78,36 @@ const EMPTY: EffectPlan = {
  * An unknown mode gets the lightest plan, not the heaviest — the old fallback
  * did the opposite, so anything unexpected landed on SSAO and depth of field.
  */
+/**
+ * The effects a rower who asked for less motion does not get (#344).
+ *
+ * Chromatic aberration splits the frame into red and blue fringes that shift
+ * with the camera. On a screen at arm's length while rowing hard it reads as
+ * the picture swimming, and it is the one effect in the stack whose whole
+ * purpose is to feel like movement. Dropping it costs the scene a lens
+ * imperfection; keeping it costs a rower who asked for stillness the row.
+ *
+ * Nothing else goes. Bloom, the grade and the vignette are static - they look
+ * the same in a frozen frame as in a moving one - and depth of field and SSAO
+ * are depth, not motion.
+ */
+const MOTION_EFFECTS: readonly EffectName[] = ['chromaticAberration'];
+
+const withoutMotion = (effects: EffectName[], reducedMotion: boolean): EffectName[] =>
+  reducedMotion ? effects.filter((effect) => !MOTION_EFFECTS.includes(effect)) : effects;
+
 export const effectPlanFor = (
   mode: PerformanceMode,
-  { hasSun }: { hasSun: boolean },
+  { hasSun, reducedMotion = false }: { hasSun: boolean; reducedMotion?: boolean },
 ): EffectPlan => {
   if (mode === 'high') {
     return {
       composer: true,
       normalPass: true,
-      effects: [...GRADE, 'ssao', 'depthOfField', ...(hasSun ? (['godRays'] as EffectName[]) : [])],
+      effects: withoutMotion(
+        [...GRADE, 'ssao', 'depthOfField', ...(hasSun ? (['godRays'] as EffectName[]) : [])],
+        reducedMotion,
+      ),
       ssaoSamples: 24,
       toneMapOnRenderer: false,
     };
@@ -97,7 +118,12 @@ export const effectPlanFor = (
     // six metres behind the boat, everything past about thirty-five metres was
     // bokeh - which since #321 made a unit a metre is the entire far bank,
     // permanently. It survives at high, where it is focused on the boat (#327).
-    return { composer: true, normalPass: false, effects: [...GRADE], toneMapOnRenderer: false };
+    return {
+      composer: true,
+      normalPass: false,
+      effects: withoutMotion([...GRADE], reducedMotion),
+      toneMapOnRenderer: false,
+    };
   }
 
   return EMPTY;
