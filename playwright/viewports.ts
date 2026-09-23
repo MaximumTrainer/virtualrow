@@ -55,6 +55,13 @@ export const HEAVY_SPEC = '**/*.heavy.spec.ts';
  */
 export const VISUAL_SPEC = '**/visual/*.spec.ts';
 
+/**
+ * The published screenshots (#362), a visual spec whose baselines are the
+ * files under `docs/` that the site serves. It matches VISUAL_SPEC too, so
+ * every config that ignores the visual suite ignores this with it.
+ */
+export const DOCS_SCREENSHOTS_SPEC = '**/visual/docs-screenshots.spec.ts';
+
 /** The matrix as Playwright projects, plus a `default` project for every other spec. */
 export function responsiveProjects(): Project[] {
   return [

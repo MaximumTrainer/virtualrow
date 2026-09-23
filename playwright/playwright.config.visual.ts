@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 import ci from './playwright.config.ci';
-import { VISUAL_SPEC } from './viewports';
+import { DOCS_SCREENSHOTS_SPEC, VISUAL_SPEC } from './viewports';
 
 /**
  * The visual baseline suite (#340).
@@ -24,7 +24,24 @@ import { VISUAL_SPEC } from './viewports';
 export default defineConfig({
   ...ci,
   testDir: './tests',
-  projects: [{ name: 'visual', testMatch: VISUAL_SPEC }],
+  projects: [
+    { name: 'visual', testMatch: VISUAL_SPEC, testIgnore: DOCS_SCREENSHOTS_SPEC },
+    // The published screenshots (#362). Their baselines are not copies under
+    // `__snapshots__/` but the files the site serves, `docs/{name}.png`, so
+    // the comparison is against what a visitor actually sees and a re-record
+    // lands where the deploy reads it. Two files that have to be kept equal
+    // were the bug; there is one.
+    //
+    // A project of its own because a snapshot path is a project setting in
+    // Playwright: there is no per-test or per-call override, and the
+    // config-wide template below is the scene's. `{testDir}` is `tests/`, two
+    // levels under the repository root.
+    {
+      name: 'docs',
+      testMatch: DOCS_SCREENSHOTS_SPEC,
+      snapshotPathTemplate: '{testDir}/../../docs/{arg}{ext}',
+    },
+  ],
   // Beside the specs rather than under a per-platform folder: the shots are
   // recorded on one platform on purpose, so a `-linux` suffix would only
   // suggest the others exist.

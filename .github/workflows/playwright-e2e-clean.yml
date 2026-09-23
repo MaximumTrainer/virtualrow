@@ -141,6 +141,11 @@ jobs:
   # here instead of becoming a baseline that fails for the next person. The
   # recorded PNGs come back as an artifact to commit; nothing is written to the
   # repository by CI, and nothing is ever recorded on a developer's GPU.
+  #
+  # The three screenshots the landing page publishes are baselines here too
+  # (#362), and their baseline files are the published ones under docs/ - so a
+  # change that moves one of them is red in this job, and a labelled run hands
+  # them back with the scene shots.
   visual:
     needs: preflight
     runs-on: ubuntu-latest
@@ -185,7 +190,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: visual-baselines-${{ github.run_id }}
-          path: playwright/tests/visual/__snapshots__
+          # Two roots, so the artifact keeps paths from the repository root:
+          # unzip it there and every file lands where it is committed.
+          path: |
+            playwright/tests/visual/__snapshots__
+            docs/screenshot-rower-3d.png
+            docs/screenshot-activity.png
+            docs/screenshot-route-selection.png
           if-no-files-found: warn
 
       # A recording that changed something has to be committed before merge.
@@ -196,13 +207,22 @@ jobs:
       # and main compares the new scene against stale baselines and goes red,
       # on a change that was green a minute earlier. This is the step that says
       # so, and the artifact above is what to commit.
+      #
+      # The published screenshots are in the same list: a re-recorded hero that
+      # was never committed would pass here and then go on being deployed stale.
       - name: Check the recorded baselines were committed
         if: contains(github.event.pull_request.labels.*.name, 'visual-baseline')
+        env:
+          BASELINES: >-
+            playwright/tests/visual/__snapshots__
+            docs/screenshot-rower-3d.png
+            docs/screenshot-activity.png
+            docs/screenshot-route-selection.png
         run: |
-          if ! git diff --quiet -- playwright/tests/visual/__snapshots__; then
+          if ! git diff --quiet -- $BASELINES; then
             echo "::error::Re-recording changed these baselines, and the branch still has the old ones:"
-            git diff --name-only -- playwright/tests/visual/__snapshots__
-            echo "::error::Download the visual-baselines artifact from this run, commit it, and push."
+            git diff --name-only -- $BASELINES
+            echo "::error::Download the visual-baselines artifact from this run, unzip it at the repository root, commit it, and push."
             exit 1
           fi
           echo "Re-recording reproduced the committed baselines exactly."

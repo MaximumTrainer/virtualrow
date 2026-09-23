@@ -361,7 +361,9 @@ npm run build
 
 ## GitHub Pages Landing Page
 
-The project website is published to GitHub Pages from the `docs/` directory on every push to `main` via `.github/workflows/pages.yml`.
+The project website is published to GitHub Pages from the `docs/` directory on every push to `main` via `.github/workflows/deploy-pages.yml`.
+That job builds the app into `docs/app/` from the same checkout and uploads `docs/` as one
+artifact, so the page, its screenshots and the app always come from one commit.
 
 ### Enabling GitHub Pages (one-time repo setup)
 
@@ -378,9 +380,41 @@ https://<org>.github.io/virtualrow/
 
 Edit `docs/index.html` — it is a self-contained static file with no build step.
 
-To replace the hero screenshot, overwrite `docs/screenshot-rower-3d.png` with a new capture.
+### Updating the published screenshots
+
+The three screenshots the page publishes — `docs/screenshot-rower-3d.png` (the hero),
+`docs/screenshot-activity.png` and `docs/screenshot-route-selection.png` — are visual
+baselines (#362). `playwright/tests/visual/docs-screenshots.spec.ts` renders each one from
+the current build with the scene frozen, and compares it with the committed file. The
+comparison runs in the `visual` job of `playwright-e2e-clean.yml`, so a change that moves
+one of the pictures fails CI and names the file that drifted; the diff is in the job's
+Playwright artifacts. The baseline *is* the published file (the `docs` project in
+`playwright/playwright.config.visual.ts` points its snapshot path at `docs/`), so there is
+no copy to keep in step.
+
+Do not overwrite them by hand, and do not commit a capture taken on your own machine. A
+screenshot is a picture of the rasteriser that drew it: your GPU and CI's SwiftShader draw
+the same scene differently, so a local capture fails the comparison on every pull request
+after it — and the published picture would be of a renderer nothing else checks against.
+
+To regenerate them, when a change is meant to alter what they show:
+
+1. Put the `visual-baseline` label on the pull request.
+2. The `visual` job re-records every visual baseline — the scene shots and these three — on
+   Linux/SwiftShader, compares the scene against what it just recorded, and uploads the
+   result as the `visual-baselines-<run id>` artifact. It fails while the branch still
+   carries the old files; nothing is written to the repository by CI.
+3. Download the artifact, unzip it at the repository root (it holds
+   `playwright/tests/visual/__snapshots__/` and `docs/`), commit the PNGs, and push.
+
+A regenerated hero is published only if it also passes `src/__tests__/heroScreenshot.test.ts`,
+which refuses a blank, low-contrast or structureless picture and says by how much. That
+refusal is a fault in the scene — framing, foliage, exposure — and is fixed there, never by
+lowering the thresholds.
+
 The gameplay E2E test (`captures gameplay visuals for rowing model and graphics validation`)
-produces labeled canvas screenshots in `playwright/playwright-report/` that can be used directly.
+still produces labeled canvas screenshots in `playwright/playwright-report/`, for looking at;
+they are not what the site publishes.
 
 ### Local preview
 
