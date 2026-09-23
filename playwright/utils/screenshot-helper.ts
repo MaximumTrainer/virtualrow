@@ -164,10 +164,20 @@ export async function captureTestEvidence(
   const timestamp = Date.now();
   const screenshotName = `${sanitizedDescription}-${timestamp}.png`;
   
-  await page.screenshot({
-    path: `${testInfo.outputDir}/${screenshotName}`,
-    fullPage: true,
-  });
+  // Evidence is for whoever reads the report, not an assertion: a full-page
+  // shot of the WebGL page on a software renderer can outlast the action
+  // timeout, and that used to fail tests whose every assertion held. A missed
+  // shot is recorded on the test instead.
+  try {
+    await page.screenshot({
+      path: `${testInfo.outputDir}/${screenshotName}`,
+      fullPage: true,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    testInfo.annotations.push({ type: 'evidence-skipped', description: `${description}: ${reason}` });
+    console.warn(`[evidence] ${description} not captured: ${reason}`);
+  }
 }
 
 /**

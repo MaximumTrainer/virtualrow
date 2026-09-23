@@ -82,7 +82,7 @@ test.describe('auth header button', () => {
     // due to SubtleCrypto, so allow up to 5 seconds)
     await page.waitForFunction(
       () => window.__PLAYWRIGHT_TESTING !== undefined || true,
-      { timeout: 500 },
+      undefined, { timeout: 10_000 },
     ).catch(() => {});
     // Give startLogin's async generateCodeChallenge time to complete
     await page.waitForTimeout(2000);

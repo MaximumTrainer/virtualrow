@@ -93,7 +93,7 @@ async function connectDevices(page: Page) {
     const pm5 = names.find((n) => String(n.textContent).includes('Concept2 PM5'));
     const status = pm5?.closest('.bluetooth-device-container')?.querySelector('.device-status');
     return !!status && String(status.textContent).includes('Connected');
-  }, { timeout: 20_000 });
+  }, undefined, { timeout: 20_000 });
 
   await page.click('button:has-text("Connect HR Monitor")');
   await page.waitForFunction(() => {
@@ -101,7 +101,7 @@ async function connectDevices(page: Page) {
     const hr = containers.find((c) => String(c.querySelector('.device-name')?.textContent).includes('Heart Rate Monitor'));
     const status = hr?.querySelector('.device-status');
     return !!status && String(status.textContent).includes('Connected');
-  }, { timeout: 20_000 });
+  }, undefined, { timeout: 20_000 });
 }
 
 /** PM5 general status: elapsed time (24-bit LE, x0.01s) then distance (24-bit LE, x0.1m). */
