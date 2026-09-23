@@ -49,36 +49,39 @@ base('a renderer killed outright raises a crash event here', async ({ page }) =>
   const before = await readTelemetry(page);
   expect(before.map((e) => e.kind)).toContain('run-start');
 
-  // How long a round trip to this renderer takes just before the kill, for
-  // the log. On CI the kill has been seen to land minutes late (#386), and
-  // this is the number that says whether the renderer was starved at the time.
-  const probeStarted = Date.now();
-  await page.evaluate(() => 0);
-  const roundTripMs = Date.now() - probeStarted;
-
-  // Killed through the DevTools protocol: one command to this tab's renderer.
-  // It never answers, because the thing meant to answer it is dead.
+  // Killed with SIGKILL, from outside, the way the OOM killer takes a tab.
   //
-  // Waited on for up to three minutes, not thirty seconds. On CI the event
-  // arrives, but late: across eight runs the thirty-second wait failed the
-  // first attempt every time, and the retries that passed took 4.5 to 5.6
-  // minutes. What this test claims is that Chromium under these flags raises
-  // `crash` for the tab at all - not how quickly a starved runner gets there -
-  // so the wait is sized to the evidence and the time it took is logged.
-  const cdp = await page.context().newCDPSession(page);
-  const crashed = page.waitForEvent('crash', { timeout: 180_000 });
+  // This used to navigate to chrome://crash, and then send `Page.crash`. Both
+  // crash the renderer from inside, and a crashing process dumps core before
+  // it is gone - so the browser cannot report the crash until the dump is
+  // written. A renderer drawing this scene reserves about 1.3 TB of address
+  // space; locally, with core dumps on, that took the event from 12 ms to
+  // 17 s, and on CI, where the dump goes to a pipe that cannot skip the holes,
+  // it took minutes. The first attempt failed on every run and main went red
+  // (#386). SIGKILL dumps nothing, so the event depends on the browser alone,
+  // which is the thing this test is about.
+  const browserSession = await page.context().browser()!.newBrowserCDPSession();
+  const { processInfo } = (await browserSession.send('SystemInfo.getProcessInfo')) as {
+    processInfo: { type: string; id: number }[];
+  };
+  await browserSession.detach();
+  // Each test has its own context and each worker its own browser, so the
+  // renderers here are this page's (and at most a spare, which is harmless
+  // to kill).
+  const renderers = processInfo.filter((p) => p.type === 'renderer').map((p) => p.id);
+  expect(renderers.length, 'the browser reported no renderer process to kill').toBeGreaterThan(0);
+
+  const crashed = page.waitForEvent('crash', { timeout: 30_000 });
   const killStarted = Date.now();
-  let sent = 'Page.crash never answered, which is expected: the renderer died';
-  void cdp.send('Page.crash').then(
-    () => { sent = `Page.crash answered after ${Date.now() - killStarted} ms without crashing`; },
-    (error: Error) => { sent = `Page.crash rejected after ${Date.now() - killStarted} ms: ${error.message}`; },
-  );
-  await crashed.catch((error: Error) => {
-    throw new Error(`${error.message} (${sent}; round trip before the kill ${roundTripMs} ms)`);
-  });
-  console.log(
-    `[crash-detection] round trip before the kill ${roundTripMs} ms; crash event after ${Date.now() - killStarted} ms`,
-  );
+  for (const pid of renderers) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // Already gone - a spare renderer can exit on its own.
+    }
+  }
+  await crashed;
+  console.log(`[crash-detection] crash event ${Date.now() - killStarted} ms after SIGKILL`);
 
   // And the rule agrees, on the evidence a real run would hand it.
   const verdict = describeCrashEvidence({ crashEventFired, events: before });
