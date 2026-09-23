@@ -215,6 +215,9 @@ export const SCENE_CONFIG: SceneConfig = {
     species: [
       { type: 'willow', color: '#3a6840', trunkColor: '#5a4030' },
       { type: 'oak',    color: '#2a5838', trunkColor: '#4a3820' },
+      // The billboard foliage draws a conifer shape (#333); without a pine
+      // here a forest profile could only ever plant broadleaves.
+      { type: 'pine',   color: '#24472e', trunkColor: '#3a2a1a' },
     ],
   },
   architecture: {

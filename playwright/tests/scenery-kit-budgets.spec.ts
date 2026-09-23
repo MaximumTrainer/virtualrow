@@ -167,6 +167,75 @@ test('a 20 km route stays inside the geometry budget with the kit on', async ({ 
 });
 
 /**
+ * Issue #333 — a forest is a handful of draw calls.
+ *
+ * The bank trees were eleven meshes each, so the demo route could afford about
+ * forty of them and the hero camera looked down a lake between two lawns. The
+ * billboard foliage is one instanced mesh per species, and what that buys is
+ * asserted here on the renderer's own count: the demo row, frozen at the hero's
+ * frame, with the foliage on and then off. The difference is what the forest
+ * costs, and it must not grow with the forest.
+ *
+ * At `auto`, because that is the lowest tier with a shadow pass: each species
+ * is drawn once into the shadow map as well, so three species cost six.
+ */
+test('a forest of hundreds of trees costs a handful of draw calls', async ({ page }) => {
+  test.slow();
+
+  const measure = async (target: Page, foliage: boolean) => {
+    await target.addInitScript((on) => {
+      const w = window as unknown as Record<string, unknown>;
+      w.__VIRTUALROW_TELEMETRY = true;
+      w.__VIRTUALROW_PERFORMANCE_MODE = 'auto';
+      w.__VIRTUALROW_FOLIAGE = on;
+      // The same frame on both runs: the hero's, which is where the trees are.
+      w.__ROWER3D_FREEZE = { time: 12.5, progress: 0.3 };
+    }, foliage);
+    await target.setViewportSize({ width: 1280, height: 800 });
+    await target.goto('./');
+    await target.locator('.btn-try-demo').click();
+    await expect(target.locator('.activity-view')).toBeVisible({ timeout: 30_000 });
+
+    // Until the count stops moving: the route's chunks build progressively.
+    let previous = -1;
+    await expect
+      .poll(
+        async () => {
+          const current = await target.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawCalls ?? 0);
+          const settled = current > 0 && current === previous;
+          previous = current;
+          return settled;
+        },
+        { timeout: 90_000, intervals: [3_000] },
+      )
+      .toBe(true);
+
+    return target.evaluate(() => ({
+      drawCalls: window.__ROWER3D_RENDER_STATS!.drawCalls,
+      foliage: window.__ROWER3D_FOLIAGE ?? null,
+    }));
+  };
+
+  const bare = await page.context().newPage();
+  const without = await measure(bare, false);
+  await bare.close();
+  const withForest = await measure(page, true);
+
+  console.log(
+    `[foliage] ${withForest.foliage?.trees} trees in ${withForest.foliage?.meshes} meshes, ` +
+      `${withForest.foliage?.drawn} in sight: ${without.drawCalls} draw calls without, ` +
+      `${withForest.drawCalls} with`,
+  );
+
+  expect(without.foliage, 'the foliage was drawn with the foliage switched off').toBeNull();
+  expect(withForest.foliage!.trees, 'the demo route was not planted as a forest').toBeGreaterThanOrEqual(400);
+  expect(withForest.foliage!.drawn, 'no tree was in sight of the hero frame').toBeGreaterThan(0);
+  const cost = withForest.drawCalls - without.drawCalls;
+  expect(cost, `the forest cost ${cost} draw calls`).toBeGreaterThan(0);
+  expect(cost, `the forest cost ${cost} draw calls`).toBeLessThanOrEqual(6);
+});
+
+/**
  * The kit must not flood a static host.
  *
  * A demo row handed the loader all 58 models at once — 57 fetches in flight —

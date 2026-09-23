@@ -129,7 +129,7 @@ const readSceneryClearance = (page: Page) =>
   page.evaluate(() => window.__ROWER3D_SCENERY_CLEARANCE ?? null);
 
 /** Every path that places something beside the demo route. */
-const SCENERY_PATHS = ['landscape', 'scenery-left', 'structures'] as const;
+const SCENERY_PATHS = ['landscape', 'foliage', 'scenery-left', 'structures'] as const;
 
 test('nothing on the demo row stands in the river', async ({ page }) => {
   test.slow();
