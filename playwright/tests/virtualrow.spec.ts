@@ -1147,165 +1147,16 @@ test.describe('Simulated e2e route playback', () => {
   });
 });
 
-// ===========================================================================
-// Docs screenshots — captures in-game visuals published to docs/
-// ===========================================================================
-test.describe('docs screenshots', () => {
-  const docsDir = path.resolve(__dirname, '../../docs');
-
-  test.beforeEach(async ({ page }) => {
-    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
-    await page.addInitScript({ content: initScript });
-    await page.goto('./');
-    await waitForRowScreen(page);
-  });
-
-  test('captures and publishes screenshots for documentation', async ({ page }) => {
-    // 1. The Row screen — viewport only, so the selected route and its map fill
-    //    the frame (the route list is its own screen now, issue #219 R3).
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-route-selection.png'), fullPage: false });
-
-    // 2. Connect PM5 and HR
-    await page.waitForSelector('button:has-text("Connect PM5")');
-    await page.click('button:has-text("Connect PM5")');
-    await waitForPM5Connected(page);
-
-    await page.evaluate(() => {
-      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
-      const hrContainer = containers.find((c) =>
-        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
-      );
-      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
-    });
-    await waitForHRConnected(page);
-
-    // Select Willowbrook River route (fallback to first route if not found)
-    if (!(await selectRoute(page, 'Willowbrook River'))) {
-      await page.getByRole('button', { name: 'Routes', exact: true }).click();
-      await page.waitForSelector('.route-item', { timeout: 10_000 });
-      await page.locator('.route-item').first().click({ force: true });
-      await waitForRowScreen(page);
-    }
-
-    // Wait for start button to become enabled
-    await page.waitForFunction(
-      () => {
-        const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
-        return !!(btn && !btn.disabled);
-      },
-      { timeout: 10_000 },
-    );
-
-    // Start workout via evaluate to bypass 3D canvas pointer-event interception
-    await page.evaluate(() => {
-      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
-    });
-
-    await page.waitForFunction(
-      () => !!window.__workoutService?.getCurrentSession?.(),
-      { timeout: 5000 },
-    );
-
-    // Wait for React to render the activity view
-    await page.waitForSelector('.activity-view', { timeout: 10_000 });
-
-    // Wait for Three.js WebGL renderer to initialise (fires in Canvas onCreated callback)
-    await page.waitForFunction(
-      () => !!window.__ROWER3D_GPU_BACKEND,
-      { timeout: 15_000 },
-    );
-
-    // Inject PM5 + HR data three times with pauses so the animation loop runs multiple
-    // frames and the boat model has time to load and be positioned on the route.
-    for (let i = 1; i <= 3; i++) {
-      await dispatchGeneralStatus(page, 500 * i, 60 * i);
-      await dispatchAdditionalStatus(page, { elapsedSeconds: 60 * i, strokeRate: 26, heartRate: 148 });
-      await dispatchHeartRate(page, 148);
-      await page.waitForTimeout(600);
-    }
-
-    // Wait for the Rower3D animation loop to place the boat on the route
-    await page.waitForFunction(
-      () => (window.__ROWER3D_DISTANCE_M ?? 0) > 0,
-      { timeout: 5000 },
-    ).catch(() => { /* non-critical — screenshot taken regardless */ });
-
-    // Allow Two.js/Three.js additional frame time to render the scene
-    await page.waitForTimeout(1500);
-
-    // 3. Activity screen — viewport only so the 3D canvas is centre-stage
-    await page.screenshot({ path: path.join(docsDir, 'screenshot-activity.png'), fullPage: false });
-
-    // 4. 3D hero image — clip to the existing 3D canvas stage so the single scull
-    // is centre-stage without sidebar/stats overlays. Critically, we do NOT resize
-    // the canvas/page layout here: aggressive width/height overrides on the
-    // route stage trigger WebGL context loss in headless software-rendered
-    // Chromium and cause the GPU error boundary to render a blank fallback.
-    // Instead we hide the in-stage overlays only, then screenshot the
-    // .activity-route-stage element directly.
-    await page.evaluate(() => {
-      const style = document.createElement('style');
-      style.id = 'docs-hero-screenshot-style';
-      style.textContent = `
-        .activity-route-summary,
-        .activity-map-overlay {
-          display: none !important;
-        }
-      `;
-      document.head.appendChild(style);
-    });
-    // Wait until the overlay-hidden state is actually applied before capture
-    // (deterministic — avoids relying on a fixed timeout).
-    await page.waitForFunction(() => {
-      const summary = document.querySelector('.activity-route-summary');
-      const mapOverlay = document.querySelector('.activity-map-overlay');
-      const summaryHidden = !summary || window.getComputedStyle(summary).display === 'none';
-      const mapHidden = !mapOverlay || window.getComputedStyle(mapOverlay).display === 'none';
-      return summaryHidden && mapHidden;
-    }, { timeout: 2000 });
-    const routeStage = page.locator('.activity-route-stage');
-    // Use page.screenshot with clip to avoid locator stability-check timeouts caused
-    // by the Three.js animation loop on Ubuntu/Windows CI runners. This gives the same
-    // cropped output without waiting for pixel-level stabilisation.
-    const routeStageBbox = await routeStage.boundingBox({ timeout: 5000 }).catch(() => null);
-    // Draw a complete frame first. The renderer clears to a transparent buffer
-    // at the start of every render and a frame is slow here, so a screenshot
-    // taken on its own schedule usually lands in the gap between two frames —
-    // which is how an empty gradient shipped as the site's hero image while the
-    // scene was rendering sky, banks and water perfectly well (#261).
-    await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
-    // Check before publishing. This writes the site's hero image, and with no
-    // assertion in front of it a run with a broken scene would publish a
-    // picture of the context-lost banner - or, as happened, a picture of a
-    // river with one bank (#283, #290).
-    await expectSceneAlive(page, 'the scene about to be published as the hero');
-    await page.screenshot({
-      path: path.join(docsDir, 'screenshot-rower-3d.png'),
-      ...(routeStageBbox ? { clip: routeStageBbox } : {}),
-    });
-    await page.evaluate(() => {
-      document.getElementById('docs-hero-screenshot-style')?.remove();
-    });
-
-    // 5. End the live session and return to the routes view.
-    // (The History screenshot was dropped along with the History view — AUTH-1.)
-    await page.evaluate(() => {
-      const svc = window.__workoutService;
-      if (svc?.endSession) svc.endSession();
-    });
-    await page.waitForSelector('.view-container--routes', { timeout: 5000 });
-  });
-});
-
 test.describe('docs screenshots — other route heroes', () => {
   const docsDir = path.resolve(__dirname, '../../docs');
 
   // -------------------------------------------------------------------------
   // Additional route hero screenshots — capture the 3D stage on each of the
   // non-Willowbrook routes so the website can showcase the visual variety.
-  // The hero capture for Willowbrook River is produced by the main docs
-  // screenshots test above (`screenshot-rower-3d.png`); this test produces
-  // the companion shots used in the `See every screen` grid.
+  // The Willowbrook River hero (`screenshot-rower-3d.png`) is a visual
+  // baseline now, compared rather than written, in
+  // visual/docs-screenshots.spec.ts (#362); this test produces the companion
+  // shots used in the `See every screen` grid.
   //
   // This test lives in its own describe so we can install a network
   // interceptor for the external drei cloud asset BEFORE any navigation.

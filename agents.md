@@ -161,6 +161,9 @@ See §6 for the full gate and its escape hatches.
 
 **Visual baselines (Playwright, #340):**
 - Live in `playwright/tests/visual/`, with their PNGs in `playwright/tests/visual/__snapshots__/`.
+- The exception is `docs-screenshots.spec.ts` (#362): its baselines are the published
+  hero, activity and route-selection PNGs under `docs/`, via the `docs` project's snapshot
+  path, so the published pictures change only by the label workflow below.
 - Excluded from every other config, so the verification matrix does not run them.
 - Recording and committing are one step. The labelled job re-records, then fails
   if that changed a committed baseline — because the comparison after it runs
