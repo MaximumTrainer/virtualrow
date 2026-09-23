@@ -31,8 +31,14 @@ describe('makeFoliageBillboardMaterial', () => {
   const map = new THREE.Texture();
   const material = makeFoliageBillboardMaterial({ map, color: '#3a6840' }, uTime);
 
-  it('is a standard material cut out by its texture', () => {
-    expect(material).toBeInstanceOf(THREE.MeshStandardMaterial);
+  it('is a Lambert material cut out by its texture', () => {
+    // Lambert, not PBR. A billboard's shading is painted into its texture, so
+    // the physical model buys nothing visible - and it is what the forest
+    // cost. Measured on the demo row at the low tier (#333, #391): windows
+    // p50 frame 345 ms without foliage, 458 ms with standard foliage, 381 ms
+    // with Lambert; ubuntu 228 / 288 / 241.
+    expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(material).not.toBeInstanceOf(THREE.MeshStandardMaterial);
     expect(material.map).toBe(map);
     expect(material.alphaTest).toBeGreaterThanOrEqual(0.5);
     // Front faces only: the geometry is wound both ways, and a double-sided

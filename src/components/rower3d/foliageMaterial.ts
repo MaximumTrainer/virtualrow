@@ -66,18 +66,21 @@ export interface FoliageBillboardParameters {
  * both windings of each quad (`createFoliageGeometry`): as a double-sided
  * material, three flips the normal of a face seen from behind, and these
  * normals point up and out, so a tree seen from its back went black.
+ *
+ * Lambert rather than standard: the leaf mass, its light side and its dark
+ * side are painted into the texture and tinted per tree, so a physically based
+ * model adds nothing a rower can see - and on the software rasteriser CI draws
+ * with, it was most of what the forest cost (#391).
  */
 export function makeFoliageBillboardMaterial(
   { map, color }: FoliageBillboardParameters,
   uTime: THREE.IUniform<number>,
-): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({
+): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({
     map,
     color,
     alphaTest: 0.5,
     side: THREE.FrontSide,
-    roughness: 0.9,
-    metalness: 0,
   });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;

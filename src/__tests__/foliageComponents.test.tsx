@@ -88,7 +88,7 @@ describe('BankFoliage', () => {
     const scene = await mount(<BankFoliage curve={straightRoute(4_000)} viewDistance={600} />);
 
     for (const mesh of scene.foliage()) {
-      const material = mesh.material as THREE.MeshStandardMaterial;
+      const material = mesh.material as THREE.MeshLambertMaterial;
       const type = mesh.name.slice(BANK_FOLIAGE_NAME.length + 1);
       const entry = SCENE_CONFIG.trees.species.find((s) => s.type === type)!;
       expect(`#${material.color.getHexString()}`).toBe(entry.color);

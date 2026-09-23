@@ -50,7 +50,7 @@ export interface BankFoliageProps {
 interface SpeciesParts {
   name: string;
   geometry: THREE.BufferGeometry;
-  material: THREE.MeshStandardMaterial;
+  material: THREE.MeshLambertMaterial;
 }
 
 /**
