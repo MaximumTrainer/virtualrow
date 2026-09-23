@@ -125,7 +125,11 @@ export default defineConfig({
         // of them; there are twenty now, 15 covered. A per-file 100 is a floor
         // that any new branch breaks, which is what happened here - 70 is the
         // reading rounded down with room to move.
-        '**/skyComponents.tsx': { lines: 88, statements: 88, branches: 70, functions: 100 },
+        // #364 then took out the horizon's switch on a theme's silhouette
+        // type, of which only the hills could be reached: 89.04 / 77.27 on
+        // main became 98.38 / 100. A point under the lines, and branches held
+        // back for the same reason as before.
+        '**/skyComponents.tsx': { lines: 97, statements: 97, branches: 90, functions: 100 },
       },
     },
   },

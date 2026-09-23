@@ -54,6 +54,7 @@ const { renderScene, demoRoute } = await import('./sceneTestRenderer');
 const { BOAT_GROUP_NAME } = await import('../components/rower3d/constants');
 const { fogFor } = await import('../components/rower3d/fogPlan');
 const { GROUND_PLANE_NAME } = await import('../components/rower3d/bankComponents');
+const { SCENERY_MODELS_NAME } = await import('../components/rower3d/sceneryModels');
 
 /** 2:00/500m — 4.17 m/s, and a pace a test can do arithmetic on. */
 const PACE_S_PER_500 = 120;
@@ -79,9 +80,9 @@ describe('RowerScene', () => {
     await scene.unmount();
   });
 
-  // The one surviving theme dresses the scene, on a route named for it or
-  // not: #361 retired the other five, so a route's name no longer decides
-  // what it looks like.
+  // One art direction dresses every scene, whatever the route is called:
+  // #361 retired the other five themes and #364 the choosing between them,
+  // so a route's name no longer decides what it looks like.
   it('dresses the scene whatever the route is called', async () => {
     const scene = await renderScene({ route: { ...demoRoute, name: 'Leviathan Reach' } });
 
@@ -92,21 +93,49 @@ describe('RowerScene', () => {
     await scene.unmount();
   });
 
-  // Issue #325 — the fog the theme authored has to reach the renderer, not
+  // Issue #325 — the fog the config authored has to reach the renderer, not
   // just be returned by a helper. This is the seam where it used to stop: the
-  // numbers existed in the theme table for the whole life of the project and
+  // numbers existed in the config for the whole life of the project and
   // nothing ever mounted them.
-  it('fogs the scene with the distance the theme authored', async () => {
+  it('fogs the scene with the distance the config authored', async () => {
     const scene = await renderScene({ performanceMode: 'low' });
     // `instance` is typed as the base Object3D; the root of an R3F tree is a Scene.
     const { fog } = scene.renderer.scene.instance as unknown as THREE.Scene;
 
     expect(fog, 'the scene has no fog').toBeTruthy();
     const linear = fog as THREE.Fog;
-    expect(linear.near).toBe(fogFor('willowbrook').near);
-    expect(linear.far).toBe(fogFor('willowbrook').far);
+    expect(linear.near).toBe(fogFor().near);
+    expect(linear.far).toBe(fogFor().far);
+    // #364: the numbers the refactor must not move.
+    expect([linear.near, linear.far]).toEqual([80, 550]);
 
     await scene.unmount();
+  });
+
+  // Issue #364 — the GLB scenery used to be gated on the route's theme as
+  // well, a condition that could no longer be false. What is left of the gate
+  // is the tier and the switch, and both still have to close it.
+  describe('GLB scenery', () => {
+    const mountedScenery = (scene: Awaited<ReturnType<typeof renderScene>>) =>
+      scene.objects().filter((o) => o.name === SCENERY_MODELS_NAME);
+
+    it('is not mounted on the low tier, even when switched on', async () => {
+      const scene = await renderScene({ performanceMode: 'low', sceneryEnabled: true });
+      expect(mountedScenery(scene)).toHaveLength(0);
+      await scene.unmount();
+    });
+
+    it('is mounted on the auto tier when switched on', async () => {
+      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: true });
+      expect(mountedScenery(scene).length).toBeGreaterThan(0);
+      await scene.unmount();
+    });
+
+    it('is not mounted on the auto tier when switched off', async () => {
+      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: false });
+      expect(mountedScenery(scene)).toHaveLength(0);
+      await scene.unmount();
+    });
   });
 
   // Issue #334 — there is ground under the world.

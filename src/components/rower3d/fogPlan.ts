@@ -1,9 +1,9 @@
-import { getThemeConfig, type RouteTheme } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 
 /**
  * How far a rower can see, and where the world stops being drawn (#325).
  *
- * The theme table has carried `fogColor`, `fogNear` and `fogFar` since it was
+ * The scene config has carried `fogColor`, `fogNear` and `fogFar` since it was
  * written and nothing has ever read them, so the water strip simply ended:
  * `geometryChunks.ts` records that the cut used to be hidden by `fogExp2` and
  * has been bare since, and #321 had to hold the cull out at seven kilometres
@@ -24,8 +24,8 @@ export interface FogPlan {
   far: number;
 }
 
-export const fogFor = (theme: RouteTheme): FogPlan => {
-  const { fogColor, fogNear, fogFar } = getThemeConfig(theme).atmosphere;
+export const fogFor = (): FogPlan => {
+  const { fogColor, fogNear, fogFar } = SCENE_CONFIG.atmosphere;
   return { color: fogColor, near: fogNear, far: fogFar };
 };
 
@@ -36,4 +36,4 @@ export const fogFor = (theme: RouteTheme): FogPlan => {
  * culled on its bounding sphere and appears at its near edge: cutting exactly
  * at `far` would pop a chunk in while part of it was still short of full fog.
  */
-export const chunkViewDistanceFor = (theme: RouteTheme): number => fogFor(theme).far * 1.1;
+export const chunkViewDistanceFor = (): number => fogFor().far * 1.1;

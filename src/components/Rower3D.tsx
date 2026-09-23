@@ -27,8 +27,7 @@ import {
   getCurveDistances,
   distanceToProgress,
 } from './rower3d/curve';
-import { getThemeConfig, themeUsesGlbScenery } from './rower3d/themeConfig';
-import type { RouteTheme } from './rower3d/themeConfig';
+import { SCENE_CONFIG } from './rower3d/themeConfig';
 import { AnimationProvider } from './rower3d/AnimationContext';
 import { RiverGuides } from './rower3d/RiverGuides';
 import {
@@ -80,7 +79,6 @@ import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatC
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
 import { frozenClock, frozenProgress, frozenVelocity, readSceneFreeze } from './rower3d/sceneFreeze';
-import { detectRouteTheme } from './rower3d/routeTheme';
 import { fogFor, chunkViewDistanceFor } from './rower3d/fogPlan';
 import {
   LOOK_AT_TAU,
@@ -131,15 +129,14 @@ export interface Rower3DProps {
 }
 
 // ============================================================================
-// THEMED RIVERBANKS - Ground color varies by route theme
+// THEMED RIVERBANKS - Flat banks for a route with no curve to build from
 // ============================================================================
-const ThemedRiverbanks: React.FC<{
+const FlatRiverbanks: React.FC<{
   followRef: React.RefObject<THREE.Vector3 | null>;
-  theme: RouteTheme;
-}> = ({ followRef, theme }) => {
+}> = ({ followRef }) => {
   const banksRef = useRef<THREE.Group>(null);
   useFollowZ(banksRef, followRef);
-  const bankColor = useMemo(() => getThemeConfig(theme).bank.flatColor, [theme]);
+  const bankColor = SCENE_CONFIG.bank.flatColor;
   
   return (
     <group ref={banksRef} position={[0, -0.5, 0]}>
@@ -208,7 +205,6 @@ export const RowerScene: React.FC<
 
   useEffect(() => clearRenderStats, []);
 
-  const routeTheme = useMemo(() => detectRouteTheme(route), [route]);
   // A route that states its own progression dresses from that, not from a
   // land-use query over its coordinates (#232).
   // Only the crew in the boat is worth downloading.
@@ -219,7 +215,6 @@ export const RowerScene: React.FC<
   // Which regional building kit dresses the banks, from the route's own
   // coordinates — no extra network call (#232).
   const sceneryRegion = useMemo(() => resolveRegion(route.coordinates), [route.coordinates]);
-  const themeConfig = useMemo(() => getThemeConfig(routeTheme), [routeTheme]);
   
   const routeCurve = useMemo(() => {
     markRouteLoadStart();
@@ -335,8 +330,8 @@ export const RowerScene: React.FC<
     // a value written on it by design — the effect stack writes the same field
     // every frame.
     // eslint-disable-next-line react-hooks/immutability
-    gl.toneMappingExposure = sceneExposure(routeTheme, 0);
-  }, [gl, routeTheme]);
+    gl.toneMappingExposure = sceneExposure(0);
+  }, [gl]);
 
   useFrame((state, delta) => {
     markFirstFrame();
@@ -670,31 +665,31 @@ export const RowerScene: React.FC<
    * landscape of their own. They were retired in #361 and this is what the one
    * survivor always did.
    */
-  const renderThemedLandscape = () => (
+  const renderFlatLandscape = () => (
     <>
       <ProceduralTerrain side="left" followRef={sceneryFollowRef} enrichment={enrichment} />
       <ProceduralTerrain side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
-      <PineTrees side="left" followRef={sceneryFollowRef} theme={routeTheme} enrichment={enrichment} />
-      <PineTrees side="right" followRef={sceneryFollowRef} theme={routeTheme} enrichment={enrichment} />
-      {themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
+      <PineTrees side="left" followRef={sceneryFollowRef} enrichment={enrichment} />
+      <PineTrees side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
+      {performanceMode !== 'low' && sceneryOn && (
         <Suspense fallback={null}>
-          <SceneryModels side="left" positionRef={boatPositionRef} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
-          <SceneryModels side="right" positionRef={boatPositionRef} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+          <SceneryModels side="left" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
+          <SceneryModels side="right" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
         </Suspense>
       )}
     </>
   );
 
   const sunLightPos = useMemo((): [number, number, number] => {
-    const elevRad = (themeConfig.lighting.sunElevation * Math.PI) / 180;
-    const azRad   = (themeConfig.lighting.sunAzimuth   * Math.PI) / 180;
+    const elevRad = (SCENE_CONFIG.lighting.sunElevation * Math.PI) / 180;
+    const azRad   = (SCENE_CONFIG.lighting.sunAzimuth   * Math.PI) / 180;
     const scale   = 200;
     return [
       Math.cos(elevRad) * Math.sin(azRad) * scale,
       Math.sin(elevRad) * scale,
       Math.cos(elevRad) * Math.cos(azRad) * scale,
     ];
-  }, [themeConfig.lighting.sunElevation, themeConfig.lighting.sunAzimuth]);
+  }, []);
 
   // State, not a ref: the god-rays pass dereferences the mesh every frame, and
   // a ref object is truthy before its mesh exists. A callback ref re-renders
@@ -702,12 +697,12 @@ export const RowerScene: React.FC<
   // at all (#233).
   const [sunMesh, setSunMesh] = useState<THREE.Mesh | null>(null);
   const godRaysSunMesh = godRaysSun(performanceMode, sunMesh);
-  const fog = useMemo(() => fogFor(routeTheme), [routeTheme]);
+  const fog = useMemo(() => fogFor(), []);
 
   return (
     <AnimationProvider>
       
-      <PhotorealisticSkydome theme={routeTheme} positionRef={boatPositionRef} performanceMode={performanceMode} />
+      <PhotorealisticSkydome positionRef={boatPositionRef} performanceMode={performanceMode} />
       
       {/* Aerial perspective, and the thing that lets the world end.
           Linear rather than exponential: the chunk cull is a hard distance, so
@@ -721,8 +716,8 @@ export const RowerScene: React.FC<
       
       <directionalLight
         position={sunLightPos}
-        intensity={themeConfig.lighting.sunIntensity}
-        color={themeConfig.lighting.sunColor}
+        intensity={SCENE_CONFIG.lighting.sunIntensity}
+        color={SCENE_CONFIG.lighting.sunColor}
         castShadow={performanceMode !== 'low'}
         shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
         shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
@@ -735,38 +730,38 @@ export const RowerScene: React.FC<
       />
       
       <ambientLight 
-        intensity={themeConfig.lighting.ambientIntensity}
-        color={themeConfig.lighting.ambientColor}
+        intensity={SCENE_CONFIG.lighting.ambientIntensity}
+        color={SCENE_CONFIG.lighting.ambientColor}
       />
       
       <directionalLight
         position={[-sunLightPos[0] * 0.6, 50, -sunLightPos[2] * 0.5]}
-        intensity={themeConfig.lighting.fillIntensity}
-        color={themeConfig.lighting.fillColor}
+        intensity={SCENE_CONFIG.lighting.fillIntensity}
+        color={SCENE_CONFIG.lighting.fillColor}
       />
 
       {!IS_TEST_MODE && performanceMode === 'high' && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
-          <meshBasicMaterial color={themeConfig.lighting.sunColor} />
+          <meshBasicMaterial color={SCENE_CONFIG.lighting.sunColor} />
         </mesh>
       )}
       
-      <PMREMEnvironment theme={routeTheme} />
+      <PMREMEnvironment />
       
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} theme={routeTheme} enrichment={enrichment} performanceMode={performanceMode} />
+        <CurvedWaterChannel curve={routeCurve} enrichment={enrichment} performanceMode={performanceMode} />
       ) : (
-        <PhotorealisticWater followRef={sceneryFollowRef} theme={routeTheme} performanceMode={performanceMode} />
+        <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && !routeCurve && (
-        <WaterReflectionPlane followRef={sceneryFollowRef} theme={routeTheme} />
+        <WaterReflectionPlane followRef={sceneryFollowRef} />
       )}
       
       {routeCurve && (
         <>
-          <CurvedRiverbanks curve={routeCurve} theme={routeTheme} enrichment={enrichment} />
+          <CurvedRiverbanks curve={routeCurve} enrichment={enrichment} />
           <Shoreline curve={routeCurve} enrichment={enrichment} />
         </>
       )}
@@ -779,35 +774,33 @@ export const RowerScene: React.FC<
       )}
       
       {!routeCurve && (
-        <ThemedRiverbanks followRef={sceneryFollowRef} theme={routeTheme} />
+        <FlatRiverbanks followRef={sceneryFollowRef} />
       )}
       
       {/* Behind everything, whether or not there is a curve to build banks
           from: it is the absence of a hole, not part of the landscape (#334). */}
-      <GroundPlane curve={routeCurve} theme={routeTheme} />
+      <GroundPlane curve={routeCurve} />
 
       {routeCurve ? (
         <CurvedLandscapeElements
           curve={routeCurve}
-          theme={routeTheme}
           positionRef={boatPositionRef}
           chunkProgress={chunkProgress}
           mountProgress={sceneryMount.progress}
-          viewDistance={chunkViewDistanceFor(routeTheme)}
+          viewDistance={chunkViewDistanceFor()}
           enrichment={enrichment}
           track={sceneryTrack}
         />
       ) : (
-        renderThemedLandscape()
+        renderFlatLandscape()
       )}
 
-      {routeCurve && themeUsesGlbScenery(routeTheme) && performanceMode !== 'low' && sceneryOn && (
+      {routeCurve && performanceMode !== 'low' && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}
             positionRef={boatPositionRef}
             mountProgress={sceneryMount.progress}
-            theme={routeTheme}
             enrichment={enrichment}
             performanceMode={performanceMode}
             track={sceneryTrack}
@@ -855,7 +848,7 @@ export const RowerScene: React.FC<
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
           velocityRef={velocityRef}
-          foamColor={themeConfig.water.foamColor}
+          foamColor={SCENE_CONFIG.water.foamColor}
         />
       )}
 
@@ -864,8 +857,8 @@ export const RowerScene: React.FC<
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
           strokePhase={strokePhase}
-          foamColor={themeConfig.water.foamColor}
-          foamIntensity={themeConfig.water.foamIntensity}
+          foamColor={SCENE_CONFIG.water.foamColor}
+          foamIntensity={SCENE_CONFIG.water.foamIntensity}
         />
       )}
 
@@ -899,7 +892,6 @@ export const RowerScene: React.FC<
           <DynamicPostFx
             velocityRef={velocityRef}
             performanceMode={performanceMode}
-            theme={routeTheme}
             sunMesh={godRaysSunMesh}
             boatPositionRef={boatPositionRef}
           />
@@ -911,11 +903,11 @@ export const RowerScene: React.FC<
       )}
 
       {!IS_TEST_MODE && performanceMode !== 'low' && (
-        <GroundCover followRef={sceneryFollowRef} theme={routeTheme} performanceMode={performanceMode} enrichment={enrichment} />
+        <GroundCover followRef={sceneryFollowRef} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 
       {!IS_TEST_MODE && (
-        <HorizonSilhouette positionRef={boatPositionRef} theme={routeTheme} />
+        <HorizonSilhouette positionRef={boatPositionRef} />
       )}
     </AnimationProvider>
   );
@@ -1083,7 +1075,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
       // The starting value only. Which stage grades the frame is decided by the
       // effect plan and applied in DynamicPostFx (#327).
       toneMapping: THREE.ACESFilmicToneMapping,
-      // Set from the theme below; the initial value only covers the first
+      // Set from the scene config below; the initial value only covers the first
       // frames before the effect runs.
       toneMappingExposure: 0.55,
     }),
@@ -1142,7 +1134,7 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             // Whatever the world does not cover is the distance, so it is the
             // colour the distance fades to (#334, #325).
-            scene.background = new THREE.Color(fogFor(detectRouteTheme(props.route)).color);
+            scene.background = new THREE.Color(fogFor().color);
             try {
               window.__ROWER3D_MAX_ANISOTROPY = gl.capabilities.getMaxAnisotropy();
             } catch { /* intentional */ }

@@ -20,7 +20,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
-import type { RouteTheme } from './themeConfig';
 import type { PerformanceMode } from './constants';
 import {
   buildTerrainProfile,
@@ -81,7 +80,6 @@ interface SceneryModelsProps {
    * across a route rather than three thousand.
    */
   mountProgress?: number;
-  theme?: RouteTheme;
   enrichment?: RouteEnrichmentData | null;
   terrainY?: number;
   performanceMode?: PerformanceMode;
@@ -108,7 +106,6 @@ const SceneryModelsChunk: React.FC<
   boatZ = 0,
   positionRef = null,
   mountProgress = 0,
-  theme = 'willowbrook',
   enrichment,
   terrainY = 0,
   performanceMode = 'high',
@@ -178,7 +175,7 @@ const SceneryModelsChunk: React.FC<
   }, [ready, gltfs]);
 
   const budget = budgetFor(performanceMode);
-  const viewDistance = chunkViewDistanceFor(theme);
+  const viewDistance = chunkViewDistanceFor();
 
   const placements = useMemo<Placement[]>(
     () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side, track }),
@@ -263,7 +260,7 @@ const SceneryModelsChunk: React.FC<
   const groupPos: [number, number, number] = curve ? [0, 0, 0] : [0, terrainY, boatZ];
 
   return (
-    <group position={groupPos}>
+    <group name={SCENERY_MODELS_NAME} position={groupPos}>
       {instances.map(({ key, obj, p }, index) => (
         <group
           key={key}
@@ -283,6 +280,9 @@ const SceneryModelsChunk: React.FC<
     </group>
   );
 };
+
+/** The name on each side's scenery group, so a test can ask whether it is mounted (#364). */
+export const SCENERY_MODELS_NAME = 'SceneryModels';
 
 /** Fetches in flight at once — small enough that a static host stays friendly. */
 export const SCENERY_LOAD_CONCURRENCY = 3;

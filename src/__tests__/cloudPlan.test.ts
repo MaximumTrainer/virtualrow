@@ -1,47 +1,47 @@
 import { describe, it, expect } from 'vitest';
 import { cloudsFor } from '../components/rower3d/cloudPlan';
-import { getThemeConfig } from '../components/rower3d/themeConfig';
+import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
 
 /**
  * Issue #326 — what the sky costs, per tier.
  *
  * Every cloud is a drei `Cloud`, and each is rebuilt per instance from the
- * theme's `segments` — up to forty sprites apiece. Eight of those is three
+ * config's `segments` — up to forty sprites apiece. Eight of those is three
  * hundred and twenty transparent quads over the whole sky, sorted and blended
  * every frame, on hardware the low tier exists because it could not manage
  * shadows.
  *
- * The tier decides, not the theme. A theme says what the sky looks like where
+ * The tier decides, not the authored. A theme says what the sky looks like where
  * there is room for it.
  */
-const theme = getThemeConfig('willowbrook').clouds;
+const authored = SCENE_CONFIG.clouds;
 
 describe('cloudsFor', () => {
   it('draws no clouds at all on the low tier', () => {
-    expect(cloudsFor('low', 'willowbrook').count).toBe(0);
+    expect(cloudsFor('low').count).toBe(0);
   });
 
   it('keeps auto to a handful', () => {
-    expect(cloudsFor('auto', 'willowbrook').count).toBeLessThanOrEqual(6);
+    expect(cloudsFor('auto').count).toBeLessThanOrEqual(6);
   });
 
-  it('never asks for more than the theme authored', () => {
+  it('never asks for more than the config authored', () => {
     for (const mode of ['low', 'auto', 'high'] as const) {
-      expect(cloudsFor(mode, 'willowbrook').count).toBeLessThanOrEqual(theme.count);
+      expect(cloudsFor(mode).count).toBeLessThanOrEqual(authored.count);
     }
   });
 
   // The segment count is the per-cloud cost, and it is the one that multiplies.
-  it('spends the theme’s detail only where there is room for it', () => {
-    expect(cloudsFor('high', 'willowbrook').segments).toBe(theme.segments);
-    expect(cloudsFor('auto', 'willowbrook').segments).toBeLessThan(theme.segments);
+  it('spends the authored detail only where there is room for it', () => {
+    expect(cloudsFor('high').segments).toBe(authored.segments);
+    expect(cloudsFor('auto').segments).toBeLessThan(authored.segments);
   });
 
-  it('gives back the rest of the theme untouched', () => {
-    const plan = cloudsFor('auto', 'willowbrook');
+  it('gives back the rest of the config untouched', () => {
+    const plan = cloudsFor('auto');
 
-    expect(plan.color).toBe(theme.color);
-    expect(plan.opacity).toBe(theme.opacity);
-    expect(plan.speed).toBe(theme.speed);
+    expect(plan.color).toBe(authored.color);
+    expect(plan.opacity).toBe(authored.opacity);
+    expect(plan.speed).toBe(authored.speed);
   });
 });

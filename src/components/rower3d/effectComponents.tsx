@@ -9,9 +9,9 @@ import { canInitialisePostProcessing } from './postProcessingGuard';
 import { sceneExposure } from './sceneExposure';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
-import { getThemeConfig } from './themeConfig';
+import { SCENE_CONFIG } from './themeConfig';
 import { recordComposerMounted } from './composerState';
-import type { RouteTheme, ColorGradingConfig } from './themeConfig';
+import type { ColorGradingConfig } from './themeConfig';
 import { createCausticsTexture } from './helpers';
 import {
   FOAM_RING_LIFETIME_SECONDS,
@@ -206,7 +206,7 @@ export const BladeEntryFoam: React.FC<{
 // PMREM ENVIRONMENT — generates env map from the procedural skydome via
 // PMREMGenerator (#121).
 // ============================================================================
-export const PMREMEnvironment: React.FC<{ theme: RouteTheme }> = ({ theme }) => {
+export const PMREMEnvironment: React.FC = () => {
   const { gl, scene } = useThree();
   useEffect(() => {
     if (IS_TEST_MODE) return;
@@ -224,7 +224,7 @@ export const PMREMEnvironment: React.FC<{ theme: RouteTheme }> = ({ theme }) => 
       pmremGen.dispose();
       scene.environment = null;
     };
-  }, [gl, scene, theme]);
+  }, [gl, scene]);
   return null;
 };
 
@@ -448,7 +448,6 @@ export const CausticsLight: React.FC<{
 export const DynamicPostFx: React.FC<{
   velocityRef: React.MutableRefObject<number>;
   performanceMode?: PerformanceMode;
-  theme: RouteTheme;
   /**
    * The sun mesh itself, not a ref to it: GodRaysEffect dereferences the light
    * source every frame, and a ref is truthy before its mesh exists (#233).
@@ -456,7 +455,7 @@ export const DynamicPostFx: React.FC<{
   sunMesh?: THREE.Mesh | null;
   /** Where the boat is, so depth of field can focus on it rather than on a fixed distance. */
   boatPositionRef: React.MutableRefObject<THREE.Vector3>;
-}> = ({ velocityRef, performanceMode, theme, sunMesh, boatPositionRef }) => {
+}> = ({ velocityRef, performanceMode, sunMesh, boatPositionRef }) => {
   const gl = useThree((state) => state.gl);
   const caEffect = useMemo(() => new ChromaticAberrationEffect({ offset: new THREE.Vector2(0, 0), radialModulation: false, modulationOffset: 0 }), []);
   useEffect(() => () => caEffect.dispose(), [caEffect]);
@@ -482,7 +481,7 @@ export const DynamicPostFx: React.FC<{
     }
   }, [canPostProcess]);
 
-  const colorGrading: ColorGradingConfig = useMemo(() => getThemeConfig(theme).colorGrading, [theme]);
+  const colorGrading: ColorGradingConfig = SCENE_CONFIG.colorGrading;
 
   const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
 
@@ -535,9 +534,9 @@ export const DynamicPostFx: React.FC<{
     const aberration = Math.min(vel / 8.0, 1.0) * 0.0018;
     caEffect.offset.set(aberration, aberration * 0.6);
 
-    // Relative to the exposure the theme authored, not to a hardcoded 1.0 —
+    // Relative to the exposure the config authored, not to a hardcoded 1.0 —
     // which is what rendered the sky, and the water reflecting it, white (#269).
-    const targetExposure = sceneExposure(theme, vel);
+    const targetExposure = sceneExposure(vel);
     gl.toneMappingExposure = THREE.MathUtils.lerp(gl.toneMappingExposure, targetExposure, 0.015);
   });
 
