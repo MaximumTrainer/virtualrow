@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useFollowPoint } from './followBoat';
 import { withinMountRange } from './visibilityCull';
-import { LANDSCAPE_OFFSET, RENDER_CONFIG } from './constants';
+import { RENDER_CONFIG } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG } from './themeConfig';
@@ -11,9 +11,7 @@ import { createBankTexture } from './bankTexture';
 import { makeSwayFoliageMaterial } from './foliageMaterial';
 import {
   buildTerrainProfile,
-  getTerrainReliefForProgress,
   type RouteEnrichmentData,
-  type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
@@ -22,8 +20,10 @@ import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } f
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
-import { getSegmentSceneryProfile, BASE_BUILDING_HEIGHT } from './segmentScenery';
+import { BASE_BUILDING_HEIGHT } from './segmentScenery';
 import type { SceneryTrack } from './sceneryTrack';
+import { landscapeStanding, layoutLandscape } from './landscapeLayout';
+import { landClearance, publishSceneryClearance } from './sceneryClearance';
 
 // ============================================================================
 // HD CURVED RIVERBANKS - Follows GPS path with realistic terrain materials
@@ -258,38 +258,15 @@ interface CurvedLandscapeProps {
   track?: SceneryTrack | null;
 }
 
-const getSegmentStyle = (
-  enrichment: RouteEnrichmentData | null | undefined,
-  progress: number,
-) => {
-  const segmentProfiles = enrichment?.segmentProfiles;
-  if (!segmentProfiles || segmentProfiles.length === 0) {
-    return {
-      treeDensity: 0.45,
-      vegetationDensity: 0.5,
-      buildingDensity: 0.12,
-      objectScale: 1,
-    };
-  }
-
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const lastIndex = segmentProfiles.length - 1;
-  const scaledIndex = clampedProgress * lastIndex;
-  const lowerIndex = Math.floor(scaledIndex);
-  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
-  const blend = scaledIndex - lowerIndex;
-  const lower = segmentProfiles[lowerIndex];
-  const upper = segmentProfiles[upperIndex];
-
-  return {
-    treeDensity: lower.treeDensity + (upper.treeDensity - lower.treeDensity) * blend,
-    vegetationDensity:
-      lower.vegetationDensity +
-      (upper.vegetationDensity - lower.vegetationDensity) * blend,
-    buildingDensity:
-      lower.buildingDensity + (upper.buildingDensity - lower.buildingDensity) * blend,
-    objectScale: lower.objectScale + (upper.objectScale - lower.objectScale) * blend,
-  };
+/**
+ * Move the foliage sway on to `time`.
+ *
+ * A uniform is a handle the shader reads each frame, written in place by
+ * design, so the write lives out here rather than inside the component where
+ * the compiler would read it as a mutation of render state.
+ */
+const advanceSway = (uniform: THREE.IUniform<number>, time: number) => {
+  uniform.value = time;
 };
 
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
@@ -302,75 +279,20 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   track = null,
 }) => {
   const elementsGroupRef = useRef<THREE.Group>(null);
-  const landscapeElements = useMemo(() => {
-    if (!curve) return { leftElements: [], rightElements: [] };
-    
-    const leftElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number; sceneryProfile: SceneryProfile }> = [];
-    const rightElements: Array<{ position: THREE.Vector3; type: 'tree' | 'mountain' | 'building'; scale: number; rotation: number; sceneryProfile: SceneryProfile }> = [];
-    
-    const elementSpacing = 0.02;
-    const minOffset = LANDSCAPE_OFFSET;
-    // Same terrain the banks are built from, so trees and buildings stand on
-    // the raised ground rather than being buried in it (#202).
-    const terrain = buildTerrainProfile(enrichment?.elevations);
-    
-    let elemIdx = 0;
-    for (let t = 0; t < 1; t += elementSpacing) {
-      const point = curve.getPointAt(t);
-      const tangent = curve.getTangentAt(t).normalize();
-      const up = new THREE.Vector3(0, 1, 0);
-      const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
-      const segmentStyle = getSegmentStyle(enrichment, t);
-      const sceneryProfile = getSegmentSceneryProfile(enrichment, t, track);
-      
-      const leftOffset =
-        minOffset +
-        seededRandom(elemIdx * 7 + 1) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
-      const rightOffset =
-        minOffset +
-        seededRandom(elemIdx * 7 + 2) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
-      
-      const getElementType = (seedOffset: number): 'tree' | 'mountain' | 'building' => {
-        const rand = seededRandom(elemIdx * 7 + seedOffset);
-        const buildingThreshold = Math.min(0.8, segmentStyle.buildingDensity * 0.85);
-        const treeThreshold = Math.min(
-          0.98,
-          buildingThreshold + Math.max(0.18, segmentStyle.treeDensity * 0.75),
-        );
-        if (rand < buildingThreshold) return 'building';
-        if (rand < treeThreshold) return 'tree';
-        return 'mountain';
-      };
-      
-      const placementChance = 0.1 + segmentStyle.treeDensity * 0.55 + segmentStyle.vegetationDensity * 0.2;
-      if (seededRandom(elemIdx * 7 + 4) < placementChance) {
-        const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
-        leftPos.y = getTerrainReliefForProgress(terrain, t);
-        leftElements.push({
-          position: leftPos,
-          type: getElementType(3),
-          scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * segmentStyle.objectScale,
-          rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2,
-          sceneryProfile,
-        });
-      }
-      
-      if (seededRandom(elemIdx * 7 + 6) < placementChance) {
-        const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
-        rightPos.y = getTerrainReliefForProgress(terrain, t);
-        rightElements.push({
-          position: rightPos,
-          type: getElementType(7),
-          scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * segmentStyle.objectScale,
-          rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2,
-          sceneryProfile,
-        });
-      }
-      elemIdx++;
-    }
-    
-    return { leftElements, rightElements };
-  }, [curve, enrichment, track]);
+  const landscapeElements = useMemo(
+    () => layoutLandscape({ curve, enrichment, track }),
+    [curve, enrichment, track],
+  );
+
+  // How near the water the nearest of them stands, for the E2E that walks the
+  // demo row (#379).
+  useEffect(() => {
+    if (!curve) return;
+    publishSceneryClearance(
+      'landscape',
+      landClearance(landscapeStanding(landscapeElements), curve, enrichment),
+    );
+  }, [curve, enrichment, landscapeElements]);
   
   const colors = SCENE_CONFIG.landscapeColors;
   const archConfig = SCENE_CONFIG.architecture;
@@ -384,7 +306,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.68, metalness: 0.0, transmission: 0.14, thickness: 0.3, sheen: 0.65, sheenColor: new THREE.Color(colors.treeHighlight) }, swayTime),
   ], [colors, swayTime]);
   useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
-  useAnimationFrame((time) => { swayTime.value = time; });
+  useAnimationFrame((time) => advanceSway(swayTime, time));
 
   // The elements are laid out once and switched on and off from here, rather
   // than filtered during render (#331). Every sixth frame: a tree on a bank

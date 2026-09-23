@@ -12,7 +12,11 @@ import {
   computeStructurePlacements,
 } from '../components/rower3d/sceneryStructures';
 import type { Crossing } from '../utils/bridgeCrossings';
-import { buildTerrainProfile } from '../services/routeEnrichmentService';
+import { buildTerrainProfile, type RouteEnrichmentData } from '../services/routeEnrichmentService';
+import {
+  SCENERY_WATER_MARGIN_METRES,
+  waterHalfWidthAt,
+} from '../components/rower3d/sceneryClearance';
 
 const curve = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0, 0, -200),
@@ -278,5 +282,85 @@ describe('routeStructures — what a route actually asks for (review of #232)', 
 
     expect(ids).toContain('a06-finish-tower');
     expect(ids).toContain('l-barnes-railway-bridge');
+  });
+});
+
+describe('structures stand clear of the water (#379)', () => {
+  // A straight route along +z, so the distance across the water is |x|.
+  const straight = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -300),
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 300),
+  ]);
+
+  const river = (widthMeters: number): RouteEnrichmentData =>
+    ({
+      routeId: 'river',
+      elevations: [],
+      segmentProfiles: [0, 1, 2].map((index) => ({
+        index,
+        startMeters: index * 50,
+        endMeters: (index + 1) * 50,
+        sceneryProfile: 'fallback',
+        treeDensity: 0.5,
+        vegetationDensity: 0.5,
+        buildingDensity: 0.2,
+        objectScale: 1,
+        waterWidthMeters: widthMeters,
+        dragMultiplier: 1,
+        bearing: 0,
+        bearingDelta: 0,
+      })),
+      waterBodyType: 'river',
+      waterWidthMeters: widthMeters,
+      waterColor: '#000',
+      waveIntensity: 0.5,
+      fetchedAt: 0,
+      source: 'fallback',
+    }) as RouteEnrichmentData;
+
+  const across = (kind: 'bridge' | 'furniture' | 'landmark', e?: RouteEnrichmentData | null) => {
+    const [p] = computeStructurePlacements(
+      straight,
+      [{ id: 'a06-finish-tower', progress: 0.5, kind }],
+      null,
+      e,
+    );
+    return { distance: Math.abs(p.position[0]), footing: p.footing };
+  };
+
+  it('stands a landmark on the bank of a 55 m river, past the shoreline margin', () => {
+    const landmark = across('landmark', river(55));
+
+    expect(landmark.distance).toBeGreaterThanOrEqual(27.5);
+    expect(landmark.distance).toBeGreaterThanOrEqual(27.5 + SCENERY_WATER_MARGIN_METRES);
+    expect(landmark.footing).toBe('bank');
+  });
+
+  it('stands course furniture on the bank of a 55 m river', () => {
+    expect(across('furniture', river(55)).distance).toBeGreaterThanOrEqual(
+      27.5 + SCENERY_WATER_MARGIN_METRES,
+    );
+  });
+
+  it('keeps a bridge on the centreline, however wide the water', () => {
+    for (const width of [7, 55, 120]) {
+      const bridge = across('bridge', river(width));
+      expect(bridge.distance).toBeCloseTo(0, 9);
+      expect(bridge.footing).toBe('water');
+    }
+  });
+
+  it('leaves furniture where it was on a stream narrow enough to allow it', () => {
+    // 7 m of water: half of the 7.06 m floor plus the margin is still inside
+    // the 7 m the furniture was authored at.
+    expect(across('furniture', river(7)).distance).toBeCloseTo(7, 9);
+  });
+
+  it('reads the default channel for a route with no enrichment, as the water does', () => {
+    expect(across('furniture', null).distance).toBeCloseTo(
+      waterHalfWidthAt(null, 0.5) + SCENERY_WATER_MARGIN_METRES,
+      9,
+    );
   });
 });
