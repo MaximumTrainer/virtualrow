@@ -53,3 +53,30 @@ describe('chunkViewDistanceFor', () => {
     expect(chunkViewDistanceFor()).toBeLessThan(fogFor().far * 1.5);
   });
 });
+
+/**
+ * Issue #346 — fog is part of the weather now.
+ *
+ * Overcast pulls the far plane in to half, which is what actually reads as
+ * overcast: the far bank going soft. `fogFor` takes the config so the preset
+ * reaches the scene, and the chunk view distance follows it rather than
+ * staying pinned to the authored figure and drawing chunks nobody can see.
+ */
+describe('fog under the conditions presets', () => {
+  const overcast = {
+    ...SCENE_CONFIG,
+    atmosphere: { ...SCENE_CONFIG.atmosphere, fogFar: SCENE_CONFIG.atmosphere.fogFar * 0.5 },
+  };
+
+  it('reads the config it is handed, not the authored one', () => {
+    expect(fogFor(overcast).far).toBeCloseTo(SCENE_CONFIG.atmosphere.fogFar * 0.5, 6);
+  });
+
+  it('brings the chunks in with the fog', () => {
+    expect(chunkViewDistanceFor(overcast)).toBeLessThan(chunkViewDistanceFor());
+  });
+
+  it('falls back to the authored config when handed none', () => {
+    expect(fogFor().far).toBe(SCENE_CONFIG.atmosphere.fogFar);
+  });
+});

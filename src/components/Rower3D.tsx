@@ -78,6 +78,8 @@ import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { resolveRegion } from './rower3d/sceneryRegion';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
+import { sunPositionFrom } from './rower3d/conditions';
+import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { GhostBoat } from './rower3d/GhostBoat';
@@ -157,6 +159,12 @@ export interface Rower3DProps {
   audio?: AudioPort;
   /** How hard the strokes are landing, 0..1, for how loud they sound. */
   strokeIntensity?: number;
+  /**
+   * The scene as the chosen conditions leave it (#346): sun, sky, cloud and
+   * fog, varied per row. Defaulted to the authored config, so a caller that
+   * knows nothing about presets gets exactly what it got before.
+   */
+  sceneConfig?: SceneConfig;
 }
 
 // ============================================================================
@@ -232,6 +240,7 @@ export const RowerScene: React.FC<
   elapsedSecondsRef,
   audio,
   strokeIntensity = 1,
+  sceneConfig = SCENE_CONFIG,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -722,16 +731,20 @@ export const RowerScene: React.FC<
     </>
   );
 
-  const sunLightPos = useMemo((): [number, number, number] => {
-    const elevRad = (SCENE_CONFIG.lighting.sunElevation * Math.PI) / 180;
-    const azRad   = (SCENE_CONFIG.lighting.sunAzimuth   * Math.PI) / 180;
-    const scale   = 200;
-    return [
-      Math.cos(elevRad) * Math.sin(azRad) * scale,
-      Math.sin(elevRad) * scale,
-      Math.cos(elevRad) * Math.cos(azRad) * scale,
-    ];
-  }, []);
+  /*
+   * One sun (#346).
+   *
+   * This and `sky.sunPosition` used to be authored separately, and they
+   * disagreed - the sky drew its sun at [90, 55, 35] while the light shone
+   * from 45° at 135°, so shadows fell one way and the glare came from
+   * another. Both now come from the same elevation and azimuth, through the
+   * same function.
+   */
+  const sunLightPos = useMemo(
+    (): [number, number, number] =>
+      sunPositionFrom(sceneConfig.lighting.sunElevation, sceneConfig.lighting.sunAzimuth, 200),
+    [sceneConfig.lighting.sunElevation, sceneConfig.lighting.sunAzimuth],
+  );
 
   // State, not a ref: the god-rays pass dereferences the mesh every frame, and
   // a ref object is truthy before its mesh exists. A callback ref re-renders
@@ -739,12 +752,16 @@ export const RowerScene: React.FC<
   // at all (#233).
   const [sunMesh, setSunMesh] = useState<THREE.Mesh | null>(null);
   const godRaysSunMesh = godRaysSun(performanceMode, sunMesh);
-  const fog = useMemo(() => fogFor(), []);
+  const fog = useMemo(() => fogFor(sceneConfig), [sceneConfig]);
 
   return (
     <AnimationProvider>
       
-      <PhotorealisticSkydome positionRef={boatPositionRef} performanceMode={performanceMode} />
+      <PhotorealisticSkydome
+        positionRef={boatPositionRef}
+        performanceMode={performanceMode}
+        config={sceneConfig}
+      />
       
       {/* Aerial perspective, and the thing that lets the world end.
           Linear rather than exponential: the chunk cull is a hard distance, so
@@ -758,8 +775,8 @@ export const RowerScene: React.FC<
       
       <directionalLight
         position={sunLightPos}
-        intensity={SCENE_CONFIG.lighting.sunIntensity}
-        color={SCENE_CONFIG.lighting.sunColor}
+        intensity={sceneConfig.lighting.sunIntensity}
+        color={sceneConfig.lighting.sunColor}
         castShadow={performanceMode !== 'low'}
         shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
         shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
@@ -772,20 +789,20 @@ export const RowerScene: React.FC<
       />
       
       <ambientLight 
-        intensity={SCENE_CONFIG.lighting.ambientIntensity}
-        color={SCENE_CONFIG.lighting.ambientColor}
+        intensity={sceneConfig.lighting.ambientIntensity}
+        color={sceneConfig.lighting.ambientColor}
       />
       
       <directionalLight
         position={[-sunLightPos[0] * 0.6, 50, -sunLightPos[2] * 0.5]}
-        intensity={SCENE_CONFIG.lighting.fillIntensity}
-        color={SCENE_CONFIG.lighting.fillColor}
+        intensity={sceneConfig.lighting.fillIntensity}
+        color={sceneConfig.lighting.fillColor}
       />
 
       {!IS_TEST_MODE && performanceMode === 'high' && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
-          <meshBasicMaterial color={SCENE_CONFIG.lighting.sunColor} />
+          <meshBasicMaterial color={sceneConfig.lighting.sunColor} />
         </mesh>
       )}
       

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Billboard, Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
-import { SCENE_CONFIG } from './themeConfig';
+import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
@@ -35,9 +35,17 @@ export const PhotorealisticSkydome: React.FC<{
    */
   positionRef: React.RefObject<THREE.Vector3 | null>;
   performanceMode: PerformanceMode;
-}> = ({ positionRef, performanceMode }) => {
-  const skyConfig = SCENE_CONFIG.sky;
-  const cloudConfig = useMemo(() => cloudsFor(performanceMode), [performanceMode]);
+  /**
+   * The scene config in force, which the conditions presets vary per row
+   * (#346). Defaulted so nothing that has not been told about presets changes.
+   */
+  config?: SceneConfig;
+}> = ({ positionRef, performanceMode, config = SCENE_CONFIG }) => {
+  const skyConfig = config.sky;
+  const cloudConfig = useMemo(
+    () => cloudsFor(performanceMode, config),
+    [performanceMode, config],
+  );
 
   const cloudPositions = useMemo(() => {
     const positions: Array<{ x: number; y: number; z: number; scale: number; variation: number }> = [];

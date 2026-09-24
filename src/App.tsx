@@ -38,6 +38,8 @@ import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
 import { SoundPicker } from './components/SoundPicker';
 import { useRaceCues } from './hooks/useRaceCues';
+import { ConditionsPicker } from './components/ConditionsPicker';
+import { useConditions } from './hooks/useConditions';
 import { CrewPicker } from './components/CrewPicker';
 import { useCrewPreference } from './hooks/useCrewPreference';
 import { useRenderStats } from './hooks/useRenderStats';
@@ -720,6 +722,12 @@ function App() {
     return () => window.clearTimeout(id);
   }, [finish]);
 
+  /**
+   * The light this row is rowed in (#346), remembered between rows. `auto`
+   * matches the rower's own clock, which is the default.
+   */
+  const conditions = useConditions();
+
   const startSequence = useStartSequence({
     active: isWorkoutActive,
     strokeAt,
@@ -1297,6 +1305,14 @@ function App() {
                     onChange={graphics.setQuality}
                   />
 
+                  {/* The same kind of decision as the tier above it: set once,
+                      changing how every row looks (#346). */}
+                  <ConditionsPicker
+                    choice={conditions.choice}
+                    resolved={conditions.conditions}
+                    onChange={conditions.setChoice}
+                  />
+
                   <SoundPicker
                     enabled={soundEnabled}
                     volume={soundVolume}
@@ -1541,6 +1557,7 @@ function App() {
                       elapsedSecondsRef={elapsedSecondsRef}
                       audio={audioService}
                       strokeIntensity={strokeIntensity}
+                      sceneConfig={conditions.sceneConfig}
                     />
                   </Suspense>
 
