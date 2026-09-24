@@ -1533,6 +1533,14 @@ test.describe('the start and the finish of a row (#336)', () => {
 
     await expect(page.locator('.session-summary-modal')).toBeVisible({ timeout: 15_000 });
     await expect(banner).toHaveCount(0);
+
+    // The summary is the row, not just its total (#337): the shape of it, the
+    // splits behind that shape, and today measured against the rower's best.
+    const summary = page.locator('.session-summary-modal');
+    await expect(summary.locator('.row-chart canvas')).toBeVisible();
+    await expect(summary.getByRole('figure', { name: /pace and heart rate/i })).toBeVisible();
+    await expect(summary.locator('table[aria-label="Splits"]')).toBeVisible();
+    await expect(summary.locator('.personal-best')).toBeVisible();
   });
 });
 

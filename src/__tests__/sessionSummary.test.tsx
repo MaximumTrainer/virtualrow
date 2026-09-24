@@ -7,6 +7,14 @@ import { AuthContext, type AuthContextValue } from '../context/useAuth';
 import type { ActivityUploadAuth, ActivityUploadResult } from '../services/intervalsIcuActivityService';
 import type { ActivitySample, WorkoutSession } from '../types/index';
 
+// Chart.js measures its container on mount, and jsdom has no layout to give
+// it. The chart's own behaviour is covered in `rowChart.test.tsx`; here it
+// only needs to not be a canvas.
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="row-chart-canvas" />,
+}));
+
+
 /**
  * The signed-in end-of-session summary (issue #221, R4) and the rule that a
  * guest or demo row never reaches the upload (R5).

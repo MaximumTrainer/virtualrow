@@ -1,0 +1,19 @@
+.row-chart {
+  margin: 0 0 1.25rem;
+}
+
+.row-chart-canvas {
+  position: relative;
+  width: 100%;
+}
+
+/*
+ * The caption is the chart's text alternative (#344), not decoration: it stays
+ * legible rather than shrinking to the point where only the canvas is readable.
+ */
+.row-chart-caption {
+  margin-top: 0.5rem;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  text-align: center;
+}

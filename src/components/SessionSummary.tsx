@@ -8,6 +8,7 @@ import { activityFileName, triggerBlobDownload } from '../utils/exporters';
 import { formatPace } from '../utils/formatters';
 import { SplitsTable } from './SplitsTable';
 import { PersonalBestLine } from './PersonalBestLine';
+import { RowChart } from './RowChart';
 import './SessionSummary.css';
 
 /**
@@ -119,6 +120,9 @@ export function SessionSummary({ session, onDone, onSaved, isDemo }: SessionSumm
           averagePace={session.averagePace}
           best={workoutService.bestPaceForRoute(session.routeId, { excludeId: session.id })}
         />
+
+        {/* The chart first: the shape of the row, then the numbers behind it. */}
+        <RowChart samples={session.samples ?? []} />
 
         <SplitsTable samples={session.samples ?? []} />
 

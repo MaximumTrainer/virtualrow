@@ -4,6 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { GuestSessionSummary } from '../components/GuestSessionSummary';
 import type { WorkoutSession } from '../types/index';
 
+// Chart.js measures its container on mount, and jsdom has no layout to give
+// it. The chart's own behaviour is covered in `rowChart.test.tsx`; here it
+// only needs to not be a canvas.
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <div data-testid="row-chart-canvas" />,
+}));
+
+
 function makeSession(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
   return {
     id: 's1',
