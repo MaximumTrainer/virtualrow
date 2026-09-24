@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr398, main, bare-maintests]
+        variant: [bare, bare-kittrees, main]
         runner: [a, b]
     runs-on: windows-latest
     env:

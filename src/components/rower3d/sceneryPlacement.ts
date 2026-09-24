@@ -179,7 +179,8 @@ export const budgetFor = (mode: PerformanceMode): number =>
  * handful per bank, and each is a cloned GLB of several meshes, which is what
  * the billboards exist to avoid paying for below the top tier.
  */
-export const keepsKitTrees = (mode: PerformanceMode): boolean => mode === 'high';
+export const keepsKitTrees = (mode: PerformanceMode): boolean =>
+  import.meta.env.VITE_BENCH_VARIANT === 'bare-kittrees' || mode === 'high';
 
 /** Distinct scenery profiles present on the route (fallback when none). */
 export const distinctProfiles = (
