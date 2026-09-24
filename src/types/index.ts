@@ -382,7 +382,8 @@ declare global {
      * How far past the waterline the nearest scenery stands, per placement
      * path (#379): `scenery-left`/`scenery-right` for the GLB scatter,
      * `structures` for the pinned course structures, `landscape` for the
-     * procedural trees, buildings and mountains. `nearestM` below `marginM`
+     * procedural buildings and mountains, `foliage` for the billboard trees
+     * (#333). `nearestM` below `marginM`
      * means something is closer to the water than it was meant to be; below
      * zero, it is standing in it.
      */
@@ -442,6 +443,13 @@ declare global {
     /** Per-frame render cost, sampled before the effect composer runs (#232). */
     /** Publish render and frame telemetry without entering test mode (#342). */
     __VIRTUALROW_TELEMETRY?: boolean;
+    /** `false` leaves the billboard foliage out, so a spec can measure its cost (#333). */
+    __VIRTUALROW_FOLIAGE?: boolean;
+    /**
+     * The billboard foliage (#333): how many trees the route was planted with,
+     * how many meshes draw them, and how many trees the last cull kept.
+     */
+    __ROWER3D_FOLIAGE?: { trees: number; meshes: number; drawn: number };
     __ROWER3D_RENDER_STATS?: {
       drawing: string;
       drawCalls: number;

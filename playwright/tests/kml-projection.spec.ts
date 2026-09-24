@@ -132,7 +132,7 @@ test.describe('imported KML route rendering (KV-2)', () => {
 
     await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 15_000 });
     await expectSceneAlive(page, 'the imported KML route');
-    await page.waitForFunction(() => window.__ROWER3D_POS !== undefined, { timeout: 15_000 });
+    await page.waitForFunction(() => window.__ROWER3D_POS !== undefined, undefined, { timeout: 15_000 });
 
     /** Every telemetry number the scene exposes, at one instant. */
     const sampleTelemetry = () =>

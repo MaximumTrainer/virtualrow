@@ -1,11 +1,15 @@
 // ============================================================================
-// LANDSCAPE LAYOUT — where CurvedLandscapeElements puts its procedural trees,
+// LANDSCAPE LAYOUT — where CurvedLandscapeElements puts its procedural
 // buildings and mountains.
 //
 // Split out of bankComponents.tsx so the layout can be asserted without a
 // WebGL context: that file is an R3F component and out of the unit coverage,
 // which is how the landscape went on measuring from the centreline while the
 // water beside it widened (#379).
+//
+// The trees it used to place here are planted by the metre in foliagePlan.ts
+// now (#333). A slot that rolls a tree stays empty, so every house and
+// mountain keeps the place it had.
 // ============================================================================
 import * as THREE from 'three';
 import { LANDSCAPE_OFFSET } from './constants';
@@ -20,7 +24,10 @@ import {
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 
-export type LandscapeElementType = 'tree' | 'mountain' | 'building';
+export type LandscapeElementType = 'mountain' | 'building';
+
+/** What a slot rolls: a tree is a slot left for the foliage. */
+type SlotRoll = LandscapeElementType | 'tree';
 
 export interface LandscapeElement {
   position: THREE.Vector3;
@@ -119,7 +126,7 @@ export const layoutLandscape = ({
       minOffset +
       seededRandom(elemIdx * 7 + 2) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
 
-    const getElementType = (seedOffset: number): LandscapeElementType => {
+    const rollSlot = (seedOffset: number): SlotRoll => {
       const rand = seededRandom(elemIdx * 7 + seedOffset);
       const buildingThreshold = Math.min(0.8, segmentStyle.buildingDensity * 0.85);
       const treeThreshold = Math.min(
@@ -133,12 +140,13 @@ export const layoutLandscape = ({
 
     const placementChance =
       0.1 + segmentStyle.treeDensity * 0.55 + segmentStyle.vegetationDensity * 0.2;
-    if (seededRandom(elemIdx * 7 + 4) < placementChance) {
+    const leftRoll = rollSlot(3);
+    if (seededRandom(elemIdx * 7 + 4) < placementChance && leftRoll !== 'tree') {
       const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
       leftPos.y = getTerrainReliefForProgress(terrain, t);
       leftElements.push({
         position: leftPos,
-        type: getElementType(3),
+        type: leftRoll,
         scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * segmentStyle.objectScale,
         rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2,
         sceneryProfile,
@@ -146,12 +154,13 @@ export const layoutLandscape = ({
       });
     }
 
-    if (seededRandom(elemIdx * 7 + 6) < placementChance) {
+    const rightRoll = rollSlot(7);
+    if (seededRandom(elemIdx * 7 + 6) < placementChance && rightRoll !== 'tree') {
       const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
       rightPos.y = getTerrainReliefForProgress(terrain, t);
       rightElements.push({
         position: rightPos,
-        type: getElementType(7),
+        type: rightRoll,
         scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * segmentStyle.objectScale,
         rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2,
         sceneryProfile,

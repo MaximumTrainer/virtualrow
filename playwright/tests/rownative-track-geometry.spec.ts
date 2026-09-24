@@ -100,7 +100,7 @@ test.describe('rownative course geometry (issue #194)', () => {
     await expect(page.locator('.rower3d-canvas-container')).toBeVisible({ timeout: 20_000 });
     await expectSceneAlive(page, 'the rownative course scene');
 
-    await page.waitForFunction(() => (window.__ROWER3D_ROUTE?.totalDistance ?? 0) > 0, { timeout: 20_000 });
+    await page.waitForFunction(() => (window.__ROWER3D_ROUTE?.totalDistance ?? 0) > 0, undefined, { timeout: 20_000 });
     const { engineTotal, cardKm } = await page.evaluate(() => ({
       engineTotal: window.__ROWER3D_ROUTE!.totalDistance,
       cardKm: window.__SELECTED_ROUTE!.distanceKm,

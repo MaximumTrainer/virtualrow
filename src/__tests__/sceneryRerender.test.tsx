@@ -29,7 +29,9 @@ vi.mock('@react-three/drei', async () => {
   return { ...actual, Cloud: () => null };
 });
 
-const { CurvedLandscapeElements } = await import('../components/rower3d/bankComponents');
+const { CurvedLandscapeElements, LANDSCAPE_ELEMENT_NAME } = await import(
+  '../components/rower3d/bankComponents'
+);
 const { AnimationProvider } = await import('../components/rower3d/AnimationContext');
 
 /** A straight 2 km route, so a boat's distance from a tree is easy to reason about. */
@@ -78,12 +80,15 @@ describe('steady rowing', () => {
       </AnimationProvider>,
     );
 
-    /** The per-element groups the cull writes `visible` on. */
+    /**
+     * The per-element groups the cull writes `visible` on. By name, since the
+     * trees beside them are instanced and culled per instance (#333).
+     */
     const elements = (): THREE.Object3D[] => {
       const scene = renderer.scene.instance as unknown as THREE.Scene;
       const found: THREE.Object3D[] = [];
       scene.traverse((object) => {
-        if (object.parent && object.parent.parent === scene) found.push(object);
+        if (object.name === LANDSCAPE_ELEMENT_NAME) found.push(object);
       });
       return found;
     };

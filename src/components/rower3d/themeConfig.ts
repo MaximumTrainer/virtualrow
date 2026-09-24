@@ -60,9 +60,6 @@ export interface BankConfig {
 }
 
 export interface LandscapeColors {
-  tree: string;
-  treeBark: string;
-  treeHighlight: string;
   mountain: string;
   mountainSnow: string;
   buildingAccent: string;
@@ -185,7 +182,6 @@ export const SCENE_CONFIG: SceneConfig = {
     flatColor: '#4a7c32',
   },
   landscapeColors: {
-    tree: '#2a5a38', treeBark: '#4a3020', treeHighlight: '#4a8a58',
     mountain: '#5a7247', mountainSnow: '#f5f8fa',
     buildingAccent: '#6a5a45', windowGlow: '#ffcc88',
   },
@@ -215,6 +211,9 @@ export const SCENE_CONFIG: SceneConfig = {
     species: [
       { type: 'willow', color: '#3a6840', trunkColor: '#5a4030' },
       { type: 'oak',    color: '#2a5838', trunkColor: '#4a3820' },
+      // The billboard foliage draws a conifer shape (#333); without a pine
+      // here a forest profile could only ever plant broadleaves.
+      { type: 'pine',   color: '#24472e', trunkColor: '#3a2a1a' },
     ],
   },
   architecture: {

@@ -20,6 +20,8 @@ import {
 import { computePlacements, distinctProfiles } from '../components/rower3d/sceneryPlacement';
 import { computeStructurePlacements, routeStructures } from '../components/rower3d/sceneryStructures';
 import { layoutLandscape } from '../components/rower3d/landscapeLayout';
+import { layoutFoliage } from '../components/rower3d/foliagePlan';
+import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
 import { SCENERY_WATER_MARGIN_METRES } from '../components/rower3d/sceneryClearance';
 
 /**
@@ -106,7 +108,16 @@ const everythingOnTheBank = (enrichment: RouteEnrichmentData): Measured[] => {
     progress: e.progress,
   }));
 
-  return [...scatter, ...structures, ...landscape];
+  // The billboard trees, planted round the houses as CurvedLandscapeElements
+  // plants them (#333).
+  const avoid = [...leftElements, ...rightElements]
+    .filter((e) => e.type === 'building')
+    .map((e) => ({ x: e.position.x, z: e.position.z }));
+  const foliage = layoutFoliage({ curve, enrichment, track, species: SCENE_CONFIG.trees.species, avoid }).map(
+    (t) => ({ path: 'foliage', x: t.position[0], z: t.position[2], progress: t.progress }),
+  );
+
+  return [...scatter, ...structures, ...landscape, ...foliage];
 };
 
 /** Metres from the water's edge, across the route; negative is in the river. */
@@ -136,7 +147,15 @@ describe('the demo route has nothing standing in its river (#379)', () => {
 
     // Every path contributed, or this proved nothing about the one that did not.
     const paths = new Set(placed.map((p) => p.path));
-    expect([...paths].sort()).toEqual(['landscape', 'scenery-left', 'scenery-right', 'structures']);
+    expect([...paths].sort()).toEqual([
+      'foliage',
+      'landscape',
+      'scenery-left',
+      'scenery-right',
+      'structures',
+    ]);
+    // A tree-lined route, not the forty cone trees it had (#333).
+    expect(placed.filter((p) => p.path === 'foliage').length).toBeGreaterThanOrEqual(400);
 
     const inTheRiver = placed
       .map((p) => ({ ...p, clearance: clearanceOf(enrichment, p) }))
