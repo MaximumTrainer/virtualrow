@@ -20,6 +20,7 @@ import { routeEnrichmentService } from '../services/routeEnrichmentService';
 import { defaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 import { intervalsIcuActivityService } from '../services/intervalsIcuActivityService';
 import { intervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
+import { audioService } from '../services/audioService';
 
 /** Production-adapter bundle wired from the existing service singletons. */
 export const defaultServices: Services = {
@@ -35,6 +36,7 @@ export const defaultServices: Services = {
   defaultRoutePreferenceStore,
   intervalsIcuActivityService,
   intervalsIcuWorkoutService,
+  audioService,
 };
 
 export const ServicesContext = createContext<Services>(defaultServices);
