@@ -260,34 +260,38 @@ test.describe('responsive layout', () => {
     await startDemo(page);
     await expect(page.locator('.row-hud-tile').first()).toBeVisible({ timeout: 20_000 });
 
-    // Poll: the canvas mounts lazily and the layout settles after it.
+    const width = page.viewportSize()!.width;
+    // One round trip, polled: the canvas mounts lazily and the layout settles
+    // after it, and at 4K on a software renderer the page's main thread can be
+    // busy with a frame for longer than a single evaluate is given.
     await expect
       .poll(
         () =>
           page.evaluate(() => {
             const view = document.querySelector('.activity-view');
             const scrolled = (document.scrollingElement?.scrollTop ?? 0) + (view?.scrollTop ?? 0);
-            const offscreen = Array.from(document.querySelectorAll('.row-hud-tile'))
+            const tiles = Array.from(document.querySelectorAll('.row-hud-tile'));
+            const offscreen = tiles
               .map((tile) => ({ label: tile.querySelector('.activity-stat-label')?.textContent, r: tile.getBoundingClientRect() }))
               .filter(({ r }) => r.top < 0 || r.left < 0 || r.bottom > window.innerHeight + 0.5 || r.right > window.innerWidth + 0.5)
               .map(({ label, r }) => `${label} at ${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)}`);
-            return { scrolled, offscreen };
+            const labels = tiles.map((tile) => tile.querySelector('.activity-stat-label')?.textContent ?? '');
+            // Every digit one width, so a changing split does not jitter.
+            const value = tiles[0]?.querySelector('.activity-stat-value');
+            const tabular = !!value && getComputedStyle(value).fontVariantNumeric.includes('tabular-nums');
+            return { scrolled, offscreen, labels, tabular };
           }),
-        { timeout: 15_000 },
+        { timeout: 30_000 },
       )
-      .toEqual({ scrolled: 0, offscreen: [] });
-
-    const labels = await page.locator('.row-hud-tile .activity-stat-label').allTextContents();
-    expect(labels).toEqual(expect.arrayContaining(['Split', 'SPM', 'Heart Rate', 'Meters']));
-    const width = page.viewportSize()!.width;
-    expect(labels, 'six tiles from 900px, four below').toHaveLength(width >= 900 ? 6 : 4);
-
-    // Every digit one width, so a changing split does not jitter.
-    const numeric = await page
-      .locator('.row-hud-tile .activity-stat-value')
-      .first()
-      .evaluate((el) => getComputedStyle(el).fontVariantNumeric);
-    expect(numeric).toContain('tabular-nums');
+      .toEqual({
+        scrolled: 0,
+        offscreen: [],
+        // Six tiles from 900px, four below, and the four a rower steers by always.
+        labels: width >= 900
+          ? ['Split', 'SPM', 'Power', 'Heart Rate', 'Meters', 'Time']
+          : ['Split', 'SPM', 'Heart Rate', 'Meters'],
+        tabular: true,
+      });
   });
 
   test('the HUD is legible over the brightest sky (#335)', async ({ page }) => {
