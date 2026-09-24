@@ -1,0 +1,2265 @@
+{
+  "models": {
+    "a01-buoy-lane-sphere": {
+      "path": "public/assets/scenery/tier-a/a01-buoy-lane-sphere.glb",
+      "bytesBefore": 14684,
+      "bytesAfter": 5772,
+      "trianglesBefore": 696,
+      "trianglesAfter": 680,
+      "bounds": [
+        -150,
+        -131.99999999999997,
+        -149.88900756835935,
+        149.9036865234375,
+        131.99999999999997,
+        149.88900756835935
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a02-buoy-turn-cylinder": {
+      "path": "public/assets/scenery/tier-a/a02-buoy-turn-cylinder.glb",
+      "bytesBefore": 51476,
+      "bytesAfter": 33168,
+      "trianglesBefore": 1084,
+      "trianglesAfter": 1084,
+      "bounds": [
+        -309.6146545410156,
+        -899.9999999999999,
+        -309.9036560058592,
+        310,
+        539.9999999999999,
+        309.90365600585943
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a03-pontoon-floating-dock": {
+      "path": "public/assets/scenery/tier-a/a03-pontoon-floating-dock.glb",
+      "bytesBefore": 32456,
+      "bytesAfter": 34620,
+      "trianglesBefore": 140,
+      "trianglesAfter": 140,
+      "bounds": [
+        -3000,
+        -300.00000000000017,
+        -1199.9999999999998,
+        3000,
+        150.0000000000002,
+        1199.9999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a04-launch-dock-fixed": {
+      "path": "public/assets/scenery/tier-a/a04-launch-dock-fixed.glb",
+      "bytesBefore": 72376,
+      "bytesAfter": 74228,
+      "trianglesBefore": 396,
+      "trianglesAfter": 396,
+      "bounds": [
+        -6000,
+        -100.00000000000028,
+        -2369.9999999999995,
+        6000,
+        2199.999999999999,
+        1500
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a05-stakeboat-platform": {
+      "path": "public/assets/scenery/tier-a/a05-stakeboat-platform.glb",
+      "bytesBefore": 21832,
+      "bytesAfter": 17740,
+      "trianglesBefore": 296,
+      "trianglesAfter": 245,
+      "bounds": [
+        -1750,
+        -400,
+        -699.9999999999999,
+        1750,
+        799.9999999999998,
+        699.9999999999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a06-finish-tower": {
+      "path": "public/assets/scenery/tier-a/a06-finish-tower.glb",
+      "bytesBefore": 77488,
+      "bytesAfter": 83072,
+      "trianglesBefore": 436,
+      "trianglesAfter": 436,
+      "bounds": [
+        -1650,
+        -25.000000000000025,
+        -1649.9999999999982,
+        1800,
+        6059.999999999999,
+        1650.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a07-distance-marker-post": {
+      "path": "public/assets/scenery/tier-a/a07-distance-marker-post.glb",
+      "bytesBefore": 9772,
+      "bytesAfter": 13040,
+      "trianglesBefore": 36,
+      "trianglesAfter": 36,
+      "bounds": [
+        -450,
+        -6.661338147750939e-15,
+        -29.999999999999993,
+        450,
+        2399.9999999999995,
+        30.000000000000526
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a08-umpire-launch": {
+      "path": "public/assets/scenery/tier-a/a08-umpire-launch.glb",
+      "bytesBefore": 99480,
+      "bytesAfter": 56404,
+      "trianglesBefore": 3044,
+      "trianglesAfter": 2741,
+      "bounds": [
+        -2600,
+        -1.9984014443252818e-13,
+        -899.9999999999998,
+        2600,
+        1749.9999999999995,
+        900
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a09-gazebo-hexagonal": {
+      "path": "public/assets/scenery/tier-a/a09-gazebo-hexagonal.glb",
+      "bytesBefore": 82552,
+      "bytesAfter": 55504,
+      "trianglesBefore": 1612,
+      "trianglesAfter": 1294,
+      "bounds": [
+        -2300,
+        -4.230517845760229e-13,
+        -1991.8583984374989,
+        2300,
+        4299.999999999999,
+        1991.8583984375002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a10-slipway-ramp": {
+      "path": "public/assets/scenery/tier-a/a10-slipway-ramp.glb",
+      "bytesBefore": 9808,
+      "bytesAfter": 15208,
+      "trianglesBefore": 36,
+      "trianglesAfter": 36,
+      "bounds": [
+        -2000,
+        -8.881784197001252e-13,
+        -2049.9999999999995,
+        5950,
+        999.9999999999998,
+        3999.999999999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a11-bank-railing": {
+      "path": "public/assets/scenery/tier-a/a11-bank-railing.glb",
+      "bytesBefore": 39988,
+      "bytesAfter": 14776,
+      "trianglesBefore": 1154,
+      "trianglesAfter": 802,
+      "bounds": [
+        -1227.96533203125,
+        -6.215316432231716e-15,
+        -27.99721527099584,
+        1228,
+        1121.9999999999998,
+        27.997215270996332
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "a12-regatta-flagpole": {
+      "path": "public/assets/scenery/tier-a/a12-regatta-flagpole.glb",
+      "bytesBefore": 170152,
+      "bytesAfter": 32860,
+      "trianglesBefore": 8851,
+      "trianglesAfter": 5897,
+      "bounds": [
+        -59.9254150390625,
+        -1.3318535151422752e-14,
+        -59.999999999998344,
+        900,
+        8044.999999999998,
+        59.981349945068345
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b01-boathouse-new-england": {
+      "path": "public/assets/scenery/tier-b/b01-boathouse-new-england.glb",
+      "bytesBefore": 54924,
+      "bytesAfter": 62696,
+      "trianglesBefore": 292,
+      "trianglesAfter": 276,
+      "bounds": [
+        -15000,
+        -1.5543122344752192e-12,
+        -8399.999999999996,
+        15000,
+        11149.999999999998,
+        7000.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b02-boathouse-uk-victorian": {
+      "path": "public/assets/scenery/tier-b/b02-boathouse-uk-victorian.glb",
+      "bytesBefore": 33076,
+      "bytesAfter": 38556,
+      "trianglesBefore": 128,
+      "trianglesAfter": 128,
+      "bounds": [
+        -11200,
+        -1.3322676295501878e-12,
+        -6309.999999999997,
+        11200,
+        10000,
+        6160
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b03-clubhouse-modern": {
+      "path": "public/assets/scenery/tier-b/b03-clubhouse-modern.glb",
+      "bytesBefore": 21476,
+      "bytesAfter": 23216,
+      "trianglesBefore": 88,
+      "trianglesAfter": 88,
+      "bounds": [
+        -12200,
+        -1.3322676295501878e-12,
+        -8249.999999999998,
+        12200,
+        8175,
+        6200
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b04-boat-rack-outdoor": {
+      "path": "public/assets/scenery/tier-b/b04-boat-rack-outdoor.glb",
+      "bytesBefore": 384220,
+      "bytesAfter": 71020,
+      "trianglesBefore": 18488,
+      "trianglesAfter": 11156,
+      "bounds": [
+        -9000,
+        -3.3306690738754696e-13,
+        -1499.9999999999998,
+        9000,
+        3349.999999999999,
+        1499.9999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b05-quay-wall-stone": {
+      "path": "public/assets/scenery/tier-b/b05-quay-wall-stone.glb",
+      "bytesBefore": 335700,
+      "bytesAfter": 47488,
+      "trianglesBefore": 16044,
+      "trianglesAfter": 9692,
+      "bounds": [
+        -4000,
+        -1.3322676295501878e-13,
+        -709.9999999999998,
+        4000,
+        2999.9999999999995,
+        700.0000000000006
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b06-wharf-warehouse": {
+      "path": "public/assets/scenery/tier-b/b06-wharf-warehouse.glb",
+      "bytesBefore": 72700,
+      "bytesAfter": 34152,
+      "trianglesBefore": 284,
+      "trianglesAfter": 284,
+      "bounds": [
+        -14000,
+        -1.7763568394002505e-12,
+        -10999.999999999995,
+        14000,
+        16499.999999999996,
+        8000.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b07-quay-crane": {
+      "path": "public/assets/scenery/tier-b/b07-quay-crane.glb",
+      "bytesBefore": 75332,
+      "bytesAfter": 34632,
+      "trianglesBefore": 1784,
+      "trianglesAfter": 1478,
+      "bounds": [
+        -5500,
+        -50.0000000000006,
+        -10177.236328124995,
+        5500,
+        17301.677734375,
+        3700.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "b08-marina-pontoon-cluster": {
+      "path": "public/assets/scenery/tier-b/b08-marina-pontoon-cluster.glb",
+      "bytesBefore": 261072,
+      "bytesAfter": 82596,
+      "trianglesBefore": 11642,
+      "trianglesAfter": 9434,
+      "bounds": [
+        -20250,
+        -350.00000000000125,
+        -10199.999999999998,
+        22199.892578125,
+        2599.9999999999973,
+        12249.999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c01-bridge-arch-masonry": {
+      "path": "public/assets/scenery/tier-c/c01-bridge-arch-masonry.glb",
+      "bytesBefore": 59692,
+      "bytesAfter": 42872,
+      "trianglesBefore": 1104,
+      "trianglesAfter": 1104,
+      "bounds": [
+        -30000,
+        -9.992007221626409e-13,
+        -4629.999999999998,
+        30000,
+        11300,
+        4630.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c02-bridge-road-concrete": {
+      "path": "public/assets/scenery/tier-c/c02-bridge-road-concrete.glb",
+      "bytesBefore": 34656,
+      "bytesAfter": 20124,
+      "trianglesBefore": 572,
+      "trianglesAfter": 360,
+      "bounds": [
+        -40000,
+        -1.5543122344752192e-12,
+        -6999.999999999998,
+        40000,
+        11100,
+        7000
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c03-bridge-truss-steel": {
+      "path": "public/assets/scenery/tier-c/c03-bridge-truss-steel.glb",
+      "bytesBefore": 434488,
+      "bytesAfter": 93812,
+      "trianglesBefore": 11916,
+      "trianglesAfter": 9468,
+      "bounds": [
+        -35249.921875,
+        1750.3107910156236,
+        -4249.922363281249,
+        35249.921875,
+        10249.999999999998,
+        4249.922363281251
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c04-bridge-rail-girder": {
+      "path": "public/assets/scenery/tier-c/c04-bridge-rail-girder.glb",
+      "bytesBefore": 18740,
+      "bytesAfter": 16932,
+      "trianglesBefore": 72,
+      "trianglesAfter": 72,
+      "bounds": [
+        -22500,
+        -1.1102230246251565e-12,
+        -4999.999999999999,
+        22500,
+        6849.999999999999,
+        5000
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c05-bridge-bascule": {
+      "path": "public/assets/scenery/tier-c/c05-bridge-bascule.glb",
+      "bytesBefore": 31168,
+      "bytesAfter": 26180,
+      "trianglesBefore": 816,
+      "trianglesAfter": 798,
+      "bounds": [
+        -15000,
+        -2905.0522460937505,
+        -7499.999999999996,
+        8744.421875,
+        14299.999999999996,
+        4500.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c06-bridge-foot-suspension": {
+      "path": "public/assets/scenery/tier-c/c06-bridge-foot-suspension.glb",
+      "bytesBefore": 262768,
+      "bytesAfter": 68912,
+      "trianglesBefore": 6980,
+      "trianglesAfter": 5552,
+      "bounds": [
+        -27539.173828125,
+        5849.999999999999,
+        -1692.1523437499982,
+        27539.173828125,
+        12081.003906249998,
+        1691.7891845703134
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c07-bridge-dutch-lift": {
+      "path": "public/assets/scenery/tier-c/c07-bridge-dutch-lift.glb",
+      "bytesBefore": 93492,
+      "bytesAfter": 40456,
+      "trianglesBefore": 2280,
+      "trianglesAfter": 1821,
+      "bounds": [
+        -3243.743408203125,
+        -54.23261260986371,
+        -2299.9999999999986,
+        7000,
+        9249.999999999998,
+        2300.0000000000005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "c08-bridge-cantilever": {
+      "path": "public/assets/scenery/tier-c/c08-bridge-cantilever.glb",
+      "bytesBefore": 129428,
+      "bytesAfter": 34912,
+      "trianglesBefore": 3484,
+      "trianglesAfter": 2770,
+      "bounds": [
+        -60211.44140625,
+        9399.999999999996,
+        -5999.999999999997,
+        60211.44140625,
+        25599.999999999993,
+        6000.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-ce-01-baroque-church-onion": {
+      "path": "public/assets/scenery/tier-d/d-ce-01-baroque-church-onion.glb",
+      "bytesBefore": 58400,
+      "bytesAfter": 32176,
+      "trianglesBefore": 1916,
+      "trianglesAfter": 1684,
+      "bounds": [
+        -14000,
+        -1.7763568394002505e-12,
+        -7999.999999999998,
+        14000,
+        31499.999999999993,
+        8000.000000000003
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-ce-02-panelak-block": {
+      "path": "public/assets/scenery/tier-d/d-ce-02-panelak-block.glb",
+      "bytesBefore": 82216,
+      "bytesAfter": 29356,
+      "trianglesBefore": 324,
+      "trianglesAfter": 324,
+      "bounds": [
+        -30100,
+        -1.5765166949677223e-12,
+        -7299.999999999998,
+        30100,
+        25999.999999999993,
+        7100.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-ce-03-riverside-villa": {
+      "path": "public/assets/scenery/tier-d/d-ce-03-riverside-villa.glb",
+      "bytesBefore": 26888,
+      "bytesAfter": 23316,
+      "trianglesBefore": 576,
+      "trianglesAfter": 406,
+      "bounds": [
+        -8896.3955078125,
+        -1.5543122344752192e-12,
+        -9249.999999999998,
+        8500,
+        16999.999999999996,
+        7899.098632812501
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-ce-04-hydro-weir-house": {
+      "path": "public/assets/scenery/tier-d/d-ce-04-hydro-weir-house.glb",
+      "bytesBefore": 21316,
+      "bytesAfter": 21476,
+      "trianglesBefore": 80,
+      "trianglesAfter": 80,
+      "bounds": [
+        -21000,
+        -1.3322676295501878e-12,
+        -5999.999999999999,
+        21000,
+        10999.999999999998,
+        6000
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-01-terrace-brick": {
+      "path": "public/assets/scenery/tier-d/d-gb-01-terrace-brick.glb",
+      "bytesBefore": 33396,
+      "bytesAfter": 23944,
+      "trianglesBefore": 128,
+      "trianglesAfter": 128,
+      "bounds": [
+        -12000,
+        -8.881784197001252e-13,
+        -5199.999999999999,
+        12000,
+        11999.999999999998,
+        4000.0000000000014
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-02-church-square-tower": {
+      "path": "public/assets/scenery/tier-d/d-gb-02-church-square-tower.glb",
+      "bytesBefore": 84224,
+      "bytesAfter": 37600,
+      "trianglesBefore": 2840,
+      "trianglesAfter": 1916,
+      "bounds": [
+        -17600,
+        -1.5543122344752192e-12,
+        -6999.999999999998,
+        6000,
+        24599.999999999993,
+        7000.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-03-riverside-pub": {
+      "path": "public/assets/scenery/tier-d/d-gb-03-riverside-pub.glb",
+      "bytesBefore": 73416,
+      "bytesAfter": 39784,
+      "trianglesBefore": 1704,
+      "trianglesAfter": 1312,
+      "bounds": [
+        -8000,
+        -1.2212453270876722e-12,
+        -9999.999999999998,
+        8000,
+        9000,
+        5500.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-04-stone-cottage": {
+      "path": "public/assets/scenery/tier-d/d-gb-04-stone-cottage.glb",
+      "bytesBefore": 15244,
+      "bytesAfter": 20444,
+      "trianglesBefore": 56,
+      "trianglesAfter": 56,
+      "bounds": [
+        -5000,
+        -7.771561172376096e-13,
+        -3649.999999999999,
+        5000,
+        7799.999999999998,
+        3500.0000000000005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-05-stone-barn": {
+      "path": "public/assets/scenery/tier-d/d-gb-05-stone-barn.glb",
+      "bytesBefore": 13796,
+      "bytesAfter": 17964,
+      "trianglesBefore": 56,
+      "trianglesAfter": 56,
+      "bounds": [
+        -9000,
+        -9.992007221626409e-13,
+        -4499.999999999999,
+        14000,
+        7999.999999999999,
+        4500.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-gb-06-regatta-marquee": {
+      "path": "public/assets/scenery/tier-d/d-gb-06-regatta-marquee.glb",
+      "bytesBefore": 80636,
+      "bytesAfter": 23500,
+      "trianglesBefore": 2016,
+      "trianglesAfter": 1608,
+      "bounds": [
+        -10000,
+        1999.9999999999984,
+        -5099.999999999998,
+        10000,
+        6000,
+        5000
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-it-01-po-palazzo": {
+      "path": "public/assets/scenery/tier-d/d-it-01-po-palazzo.glb",
+      "bytesBefore": 55576,
+      "bytesAfter": 26244,
+      "trianglesBefore": 240,
+      "trianglesAfter": 224,
+      "bounds": [
+        -15500,
+        -1.9984014443252818e-12,
+        -9499.999999999995,
+        15500,
+        23699.999999999996,
+        9500.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-it-02-castello-valentino": {
+      "path": "public/assets/scenery/tier-d/d-it-02-castello-valentino.glb",
+      "bytesBefore": 36412,
+      "bytesAfter": 26536,
+      "trianglesBefore": 252,
+      "trianglesAfter": 171,
+      "bounds": [
+        -31750,
+        -5.218048215738236e-12,
+        -27999.999999999993,
+        31750,
+        33000,
+        23750.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-it-03-arcaded-embankment": {
+      "path": "public/assets/scenery/tier-d/d-it-03-arcaded-embankment.glb",
+      "bytesBefore": 36576,
+      "bytesAfter": 20380,
+      "trianglesBefore": 144,
+      "trianglesAfter": 144,
+      "bounds": [
+        -15000,
+        -8.881784197001252e-13,
+        -4949.999999999999,
+        15000,
+        7949.999999999999,
+        4000.0000000000005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-01-gabled-canal-house": {
+      "path": "public/assets/scenery/tier-d/d-nl-01-gabled-canal-house.glb",
+      "bytesBefore": 39820,
+      "bytesAfter": 31516,
+      "trianglesBefore": 156,
+      "trianglesAfter": 156,
+      "bounds": [
+        -3000,
+        -1.3322676295501878e-12,
+        -6899.9999999999945,
+        3000,
+        17599.999999999996,
+        6000.000000000003
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-02-polder-windmill": {
+      "path": "public/assets/scenery/tier-d/d-nl-02-polder-windmill.glb",
+      "bytesBefore": 45404,
+      "bytesAfter": 37792,
+      "trianglesBefore": 904,
+      "trianglesAfter": 760,
+      "bounds": [
+        -6500,
+        -1.3318535727405156e-12,
+        -5998.135253906249,
+        6500,
+        23499.999999999996,
+        5998.135253906249
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-03-polder-farmhouse": {
+      "path": "public/assets/scenery/tier-d/d-nl-03-polder-farmhouse.glb",
+      "bytesBefore": 22280,
+      "bytesAfter": 19496,
+      "trianglesBefore": 108,
+      "trianglesAfter": 92,
+      "bounds": [
+        -12500,
+        -2.6645352591003757e-12,
+        -12499.999999999995,
+        12500,
+        14499.999999999996,
+        12499.999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-04-canal-lock": {
+      "path": "public/assets/scenery/tier-d/d-nl-04-canal-lock.glb",
+      "bytesBefore": 57504,
+      "bytesAfter": 23216,
+      "trianglesBefore": 1076,
+      "trianglesAfter": 1076,
+      "bounds": [
+        -18500,
+        -1.3322676295501878e-12,
+        -5999.999999999999,
+        15000,
+        6699.999999999999,
+        6000.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-05-wind-turbine": {
+      "path": "public/assets/scenery/tier-d/d-nl-05-wind-turbine.glb",
+      "bytesBefore": 65832,
+      "bytesAfter": 29624,
+      "trianglesBefore": 2664,
+      "trianglesAfter": 1665,
+      "bounds": [
+        -23202.62890625,
+        -5.549389615368272e-13,
+        -2499.2229003906245,
+        44500,
+        124088.13281249997,
+        2800.0000000000273
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-nl-06-reed-bank-edge": {
+      "path": "public/assets/scenery/tier-d/d-nl-06-reed-bank-edge.glb",
+      "bytesBefore": 174528,
+      "bytesAfter": 136428,
+      "trianglesBefore": 648,
+      "trianglesAfter": 648,
+      "bounds": [
+        -4000,
+        -500.0000000000002,
+        -1499.9999999999998,
+        4000,
+        1987.6295166015618,
+        1500
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-01-clapboard-house": {
+      "path": "public/assets/scenery/tier-d/d-us-01-clapboard-house.glb",
+      "bytesBefore": 21436,
+      "bytesAfter": 21788,
+      "trianglesBefore": 292,
+      "trianglesAfter": 292,
+      "bounds": [
+        -6000,
+        -9.992007221626409e-13,
+        -4649.999999999999,
+        6000,
+        10199.999999999998,
+        4500.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-02-brick-mill": {
+      "path": "public/assets/scenery/tier-d/d-us-02-brick-mill.glb",
+      "bytesBefore": 21412,
+      "bytesAfter": 22216,
+      "trianglesBefore": 80,
+      "trianglesAfter": 74,
+      "bounds": [
+        -35000,
+        -2.220446049250313e-12,
+        -10049.999999999996,
+        35000,
+        27999.999999999993,
+        10000.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-03-collegiate-dome": {
+      "path": "public/assets/scenery/tier-d/d-us-03-collegiate-dome.glb",
+      "bytesBefore": 93752,
+      "bytesAfter": 38516,
+      "trianglesBefore": 2662,
+      "trianglesAfter": 2340,
+      "bounds": [
+        -22500,
+        -3.3306690738754696e-12,
+        -16499.999999999993,
+        22500,
+        26999.999999999993,
+        15000
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-04-collegiate-tower": {
+      "path": "public/assets/scenery/tier-d/d-us-04-collegiate-tower.glb",
+      "bytesBefore": 91148,
+      "bytesAfter": 21024,
+      "trianglesBefore": 3344,
+      "trianglesAfter": 2220,
+      "bounds": [
+        -6398.88134765625,
+        -1.3322676295501878e-12,
+        -6399.72021484374,
+        6400,
+        39999.99999999999,
+        6399.720214843756
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-05-water-tower": {
+      "path": "public/assets/scenery/tier-d/d-us-05-water-tower.glb",
+      "bytesBefore": 50280,
+      "bytesAfter": 21472,
+      "trianglesBefore": 1008,
+      "trianglesAfter": 880,
+      "bounds": [
+        -4893.90869140625,
+        -7.255732473177012e-13,
+        -4898.477050781245,
+        4900,
+        27499.999999999993,
+        4898.477050781253
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "d-us-06-highway-sign-gantry": {
+      "path": "public/assets/scenery/tier-d/d-us-06-highway-sign-gantry.glb",
+      "bytesBefore": 12672,
+      "bytesAfter": 13216,
+      "trianglesBefore": 48,
+      "trianglesAfter": 48,
+      "bounds": [
+        -10000,
+        -5.551115123125783e-14,
+        -299.9999999999984,
+        10000,
+        8099.999999999998,
+        475.0000000000016
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e01-london-plane": {
+      "path": "public/assets/scenery/tier-e/e01-london-plane.glb",
+      "bytesBefore": 77684,
+      "bytesAfter": 23444,
+      "trianglesBefore": 3740,
+      "trianglesAfter": 3004,
+      "bounds": [
+        -6500,
+        -9.988901660028596e-14,
+        -6495.1904296874945,
+        6498.42578125,
+        20499.999999999996,
+        6495.190429687502
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e02-weeping-willow": {
+      "path": "public/assets/scenery/tier-e/e02-weeping-willow.glb",
+      "bytesBefore": 50720,
+      "bytesAfter": 16716,
+      "trianglesBefore": 2342,
+      "trianglesAfter": 1916,
+      "bounds": [
+        -6800,
+        -1.33185359984557e-13,
+        -6794.968749999997,
+        6799.9970703125,
+        11299.999999999998,
+        6794.968749999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00009
+    },
+    "e03-lombardy-poplar": {
+      "path": "public/assets/scenery/tier-e/e03-lombardy-poplar.glb",
+      "bytesBefore": 105248,
+      "bytesAfter": 21088,
+      "trianglesBefore": 5446,
+      "trianglesAfter": 3314,
+      "bounds": [
+        -2400,
+        -8.879023547219561e-14,
+        -2399.4018554687464,
+        2379.71044921875,
+        25499.999999999993,
+        2399.4018554687527
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00005
+    },
+    "e04-english-oak": {
+      "path": "public/assets/scenery/tier-e/e04-english-oak.glb",
+      "bytesBefore": 61892,
+      "bytesAfter": 21196,
+      "trianglesBefore": 2882,
+      "trianglesAfter": 2472,
+      "bounds": [
+        -7400,
+        -1.7758047094439122e-13,
+        -6495.190429687495,
+        7698.89697265625,
+        17499.999999999996,
+        6696.892578125001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e05-red-maple": {
+      "path": "public/assets/scenery/tier-e/e05-red-maple.glb",
+      "bytesBefore": 49016,
+      "bytesAfter": 14768,
+      "trianglesBefore": 2328,
+      "trianglesAfter": 1812,
+      "bounds": [
+        -4200,
+        -1.109877977283763e-13,
+        -4196.892578124996,
+        4199.35107421875,
+        16999.999999999996,
+        4196.892578125002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e06-white-birch": {
+      "path": "public/assets/scenery/tier-e/e06-white-birch.glb",
+      "bytesBefore": 357988,
+      "bytesAfter": 68172,
+      "trianglesBefore": 18550,
+      "trianglesAfter": 12385,
+      "bounds": [
+        -2900,
+        -1.0434923460251114e-13,
+        -2598.372070312497,
+        2798.998046875,
+        15999.999999999996,
+        2498.3720703125023
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00002
+    },
+    "e07-eastern-white-pine": {
+      "path": "public/assets/scenery/tier-e/e07-eastern-white-pine.glb",
+      "bytesBefore": 74740,
+      "bytesAfter": 24240,
+      "trianglesBefore": 3113,
+      "trianglesAfter": 2032,
+      "bounds": [
+        -5193.5361328125,
+        -1.33185359984557e-13,
+        -5198.383789062498,
+        5200,
+        28099.999999999993,
+        5198.3837890625
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e08-scots-pine": {
+      "path": "public/assets/scenery/tier-e/e08-scots-pine.glb",
+      "bytesBefore": 73612,
+      "bytesAfter": 20248,
+      "trianglesBefore": 3590,
+      "trianglesAfter": 2708,
+      "bounds": [
+        -5000,
+        -1.109877977283763e-13,
+        -4996.300292968745,
+        4999.44140625,
+        19099.999999999996,
+        4996.300292968753
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e09-alder-scrub": {
+      "path": "public/assets/scenery/tier-e/e09-alder-scrub.glb",
+      "bytesBefore": 249836,
+      "bytesAfter": 54388,
+      "trianglesBefore": 12234,
+      "trianglesAfter": 8108,
+      "bounds": [
+        -2600,
+        -1.1776712417754798e-13,
+        -2598.0761718749986,
+        2999.673095703125,
+        6599.999999999998,
+        2598.0761718750005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e10-italian-cypress": {
+      "path": "public/assets/scenery/tier-e/e10-italian-cypress.glb",
+      "bytesBefore": 29616,
+      "bytesAfter": 8196,
+      "trianglesBefore": 1336,
+      "trianglesAfter": 849,
+      "bounds": [
+        -1298.384033203125,
+        -2.885682686727675e-13,
+        -1299.5959472656248,
+        1300,
+        14999.999999999996,
+        1299.5959472656248
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e11-reed-bed-clump": {
+      "path": "public/assets/scenery/tier-e/e11-reed-bed-clump.glb",
+      "bytesBefore": 107260,
+      "bytesAfter": 105232,
+      "trianglesBefore": 396,
+      "trianglesAfter": 396,
+      "bounds": [
+        -475.9173278808594,
+        -1.0000863120496542e-13,
+        -380.96844482421824,
+        338.6263732910156,
+        2838.1274414062495,
+        462.89883422851597
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e12-pollarded-willow": {
+      "path": "public/assets/scenery/tier-e/e12-pollarded-willow.glb",
+      "bytesBefore": 67064,
+      "bytesAfter": 84136,
+      "trianglesBefore": 928,
+      "trianglesAfter": 672,
+      "bounds": [
+        -599.254150390625,
+        -1.33185359984557e-13,
+        -599.8135375976561,
+        600,
+        3737.203369140624,
+        599.8135375976561
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e13-mown-bank-grass": {
+      "path": "public/assets/scenery/tier-e/e13-mown-bank-grass.glb",
+      "bytesBefore": 6740,
+      "bytesAfter": 9784,
+      "trianglesBefore": 24,
+      "trianglesAfter": 24,
+      "bounds": [
+        -4000,
+        -2.353672812205332e-13,
+        -999.9999999999998,
+        4000,
+        179.99999999999977,
+        1059.9999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e14-autumn-leaf-litter": {
+      "path": "public/assets/scenery/tier-e/e14-autumn-leaf-litter.glb",
+      "bytesBefore": 91660,
+      "bytesAfter": 92916,
+      "trianglesBefore": 336,
+      "trianglesAfter": 336,
+      "bounds": [
+        -1294.418212890625,
+        -3.1551993548255275e-13,
+        -1483.3270263671873,
+        1495.4481201171875,
+        12.000000000000325,
+        1420.9754638671873
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "e15-palm": {
+      "path": "public/assets/scenery/tier-e/e15-palm.glb",
+      "bytesBefore": 81524,
+      "bytesAfter": 61468,
+      "trianglesBefore": 2596,
+      "trianglesAfter": 1649,
+      "bounds": [
+        -4227.5830078125,
+        -7.769145434410527e-14,
+        -4417.615722656247,
+        4473.421875,
+        11110.368164062498,
+        4417.615722656251
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f01-bank-earth-cut": {
+      "path": "public/assets/scenery/tier-f/f01-bank-earth-cut.glb",
+      "bytesBefore": 31384,
+      "bytesAfter": 36664,
+      "trianglesBefore": 128,
+      "trianglesAfter": 128,
+      "bounds": [
+        -4000,
+        -3.3306690738754696e-13,
+        -1499.9999999999998,
+        4000,
+        2589.9999999999995,
+        1500.0000000000005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f02-bank-shingle-shelf": {
+      "path": "public/assets/scenery/tier-f/f02-bank-shingle-shelf.glb",
+      "bytesBefore": 6764,
+      "bytesAfter": 10164,
+      "trianglesBefore": 24,
+      "trianglesAfter": 24,
+      "bounds": [
+        -4000,
+        -6.661338147750939e-13,
+        -2999.9999999999995,
+        4000,
+        1000.0000000000005,
+        3149.999999999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f03-bank-reed-margin": {
+      "path": "public/assets/scenery/tier-f/f03-bank-reed-margin.glb",
+      "bytesBefore": 201596,
+      "bytesAfter": 186712,
+      "trianglesBefore": 732,
+      "trianglesAfter": 732,
+      "bounds": [
+        -4000,
+        -5.551115123125783e-13,
+        -2499.9999999999995,
+        4000,
+        2099.105468749999,
+        2499.9999999999995
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f04-bank-masonry-wall": {
+      "path": "public/assets/scenery/tier-f/f04-bank-masonry-wall.glb",
+      "bytesBefore": 71900,
+      "bytesAfter": 32144,
+      "trianglesBefore": 1772,
+      "trianglesAfter": 1772,
+      "bounds": [
+        -4000,
+        -8.881784197001252e-14,
+        -1229.9999999999995,
+        4000,
+        2749.9999999999995,
+        500.0000000000005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f05-bank-sheet-piling": {
+      "path": "public/assets/scenery/tier-f/f05-bank-sheet-piling.glb",
+      "bytesBefore": 57332,
+      "bytesAfter": 24708,
+      "trianglesBefore": 228,
+      "trianglesAfter": 228,
+      "bounds": [
+        -4240,
+        -4.440892098500626e-14,
+        -299.9999999999993,
+        4240,
+        3199.999999999999,
+        300.0000000000007
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f06-bank-sand-shelf": {
+      "path": "public/assets/scenery/tier-f/f06-bank-sand-shelf.glb",
+      "bytesBefore": 52828,
+      "bytesAfter": 52408,
+      "trianglesBefore": 192,
+      "trianglesAfter": 192,
+      "bounds": [
+        -4000,
+        -8.881784197001252e-13,
+        -3999.999999999999,
+        4000,
+        1490.3928222656255,
+        3999.999999999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f07-bank-boulder-shore": {
+      "path": "public/assets/scenery/tier-f/f07-bank-boulder-shore.glb",
+      "bytesBefore": 133548,
+      "bytesAfter": 53560,
+      "trianglesBefore": 6304,
+      "trianglesAfter": 6060,
+      "bounds": [
+        -4000,
+        -156.8953704833982,
+        -1999.9999999999993,
+        4038.2255859375,
+        960.0000000000002,
+        2899.9999999999995
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f08-bank-pile-revetment": {
+      "path": "public/assets/scenery/tier-f/f08-bank-pile-revetment.glb",
+      "bytesBefore": 51460,
+      "bytesAfter": 20984,
+      "trianglesBefore": 204,
+      "trianglesAfter": 204,
+      "bounds": [
+        -4000,
+        -8.659739592076221e-14,
+        -499.9999999999995,
+        4000,
+        1874.9999999999995,
+        500.0000000000003
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f09-bank-concrete-step": {
+      "path": "public/assets/scenery/tier-f/f09-bank-concrete-step.glb",
+      "bytesBefore": 33608,
+      "bytesAfter": 20016,
+      "trianglesBefore": 132,
+      "trianglesAfter": 132,
+      "bounds": [
+        -4000,
+        -3.3306690738754696e-13,
+        -1499.9999999999998,
+        4000,
+        2950,
+        1500.0000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f10-ridge-rolling-meadow": {
+      "path": "public/assets/scenery/tier-f/f10-ridge-rolling-meadow.glb",
+      "bytesBefore": 32148,
+      "bytesAfter": 16000,
+      "trianglesBefore": 1418,
+      "trianglesAfter": 1332,
+      "bounds": [
+        -34000,
+        -15999.999999999996,
+        -21983.722656249996,
+        33997.66796875,
+        11749.999999999998,
+        21983.722656249996
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00013
+    },
+    "f11-hillside-wooded": {
+      "path": "public/assets/scenery/tier-f/f11-hillside-wooded.glb",
+      "bytesBefore": 133436,
+      "bytesAfter": 46120,
+      "trianglesBefore": 6528,
+      "trianglesAfter": 6126,
+      "bounds": [
+        -45497.546875,
+        -7999.999999999998,
+        -25980.761718749993,
+        43863.86328125,
+        16940.279296874996,
+        26852.666015624993
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f12-bluff-steep": {
+      "path": "public/assets/scenery/tier-f/f12-bluff-steep.glb",
+      "bytesBefore": 31232,
+      "bytesAfter": 16524,
+      "trianglesBefore": 952,
+      "trianglesAfter": 592,
+      "bounds": [
+        -30000,
+        -1499.999999999998,
+        -13196.152343749996,
+        30000,
+        24999.999999999993,
+        12500.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00009
+    },
+    "f13-cliff-face": {
+      "path": "public/assets/scenery/tier-f/f13-cliff-face.glb",
+      "bytesBefore": 48888,
+      "bytesAfter": 20340,
+      "trianglesBefore": 192,
+      "trianglesAfter": 192,
+      "bounds": [
+        -20000,
+        -1.687538997430238e-12,
+        -7699.999999999993,
+        20000,
+        39999.99999999999,
+        7600.000000000007
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f14-polder-flat": {
+      "path": "public/assets/scenery/tier-f/f14-polder-flat.glb",
+      "bytesBefore": 58208,
+      "bytesAfter": 22164,
+      "trianglesBefore": 228,
+      "trianglesAfter": 228,
+      "bounds": [
+        -50000,
+        -350.00000000000637,
+        -29999.999999999993,
+        50000,
+        2700.0000000000055,
+        29999.999999999993
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f15-sandbank-midchannel": {
+      "path": "public/assets/scenery/tier-f/f15-sandbank-midchannel.glb",
+      "bytesBefore": 32396,
+      "bytesAfter": 9668,
+      "trianglesBefore": 1588,
+      "trianglesAfter": 1222,
+      "bounds": [
+        -15000,
+        -1299.9999999999998,
+        -3981.131591796874,
+        14999.9296875,
+        3699.999999999999,
+        3943.009765624999
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00012
+    },
+    "f16-island-wooded": {
+      "path": "public/assets/scenery/tier-f/f16-island-wooded.glb",
+      "bytesBefore": 105060,
+      "bytesAfter": 37792,
+      "trianglesBefore": 4936,
+      "trianglesAfter": 4561,
+      "bounds": [
+        -22000,
+        -3999.999999999999,
+        -9992.600585937498,
+        24182.515625,
+        12268.171874999998,
+        10711.884765625
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00022
+    },
+    "f17-mudflat-tidal": {
+      "path": "public/assets/scenery/tier-f/f17-mudflat-tidal.glb",
+      "bytesBefore": 21792,
+      "bytesAfter": 15084,
+      "trianglesBefore": 84,
+      "trianglesAfter": 84,
+      "bounds": [
+        -15000,
+        -1.3322676295501878e-12,
+        -5999.999999999999,
+        15000,
+        750.000000000001,
+        5999.999999999999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f18-grass-tuft-clump": {
+      "path": "public/assets/scenery/tier-f/f18-grass-tuft-clump.glb",
+      "bytesBefore": 30840,
+      "bytesAfter": 49168,
+      "trianglesBefore": 108,
+      "trianglesAfter": 108,
+      "bounds": [
+        -192.2322540283203,
+        -1.208501935005199,
+        -200.41723632812494,
+        184.0814208984375,
+        559.4503173828124,
+        143.29962158203122
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f19-flower-meadow-patch": {
+      "path": "public/assets/scenery/tier-f/f19-flower-meadow-patch.glb",
+      "bytesBefore": 198236,
+      "bytesAfter": 96372,
+      "trianglesBefore": 7920,
+      "trianglesAfter": 7718,
+      "bounds": [
+        -308.3627014160156,
+        -7.413972322352358e-14,
+        -334.22180175781233,
+        380.9877624511719,
+        497.69592285156233,
+        371.8623352050782
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f20-reed-stand": {
+      "path": "public/assets/scenery/tier-f/f20-reed-stand.glb",
+      "bytesBefore": 80336,
+      "bytesAfter": 78336,
+      "trianglesBefore": 288,
+      "trianglesAfter": 288,
+      "bounds": [
+        -398.04412841796875,
+        -6.697799866811627e-14,
+        -379.51638793945256,
+        418.9468688964844,
+        2691.5820312499995,
+        310.64208984375045
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f21-boulder-cluster": {
+      "path": "public/assets/scenery/tier-f/f21-boulder-cluster.glb",
+      "bytesBefore": 202360,
+      "bytesAfter": 104492,
+      "trianglesBefore": 7708,
+      "trianglesAfter": 6993,
+      "bounds": [
+        -700,
+        -40.000000000000085,
+        -574.9999999999999,
+        700,
+        499.99999999999983,
+        499.99999999999994
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f22-shingle-scatter": {
+      "path": "public/assets/scenery/tier-f/f22-shingle-scatter.glb",
+      "bytesBefore": 596416,
+      "bytesAfter": 165408,
+      "trianglesBefore": 29758,
+      "trianglesAfter": 27967,
+      "bounds": [
+        -972.0758666992188,
+        -17.975376129150504,
+        -929.2348022460935,
+        1031.1795654296875,
+        53.92612838745104,
+        1001.8375854492185
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f23-driftwood-log": {
+      "path": "public/assets/scenery/tier-f/f23-driftwood-log.glb",
+      "bytesBefore": 42920,
+      "bytesAfter": 20480,
+      "trianglesBefore": 1500,
+      "trianglesAfter": 1481,
+      "bounds": [
+        -1753.571044921875,
+        0.3362442851066561,
+        -670.639221191406,
+        2009.996826171875,
+        685.5565185546875,
+        548.7359008789062
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f24-deadfall-branch-pile": {
+      "path": "public/assets/scenery/tier-f/f24-deadfall-branch-pile.glb",
+      "bytesBefore": 90828,
+      "bytesAfter": 50024,
+      "trianglesBefore": 2480,
+      "trianglesAfter": 2480,
+      "bounds": [
+        -1535.577880859375,
+        -48.28405761718746,
+        -581.6175537109374,
+        1452.982421875,
+        724.7559814453124,
+        981.5917968749999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f25-bramble-scrub": {
+      "path": "public/assets/scenery/tier-f/f25-bramble-scrub.glb",
+      "bytesBefore": 47684,
+      "bytesAfter": 59612,
+      "trianglesBefore": 766,
+      "trianglesAfter": 730,
+      "bounds": [
+        -1000,
+        -399.9999999999999,
+        -999.2600708007809,
+        999.8851318359375,
+        1223.2064208984373,
+        999.2600708007811
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f26-fern-clump": {
+      "path": "public/assets/scenery/tier-f/f26-fern-clump.glb",
+      "bytesBefore": 27912,
+      "bytesAfter": 45224,
+      "trianglesBefore": 96,
+      "trianglesAfter": 96,
+      "bounds": [
+        -250.67263793945312,
+        -286.358642578125,
+        -232.2753448486327,
+        250.67263793945312,
+        286.35864257812494,
+        232.2753448486328
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f27-lily-pad-raft": {
+      "path": "public/assets/scenery/tier-f/f27-lily-pad-raft.glb",
+      "bytesBefore": 221980,
+      "bytesAfter": 130180,
+      "trianglesBefore": 6936,
+      "trianglesAfter": 6457,
+      "bounds": [
+        -1665.7584228515625,
+        -20.000000000000064,
+        -1533.3001708984373,
+        1637.3743896484375,
+        380,
+        1114.2875976562498
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f28-floating-weed-mat": {
+      "path": "public/assets/scenery/tier-f/f28-floating-weed-mat.glb",
+      "bytesBefore": 115432,
+      "bytesAfter": 86364,
+      "trianglesBefore": 2600,
+      "trianglesAfter": 2577,
+      "bounds": [
+        -2132.541015625,
+        -4.1284179850761826e-13,
+        -1804.7011718749995,
+        2321.000244140625,
+        60.000000000000384,
+        1859.2741699218745
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f29-weed-streamer": {
+      "path": "public/assets/scenery/tier-f/f29-weed-streamer.glb",
+      "bytesBefore": 3936,
+      "bytesAfter": 6732,
+      "trianglesBefore": 12,
+      "trianglesAfter": 12,
+      "bounds": [
+        -88.29476165771484,
+        -46.94715499877933,
+        -199.99999999999994,
+        651.66064453125,
+        1106.4842529296873,
+        200.0000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f30-foam-line": {
+      "path": "public/assets/scenery/tier-f/f30-foam-line.glb",
+      "bytesBefore": 3812,
+      "bytesAfter": 5076,
+      "trianglesBefore": 40,
+      "trianglesAfter": 40,
+      "bounds": [
+        -3000,
+        -4.440892098500626e-14,
+        -199.99999999999994,
+        3000,
+        30.000000000000036,
+        199.99999999999994
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f31-moored-dinghy": {
+      "path": "public/assets/scenery/tier-f/f31-moored-dinghy.glb",
+      "bytesBefore": 101948,
+      "bytesAfter": 53012,
+      "trianglesBefore": 3676,
+      "trianglesAfter": 3367,
+      "bounds": [
+        -1800,
+        -29.999999999999993,
+        -699.9999999999999,
+        2599.98974609375,
+        899.9999999999999,
+        700.0000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f32-moored-cruiser": {
+      "path": "public/assets/scenery/tier-f/f32-moored-cruiser.glb",
+      "bytesBefore": 179988,
+      "bytesAfter": 67524,
+      "trianglesBefore": 8442,
+      "trianglesAfter": 7560,
+      "bounds": [
+        -4000,
+        -2.886579864025407e-13,
+        -1499.889038085937,
+        4000,
+        2799.9999999999995,
+        1300
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f33-post-rail-fence": {
+      "path": "public/assets/scenery/tier-f/f33-post-rail-fence.glb",
+      "bytesBefore": 13072,
+      "bytesAfter": 16540,
+      "trianglesBefore": 84,
+      "trianglesAfter": 84,
+      "bounds": [
+        -1540,
+        -8.881784197001252e-15,
+        -39.99999999999999,
+        1540,
+        1199.9999999999998,
+        40.000000000000256
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f34-wire-stock-fence": {
+      "path": "public/assets/scenery/tier-f/f34-wire-stock-fence.glb",
+      "bytesBefore": 45244,
+      "bytesAfter": 18148,
+      "trianglesBefore": 1028,
+      "trianglesAfter": 824,
+      "bounds": [
+        -1545,
+        -9.992007221626409e-15,
+        -44.99999999999999,
+        1545,
+        1099.9999999999998,
+        45.000000000000234
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f35-hedgerow-section": {
+      "path": "public/assets/scenery/tier-f/f35-hedgerow-section.glb",
+      "bytesBefore": 25568,
+      "bytesAfter": 20756,
+      "trianglesBefore": 536,
+      "trianglesAfter": 420,
+      "bounds": [
+        -3000,
+        -6.661338147750939e-14,
+        -599.9999999999998,
+        3000,
+        1799.9999999999995,
+        600.0000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f36-towpath-section": {
+      "path": "public/assets/scenery/tier-f/f36-towpath-section.glb",
+      "bytesBefore": 9664,
+      "bytesAfter": 10332,
+      "trianglesBefore": 36,
+      "trianglesAfter": 36,
+      "bounds": [
+        -4000,
+        -3.3306690738754696e-13,
+        -1499.9999999999998,
+        4000,
+        120.0000000000003,
+        1499.9999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f37-park-bench": {
+      "path": "public/assets/scenery/tier-f/f37-park-bench.glb",
+      "bytesBefore": 38560,
+      "bytesAfter": 42668,
+      "trianglesBefore": 156,
+      "trianglesAfter": 156,
+      "bounds": [
+        -825,
+        -5.551115123125783e-14,
+        -249.99999999999994,
+        825,
+        859.9999999999998,
+        262.5000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f38-lamp-post": {
+      "path": "public/assets/scenery/tier-f/f38-lamp-post.glb",
+      "bytesBefore": 67656,
+      "bytesAfter": 22376,
+      "trianglesBefore": 3004,
+      "trianglesAfter": 1955,
+      "bounds": [
+        -200,
+        -3.1076581737642106e-14,
+        -849.9999999999985,
+        200,
+        5669.459472656249,
+        139.95648193359372
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f39-litter-bin": {
+      "path": "public/assets/scenery/tier-f/f39-litter-bin.glb",
+      "bytesBefore": 32508,
+      "bytesAfter": 13012,
+      "trianglesBefore": 1190,
+      "trianglesAfter": 1148,
+      "bounds": [
+        -220,
+        -1.3318535151422752e-14,
+        -219.837219238281,
+        219.99783325195312,
+        1069.9999999999998,
+        219.8372192382814
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f40-pylon-lattice": {
+      "path": "public/assets/scenery/tier-f/f40-pylon-lattice.glb",
+      "bytesBefore": 293720,
+      "bytesAfter": 102440,
+      "trianglesBefore": 7960,
+      "trianglesAfter": 6328,
+      "bounds": [
+        -7080,
+        -21.09241867065515,
+        -4199.380859374999,
+        7079.900390625,
+        40021.09374999999,
+        4199.380859374999
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f41-telegraph-pole": {
+      "path": "public/assets/scenery/tier-f/f41-telegraph-pole.glb",
+      "bytesBefore": 66152,
+      "bytesAfter": 19764,
+      "trianglesBefore": 1748,
+      "trianglesAfter": 1697,
+      "bounds": [
+        -1200,
+        -3.329633999613925e-14,
+        -149.95338439941403,
+        1200,
+        8999.999999999998,
+        149.95338439941602
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f42-culvert-outfall": {
+      "path": "public/assets/scenery/tier-f/f42-culvert-outfall.glb",
+      "bytesBefore": 21368,
+      "bytesAfter": 20988,
+      "trianglesBefore": 300,
+      "trianglesAfter": 300,
+      "bounds": [
+        -1000,
+        -199.99999999999986,
+        -649.9999999999999,
+        1000,
+        1499.9999999999998,
+        350.9995117187502
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f43-mooring-bollard": {
+      "path": "public/assets/scenery/tier-f/f43-mooring-bollard.glb",
+      "bytesBefore": 23612,
+      "bytesAfter": 9900,
+      "trianglesBefore": 942,
+      "trianglesAfter": 900,
+      "bounds": [
+        -220,
+        299.9999999999999,
+        -219.83721923828105,
+        219.99783325195312,
+        899.9999999999998,
+        219.83721923828134
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f44-navigation-marker": {
+      "path": "public/assets/scenery/tier-f/f44-navigation-marker.glb",
+      "bytesBefore": 9756,
+      "bytesAfter": 13060,
+      "trianglesBefore": 36,
+      "trianglesAfter": 36,
+      "bounds": [
+        -300,
+        -8.881784197001252e-15,
+        -39.99999999999999,
+        300,
+        2199.9999999999995,
+        40.00000000000044
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f45-treeline-strip": {
+      "path": "public/assets/scenery/tier-f/f45-treeline-strip.glb",
+      "bytesBefore": 1117956,
+      "bytesAfter": 179796,
+      "trianglesBefore": 58530,
+      "trianglesAfter": 35102,
+      "bounds": [
+        -51000,
+        -4840.668945312499,
+        -2997.7802734374986,
+        49997.79296875,
+        14522.006835937496,
+        2997.7802734375005
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f46-hill-ridge-far": {
+      "path": "public/assets/scenery/tier-f/f46-hill-ridge-far.glb",
+      "bytesBefore": 47400,
+      "bytesAfter": 13068,
+      "trianglesBefore": 2430,
+      "trianglesAfter": 1926,
+      "bounds": [
+        -120000,
+        -59999.999999999985,
+        -29977.802734374996,
+        139997.53125,
+        29999.999999999993,
+        29977.80273437499
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "f47-skyline-strip": {
+      "path": "public/assets/scenery/tier-f/f47-skyline-strip.glb",
+      "bytesBefore": 51588,
+      "bytesAfter": 54060,
+      "trianglesBefore": 192,
+      "trianglesAfter": 192,
+      "bounds": [
+        -47923.02734375,
+        -8.881784197001252e-13,
+        -3999.999999999999,
+        46176.74609375,
+        34661.49999999999,
+        4000.000000000007
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g01-skyscraper-tower": {
+      "path": "public/assets/scenery/tier-g/g01-skyscraper-tower.glb",
+      "bytesBefore": 82856,
+      "bytesAfter": 31856,
+      "trianglesBefore": 324,
+      "trianglesAfter": 324,
+      "bounds": [
+        -12200,
+        -2.686739719592879e-12,
+        -12099.999999999998,
+        12200,
+        96999.99999999999,
+        12100.000000000018
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g02-bridge-double-decker": {
+      "path": "public/assets/scenery/tier-g/g02-bridge-double-decker.glb",
+      "bytesBefore": 140588,
+      "bytesAfter": 34204,
+      "trianglesBefore": 3744,
+      "trianglesAfter": 2979,
+      "bounds": [
+        -60000,
+        -1.487650497580817e-12,
+        -6999.999999999994,
+        60000,
+        21099.999999999996,
+        7000.000000000003
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g03-bridge-pipeline": {
+      "path": "public/assets/scenery/tier-g/g03-bridge-pipeline.glb",
+      "bytesBefore": 242428,
+      "bytesAfter": 50996,
+      "trianglesBefore": 5636,
+      "trianglesAfter": 4871,
+      "bounds": [
+        -22500,
+        -2.664397294373927e-13,
+        -1199.9378662109373,
+        22500,
+        5099.378417968749,
+        1199.9378662109382
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g04-bridge-tram": {
+      "path": "public/assets/scenery/tier-g/g04-bridge-tram.glb",
+      "bytesBefore": 72256,
+      "bytesAfter": 26952,
+      "trianglesBefore": 1560,
+      "trianglesAfter": 1254,
+      "bounds": [
+        -30000,
+        -3.3306690738754696e-13,
+        -3999.9999999999973,
+        30000,
+        14999.999999999996,
+        4000.0000000000014
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g05-footbridge-timber": {
+      "path": "public/assets/scenery/tier-g/g05-footbridge-timber.glb",
+      "bytesBefore": 90908,
+      "bytesAfter": 30900,
+      "trianglesBefore": 360,
+      "trianglesAfter": 360,
+      "bounds": [
+        -12000,
+        -2.6645352591003757e-13,
+        -1199.9999999999998,
+        12000,
+        4689.999999999999,
+        1200.0000000000007
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g06-dam-gravity-concrete": {
+      "path": "public/assets/scenery/tier-g/g06-dam-gravity-concrete.glb",
+      "bytesBefore": 40800,
+      "bytesAfter": 25876,
+      "trianglesBefore": 160,
+      "trianglesAfter": 160,
+      "bounds": [
+        -62000,
+        -2.220446049250313e-12,
+        -34999.99999999999,
+        62000,
+        24299.999999999996,
+        10000.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g07-lighthouse-harbour": {
+      "path": "public/assets/scenery/tier-g/g07-lighthouse-harbour.glb",
+      "bytesBefore": 53876,
+      "bytesAfter": 24484,
+      "trianglesBefore": 1772,
+      "trianglesAfter": 1362,
+      "bounds": [
+        -4500,
+        -9.992007221626409e-13,
+        -4499.999999999999,
+        4500,
+        14599.999999999996,
+        4500
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g08-windmotor-steel": {
+      "path": "public/assets/scenery/tier-g/g08-windmotor-steel.glb",
+      "bytesBefore": 251752,
+      "bytesAfter": 148196,
+      "trianglesBefore": 5436,
+      "trianglesAfter": 4620,
+      "bounds": [
+        -2477.647705078125,
+        -22.468229293823658,
+        -3099.999999999996,
+        2477.647705078125,
+        16799.999999999996,
+        2149.1096191406245
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g09-power-station-stack": {
+      "path": "public/assets/scenery/tier-g/g09-power-station-stack.glb",
+      "bytesBefore": 33540,
+      "bytesAfter": 23344,
+      "trianglesBefore": 552,
+      "trianglesAfter": 501,
+      "bounds": [
+        -20100,
+        -2.6645352591003757e-12,
+        -12049.999999999996,
+        20100,
+        44999.99999999999,
+        12000.000000000004
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g10-observation-tower": {
+      "path": "public/assets/scenery/tier-g/g10-observation-tower.glb",
+      "bytesBefore": 60864,
+      "bytesAfter": 22232,
+      "trianglesBefore": 2072,
+      "trianglesAfter": 1637,
+      "bounds": [
+        -5093.66015625,
+        -7.103218837775649e-13,
+        -5098.415039062493,
+        5100,
+        33999.99999999999,
+        5098.4150390625055
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g11-water-tower-masonry": {
+      "path": "public/assets/scenery/tier-g/g11-water-tower-masonry.glb",
+      "bytesBefore": 78840,
+      "bytesAfter": 46916,
+      "trianglesBefore": 1984,
+      "trianglesAfter": 1524,
+      "bounds": [
+        -5250,
+        -5.549389615368272e-13,
+        -5249.999999999994,
+        5250,
+        33999.99999999999,
+        5250.0000000000055
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "g12-islet-sandy-scrub": {
+      "path": "public/assets/scenery/tier-g/g12-islet-sandy-scrub.glb",
+      "bytesBefore": 165080,
+      "bytesAfter": 46644,
+      "trianglesBefore": 8368,
+      "trianglesAfter": 6702,
+      "bounds": [
+        -15400,
+        -1399.9999999999998,
+        -7899.769531249998,
+        15399.9951171875,
+        2669.525390624999,
+        7896.853515624998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "l-barnes-railway-bridge": {
+      "path": "public/assets/scenery/tier-l/l-barnes-railway-bridge.glb",
+      "bytesBefore": 159708,
+      "bytesAfter": 39788,
+      "trianglesBefore": 4056,
+      "trianglesAfter": 3287,
+      "bounds": [
+        -30000,
+        3299.999999999998,
+        -4599.999999999998,
+        30000,
+        11355.544921874996,
+        13949.999999999998
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "l-fremont-bridge": {
+      "path": "public/assets/scenery/tier-l/l-fremont-bridge.glb",
+      "bytesBefore": 28444,
+      "bytesAfter": 27348,
+      "trianglesBefore": 108,
+      "trianglesAfter": 108,
+      "bounds": [
+        -21216.849609375,
+        -1855.663940429688,
+        -4599.999999999997,
+        21216.849609375,
+        8049.999999999999,
+        4600.000000000001
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "l-ponte-isabella": {
+      "path": "public/assets/scenery/tier-l/l-ponte-isabella.glb",
+      "bytesBefore": 58500,
+      "bytesAfter": 38952,
+      "trianglesBefore": 1068,
+      "trianglesAfter": 1068,
+      "bounds": [
+        -35000,
+        -1.2212453270876722e-12,
+        -5639.999999999998,
+        35000,
+        12899.999999999998,
+        5640.000000000002
+      ],
+      "simplified": true,
+      "boundsDrift": 0
+    },
+    "scull-female": {
+      "path": "public/assets/boat/scull-female.glb",
+      "bytesBefore": 2006240,
+      "bytesAfter": 380888,
+      "trianglesBefore": 103046,
+      "trianglesAfter": 65634,
+      "bounds": [
+        -2.780000019073486,
+        -0.10997854173183436,
+        -4.0500001907348615,
+        2.780000019073486,
+        1.0041148662567134,
+        4.0500001907348615
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00771
+    },
+    "scull-male": {
+      "path": "public/assets/boat/scull-male.glb",
+      "bytesBefore": 2006536,
+      "bytesAfter": 381488,
+      "trianglesBefore": 103068,
+      "trianglesAfter": 65635,
+      "bounds": [
+        -2.780000019073486,
+        -0.10997854173183436,
+        -4.0500001907348615,
+        2.780000019073486,
+        1.0533149242401119,
+        4.0500001907348615
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00771
+    },
+    "scull": {
+      "path": "public/assets/boat/scull.glb",
+      "bytesBefore": 1716416,
+      "bytesAfter": 280368,
+      "trianglesBefore": 90888,
+      "trianglesAfter": 55464,
+      "bounds": [
+        -2.780000019073486,
+        -0.10997854173183436,
+        -4.0500001907348615,
+        2.780000019073486,
+        0.2400000035762786,
+        4.0500001907348615
+      ],
+      "simplified": true,
+      "boundsDrift": 0.00771
+    }
+  }
+}

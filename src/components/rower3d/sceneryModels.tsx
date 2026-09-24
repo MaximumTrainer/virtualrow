@@ -20,6 +20,11 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
+import {
+  loadSceneryManifest,
+  orderByCost,
+  type SceneryManifest,
+} from '../../utils/sceneryManifest';
 import type { PerformanceMode } from './constants';
 import {
   buildTerrainProfile,
@@ -101,10 +106,15 @@ interface SceneryModelsProps {
  * until they arrive.
  */
 const SceneryModelsChunk: React.FC<
-  SceneryModelsProps & { readyCount: number; onChunkLoaded: (total: number) => void }
+  SceneryModelsProps & {
+    readyCount: number;
+    onChunkLoaded: (total: number) => void;
+    manifest: SceneryManifest | null;
+  }
 > = ({
   readyCount,
   onChunkLoaded,
+  manifest,
   side = 'left',
   boatZ = 0,
   positionRef = null,
@@ -154,8 +164,11 @@ const SceneryModelsChunk: React.FC<
     // Structures are chosen per route, not per profile, so their models are not
     // in any resolved set.
     for (const s of structures) all.add(sceneryAssetPath(s.id));
-    return Array.from(all);
-  }, [resolvedByProfile, structures]);
+    // Cheapest first (#332): the first chunk used to be whatever three models
+    // the selection matrix happened to list first, which on a wooded route was
+    // the treeline strip and two full-detail oaks.
+    return orderByCost(Array.from(all), manifest);
+  }, [resolvedByProfile, structures, manifest]);
 
   // Only the models asked for so far. useGLTF suspends until every path it is
   // handed has loaded, so slicing here is what caps the fetches in flight: a
@@ -318,8 +331,43 @@ export const SCENERY_LOAD_CONCURRENCY = 3;
  * suspends, and a suspended component loses the state it owns: keeping the
  * count inside it restarted the first chunk forever.
  */
+/**
+ * How long the kit waits for its manifest before loading without one (#332).
+ *
+ * The manifest decides the order the chunks are filled in, so it is read
+ * before the first chunk rather than applied to a list already being
+ * downloaded - reordering mid-flight would move the chunk boundary under a
+ * model that had already loaded and unmount it. It is a local JSON file; if it
+ * has not arrived by now it is not coming, and the order it would have
+ * improved is the order the kit used before it existed.
+ */
+export const SCENERY_MANIFEST_TIMEOUT_MS = 1_500;
+
 export const SceneryModels: React.FC<SceneryModelsProps> = (props) => {
   const [readyCount, setReadyCount] = useState(SCENERY_LOAD_CONCURRENCY);
+  // `undefined` while the manifest is still being asked for, `null` once the
+  // answer is "there isn't one".
+  const [manifest, setManifest] = useState<SceneryManifest | null | undefined>(undefined);
+
+  useEffect(() => {
+    let settled = false;
+    const settle = (value: SceneryManifest | null) => {
+      if (settled) return;
+      settled = true;
+      setManifest(value);
+    };
+
+    const timer = setTimeout(() => settle(null), SCENERY_MANIFEST_TIMEOUT_MS);
+    void loadSceneryManifest().then((value) => {
+      clearTimeout(timer);
+      settle(value);
+    });
+
+    return () => {
+      settled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   const handleChunkLoaded = React.useCallback((total: number) => {
     setReadyCount((current) =>
@@ -327,9 +375,16 @@ export const SceneryModels: React.FC<SceneryModelsProps> = (props) => {
     );
   }, []);
 
+  if (manifest === undefined) return null;
+
   return (
     <Suspense fallback={null}>
-      <SceneryModelsChunk {...props} readyCount={readyCount} onChunkLoaded={handleChunkLoaded} />
+      <SceneryModelsChunk
+        {...props}
+        readyCount={readyCount}
+        onChunkLoaded={handleChunkLoaded}
+        manifest={manifest}
+      />
     </Suspense>
   );
 };

@@ -362,6 +362,9 @@ declare global {
     __ROWER3D_ARM_ANGLE?: number;
     /** Blade tip height in scene units, so a spec can watch it enter the water (#329). */
     __ROWER3D_BLADE_Y?: number;
+    /** The ghost boat's distance and world position, for the #338 E2E. */
+    __ROWER3D_GHOST_METERS?: number;
+    __ROWER3D_GHOST_POS?: [number, number, number];
     /** Seat position along the slide in metres, 0 at the finish (#330). */
     __ROWER3D_SEAT_Z?: number;
     /**

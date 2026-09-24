@@ -29,7 +29,13 @@ interface GltfNode {
 
 interface GltfJson {
   meshes?: Array<{ primitives?: Array<{ attributes?: Record<string, number> }> }>;
-  accessors?: Array<{ type?: string; min?: number[]; max?: number[] }>;
+  accessors?: Array<{
+    type?: string;
+    componentType?: number;
+    normalized?: boolean;
+    min?: number[];
+    max?: number[];
+  }>;
   nodes?: GltfNode[];
   scenes?: Array<{ nodes?: number[] }>;
   scene?: number;
@@ -53,6 +59,37 @@ export const parseGlbJson = (glb: Buffer): GltfJson => {
 };
 
 /**
+ * Full scale of each integer component type, per the glTF spec's normalised
+ * accessor rules: the viewer divides by this to get back to -1..1 (or 0..1).
+ */
+const FULL_SCALE: Record<number, number> = {
+  5120: 127, // BYTE
+  5121: 255, // UNSIGNED_BYTE
+  5122: 32767, // SHORT
+  5123: 65535, // UNSIGNED_SHORT
+};
+
+/**
+ * Undo an accessor's quantisation.
+ *
+ * Compressing the kit (#332) left every position as a `normalized` SHORT whose
+ * -32767..32767 the viewer maps to -1..1 before the node's scale turns it back
+ * into millimetres. Read raw, a 300 mm buoy measures 9.8 km. An accessor that
+ * is not normalised is returned untouched - float positions are stored in the
+ * model's own units, and dividing one by 32767 would shrink it to nothing.
+ */
+const dequantize = (
+  accessor: { componentType?: number; normalized?: boolean },
+  value: number,
+): number => {
+  if (!accessor.normalized) return value;
+  const scale = FULL_SCALE[accessor.componentType ?? 0];
+  if (!scale) return value;
+  // Signed types clamp at -1: -128 and -32768 are both "as far as it goes".
+  return Math.max(value / scale, -1);
+};
+
+/**
  * The model's bounding box, in whatever units it was authored in — millimetres
  * for this kit. Null when it has no geometry to measure.
  */
@@ -70,8 +107,8 @@ export const readGlbBounds = (glb: Buffer): Bounds | null => {
       if (!accessor?.min || !accessor?.max) continue;
       measured = true;
       for (let axis = 0; axis < 3; axis += 1) {
-        min[axis] = Math.min(min[axis], accessor.min[axis]);
-        max[axis] = Math.max(max[axis], accessor.max[axis]);
+        min[axis] = Math.min(min[axis], dequantize(accessor, accessor.min[axis]));
+        max[axis] = Math.max(max[axis], dequantize(accessor, accessor.max[axis]));
       }
     }
   }
@@ -268,9 +305,9 @@ export const readGlbWorldBounds = (glb: Buffer, nodeFilter?: (name: string) => b
         // Every corner: a rotation turns the box, and only the corners bound it.
         for (let corner = 0; corner < 8; corner += 1) {
           const local = [
-            corner & 1 ? accessor.max[0] : accessor.min[0],
-            corner & 2 ? accessor.max[1] : accessor.min[1],
-            corner & 4 ? accessor.max[2] : accessor.min[2],
+            dequantize(accessor, corner & 1 ? accessor.max[0] : accessor.min[0]),
+            dequantize(accessor, corner & 2 ? accessor.max[1] : accessor.min[1]),
+            dequantize(accessor, corner & 4 ? accessor.max[2] : accessor.min[2]),
           ];
           const point = transformPoint(world, local);
           for (let axis = 0; axis < 3; axis += 1) {

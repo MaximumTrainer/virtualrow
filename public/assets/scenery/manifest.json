@@ -1,0 +1,803 @@
+{
+  "totalBytes": 6417360,
+  "models": {
+    "a01-buoy-lane-sphere": {
+      "path": "assets/scenery/tier-a/a01-buoy-lane-sphere.glb",
+      "bytes": 5772,
+      "triangles": 680,
+      "compressed": true
+    },
+    "a02-buoy-turn-cylinder": {
+      "path": "assets/scenery/tier-a/a02-buoy-turn-cylinder.glb",
+      "bytes": 33168,
+      "triangles": 1084,
+      "compressed": true
+    },
+    "a03-pontoon-floating-dock": {
+      "path": "assets/scenery/tier-a/a03-pontoon-floating-dock.glb",
+      "bytes": 34620,
+      "triangles": 140,
+      "compressed": true
+    },
+    "a04-launch-dock-fixed": {
+      "path": "assets/scenery/tier-a/a04-launch-dock-fixed.glb",
+      "bytes": 74228,
+      "triangles": 396,
+      "compressed": true
+    },
+    "a05-stakeboat-platform": {
+      "path": "assets/scenery/tier-a/a05-stakeboat-platform.glb",
+      "bytes": 17740,
+      "triangles": 245,
+      "compressed": true
+    },
+    "a06-finish-tower": {
+      "path": "assets/scenery/tier-a/a06-finish-tower.glb",
+      "bytes": 83072,
+      "triangles": 436,
+      "compressed": true
+    },
+    "a07-distance-marker-post": {
+      "path": "assets/scenery/tier-a/a07-distance-marker-post.glb",
+      "bytes": 13040,
+      "triangles": 36,
+      "compressed": true
+    },
+    "a08-umpire-launch": {
+      "path": "assets/scenery/tier-a/a08-umpire-launch.glb",
+      "bytes": 56404,
+      "triangles": 2741,
+      "compressed": true
+    },
+    "a09-gazebo-hexagonal": {
+      "path": "assets/scenery/tier-a/a09-gazebo-hexagonal.glb",
+      "bytes": 55504,
+      "triangles": 1294,
+      "compressed": true
+    },
+    "a10-slipway-ramp": {
+      "path": "assets/scenery/tier-a/a10-slipway-ramp.glb",
+      "bytes": 15208,
+      "triangles": 36,
+      "compressed": true
+    },
+    "a11-bank-railing": {
+      "path": "assets/scenery/tier-a/a11-bank-railing.glb",
+      "bytes": 14776,
+      "triangles": 802,
+      "compressed": true
+    },
+    "a12-regatta-flagpole": {
+      "path": "assets/scenery/tier-a/a12-regatta-flagpole.glb",
+      "bytes": 32860,
+      "triangles": 5897,
+      "compressed": true
+    },
+    "b01-boathouse-new-england": {
+      "path": "assets/scenery/tier-b/b01-boathouse-new-england.glb",
+      "bytes": 62696,
+      "triangles": 276,
+      "compressed": true
+    },
+    "b02-boathouse-uk-victorian": {
+      "path": "assets/scenery/tier-b/b02-boathouse-uk-victorian.glb",
+      "bytes": 38556,
+      "triangles": 128,
+      "compressed": true
+    },
+    "b03-clubhouse-modern": {
+      "path": "assets/scenery/tier-b/b03-clubhouse-modern.glb",
+      "bytes": 23216,
+      "triangles": 88,
+      "compressed": true
+    },
+    "b04-boat-rack-outdoor": {
+      "path": "assets/scenery/tier-b/b04-boat-rack-outdoor.glb",
+      "bytes": 71020,
+      "triangles": 11156,
+      "compressed": true
+    },
+    "b05-quay-wall-stone": {
+      "path": "assets/scenery/tier-b/b05-quay-wall-stone.glb",
+      "bytes": 47488,
+      "triangles": 9692,
+      "compressed": true
+    },
+    "b06-wharf-warehouse": {
+      "path": "assets/scenery/tier-b/b06-wharf-warehouse.glb",
+      "bytes": 34152,
+      "triangles": 284,
+      "compressed": true
+    },
+    "b07-quay-crane": {
+      "path": "assets/scenery/tier-b/b07-quay-crane.glb",
+      "bytes": 34632,
+      "triangles": 1478,
+      "compressed": true
+    },
+    "b08-marina-pontoon-cluster": {
+      "path": "assets/scenery/tier-b/b08-marina-pontoon-cluster.glb",
+      "bytes": 82596,
+      "triangles": 9434,
+      "compressed": true
+    },
+    "c01-bridge-arch-masonry": {
+      "path": "assets/scenery/tier-c/c01-bridge-arch-masonry.glb",
+      "bytes": 42872,
+      "triangles": 1104,
+      "compressed": true
+    },
+    "c02-bridge-road-concrete": {
+      "path": "assets/scenery/tier-c/c02-bridge-road-concrete.glb",
+      "bytes": 20124,
+      "triangles": 360,
+      "compressed": true
+    },
+    "c03-bridge-truss-steel": {
+      "path": "assets/scenery/tier-c/c03-bridge-truss-steel.glb",
+      "bytes": 93812,
+      "triangles": 9468,
+      "compressed": true
+    },
+    "c04-bridge-rail-girder": {
+      "path": "assets/scenery/tier-c/c04-bridge-rail-girder.glb",
+      "bytes": 16932,
+      "triangles": 72,
+      "compressed": true
+    },
+    "c05-bridge-bascule": {
+      "path": "assets/scenery/tier-c/c05-bridge-bascule.glb",
+      "bytes": 26180,
+      "triangles": 798,
+      "compressed": true
+    },
+    "c06-bridge-foot-suspension": {
+      "path": "assets/scenery/tier-c/c06-bridge-foot-suspension.glb",
+      "bytes": 68912,
+      "triangles": 5552,
+      "compressed": true
+    },
+    "c07-bridge-dutch-lift": {
+      "path": "assets/scenery/tier-c/c07-bridge-dutch-lift.glb",
+      "bytes": 40456,
+      "triangles": 1821,
+      "compressed": true
+    },
+    "c08-bridge-cantilever": {
+      "path": "assets/scenery/tier-c/c08-bridge-cantilever.glb",
+      "bytes": 34912,
+      "triangles": 2770,
+      "compressed": true
+    },
+    "d-ce-01-baroque-church-onion": {
+      "path": "assets/scenery/tier-d/d-ce-01-baroque-church-onion.glb",
+      "bytes": 32176,
+      "triangles": 1684,
+      "compressed": true
+    },
+    "d-ce-02-panelak-block": {
+      "path": "assets/scenery/tier-d/d-ce-02-panelak-block.glb",
+      "bytes": 29356,
+      "triangles": 324,
+      "compressed": true
+    },
+    "d-ce-03-riverside-villa": {
+      "path": "assets/scenery/tier-d/d-ce-03-riverside-villa.glb",
+      "bytes": 23316,
+      "triangles": 406,
+      "compressed": true
+    },
+    "d-ce-04-hydro-weir-house": {
+      "path": "assets/scenery/tier-d/d-ce-04-hydro-weir-house.glb",
+      "bytes": 21476,
+      "triangles": 80,
+      "compressed": true
+    },
+    "d-gb-01-terrace-brick": {
+      "path": "assets/scenery/tier-d/d-gb-01-terrace-brick.glb",
+      "bytes": 23944,
+      "triangles": 128,
+      "compressed": true
+    },
+    "d-gb-02-church-square-tower": {
+      "path": "assets/scenery/tier-d/d-gb-02-church-square-tower.glb",
+      "bytes": 37600,
+      "triangles": 1916,
+      "compressed": true
+    },
+    "d-gb-03-riverside-pub": {
+      "path": "assets/scenery/tier-d/d-gb-03-riverside-pub.glb",
+      "bytes": 39784,
+      "triangles": 1312,
+      "compressed": true
+    },
+    "d-gb-04-stone-cottage": {
+      "path": "assets/scenery/tier-d/d-gb-04-stone-cottage.glb",
+      "bytes": 20444,
+      "triangles": 56,
+      "compressed": true
+    },
+    "d-gb-05-stone-barn": {
+      "path": "assets/scenery/tier-d/d-gb-05-stone-barn.glb",
+      "bytes": 17964,
+      "triangles": 56,
+      "compressed": true
+    },
+    "d-gb-06-regatta-marquee": {
+      "path": "assets/scenery/tier-d/d-gb-06-regatta-marquee.glb",
+      "bytes": 23500,
+      "triangles": 1608,
+      "compressed": true
+    },
+    "d-it-01-po-palazzo": {
+      "path": "assets/scenery/tier-d/d-it-01-po-palazzo.glb",
+      "bytes": 26244,
+      "triangles": 224,
+      "compressed": true
+    },
+    "d-it-02-castello-valentino": {
+      "path": "assets/scenery/tier-d/d-it-02-castello-valentino.glb",
+      "bytes": 26536,
+      "triangles": 171,
+      "compressed": true
+    },
+    "d-it-03-arcaded-embankment": {
+      "path": "assets/scenery/tier-d/d-it-03-arcaded-embankment.glb",
+      "bytes": 20380,
+      "triangles": 144,
+      "compressed": true
+    },
+    "d-nl-01-gabled-canal-house": {
+      "path": "assets/scenery/tier-d/d-nl-01-gabled-canal-house.glb",
+      "bytes": 31516,
+      "triangles": 156,
+      "compressed": true
+    },
+    "d-nl-02-polder-windmill": {
+      "path": "assets/scenery/tier-d/d-nl-02-polder-windmill.glb",
+      "bytes": 37792,
+      "triangles": 760,
+      "compressed": true
+    },
+    "d-nl-03-polder-farmhouse": {
+      "path": "assets/scenery/tier-d/d-nl-03-polder-farmhouse.glb",
+      "bytes": 19496,
+      "triangles": 92,
+      "compressed": true
+    },
+    "d-nl-04-canal-lock": {
+      "path": "assets/scenery/tier-d/d-nl-04-canal-lock.glb",
+      "bytes": 23216,
+      "triangles": 1076,
+      "compressed": true
+    },
+    "d-nl-05-wind-turbine": {
+      "path": "assets/scenery/tier-d/d-nl-05-wind-turbine.glb",
+      "bytes": 29624,
+      "triangles": 1665,
+      "compressed": true
+    },
+    "d-nl-06-reed-bank-edge": {
+      "path": "assets/scenery/tier-d/d-nl-06-reed-bank-edge.glb",
+      "bytes": 136428,
+      "triangles": 648,
+      "compressed": true
+    },
+    "d-us-01-clapboard-house": {
+      "path": "assets/scenery/tier-d/d-us-01-clapboard-house.glb",
+      "bytes": 21788,
+      "triangles": 292,
+      "compressed": true
+    },
+    "d-us-02-brick-mill": {
+      "path": "assets/scenery/tier-d/d-us-02-brick-mill.glb",
+      "bytes": 22216,
+      "triangles": 74,
+      "compressed": true
+    },
+    "d-us-03-collegiate-dome": {
+      "path": "assets/scenery/tier-d/d-us-03-collegiate-dome.glb",
+      "bytes": 38516,
+      "triangles": 2340,
+      "compressed": true
+    },
+    "d-us-04-collegiate-tower": {
+      "path": "assets/scenery/tier-d/d-us-04-collegiate-tower.glb",
+      "bytes": 21024,
+      "triangles": 2220,
+      "compressed": true
+    },
+    "d-us-05-water-tower": {
+      "path": "assets/scenery/tier-d/d-us-05-water-tower.glb",
+      "bytes": 21472,
+      "triangles": 880,
+      "compressed": true
+    },
+    "d-us-06-highway-sign-gantry": {
+      "path": "assets/scenery/tier-d/d-us-06-highway-sign-gantry.glb",
+      "bytes": 13216,
+      "triangles": 48,
+      "compressed": true
+    },
+    "e01-london-plane": {
+      "path": "assets/scenery/tier-e/e01-london-plane.glb",
+      "bytes": 23444,
+      "triangles": 3004,
+      "compressed": true
+    },
+    "e02-weeping-willow": {
+      "path": "assets/scenery/tier-e/e02-weeping-willow.glb",
+      "bytes": 16716,
+      "triangles": 1916,
+      "compressed": true
+    },
+    "e03-lombardy-poplar": {
+      "path": "assets/scenery/tier-e/e03-lombardy-poplar.glb",
+      "bytes": 21088,
+      "triangles": 3314,
+      "compressed": true
+    },
+    "e04-english-oak": {
+      "path": "assets/scenery/tier-e/e04-english-oak.glb",
+      "bytes": 21196,
+      "triangles": 2472,
+      "compressed": true
+    },
+    "e05-red-maple": {
+      "path": "assets/scenery/tier-e/e05-red-maple.glb",
+      "bytes": 14768,
+      "triangles": 1812,
+      "compressed": true
+    },
+    "e06-white-birch": {
+      "path": "assets/scenery/tier-e/e06-white-birch.glb",
+      "bytes": 68172,
+      "triangles": 12385,
+      "compressed": true
+    },
+    "e07-eastern-white-pine": {
+      "path": "assets/scenery/tier-e/e07-eastern-white-pine.glb",
+      "bytes": 24240,
+      "triangles": 2032,
+      "compressed": true
+    },
+    "e08-scots-pine": {
+      "path": "assets/scenery/tier-e/e08-scots-pine.glb",
+      "bytes": 20248,
+      "triangles": 2708,
+      "compressed": true
+    },
+    "e09-alder-scrub": {
+      "path": "assets/scenery/tier-e/e09-alder-scrub.glb",
+      "bytes": 54388,
+      "triangles": 8108,
+      "compressed": true
+    },
+    "e10-italian-cypress": {
+      "path": "assets/scenery/tier-e/e10-italian-cypress.glb",
+      "bytes": 8196,
+      "triangles": 849,
+      "compressed": true
+    },
+    "e11-reed-bed-clump": {
+      "path": "assets/scenery/tier-e/e11-reed-bed-clump.glb",
+      "bytes": 105232,
+      "triangles": 396,
+      "compressed": true
+    },
+    "e12-pollarded-willow": {
+      "path": "assets/scenery/tier-e/e12-pollarded-willow.glb",
+      "bytes": 84136,
+      "triangles": 672,
+      "compressed": true
+    },
+    "e13-mown-bank-grass": {
+      "path": "assets/scenery/tier-e/e13-mown-bank-grass.glb",
+      "bytes": 9784,
+      "triangles": 24,
+      "compressed": true
+    },
+    "e14-autumn-leaf-litter": {
+      "path": "assets/scenery/tier-e/e14-autumn-leaf-litter.glb",
+      "bytes": 92916,
+      "triangles": 336,
+      "compressed": true
+    },
+    "e15-palm": {
+      "path": "assets/scenery/tier-e/e15-palm.glb",
+      "bytes": 61468,
+      "triangles": 1649,
+      "compressed": true
+    },
+    "f01-bank-earth-cut": {
+      "path": "assets/scenery/tier-f/f01-bank-earth-cut.glb",
+      "bytes": 36664,
+      "triangles": 128,
+      "compressed": true
+    },
+    "f02-bank-shingle-shelf": {
+      "path": "assets/scenery/tier-f/f02-bank-shingle-shelf.glb",
+      "bytes": 10164,
+      "triangles": 24,
+      "compressed": true
+    },
+    "f03-bank-reed-margin": {
+      "path": "assets/scenery/tier-f/f03-bank-reed-margin.glb",
+      "bytes": 186712,
+      "triangles": 732,
+      "compressed": true
+    },
+    "f04-bank-masonry-wall": {
+      "path": "assets/scenery/tier-f/f04-bank-masonry-wall.glb",
+      "bytes": 32144,
+      "triangles": 1772,
+      "compressed": true
+    },
+    "f05-bank-sheet-piling": {
+      "path": "assets/scenery/tier-f/f05-bank-sheet-piling.glb",
+      "bytes": 24708,
+      "triangles": 228,
+      "compressed": true
+    },
+    "f06-bank-sand-shelf": {
+      "path": "assets/scenery/tier-f/f06-bank-sand-shelf.glb",
+      "bytes": 52408,
+      "triangles": 192,
+      "compressed": true
+    },
+    "f07-bank-boulder-shore": {
+      "path": "assets/scenery/tier-f/f07-bank-boulder-shore.glb",
+      "bytes": 53560,
+      "triangles": 6060,
+      "compressed": true
+    },
+    "f08-bank-pile-revetment": {
+      "path": "assets/scenery/tier-f/f08-bank-pile-revetment.glb",
+      "bytes": 20984,
+      "triangles": 204,
+      "compressed": true
+    },
+    "f09-bank-concrete-step": {
+      "path": "assets/scenery/tier-f/f09-bank-concrete-step.glb",
+      "bytes": 20016,
+      "triangles": 132,
+      "compressed": true
+    },
+    "f10-ridge-rolling-meadow": {
+      "path": "assets/scenery/tier-f/f10-ridge-rolling-meadow.glb",
+      "bytes": 16000,
+      "triangles": 1332,
+      "compressed": true
+    },
+    "f11-hillside-wooded": {
+      "path": "assets/scenery/tier-f/f11-hillside-wooded.glb",
+      "bytes": 46120,
+      "triangles": 6126,
+      "compressed": true
+    },
+    "f12-bluff-steep": {
+      "path": "assets/scenery/tier-f/f12-bluff-steep.glb",
+      "bytes": 16524,
+      "triangles": 592,
+      "compressed": true
+    },
+    "f13-cliff-face": {
+      "path": "assets/scenery/tier-f/f13-cliff-face.glb",
+      "bytes": 20340,
+      "triangles": 192,
+      "compressed": true
+    },
+    "f14-polder-flat": {
+      "path": "assets/scenery/tier-f/f14-polder-flat.glb",
+      "bytes": 22164,
+      "triangles": 228,
+      "compressed": true
+    },
+    "f15-sandbank-midchannel": {
+      "path": "assets/scenery/tier-f/f15-sandbank-midchannel.glb",
+      "bytes": 9668,
+      "triangles": 1222,
+      "compressed": true
+    },
+    "f16-island-wooded": {
+      "path": "assets/scenery/tier-f/f16-island-wooded.glb",
+      "bytes": 37792,
+      "triangles": 4561,
+      "compressed": true
+    },
+    "f17-mudflat-tidal": {
+      "path": "assets/scenery/tier-f/f17-mudflat-tidal.glb",
+      "bytes": 15084,
+      "triangles": 84,
+      "compressed": true
+    },
+    "f18-grass-tuft-clump": {
+      "path": "assets/scenery/tier-f/f18-grass-tuft-clump.glb",
+      "bytes": 49168,
+      "triangles": 108,
+      "compressed": true
+    },
+    "f19-flower-meadow-patch": {
+      "path": "assets/scenery/tier-f/f19-flower-meadow-patch.glb",
+      "bytes": 96372,
+      "triangles": 7718,
+      "compressed": true
+    },
+    "f20-reed-stand": {
+      "path": "assets/scenery/tier-f/f20-reed-stand.glb",
+      "bytes": 78336,
+      "triangles": 288,
+      "compressed": true
+    },
+    "f21-boulder-cluster": {
+      "path": "assets/scenery/tier-f/f21-boulder-cluster.glb",
+      "bytes": 104492,
+      "triangles": 6993,
+      "compressed": true
+    },
+    "f22-shingle-scatter": {
+      "path": "assets/scenery/tier-f/f22-shingle-scatter.glb",
+      "bytes": 165408,
+      "triangles": 27967,
+      "compressed": true
+    },
+    "f23-driftwood-log": {
+      "path": "assets/scenery/tier-f/f23-driftwood-log.glb",
+      "bytes": 20480,
+      "triangles": 1481,
+      "compressed": true
+    },
+    "f24-deadfall-branch-pile": {
+      "path": "assets/scenery/tier-f/f24-deadfall-branch-pile.glb",
+      "bytes": 50024,
+      "triangles": 2480,
+      "compressed": true
+    },
+    "f25-bramble-scrub": {
+      "path": "assets/scenery/tier-f/f25-bramble-scrub.glb",
+      "bytes": 59612,
+      "triangles": 730,
+      "compressed": true
+    },
+    "f26-fern-clump": {
+      "path": "assets/scenery/tier-f/f26-fern-clump.glb",
+      "bytes": 45224,
+      "triangles": 96,
+      "compressed": true
+    },
+    "f27-lily-pad-raft": {
+      "path": "assets/scenery/tier-f/f27-lily-pad-raft.glb",
+      "bytes": 130180,
+      "triangles": 6457,
+      "compressed": true
+    },
+    "f28-floating-weed-mat": {
+      "path": "assets/scenery/tier-f/f28-floating-weed-mat.glb",
+      "bytes": 86364,
+      "triangles": 2577,
+      "compressed": true
+    },
+    "f29-weed-streamer": {
+      "path": "assets/scenery/tier-f/f29-weed-streamer.glb",
+      "bytes": 6732,
+      "triangles": 12,
+      "compressed": true
+    },
+    "f30-foam-line": {
+      "path": "assets/scenery/tier-f/f30-foam-line.glb",
+      "bytes": 5076,
+      "triangles": 40,
+      "compressed": true
+    },
+    "f31-moored-dinghy": {
+      "path": "assets/scenery/tier-f/f31-moored-dinghy.glb",
+      "bytes": 53012,
+      "triangles": 3367,
+      "compressed": true
+    },
+    "f32-moored-cruiser": {
+      "path": "assets/scenery/tier-f/f32-moored-cruiser.glb",
+      "bytes": 67524,
+      "triangles": 7560,
+      "compressed": true
+    },
+    "f33-post-rail-fence": {
+      "path": "assets/scenery/tier-f/f33-post-rail-fence.glb",
+      "bytes": 16540,
+      "triangles": 84,
+      "compressed": true
+    },
+    "f34-wire-stock-fence": {
+      "path": "assets/scenery/tier-f/f34-wire-stock-fence.glb",
+      "bytes": 18148,
+      "triangles": 824,
+      "compressed": true
+    },
+    "f35-hedgerow-section": {
+      "path": "assets/scenery/tier-f/f35-hedgerow-section.glb",
+      "bytes": 20756,
+      "triangles": 420,
+      "compressed": true
+    },
+    "f36-towpath-section": {
+      "path": "assets/scenery/tier-f/f36-towpath-section.glb",
+      "bytes": 10332,
+      "triangles": 36,
+      "compressed": true
+    },
+    "f37-park-bench": {
+      "path": "assets/scenery/tier-f/f37-park-bench.glb",
+      "bytes": 42668,
+      "triangles": 156,
+      "compressed": true
+    },
+    "f38-lamp-post": {
+      "path": "assets/scenery/tier-f/f38-lamp-post.glb",
+      "bytes": 22376,
+      "triangles": 1955,
+      "compressed": true
+    },
+    "f39-litter-bin": {
+      "path": "assets/scenery/tier-f/f39-litter-bin.glb",
+      "bytes": 13012,
+      "triangles": 1148,
+      "compressed": true
+    },
+    "f40-pylon-lattice": {
+      "path": "assets/scenery/tier-f/f40-pylon-lattice.glb",
+      "bytes": 102440,
+      "triangles": 6328,
+      "compressed": true
+    },
+    "f41-telegraph-pole": {
+      "path": "assets/scenery/tier-f/f41-telegraph-pole.glb",
+      "bytes": 19764,
+      "triangles": 1697,
+      "compressed": true
+    },
+    "f42-culvert-outfall": {
+      "path": "assets/scenery/tier-f/f42-culvert-outfall.glb",
+      "bytes": 20988,
+      "triangles": 300,
+      "compressed": true
+    },
+    "f43-mooring-bollard": {
+      "path": "assets/scenery/tier-f/f43-mooring-bollard.glb",
+      "bytes": 9900,
+      "triangles": 900,
+      "compressed": true
+    },
+    "f44-navigation-marker": {
+      "path": "assets/scenery/tier-f/f44-navigation-marker.glb",
+      "bytes": 13060,
+      "triangles": 36,
+      "compressed": true
+    },
+    "f45-treeline-strip": {
+      "path": "assets/scenery/tier-f/f45-treeline-strip.glb",
+      "bytes": 179796,
+      "triangles": 35102,
+      "compressed": true
+    },
+    "f46-hill-ridge-far": {
+      "path": "assets/scenery/tier-f/f46-hill-ridge-far.glb",
+      "bytes": 13068,
+      "triangles": 1926,
+      "compressed": true
+    },
+    "f47-skyline-strip": {
+      "path": "assets/scenery/tier-f/f47-skyline-strip.glb",
+      "bytes": 54060,
+      "triangles": 192,
+      "compressed": true
+    },
+    "g01-skyscraper-tower": {
+      "path": "assets/scenery/tier-g/g01-skyscraper-tower.glb",
+      "bytes": 31856,
+      "triangles": 324,
+      "compressed": true
+    },
+    "g02-bridge-double-decker": {
+      "path": "assets/scenery/tier-g/g02-bridge-double-decker.glb",
+      "bytes": 34204,
+      "triangles": 2979,
+      "compressed": true
+    },
+    "g03-bridge-pipeline": {
+      "path": "assets/scenery/tier-g/g03-bridge-pipeline.glb",
+      "bytes": 50996,
+      "triangles": 4871,
+      "compressed": true
+    },
+    "g04-bridge-tram": {
+      "path": "assets/scenery/tier-g/g04-bridge-tram.glb",
+      "bytes": 26952,
+      "triangles": 1254,
+      "compressed": true
+    },
+    "g05-footbridge-timber": {
+      "path": "assets/scenery/tier-g/g05-footbridge-timber.glb",
+      "bytes": 30900,
+      "triangles": 360,
+      "compressed": true
+    },
+    "g06-dam-gravity-concrete": {
+      "path": "assets/scenery/tier-g/g06-dam-gravity-concrete.glb",
+      "bytes": 25876,
+      "triangles": 160,
+      "compressed": true
+    },
+    "g07-lighthouse-harbour": {
+      "path": "assets/scenery/tier-g/g07-lighthouse-harbour.glb",
+      "bytes": 24484,
+      "triangles": 1362,
+      "compressed": true
+    },
+    "g08-windmotor-steel": {
+      "path": "assets/scenery/tier-g/g08-windmotor-steel.glb",
+      "bytes": 148196,
+      "triangles": 4620,
+      "compressed": true
+    },
+    "g09-power-station-stack": {
+      "path": "assets/scenery/tier-g/g09-power-station-stack.glb",
+      "bytes": 23344,
+      "triangles": 501,
+      "compressed": true
+    },
+    "g10-observation-tower": {
+      "path": "assets/scenery/tier-g/g10-observation-tower.glb",
+      "bytes": 22232,
+      "triangles": 1637,
+      "compressed": true
+    },
+    "g11-water-tower-masonry": {
+      "path": "assets/scenery/tier-g/g11-water-tower-masonry.glb",
+      "bytes": 46916,
+      "triangles": 1524,
+      "compressed": true
+    },
+    "g12-islet-sandy-scrub": {
+      "path": "assets/scenery/tier-g/g12-islet-sandy-scrub.glb",
+      "bytes": 46644,
+      "triangles": 6702,
+      "compressed": true
+    },
+    "l-barnes-railway-bridge": {
+      "path": "assets/scenery/tier-l/l-barnes-railway-bridge.glb",
+      "bytes": 39788,
+      "triangles": 3287,
+      "compressed": true
+    },
+    "l-fremont-bridge": {
+      "path": "assets/scenery/tier-l/l-fremont-bridge.glb",
+      "bytes": 27348,
+      "triangles": 108,
+      "compressed": true
+    },
+    "l-ponte-isabella": {
+      "path": "assets/scenery/tier-l/l-ponte-isabella.glb",
+      "bytes": 38952,
+      "triangles": 1068,
+      "compressed": true
+    },
+    "scull-female": {
+      "path": "assets/boat/scull-female.glb",
+      "bytes": 380888,
+      "triangles": 65634,
+      "compressed": true
+    },
+    "scull-male": {
+      "path": "assets/boat/scull-male.glb",
+      "bytes": 381488,
+      "triangles": 65635,
+      "compressed": true
+    },
+    "scull": {
+      "path": "assets/boat/scull.glb",
+      "bytes": 280368,
+      "triangles": 55464,
+      "compressed": true
+    }
+  }
+}

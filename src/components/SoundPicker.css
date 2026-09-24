@@ -24,9 +24,70 @@
   cursor: pointer;
 }
 
+/*
+ * 44px touch floor (issue #195, Phase 4).
+ *
+ * The *input* is the tap target, not the label around it, so a 44px label with
+ * a 13px checkbox inside it is a 13px control — which is what
+ * `responsive.spec.ts` measures, and what it caught here. The checkbox is
+ * drawn as a switch at a size a thumb can find on an erg.
+ */
+.sound-picker-switch input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 44px;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sound-picker-switch input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.sound-picker-switch input[type='checkbox']:checked {
+  border-color: #4ade80;
+}
+
+.sound-picker-switch input[type='checkbox']:checked::after {
+  transform: translateX(26px);
+  background: #4ade80;
+}
+
+.sound-picker-switch input[type='checkbox']:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
 .sound-picker-volume input[type='range'] {
   flex: 1;
   min-width: 6rem;
+  /* The same floor: a 20px-tall slider is a 20px target (#195). */
+  height: 44px;
+}
+
+/*
+ * The switch still switches under reduced motion; it just stops sliding (#344).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .sound-picker-switch input[type='checkbox'],
+  .sound-picker-switch input[type='checkbox']::after {
+    transition: none;
+  }
 }
 
 .sound-picker-volume-label,

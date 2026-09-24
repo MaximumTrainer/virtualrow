@@ -346,3 +346,23 @@ describe('SessionSummary — the row itself (#337)', () => {
     expect(screen.getByTestId('row-pb')).toHaveTextContent('First row on this route');
   });
 });
+
+/**
+ * Issue #338 — the race, settled on the summary.
+ *
+ * `ghostVerdict.test.tsx` covers what the verdict says. These are about it
+ * reaching the screen at all, and staying off it when nothing was raced.
+ */
+describe('SessionSummary, after a race (#338)', () => {
+  it('says how the race came out', () => {
+    renderSummary({ ghost: { seconds: 1_290, label: 'your best' } });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/beat your best/i);
+  });
+
+  it('says nothing about a race for a row that raced nothing', () => {
+    renderSummary();
+
+    expect(screen.queryByText(/beat your best/i)).toBeNull();
+  });
+});

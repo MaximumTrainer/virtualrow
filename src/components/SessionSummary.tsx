@@ -6,6 +6,7 @@ import { useServices } from '../context/useServices';
 import { activityFileName, triggerBlobDownload } from '../utils/exporters';
 import { formatPace } from '../utils/formatters';
 import { RowBreakdown } from './RowBreakdown';
+import { GhostVerdict } from './GhostVerdict';
 import './SessionSummary.css';
 
 /**
@@ -32,6 +33,11 @@ interface SessionSummaryProps {
    * a first row (#337). Left out, the comparison is not shown.
    */
   personalBest?: number | null;
+  /**
+   * The boat this row was raced against (#338): how long it took to the same
+   * distance, and what it was. Left out, no race is reported.
+   */
+  ghost?: { seconds: number | null; label: string } | null;
 }
 
 /** Where the save has got to. */
@@ -61,7 +67,14 @@ async function encode(session: WorkoutSession): Promise<Uint8Array> {
   return encodeSession(session);
 }
 
-export function SessionSummary({ session, onDone, onSaved, isDemo, personalBest }: SessionSummaryProps) {
+export function SessionSummary({
+  session,
+  onDone,
+  onSaved,
+  isDemo,
+  personalBest,
+  ghost,
+}: SessionSummaryProps) {
   const { isAuthenticated } = useAuth();
   const { intervalsIcuActivityService, authService } = useServices();
   const [save, setSave] = useState<SaveState>({ phase: 'idle' });
@@ -117,6 +130,15 @@ export function SessionSummary({ session, onDone, onSaved, isDemo, personalBest 
           {session.heartRateMax !== undefined && <Stat label="Max HR" value={session.heartRateMax} unit="bpm" />}
           {averagePower !== null && <Stat label="Avg Power" value={averagePower} unit="W" />}
         </div>
+
+        {/* The race first: it is the question the row was rowed to (#338). */}
+        {ghost && (
+          <GhostVerdict
+            rowSeconds={session.duration}
+            ghostSeconds={ghost.seconds}
+            label={ghost.label}
+          />
+        )}
 
         <RowBreakdown session={session} personalBest={personalBest} />
 
