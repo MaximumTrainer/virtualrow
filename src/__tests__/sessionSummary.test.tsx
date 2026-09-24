@@ -324,4 +324,10 @@ describe('SessionSummary — guest and demo rows are never uploaded (issue #221,
 
     expect(uploadActivity).not.toHaveBeenCalled();
   });
+  // Both keep the row: one for a coach, one for everybody else (#337).
+  it('offers the share card beside the FIT download', () => {
+    renderSummary();
+
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
+  });
 });

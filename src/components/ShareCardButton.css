@@ -1,0 +1,9 @@
+/*
+ * The problem line sits under the button rather than replacing it: the card
+ * is worth a second try, and the message is about the picture, not the row.
+ */
+.share-card-problem {
+  margin: 0.5rem 0 0;
+  color: #fbbf24;
+  font-size: 0.85rem;
+}

@@ -9,6 +9,7 @@ import { formatPace } from '../utils/formatters';
 import { SplitsTable } from './SplitsTable';
 import { PersonalBestLine } from './PersonalBestLine';
 import { RowChart } from './RowChart';
+import { ShareCardButton } from './ShareCardButton';
 import './SessionSummary.css';
 
 /**
@@ -159,6 +160,9 @@ export function SessionSummary({ session, onDone, onSaved, isDemo }: SessionSumm
             <button className="btn btn-session-download" onClick={handleDownload} type="button">
               ⤓ Download .fit
             </button>
+            {/* Beside the other download: both keep the row, one for a coach
+                and one for everybody else (#337). */}
+            <ShareCardButton session={session} className="btn btn-session-share" />
             <button className="btn btn-session-done" onClick={onDone} type="button">
               Done
             </button>

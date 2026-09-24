@@ -102,4 +102,32 @@ describe('GuestSessionSummary', () => {
     expect(onRowAgain).toHaveBeenCalledTimes(1);
     expect(onExit).toHaveBeenCalledTimes(1);
   });
+  /**
+   * A guest's row is shown in full, not in summary (#337).
+   *
+   * The nudge above it is about what signing in would have kept; the splits
+   * and the shape of the row are what make that concrete rather than abstract.
+   */
+  it('shows the row it is about to lose, not just its totals', () => {
+    const samples = Array.from({ length: 121 }, (_, t) => ({
+      t,
+      distance: t * 4.1,
+      cadence: 24,
+      power: 180,
+      heartRate: 150,
+    }));
+    render(
+      <GuestSessionSummary session={makeSession({ samples })} onRowAgain={vi.fn()} onExit={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('figure', { name: /pace and heart rate/i })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /splits/i })).toBeInTheDocument();
+  });
+
+  // The one copy of the row a guest can keep without an account.
+  it('offers the share card, which needs no account', () => {
+    render(<GuestSessionSummary session={makeSession()} onRowAgain={vi.fn()} onExit={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
+  });
 });

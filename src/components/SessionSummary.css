@@ -187,6 +187,7 @@
 }
 
 .btn-session-download,
+.btn-session-share,
 .btn-session-done {
   min-height: 44px;
   background: var(--color-bg-card);
@@ -201,6 +202,7 @@
 
 @media (hover: hover) {
   .btn-session-download:hover,
+  .btn-session-share:hover,
   .btn-session-done:hover {
     background: var(--color-bg-secondary);
     color: var(--text-primary);

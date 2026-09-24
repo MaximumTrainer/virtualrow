@@ -132,10 +132,17 @@ export default defineConfig({
         // left them. Nothing is a point clear of the next integer - lines are
         // 0.26 past 93, branches 0.60 past 85, functions 0.47 past 89 - and a
         // floor set inside that margin is one that flaps.
+        //
+        // #337 then put the post-row summary under test: the splits, the
+        // chart's series, the share card and the two summaries that show
+        // them, all new modules covered outright. The reading is
+        // 93.46 / 86.23 / 90.11. By the rule above, branches and functions are
+        // each more than a point clear of the next integer (1.23 and 1.11), so
+        // both move up; lines are 0.46 past 93 and stay where they are.
         lines: 92,
         statements: 92,
-        branches: 84,
-        functions: 88,
+        branches: 85,
+        functions: 89,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
         // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch

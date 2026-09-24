@@ -18,11 +18,19 @@ interface CapturedLine {
     datasets: { label: string; data: (number | null)[]; yAxisID?: string }[];
   };
   options: {
-    scales?: Record<string, { reverse?: boolean; title?: { text?: string } }>;
+    scales?: Record<
+      string,
+      {
+        reverse?: boolean;
+        title?: { text?: string };
+        ticks?: { callback?: (value: string | number, index: number) => string };
+      }
+    >;
     plugins?: {
       tooltip?: {
         callbacks?: {
           label?: (item: { dataset: { label?: string }; parsed: { y: number | null } }) => string;
+          title?: (items: { label?: string }[]) => string;
         };
       };
     };
@@ -116,5 +124,24 @@ describe('the row chart', () => {
 
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId('row-chart-canvas')).toBeNull();
+  });
+  // The axis is metres, so the ticks say metres rather than the index of the
+  // point that happens to sit there.
+  it('labels its axes in the units the row was rowed in', () => {
+    render(<RowChart samples={steadyRow(1000)} />);
+
+    const { scales, plugins } = captured.current!.options;
+    expect(scales?.x?.ticks?.callback?.(0, 1)).toBe(10);
+    expect(scales?.pace?.ticks?.callback?.(125, 0)).toBe('2:05');
+    expect(plugins?.tooltip?.callbacks?.title?.([{ label: '1500' }])).toBe('1500 m');
+  });
+
+  // A gap in the recording is drawn as a gap; the tooltip has nothing to read
+  // out for one.
+  it('reads nothing back for a point the row never recorded', () => {
+    render(<RowChart samples={steadyRow(1000)} />);
+
+    const label = captured.current!.options.plugins?.tooltip?.callbacks?.label;
+    expect(label!({ dataset: { label: 'Pace (/500m)' }, parsed: { y: null } })).toBe('');
   });
 });

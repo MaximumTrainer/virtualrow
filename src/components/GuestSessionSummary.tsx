@@ -1,5 +1,8 @@
 import type { WorkoutSession } from '../types/index';
 import { formatPace } from '../utils/formatters';
+import { RowChart } from './RowChart';
+import { SplitsTable } from './SplitsTable';
+import { ShareCardButton } from './ShareCardButton';
 import './GuestSessionSummary.css';
 
 interface GuestSessionSummaryProps {
@@ -93,6 +96,16 @@ export function GuestSessionSummary({ session, onRowAgain, onExit, onSignIn, isD
           )}
         </div>
 
+        {/*
+          A guest's row is shown in full, not in summary (#337). The nudge
+          above is about what signing in would have kept; showing the splits
+          and the shape of the row is what makes that concrete - and the share
+          card is the one copy a guest can keep without an account.
+        */}
+        <RowChart samples={session.samples ?? []} />
+
+        <SplitsTable samples={session.samples ?? []} />
+
         <div className="guest-summary-actions">
           {onSignIn && (
             <button className="btn btn-guest-sign-in" onClick={onSignIn} type="button">
@@ -102,6 +115,7 @@ export function GuestSessionSummary({ session, onRowAgain, onExit, onSignIn, isD
           <button className="btn btn-guest-row-again" onClick={onRowAgain} type="button">
             ▶ Row Again
           </button>
+          <ShareCardButton session={session} className="btn btn-guest-share" />
           <button className="btn btn-guest-exit" onClick={onExit} type="button">
             Done
           </button>
