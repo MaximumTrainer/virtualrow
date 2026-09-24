@@ -47,7 +47,7 @@ describe('course furniture', () => {
   });
 
   it('puts the start furniture at the start and the finish tower at the finish', () => {
-    const structures = courseStructures();
+    const structures = courseStructures(2000);
 
     const start = structures.filter((s) => s.progress < 0.1);
     const finish = structures.filter((s) => s.progress > 0.9);
@@ -262,8 +262,8 @@ describe('routeStructures — what a route actually asks for (review of #232)', 
   ];
 
   it('places structures once per route, on one bank only', () => {
-    const left = routeStructures({ side: 'left', hasCurve: true, coordinates });
-    const right = routeStructures({ side: 'right', hasCurve: true, coordinates });
+    const left = routeStructures({ side: 'left', hasCurve: true, coordinates, routeMeters: 2000 });
+    const right = routeStructures({ side: 'right', hasCurve: true, coordinates, routeMeters: 2000 });
 
     expect(left.length).toBeGreaterThan(0);
     expect(right).toEqual([]);
@@ -278,7 +278,7 @@ describe('routeStructures — what a route actually asks for (review of #232)', 
   });
 
   it('still carries the course furniture and any landmark the route earns', () => {
-    const ids = routeStructures({ side: 'left', hasCurve: true, coordinates }).map((s) => s.id);
+    const ids = routeStructures({ side: 'left', hasCurve: true, coordinates, routeMeters: 2000 }).map((s) => s.id);
 
     expect(ids).toContain('a06-finish-tower');
     expect(ids).toContain('l-barnes-railway-bridge');
@@ -362,5 +362,71 @@ describe('structures stand clear of the water (#379)', () => {
       waterHalfWidthAt(null, 0.5) + SCENERY_WATER_MARGIN_METRES,
       9,
     );
+  });
+});
+
+describe('the course marked on the water (#336)', () => {
+  const straight = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -300),
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 300),
+  ]);
+
+  it('stands exactly one finish tower, on the finish line', () => {
+    const towers = courseStructures(2000).filter((s) => s.id === 'a06-finish-tower');
+    expect(towers).toHaveLength(1);
+    expect(towers[0].progress).toBe(1);
+  });
+
+  it('carries a post every 500 m of the route', () => {
+    const posts = courseStructures(2000).filter((s) => s.id === 'a07-distance-marker-post');
+    expect(posts.map((p) => p.progress)).toEqual([0.25, 0.5, 0.75, 1]);
+  });
+
+  it('keeps the ends dressed on a route whose length is not known', () => {
+    const ids = courseStructures().map((s) => s.id);
+    expect(ids).toContain('a05-stakeboat-platform');
+    expect(ids).not.toContain('a07-distance-marker-post');
+  });
+
+  it('floats the buoys in the water either side of the boat, clear of its blades', () => {
+    const placed = computeStructurePlacements(straight, [
+      { id: 'a01-buoy-lane-sphere', progress: 0.5, kind: 'buoy', side: 'left' },
+      { id: 'a01-buoy-lane-sphere', progress: 0.5, kind: 'buoy', side: 'right' },
+    ]);
+    const [left, right] = placed.map((p) => p.position[0]);
+
+    expect(Math.sign(left)).toBe(-Math.sign(right));
+    for (const p of placed) {
+      expect(p.footing).toBe('water');
+      expect(p.position[1]).toBe(0);
+      // A scull's blades reach about 2.9 m either side of the hull.
+      expect(Math.abs(p.position[0])).toBeGreaterThan(3);
+      // And inside the default channel's water, not on its bank.
+      expect(Math.abs(p.position[0])).toBeLessThan(waterHalfWidthAt(null, 0.5));
+    }
+  });
+
+  it('stands a post on the other bank from the tower, facing the water', () => {
+    const [post, tower] = computeStructurePlacements(straight, [
+      { id: 'a07-distance-marker-post', progress: 0.5, kind: 'furniture', side: 'left' },
+      { id: 'a06-finish-tower', progress: 0.5, kind: 'furniture', side: 'right' },
+    ]);
+
+    expect(Math.sign(post.position[0])).toBe(-Math.sign(tower.position[0]));
+    expect(Math.abs(post.position[0])).toBeCloseTo(Math.abs(tower.position[0]), 9);
+    expect(post.footing).toBe('bank');
+    // Each turned a quarter from the line, towards the water: opposite ways.
+    expect(post.rotationY).toBeCloseTo(-tower.rotationY, 9);
+  });
+
+  it('places a request with no side where furniture always stood', () => {
+    const [sided] = computeStructurePlacements(straight, [
+      { id: 'a06-finish-tower', progress: 0.5, kind: 'furniture', side: 'right' },
+    ]);
+    const [unsided] = computeStructurePlacements(straight, [
+      { id: 'a06-finish-tower', progress: 0.5, kind: 'furniture' },
+    ]);
+    expect(sided).toEqual(unsided);
   });
 });

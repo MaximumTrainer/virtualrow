@@ -199,6 +199,11 @@ for (const { theme, routeName } of THEMES) {
           3,
         );
 
+        // The start prompt (#336) is up for the whole shot, since this row
+        // never takes a stroke. Hidden rather than masked: it sits over the
+        // middle of the water, and a mask there is a box where the scene was.
+        await page.addStyleTag({ content: '.race-callout { display: none !important; }' });
+
         await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
 
         // A perceptual comparison, not an exact one. SwiftShader is

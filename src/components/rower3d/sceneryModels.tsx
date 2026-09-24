@@ -53,6 +53,7 @@ import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import { useAnimationFrame } from './animationFrame';
 import { cullByDistance, withinMountRange } from './visibilityCull';
 import { chunkViewDistanceFor } from './fogPlan';
+import { routeTotalDistanceMeters } from '../../utils/geoUtils';
 
 /**
  * Frames between scenery culls.
@@ -141,6 +142,7 @@ const SceneryModelsChunk: React.FC<
         hasCurve: Boolean(curve),
         coordinates,
         crossings: enrichment?.crossings,
+        routeMeters: coordinates ? routeTotalDistanceMeters(coordinates) : undefined,
       }),
     [enrichment?.crossings, coordinates, side, curve],
   );

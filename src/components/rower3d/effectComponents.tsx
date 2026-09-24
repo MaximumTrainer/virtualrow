@@ -23,6 +23,7 @@ import {
   createFoamRingTexture,
   createWakeGeometry,
   createWakeTexture,
+  foamIntensityFor,
   foamRingFor,
   wakeFor,
 } from './wakeTexture';
@@ -116,7 +117,9 @@ export const BladeEntryFoam: React.FC<{
   strokePhase: string;
   foamColor: string;
   foamIntensity?: number;
-}> = ({ positionRef, rotationRef, strokePhase, foamColor, foamIntensity = 0.65 }) => {
+  /** The boat has crossed the line: throw a ring now, and brighter (#336). */
+  finished?: boolean;
+}> = ({ positionRef, rotationRef, strokePhase, foamColor, foamIntensity = 0.65, finished = false }) => {
   const leftRef  = useRef<THREE.Mesh>(null);
   const rightRef = useRef<THREE.Mesh>(null);
   const leftMatRef  = useRef<THREE.MeshBasicMaterial>(null);
@@ -128,6 +131,7 @@ export const BladeEntryFoam: React.FC<{
 
   const foamLifeRef = useRef(0);
   const prevPhaseRef = useRef('recovery');
+  const prevFinishedRef = useRef(false);
 
   useFrame((_, delta) => {
     const left  = leftRef.current;
@@ -140,13 +144,15 @@ export const BladeEntryFoam: React.FC<{
       foamLifeRef.current = 1.0;
     }
     prevPhaseRef.current = strokePhase;
+    if (finished && !prevFinishedRef.current) foamLifeRef.current = 1.0;
+    prevFinishedRef.current = finished;
 
     foamLifeRef.current = Math.max(
       0,
       foamLifeRef.current - delta / FOAM_RING_LIFETIME_SECONDS,
     );
     const { scale, opacity } = foamRingFor(foamLifeRef.current);
-    const alpha = opacity * foamIntensity;
+    const alpha = opacity * foamIntensityFor(foamIntensity, finished);
 
     const pos = positionRef.current;
     const rot = rotationRef.current;

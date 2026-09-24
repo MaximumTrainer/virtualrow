@@ -34,13 +34,14 @@ export const renderScene = async (
    */
   onRender?: ProfilerOnRenderCallback,
 ) => {
-  const renderer = await ReactThreeTestRenderer.create(
+  const tree = (p: Partial<Rower3DProps>) => (
     <Suspense fallback={<group name="SceneSuspended" />}>
       <Profiler id="scene" onRender={onRender ?? (() => undefined)}>
-        <RowerScene route={demoRoute} gpuBackend="webgl" performanceMode="low" {...props} />
+        <RowerScene route={demoRoute} gpuBackend="webgl" performanceMode="low" {...p} />
       </Profiler>
-    </Suspense>,
+    </Suspense>
   );
+  const renderer = await ReactThreeTestRenderer.create(tree(props));
 
   /** Every object in the graph, so a test can ask what the scene contains. */
   const objects = (): THREE.Object3D[] => {
@@ -57,6 +58,10 @@ export const renderScene = async (
       await ReactThreeTestRenderer.act(async () => {
         await renderer.advanceFrames(frames, delta);
       });
+    },
+    /** Render the same scene with new props, as a parent re-rendering would. */
+    rerender: async (next: Partial<Rower3DProps>) => {
+      await renderer.update(tree(next));
     },
     unmount: () => renderer.unmount(),
   };

@@ -1401,6 +1401,100 @@ test.describe('PM5 data pipeline across view switches', () => {
 // ===========================================================================
 // FTMS shares the same pipeline, and shared the same defect (issue #194).
 // ===========================================================================
+// ===========================================================================
+// The start and the finish of a row (#336)
+// ===========================================================================
+
+test.describe('the start and the finish of a row (#336)', () => {
+  const startCallout = (page: Page) => page.getByTestId('start-callout');
+  const readHold = (page: Page) => page.evaluate(() => ({
+    phase: document.querySelector('[data-testid="start-callout"]')?.getAttribute('data-phase') ?? null,
+    progress: window.__ROWER3D_POS?.progress ?? null,
+  }));
+
+  test.beforeEach(async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('./');
+
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+  });
+
+  test('holds the boat at the start until a 3-2-1 from the first stroke says row', async ({ page }) => {
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+    await expect(startCallout(page)).toHaveText('Ready — take your first stroke', { timeout: 10_000 });
+
+    // The scene has to be running before "the boat has not moved" means anything.
+    await page.waitForFunction(() => window.__ROWER3D_POS !== undefined, undefined, {
+      timeout: SCENE_READY_TIMEOUT_MS,
+    });
+
+    // Distance on the erg before any stroke is still not a start: the boat
+    // waits for the rower, not for a number.
+    await dispatchGeneralStatus(page, 0, 0);
+    await page.waitForTimeout(500);
+    expect(await readHold(page)).toEqual({ phase: 'armed', progress: 0 });
+
+    // The first drive.
+    const strokeAt = Date.now();
+    await dispatchGeneralStatus(page, 6, 2);
+    await dispatchAdditionalStatus(page, { elapsedSeconds: 2, strokeRate: 24, heartRate: 140 });
+
+    // Held through the count, however hard the erg says the rower is pulling.
+    const during: Array<{ phase: string | null; progress: number | null }> = [];
+    while (Date.now() - strokeAt < 2_500) {
+      during.push(await readHold(page));
+      await page.waitForTimeout(250);
+    }
+    const counting = during.filter((s) => s.phase === 'counting');
+    expect(counting.length, `never saw the count: ${JSON.stringify(during)}`).toBeGreaterThan(0);
+    expect(counting.every((s) => s.progress === 0), JSON.stringify(counting)).toBe(true);
+
+    // "Row!" within 4 s of the drive.
+    await expect(startCallout(page)).toHaveText('Row!', {
+      timeout: Math.max(1, 4_000 - (Date.now() - strokeAt)),
+    });
+  });
+
+  test('shows the distance and time on the line, then opens the summary', async ({ page }) => {
+    // The harness keeps its rows going past the finish unless a spec asks.
+    await page.evaluate(() => {
+      window.__VIRTUALROW_AUTO_FINISH = true;
+    });
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+
+    await dispatchGeneralStatus(page, 0, 0);
+    await dispatchAdditionalStatus(page, { elapsedSeconds: 1, strokeRate: 24, heartRate: 140 });
+    // Past the end of any route in the catalogue, at 8:12.
+    await dispatchGeneralStatus(page, 500_000, 492);
+
+    const banner = page.getByTestId('finish-banner');
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toHaveText(/^Finished — \d{1,3}( \d{3})* m in 8:12$/);
+    // The banner first, and the summary after it.
+    await expect(page.locator('.session-summary-modal')).toHaveCount(0);
+
+    await expect(page.locator('.session-summary-modal')).toBeVisible({ timeout: 15_000 });
+    await expect(banner).toHaveCount(0);
+  });
+});
+
 test.describe('FTMS data pipeline across view switches', () => {
   /**
    * Minimal FTMS Rower Data frame carrying only total distance:

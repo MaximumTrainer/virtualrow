@@ -217,6 +217,29 @@ describe('RowerScene', () => {
     await scene.unmount();
   });
 
+  // Issue #336: the boat waits at the start for the countdown, however hard
+  // the rower is pulling, and goes once it is let go.
+  it('holds the boat at the start while the countdown runs', async () => {
+    const props = {
+      performanceMode: 'low' as const,
+      paceSPer500: PACE_S_PER_500,
+      cadence: 30,
+      distanceMeters: 20,
+      isPlaying: true,
+      holdBoat: true,
+    };
+    const scene = await renderScene(props);
+
+    await scene.tick(120);
+    expect(window.__ROWER3D_POS?.progress, 'the boat left before "Row!"').toBe(0);
+
+    await scene.rerender({ ...props, holdBoat: false });
+    await scene.tick(60);
+    expect(window.__ROWER3D_POS?.progress ?? 0).toBeGreaterThan(0);
+
+    await scene.unmount();
+  });
+
   // The low tier exists to cost less, and a shadow map is the most expensive
   // single thing the sun does. There are two directional lights by design - a
   // sun and a fill - so the fact worth asserting is which of them casts, not

@@ -301,6 +301,11 @@ export interface WorkoutProgress {
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
+    /**
+     * Let a Playwright spec see a row finish (#336). The harness otherwise
+     * skips the auto-finish, so a spec that is not about it keeps its row.
+     */
+    __VIRTUALROW_AUTO_FINISH?: boolean;
     __PM5_DATA?: PM5Data;
     /**
      * Forces a performance mode, independent of `IS_TEST_MODE`.

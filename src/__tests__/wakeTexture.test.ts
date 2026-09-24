@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
 import {
+  foamIntensityFor,
   WAKE_TEXTURE_SIZE,
   FOAM_RING_TEXTURE_SIZE,
   FOAM_RING_LIFETIME_SECONDS,
@@ -238,5 +239,16 @@ describe('the wake geometry', () => {
 
   it('draws over the water rather than fighting it for the depth buffer', () => {
     expect(WAKE_RENDER_ORDER).toBe(2);
+  });
+});
+
+describe('foamIntensityFor (#336)', () => {
+  it('leaves the everyday foam alone', () => {
+    expect(foamIntensityFor(0.35, false)).toBe(0.35);
+  });
+
+  it('bursts at the finish, and never past fully opaque', () => {
+    expect(foamIntensityFor(0.35, true)).toBeCloseTo(0.875, 9);
+    expect(foamIntensityFor(0.65, true)).toBe(1);
   });
 });
