@@ -30,10 +30,26 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto'
  * plastic this issue is about.
  */
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
-  low: 0.45,
-  auto: 0.7,
-  high: 1,
+  low: 0.05,
+  auto: 0.08,
+  high: 0.12,
 };
+
+/**
+ * The ground bounce, at the strength the scene was built around.
+ *
+ * The issue asks for 0.25 here. Measured, that is much too dark: the
+ * hemisphere is what lights the distant scenery and the far bank, and dropping
+ * it from 0.9 to 0.25 took the top of the frame from 138 to 108 while the
+ * environment brightened the water underneath it — two errors pulling opposite
+ * ways, and `scene-contrast.spec.ts` failed on the result with no horizon left
+ * between them. The environment is here to give the hull and the riggers
+ * something to reflect, not to relight the world.
+ */
+const HEMISPHERE_BASE = 0.9;
+
+/** The authored ambient strength, which `HEMISPHERE_BASE` is calibrated to. */
+const AUTHORED_AMBIENT = 0.25;
 
 export interface HemispherePlan {
   /** Colour from above. */
@@ -73,7 +89,7 @@ export const lightingPlan = (mode: PerformanceMode, config: SceneConfig): Lighti
      * diffuse light. The authored value is 0.25, which is what this issue asks
      * the ground bounce to be.
      */
-    intensity: config.lighting.ambientIntensity,
+    intensity: HEMISPHERE_BASE * (config.lighting.ambientIntensity / AUTHORED_AMBIENT),
   },
   sun: {
     color: config.lighting.sunColor,

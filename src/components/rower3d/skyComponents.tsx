@@ -6,7 +6,6 @@ import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
 import { buildSkyEnvironment } from './skyEnvironment';
 import { useThree } from '@react-three/fiber';
-import { IS_TEST_MODE } from './constants';
 import type { SkyConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
@@ -284,7 +283,20 @@ export const SkyEnvironment: React.FC<{
   const { gl, scene } = useThree();
 
   useEffect(() => {
-    if (IS_TEST_MODE) return;
+    /*
+     * Built under automation too, unlike the `PMREMEnvironment` it replaces.
+     *
+     * That one skipped test mode because it convolved the *live* scene, which
+     * is expensive and depends on load order. This builds a scene holding one
+     * sky mesh, which is neither — and skipping it now would matter, because
+     * the ambient light and the directional fill that used to carry the scene
+     * without an environment are gone (#349). `scene-contrast.spec.ts` said so
+     * immediately: with no environment and no fill, only 3% of the right of
+     * the frame was ground distinguishable from the water.
+     *
+     * A test that measures a scene lit differently from the shipping one is
+     * measuring the wrong scene.
+     */
     const texture = buildSkyEnvironment(gl, sky, sunPosition);
     if (!texture) return;
 
