@@ -150,6 +150,28 @@ export async function captureGameplayCanvas(
 
 
 /**
+ * Whether a passing test should photograph itself.
+ *
+ * `playwright.config.ci.ts` already settled this argument for the captures it
+ * owns: "A screenshot of a passing test is a framebuffer readback and a PNG
+ * encode, per test, on a software rasteriser - paid about a hundred times a run
+ * for images nobody opens", so it set `screenshot: 'only-on-failure'`.
+ *
+ * These captures were not covered by that, because the spec takes them itself.
+ * `virtualrow.spec.ts` asks for twenty-two of them, each `fullPage` over a
+ * WebGL canvas, in its longest test - and the bill fell due on windows shard 4,
+ * where the run log reads `page.screenshot: Timeout 10000ms exceeded` and the
+ * test then passes its 160 s budget having spent most of it being photographed.
+ *
+ * So they are opt-in. `CAPTURE_TEST_EVIDENCE=1` brings them back for whoever is
+ * actually looking at them, which is what they are for; nothing asserts on
+ * them, so nothing is weakened by their absence. Failures are unaffected:
+ * `captureErrorEvidence` below always runs, and the config still keeps a
+ * screenshot, a video and a trace of anything that goes red.
+ */
+const captureEvidenceWanted = () => process.env.CAPTURE_TEST_EVIDENCE === '1';
+
+/**
  * Captures a screenshot with a descriptive name based on test context
  * @param page - Playwright page object
  * @param testInfo - Playwright test info object
@@ -160,14 +182,20 @@ export async function captureTestEvidence(
   testInfo: TestInfo,
   description: string
 ): Promise<void> {
+  if (!captureEvidenceWanted()) return;
+
   const sanitizedDescription = description.replace(/[^a-z0-9]/gi, '-').toLowerCase();
   const timestamp = Date.now();
   const screenshotName = `${sanitizedDescription}-${timestamp}.png`;
-  
   // Evidence is for whoever reads the report, not an assertion: a full-page
   // shot of the WebGL page on a software renderer can outlast the action
   // timeout, and that used to fail tests whose every assertion held. A missed
   // shot is recorded on the test instead.
+  //
+  // Kept alongside the opt-in guard above rather than replaced by it. The guard
+  // means the shot is not normally taken at all; this means that whoever does
+  // ask for it, with a slow enough renderer, gets their evidence missing rather
+  // than their suite red.
   try {
     await page.screenshot({
       path: `${testInfo.outputDir}/${screenshotName}`,
