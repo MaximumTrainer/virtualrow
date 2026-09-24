@@ -1,4 +1,4 @@
-import { SCENE_CONFIG, type CloudConfig } from './themeConfig';
+import { SCENE_CONFIG, type CloudConfig, type SceneConfig } from './themeConfig';
 import type { PerformanceMode } from './constants';
 
 /**
@@ -19,8 +19,12 @@ const MOST_CLOUDS: Record<PerformanceMode, number> = { low: 0, auto: 6, high: 12
 /** Segments per cloud below the top tier, where the authored count stands. */
 const PLAIN_SEGMENTS = 12;
 
-export const cloudsFor = (mode: PerformanceMode): CloudConfig => {
-  const authored = SCENE_CONFIG.clouds;
+export const cloudsFor = (
+  mode: PerformanceMode,
+  /** Defaulted so existing call-sites are unchanged; #346 passes its own. */
+  config: SceneConfig = SCENE_CONFIG,
+): CloudConfig => {
+  const authored = config.clouds;
 
   return {
     ...authored,

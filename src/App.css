@@ -1972,3 +1972,39 @@ body {
   background: rgba(0, 0, 0, 0.65);
   border-color: rgba(255, 255, 255, 0.5);
 }
+
+/* ---------------------------------------------------------------------------
+   Conditions picker (#346) — the light a row is rowed in.
+   Styled with the graphics tier it sits beside; the two are the same kind of
+   decision and should not look like two different kinds of control.
+   --------------------------------------------------------------------------- */
+.conditions-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.conditions-picker-option {
+  flex: 1 1 5.5rem;
+  /* 44px touch floor (issue #195, Phase 4): a button is measured, not its row. */
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conditions-picker-option.is-selected {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg-card);
+}
+
+.conditions-picker-resolved {
+  font-weight: 400;
+  opacity: 0.8;
+}

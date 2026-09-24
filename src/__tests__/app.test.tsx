@@ -211,3 +211,39 @@ describe('choosing what to race', () => {
     expect(screen.getByLabelText(/target pace/i)).toHaveValue('2:00');
   });
 });
+
+/**
+ * Issue #346 — the conditions picker, on the screen it belongs to.
+ *
+ * `conditionsPicker.test.tsx` covers the control. This is about it being wired
+ * to the hook that remembers the choice: unwired, it would look identical and
+ * every row would be lit the same way it always was.
+ */
+describe('choosing the light a row is rowed in', () => {
+  it('offers the conditions beside the other things set once', () => {
+    render(<App />);
+
+    expect(screen.getByRole('radiogroup', { name: /conditions/i })).toBeInTheDocument();
+  });
+
+  it('matches the rower’s clock until they say otherwise', () => {
+    render(<App />);
+
+    expect(screen.getByRole('radio', { name: /my clock/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('takes the preset the rower picked', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Dusk' }));
+
+    expect(screen.getByRole('radio', { name: 'Dusk' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /my clock/i })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+});

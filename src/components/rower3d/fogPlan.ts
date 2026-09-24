@@ -1,4 +1,4 @@
-import { SCENE_CONFIG } from './themeConfig';
+import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 
 /**
  * How far a rower can see, and where the world stops being drawn (#325).
@@ -24,8 +24,14 @@ export interface FogPlan {
   far: number;
 }
 
-export const fogFor = (): FogPlan => {
-  const { fogColor, fogNear, fogFar } = SCENE_CONFIG.atmosphere;
+/**
+ * The fog, from whichever config the scene is running under.
+ *
+ * Defaulted to `SCENE_CONFIG` so every existing call-site is unchanged; the
+ * conditions presets (#346) pass the config they produced.
+ */
+export const fogFor = (config: SceneConfig = SCENE_CONFIG): FogPlan => {
+  const { fogColor, fogNear, fogFar } = config.atmosphere;
   return { color: fogColor, near: fogNear, far: fogFar };
 };
 
@@ -36,4 +42,5 @@ export const fogFor = (): FogPlan => {
  * culled on its bounding sphere and appears at its near edge: cutting exactly
  * at `far` would pop a chunk in while part of it was still short of full fog.
  */
-export const chunkViewDistanceFor = (): number => fogFor().far * 1.1;
+export const chunkViewDistanceFor = (config: SceneConfig = SCENE_CONFIG): number =>
+  fogFor(config).far * 1.1;

@@ -129,14 +129,29 @@ async function waitForDeviceConnected(page: Page, label: string) {
 /** Import the shared course under `routeName`, connect the devices, and row. */
 async function rowFrozen(
   page: Page,
-  { routeName, tier }: { routeName: string; tier: (typeof TIERS)[number] },
+  {
+    routeName,
+    tier,
+    conditions,
+  }: { routeName: string; tier: (typeof TIERS)[number]; conditions?: string },
 ) {
   await page.addInitScript(
-    ({ mode, freeze }) => {
+    ({ mode, freeze, preset }) => {
       window.__VIRTUALROW_PERFORMANCE_MODE = mode;
       window.__ROWER3D_FREEZE = freeze;
+      // Through the same stored preference a rower sets, so the shot is of the
+      // path they take rather than of a hook only the tests can reach (#346).
+      // Left unset, the app pins `auto` to midday under automation, which is
+      // what keeps the four shots above from varying with the runner's clock.
+      if (preset) {
+        try {
+          localStorage.setItem('virtualrow:conditions', preset);
+        } catch {
+          /* storage disabled: the shot falls back to the pinned default */
+        }
+      }
     },
-    { mode: tier, freeze: FREEZE },
+    { mode: tier, freeze: FREEZE, preset: conditions ?? '' },
   );
   await page.addInitScript({ content: fs.readFileSync(mockBluetoothPath, 'utf8') });
 
@@ -180,6 +195,43 @@ async function rowFrozen(
   await page.waitForTimeout(SETTLE_MS);
 
   return canvas;
+}
+
+/**
+ * Issue #346 — the same water at a different time of day.
+ *
+ * The four shots below are the scene under its default conditions, which the
+ * app pins to midday under automation so a baseline does not depend on the
+ * hour CI started. These two are the presets doing their job: a low warm sun
+ * down the course at golden hour, and a dim one under a heavy sky at dusk. A
+ * preset that quietly stopped changing the light would pass every unit test in
+ * `conditions.test.ts` and show up only here.
+ */
+for (const preset of ['golden', 'dusk'] as const) {
+  test(`willowbrook at ${preset} renders that time of day`, async ({ page }) => {
+    test.slow();
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const canvas = await rowFrozen(page, {
+      routeName: THEMES[0].routeName,
+      tier: 'auto',
+      conditions: preset,
+    });
+
+    const progress = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? -1);
+    expect(progress, 'the scene did not honour __ROWER3D_FREEZE').toBeCloseTo(FREEZE.progress, 3);
+
+    await page.addStyleTag({ content: '.race-callout { display: none !important; }' });
+    await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
+
+    await expect(canvas).toHaveScreenshot(`willowbrook-${preset}-auto-1280x720.png`, {
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.3,
+      animations: 'disabled',
+      mask: HUD_SELECTORS.map((selector) => page.locator(selector)),
+      timeout: 30_000,
+    });
+  });
 }
 
 for (const { theme, routeName } of THEMES) {
