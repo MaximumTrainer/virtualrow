@@ -1,5 +1,6 @@
 // Pure utility functions for Rower3D — no React, no side-effects.
 import * as THREE from 'three';
+import { gerstnerChunks, waterSurfaceChunks } from './shaderChunks';
 import {
   SWELL_AMPLITUDES_METRES,
   SWELL_WAVELENGTHS_METRES,
@@ -100,17 +101,6 @@ export function attachGerstnerShader(
     ? 'vec2(position.x, position.y)'
     : 'vec2(position.x, position.z)';
 
-  const glslFunctions = `
-    uniform float uTime;
-    float gWave(vec2 p, vec2 dir, float amp, float freq, float spd) {
-      vec2 nd = normalize(dir);
-      return amp * sin(dot(nd, p) * freq - spd * uTime);
-    }
-    vec2 gWaveGrad(vec2 p, vec2 dir, float amp, float freq, float spd) {
-      vec2 nd = normalize(dir);
-      return amp * freq * nd * cos(dot(nd, p) * freq - spd * uTime);
-    }
-  `;
 
   // The normal points up whichever axis the wave displaces.
   //
@@ -137,36 +127,28 @@ export function attachGerstnerShader(
     (amplitude * waveAmplitude).toFixed(4),
   );
 
-  const normalChunk = `
-    vec2 wXY = ${waveXY};
-    vec2 wGrad = gWaveGrad(wXY, vec2( 1.0,  0.3), ${amplitudes[0]}, ${swell[0]}, 0.80)
-               + gWaveGrad(wXY, vec2(-0.3,  1.0), ${amplitudes[1]}, ${swell[1]}, 0.60)
-               + gWaveGrad(wXY, vec2( 0.7,  0.7), ${amplitudes[2]}, ${swell[2]}, 1.10)
-               + gWaveGrad(wXY, vec2( 0.5, -0.5), ${amplitudes[3]}, ${swell[3]}, 1.50);
-    vec3 objectNormal = normalize(${normalFromGradient});
-    #ifdef USE_TANGENT
-      vec3 objectTangent = vec3(tangent.xyz);
-    #endif
-  `;
 
   const heightDisplace = heightAxis === 'z'
     ? 'vec3(position.x, position.y, position.z + wH)'
     : 'vec3(position.x, position.y + wH, position.z)';
 
-  const positionChunk = `
-    float wH = gWave(wXY, vec2( 1.0,  0.3), ${amplitudes[0]}, ${swell[0]}, 0.80)
-             + gWave(wXY, vec2(-0.3,  1.0), ${amplitudes[1]}, ${swell[1]}, 0.60)
-             + gWave(wXY, vec2( 0.7,  0.7), ${amplitudes[2]}, ${swell[2]}, 1.10)
-             + gWave(wXY, vec2( 0.5, -0.5), ${amplitudes[3]}, ${swell[3]}, 1.50);
-    vec3 transformed = ${heightDisplace};
-  `;
+  // The GLSL itself lives in `shaders/gerstner.vert.glsl` (#341). What is
+  // computed here is only what varies per material: which axis the wave
+  // displaces, and the swell as numbers.
+  const { functions, normal, position } = gerstnerChunks({
+    waveXY,
+    normalFromGradient,
+    heightDisplace,
+    amplitudes,
+    frequencies: swell,
+  });
 
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = timeUniform;
-    shader.vertexShader = glslFunctions + shader.vertexShader;
+    shader.vertexShader = functions + shader.vertexShader;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <beginnormal_vertex>', normalChunk)
-      .replace('#include <begin_vertex>',      positionChunk);
+      .replace('#include <beginnormal_vertex>', normal)
+      .replace('#include <begin_vertex>',      position);
   };
   mat.customProgramCacheKey = () => `gerstner-${cacheKey}`;
 }
@@ -214,36 +196,18 @@ export function attachWaterSurface(
 ): void {
   const previous = mat.onBeforeCompile;
 
-  const surfaceChunk = `
-    #include <normal_fragment_maps>
-    #ifdef USE_NORMALMAP_TANGENTSPACE
-      vec3 wSecond = texture2D(
-        normalMap,
-        vNormalMapUv * uRipple2Scale + uRipple2Offset
-      ).xyz * 2.0 - 1.0;
-      wSecond.xy *= normalScale;
-      normal = normalize(normal + tbn * wSecond * 0.5);
-    #endif
-    float wFresnel = ${WATER_FRESNEL_F0.toFixed(4)} + ${(1 - WATER_FRESNEL_F0).toFixed(4)} *
-      pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
-    diffuseColor.rgb = mix(
-      diffuseColor.rgb,
-      vec3(1.0),
-      wFresnel * ${WATER_FRESNEL_STRENGTH.toFixed(4)}
-    );
-  `;
+  // `shaders/waterSurface.frag.glsl` (#341).
+  const { uniforms: uniformDeclarations, surface } = waterSurfaceChunks({
+    fresnelF0: WATER_FRESNEL_F0,
+    fresnelStrength: WATER_FRESNEL_STRENGTH,
+  });
 
   mat.onBeforeCompile = (shader, renderer) => {
     previous?.(shader, renderer);
     shader.uniforms.uRipple2Offset = uniforms.uRipple2Offset;
     shader.uniforms.uRipple2Scale = uniforms.uRipple2Scale;
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        'void main() {',
-        `uniform vec2 uRipple2Offset;
-         uniform float uRipple2Scale;
-         void main() {`,
-      )
-      .replace('#include <normal_fragment_maps>', surfaceChunk);
+      .replace('void main() {', `${uniformDeclarations}void main() {`)
+      .replace('#include <normal_fragment_maps>', surface);
   };
 }

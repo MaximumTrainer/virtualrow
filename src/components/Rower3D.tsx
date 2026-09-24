@@ -46,6 +46,7 @@ import {
   routeLoadCount,
 } from './rower3d/sceneTiming';
 import { createFrameStatsRecorder } from './rower3d/frameStats';
+import { countShaderErrors } from './rower3d/shaderErrors';
 import { measureSceneMemory } from './rower3d/sceneMemory';
 import { recordRenderStats, readRenderStats, clearRenderStats } from './rower3d/sceneStats';
 import { resolveSceneQuality } from './rower3d/sceneQuality';
@@ -1133,6 +1134,19 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
             try {
               window.__ROWER3D_GPU_BACKEND = gpuBackend;
             } catch { /* intentional */ }
+            // How many shaders the driver refused (#341). Behind the test flag:
+            // a rower's browser does not need the counter, and what it catches
+            // - a varying the two halves disagree about, a built-in the driver
+            // does not have - is invisible until something asks.
+            if (IS_TEST_MODE) {
+              try {
+                window.__ROWER3D_SHADER_ERRORS = 0;
+                countShaderErrors(gl.getContext(), (log) => {
+                  window.__ROWER3D_SHADER_ERRORS = (window.__ROWER3D_SHADER_ERRORS ?? 0) + 1;
+                  console.error('[rower3d] shader failed to compile:', log);
+                });
+              } catch { /* intentional: no context to instrument */ }
+            }
             
             recordContextCreated({ ...glSelection, maxDpr: maxDpr(surface.dpr) });
             recordTelemetry('context-created', {
