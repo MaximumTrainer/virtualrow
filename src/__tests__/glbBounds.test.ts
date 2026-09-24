@@ -173,3 +173,70 @@ describe('readGlbWorldBounds', () => {
     expect(readGlbWorldBounds(makeGlb(noScene))?.x).toBeCloseTo(1.8, 3);
   });
 });
+
+/**
+ * Compressing the kit (#332) quantised every position: a SHORT accessor marked
+ * `normalized`, whose -32767..32767 the viewer maps to -1..1 before the node's
+ * scale turns it back into millimetres. Read raw, a 300 mm buoy measures 9.8 km
+ * - and `sceneryAssetDimensions.test.ts` failed on all 105 models at once,
+ * which is the right answer to the wrong question: the models did not move, the
+ * reader stopped understanding the file.
+ */
+describe('quantised models', () => {
+  const quantized = (componentType: number, min: number[], max: number[]) =>
+    makeGlb({
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0, scale: [150, 150, 150] }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [{ type: 'VEC3', componentType, normalized: true, min, max }],
+    });
+
+  it('maps a normalised SHORT back to the unit range before scaling it', () => {
+    const glb = quantized(5122, [-32767, -32767, -32767], [32767, 32767, 32767]);
+
+    expect(readGlbWorldBounds(glb)).toMatchObject({ x: 300, y: 300, z: 300 });
+  });
+
+  it('measures a quantised model the same as an unquantised one', () => {
+    const raw = makeGlb({
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [{ type: 'VEC3', min: [-150, -150, -150], max: [150, 150, 150] }],
+    });
+
+    expect(readGlbWorldBounds(quantized(5122, [-32767, -32767, -32767], [32767, 32767, 32767]))?.x)
+      .toBeCloseTo(readGlbWorldBounds(raw)!.x, 6);
+  });
+
+  it('knows each component type’s full scale', () => {
+    // UNSIGNED_SHORT runs 0..65535 over the same unit range.
+    expect(readGlbWorldBounds(quantized(5123, [0, 0, 0], [65535, 65535, 65535]))).toMatchObject({
+      x: 150,
+    });
+    // BYTE runs -127..127.
+    expect(readGlbWorldBounds(quantized(5120, [-127, -127, -127], [127, 127, 127]))).toMatchObject({
+      x: 300,
+    });
+  });
+
+  // A float accessor is never normalised; dividing one by 32767 would shrink
+  // every uncompressed model in the kit to nothing.
+  it('leaves an accessor that is not normalised alone', () => {
+    const glb = makeGlb({
+      scenes: [{ nodes: [0] }],
+      nodes: [{ mesh: 0 }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [{ type: 'VEC3', componentType: 5126, min: [-150, 0, 0], max: [150, 0, 0] }],
+    });
+
+    expect(readGlbWorldBounds(glb)).toMatchObject({ x: 300 });
+  });
+
+  it('measures a quantised model the plain reader’s way too', () => {
+    const glb = quantized(5122, [-32767, -32767, -32767], [32767, 32767, 32767]);
+
+    // No node scale here: the accessor alone spans the unit cube.
+    expect(readGlbBounds(glb)).toEqual({ x: 2, y: 2, z: 2 });
+  });
+});
