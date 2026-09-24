@@ -8,6 +8,7 @@ import {
   type Conditions,
 } from '../components/rower3d/conditions';
 import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
+import { skySunPosition } from '../components/rower3d/sunDirection';
 
 /**
  * Issue #346 — the same route, at a different time of day.
@@ -71,16 +72,22 @@ describe('the sun’s place in the sky', () => {
     expect(high[1]).toBeGreaterThan(low[1]);
   });
 
+  /**
+   * #352 removed `sky.sunPosition` outright, so there is no longer a second
+   * value that *could* disagree — `skySunPosition` is the only way to get one.
+   * What is left to hold is that it comes from the preset's own angles.
+   */
   it('agrees with the scene’s own lighting, whatever the preset', () => {
     for (const condition of CONDITIONS) {
       const scene = applyConditions(SCENE_CONFIG, condition);
+      const sky = skySunPosition(scene.lighting);
       const derived = sunPositionFrom(
         scene.lighting.sunElevation,
         scene.lighting.sunAzimuth,
-        Math.hypot(...scene.sky.sunPosition),
+        Math.hypot(...sky),
       );
 
-      scene.sky.sunPosition.forEach((value, axis) => {
+      sky.forEach((value: number, axis: number) => {
         expect(value, `${condition} axis ${axis}`).toBeCloseTo(derived[axis], 4);
       });
     }

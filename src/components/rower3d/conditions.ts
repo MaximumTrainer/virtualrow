@@ -72,9 +72,6 @@ export const sunPositionFrom = (
   ];
 };
 
-/** How far out the sky's sun sits. Kept from the config it replaces. */
-const SUN_DISTANCE = 110;
-
 interface Preset {
   /** Degrees above the horizon. */
   elevation: number;
@@ -194,8 +191,8 @@ export const applyConditions = (config: SceneConfig, condition: Conditions): Sce
     },
     sky: {
       ...config.sky,
-      // The one sun: the sky's and the light's, from the same two angles.
-      sunPosition: sunPositionFrom(preset.elevation, preset.azimuth, SUN_DISTANCE),
+      // No sun position here any more (#352): the sky derives it from the
+      // lighting angles above, so there is only ever one place it is decided.
       turbidity: preset.turbidity,
     },
     clouds: {

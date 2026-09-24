@@ -22,6 +22,14 @@ export const QUALITY_TIERS: PerformanceMode[] = ['low', 'auto', 'high'];
 export interface CanvasSurface {
   antialias: boolean;
   shadows: boolean;
+  /**
+   * Soft shadow edges (`PCFSoftShadowMap`) rather than three's default
+   * `PCFShadowMap` (#352). At the resolutions this scene can afford the
+   * default is a hard edge, and a scull's shadow on open water reads as a
+   * cut-out. It costs a wider tap pattern and nothing else, so every tier that
+   * draws shadows at all draws them soft.
+   */
+  softShadows: boolean;
   /** Shadow map edge in texels; 0 when the tier draws no shadows. */
   shadowMapSize: number;
   /** R3F device-pixel-ratio setting: a fixed ratio, or a [min, max] range. */
@@ -41,6 +49,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
   low: {
     antialias: false,
     shadows: false,
+    softShadows: false,
     shadowMapSize: 0,
     dpr: 1,
     powerPreference: 'low-power',
@@ -48,6 +57,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
   auto: {
     antialias: true,
     shadows: true,
+    softShadows: true,
     shadowMapSize: 1024,
     dpr: [1, 1.5],
     powerPreference: 'default',
@@ -55,6 +65,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
   high: {
     antialias: true,
     shadows: true,
+    softShadows: true,
     shadowMapSize: 2048,
     dpr: [1, 2],
     powerPreference: 'high-performance',

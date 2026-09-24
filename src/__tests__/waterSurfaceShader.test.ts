@@ -12,6 +12,7 @@ import {
   buildSkyScene,
 } from '../components/rower3d/skyEnvironment';
 import { SCENE_CONFIG } from '../components/rower3d/themeConfig';
+import { skySunPosition } from '../components/rower3d/sunDirection';
 
 /**
  * Issue #324 — the water's fragment half.
@@ -47,6 +48,8 @@ const compiled = (prepare: (material: THREE.MeshStandardMaterial) => void) => {
   );
   return shader;
 };
+
+const SUN = skySunPosition(SCENE_CONFIG.lighting);
 
 describe('attachWaterSurface', () => {
   it('blends towards the reflection at a grazing angle', () => {
@@ -136,8 +139,8 @@ describe('buildSkyEnvironment', () => {
     const renderer = {} as THREE.WebGLRenderer;
     const sky = SCENE_CONFIG.sky;
 
-    expect(() => buildSkyEnvironment(renderer, sky)).not.toThrow();
-    expect(buildSkyEnvironment(renderer, sky)).toBeNull();
+    expect(() => buildSkyEnvironment(renderer, sky, SUN)).not.toThrow();
+    expect(buildSkyEnvironment(renderer, sky, SUN)).toBeNull();
   });
 
   it('captures a scene holding the sky and nothing else', () => {
@@ -146,7 +149,7 @@ describe('buildSkyEnvironment', () => {
     // and the water material's "no environment map to reflect" was describing
     // a state that code had created. This one cannot depend on load order,
     // because the only thing in the scene it captures is the sky it just made.
-    const { scene, mesh } = buildSkyScene(SCENE_CONFIG.sky);
+    const { scene, mesh } = buildSkyScene(SCENE_CONFIG.sky, SUN);
 
     expect(scene.children, 'the captured scene is not just the sky').toHaveLength(1);
     expect(scene.children[0]).toBe(mesh);
@@ -154,18 +157,19 @@ describe('buildSkyEnvironment', () => {
 
   it('lights the sky the way the theme asks', () => {
     const sky = SCENE_CONFIG.sky;
-    const { mesh } = buildSkyScene(sky);
+    const { mesh } = buildSkyScene(sky, SUN);
     const uniforms = mesh.material.uniforms;
 
     expect(uniforms.turbidity.value).toBe(sky.turbidity);
     expect(uniforms.rayleigh.value).toBe(sky.rayleigh);
     expect(uniforms.mieCoefficient.value).toBe(sky.mieCoefficient);
     expect(uniforms.mieDirectionalG.value).toBe(sky.mieDirectionalG);
-    expect(uniforms.sunPosition.value.toArray()).toEqual(sky.sunPosition);
+    // Derived from the lighting angles now, not authored on the sky (#352).
+    expect(uniforms.sunPosition.value.toArray()).toEqual([...SUN]);
   });
 
   it('builds a dome big enough to be a sky rather than a ball over the boat', () => {
-    const { mesh } = buildSkyScene(SCENE_CONFIG.sky);
+    const { mesh } = buildSkyScene(SCENE_CONFIG.sky, SUN);
     expect(mesh.scale.x).toBe(SKY_ENVIRONMENT_SCALE);
   });
 });

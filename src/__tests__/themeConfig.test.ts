@@ -81,7 +81,9 @@ describe('SCENE_CONFIG', () => {
 
   it('sky has all required fields with valid ranges', () => {
     const sky = SCENE_CONFIG.sky;
-    expect(sky.sunPosition).toHaveLength(3);
+    // No `sunPosition` here (#352): a second place to author the sun is a
+    // second answer, and the two disagreed for as long as both existed.
+    expect(sky).not.toHaveProperty('sunPosition');
     expect(sky.turbidity).toBeGreaterThanOrEqual(0);
     expect(typeof sky.rayleigh).toBe('number');
     expect(typeof sky.mieCoefficient).toBe('number');

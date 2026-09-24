@@ -115,3 +115,30 @@ describe('no setting ever goes backwards as quality rises', () => {
   });
 });
 
+
+/**
+ * Issue #352 — shadows with a soft edge.
+ *
+ * three's default shadow map is `PCFShadowMap`, which is a hard edge at the
+ * resolutions this scene can afford: a scull's shadow on open water reads as a
+ * cut-out. `PCFSoftShadowMap` costs a wider tap pattern and nothing else, so
+ * every tier that draws shadows at all draws them soft.
+ */
+describe('how hard the shadow edges are', () => {
+  it('asks for soft shadows wherever shadows are drawn', () => {
+    for (const tier of ['auto', 'high'] as const) {
+      const surface = canvasSurfaceFor(tier);
+
+      expect(surface.shadows, tier).toBe(true);
+      expect(surface.softShadows, tier).toBe(true);
+    }
+  });
+
+  // Nothing to soften: the low tier draws no shadow map at all.
+  it('asks for nothing on a tier that draws no shadows', () => {
+    const surface = canvasSurfaceFor('low');
+
+    expect(surface.shadows).toBe(false);
+    expect(surface.softShadows).toBe(false);
+  });
+});
