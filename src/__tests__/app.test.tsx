@@ -178,3 +178,28 @@ describe('App component', () => {
     });
   });
 });
+
+/**
+ * Issue #339 — the sound switch, on the screen it belongs to.
+ *
+ * `soundPicker.test.tsx` covers the control. This is about it being wired:
+ * the switch is the user gesture a browser requires before any audio exists,
+ * so if it is not connected to anything there is no other way to start sound.
+ */
+describe('switching the sound on', () => {
+  it('offers the switch among the other settings, off to begin with', () => {
+    render(<App />);
+
+    expect(screen.getByRole('switch', { name: /sound/i })).not.toBeChecked();
+    expect(screen.queryByRole('slider', { name: /volume/i })).toBeNull();
+  });
+
+  it('turns on, and offers a volume once there is something to hear', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('switch', { name: /sound/i }));
+
+    expect(screen.getByRole('switch', { name: /sound/i })).toBeChecked();
+    expect(screen.getByRole('slider', { name: /volume/i })).toBeInTheDocument();
+  });
+});
