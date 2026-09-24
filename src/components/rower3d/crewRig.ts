@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 // ============================================================================
 // THE RIG CONTRACT, NAMED
 //
@@ -24,3 +26,100 @@ export const GLB_ROWER_NODES = [
 
 /** Oar nodes the scene sweeps about their gates. */
 export const GLB_OAR_NODES = ['LeftOar', 'RightOar'] as const;
+
+// ============================================================================
+// DRESSING THE SCULL (#349)
+//
+// Every GLB in the kit ships a flat `baseColorFactor` and nothing else, and
+// until this issue the scene had no usable environment map to reflect — so the
+// hull read as matte plastic and the metal rigger as dark grey. With a real sky
+// environment installed, materials that answer to one are worth having.
+//
+// The exporter names a group and hangs the geometry on a `_part` child, so the
+// meshes are `Hull_part`, `LeftGate_part`, `LeftOar_Blade_part`. Matching on
+// the group name alone would dress nothing.
+// ============================================================================
+
+/** Painted, waxed and wet: a clearcoat over a smooth base. */
+const HULL = /^Hull/;
+
+/** Aluminium: the riggers, their stays and the gates. */
+const METAL = /Rigger|Rig_Stay|Gate/;
+
+/** Marks a material this module made, so a second pass is a no-op. */
+const DRESSED = '__virtualrowDressed';
+
+const isDressed = (material: THREE.Material): boolean =>
+  (material as unknown as Record<string, unknown>)[DRESSED] === true;
+
+const mark = <T extends THREE.Material>(material: T): T => {
+  (material as unknown as Record<string, unknown>)[DRESSED] = true;
+  return material;
+};
+
+/**
+ * Swap the flat GLB materials for ones the sky can light.
+ *
+ * Every part keeps the colour it arrived with: `baseColorFactor` is the only
+ * thing distinguishing one club's boat from another, and a material pass that
+ * dropped it would paint every scull the same.
+ *
+ * Idempotent. It is called after `useGLTF` resolves, and the scene re-renders
+ * many times after that.
+ */
+export const dressScull = (root: THREE.Object3D): void => {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+
+    const current = mesh.material as THREE.MeshStandardMaterial;
+    if (!current || Array.isArray(mesh.material) || isDressed(current)) return;
+
+    const color = current.color;
+
+    if (HULL.test(mesh.name)) {
+      mesh.material = mark(
+        new THREE.MeshPhysicalMaterial({
+          color,
+          clearcoat: 0.9,
+          clearcoatRoughness: 0.08,
+          roughness: 0.35,
+          metalness: 0,
+        }),
+      );
+      return;
+    }
+
+    if (METAL.test(mesh.name)) {
+      mesh.material = mark(
+        new THREE.MeshStandardMaterial({ color, metalness: 0.9, roughness: 0.25 }),
+      );
+    }
+
+    // Everything else — the blade, the seat, the rower — keeps what it came
+    // with. A blade is painted, not chromed, and it is already a standard
+    // material that an environment map lights correctly.
+  });
+};
+
+/**
+ * Let a flat-colour GLB pick up the sky's tint (#349).
+ *
+ * The scenery kit is authored as `baseColorFactor` per part and nothing else
+ * (`public/assets/scenery/README.md`: "flat colour, no textures — the scene
+ * lights it"). With a real sky environment installed, a little of it on those
+ * materials is what stops a white clubhouse reading as paper against a blue
+ * sky. Half strength: the kit should take the sky's colour, not its shine.
+ */
+export const SCENERY_ENV_MAP_INTENSITY = 0.5;
+
+export const litBySky = (root: THREE.Object3D, intensity = SCENERY_ENV_MAP_INTENSITY): void => {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    // `envMapIntensity` exists on standard and physical materials; a basic or
+    // lambert one has no environment to take and is left alone.
+    if (material && 'envMapIntensity' in material) material.envMapIntensity = intensity;
+  });
+};

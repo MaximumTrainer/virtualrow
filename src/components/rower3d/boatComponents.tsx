@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { BOAT_GROUP_NAME, IS_TEST_MODE } from './constants';
 import { OAR_LEVER_RATIO, strokePose } from './strokePose';
 import { WATER_SURFACE_Y } from './waterGeometry';
-import { GLB_ROWER_NODES } from './crewRig';
+import { GLB_ROWER_NODES, dressScull } from './crewRig';
 import { createBoatNormalMap } from './helpers';
 import { CREW_URL, type Crew } from './crewModel';
 
@@ -333,7 +333,16 @@ const GltfScullBase: React.FC<{
   const { scene } = useGLTF(CREW_URL[crew]);
   // Clone so the boat is independent of the cached source scene (static meshes,
   // so a plain deep clone preserves the named nodes we animate).
-  const model = useMemo(() => scene.clone(true), [scene]);
+  //
+  // Dressed on the clone, not on the cached original (#349): the GLB ships a
+  // flat `baseColorFactor` per part, and with a real sky environment installed
+  // a clearcoat on the hull and a metal on the rigger are worth having. Doing
+  // it here means the cached source stays as it was loaded.
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    dressScull(clone);
+    return clone;
+  }, [scene]);
   const oarsRef = useRef<{ left: THREE.Object3D | null; right: THREE.Object3D | null }>({ left: null, right: null });
   /** Where the rig authored the oars, so the dip is measured from it not from zero. */
   const oarRestYRef = useRef(0);

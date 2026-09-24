@@ -70,14 +70,16 @@ import {
   readContextState,
 } from './rower3d/glContext';
 import type { GPUBackend, PerformanceMode } from './rower3d/constants';
-import { WakeEffect, BladeEntryFoam, PMREMEnvironment, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
+import { WakeEffect, BladeEntryFoam, DriveSpray, FinishSplash, CausticsLight, DynamicPostFx } from './rower3d/effectComponents';
+import { lightingPlan } from './rower3d/lightingPlan';
+import { skySunPosition } from './rower3d/sunDirection';
 import { PhotorealisticWater, WaterReflectionPlane, CurvedWaterChannel } from './rower3d/waterComponents';
 import { PineTrees, GroundCover } from './rower3d/vegetationComponents';
 import { SceneryModels } from './rower3d/sceneryModels';
 import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { resolveRegion } from './rower3d/sceneryRegion';
-import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
+import { PhotorealisticSkydome, HorizonSilhouette, SkyEnvironment } from './rower3d/skyComponents';
 import {
   sunDirection,
   followerLightPosition,
@@ -756,6 +758,22 @@ export const RowerScene: React.FC<
     [sceneConfig.lighting],
   );
 
+  /*
+   * Which lights the scene has, and how strong (#349).
+   *
+   * The ambient light and the second directional fill are gone: they existed
+   * to fake what an environment map does, and the scene had no usable one —
+   * the old `PMREMEnvironment` captured the live scene before `Sky` had drawn,
+   * so the map was near-black and every physical material had nothing to
+   * reflect. With a real sky environment they were subtracting contrast for
+   * nothing.
+   */
+  const lights = useMemo(
+    () => lightingPlan(performanceMode, sceneConfig),
+    [performanceMode, sceneConfig],
+  );
+  const skySun = useMemo(() => skySunPosition(sceneConfig.lighting), [sceneConfig.lighting]);
+
   /**
    * The sun's light follows the boat (#352).
    *
@@ -838,17 +856,20 @@ export const RowerScene: React.FC<
           the fade has to be one too if the cut is to land inside it (#325). */}
       <fog attach="fog" args={[fog.color, fog.near, fog.far]} />
 
-      {/* Sky and ground bounce. The three arguments were ternary chains over
-          six themes; five of them were retired in #361, so these are the
-          values the survivor always took. */}
-      <hemisphereLight args={['#b4d7ff', '#3d5c3a', 0.9]} position={[0, 50, 0]} />
+      {/* The ground bounce, and the only light here besides the sun and the
+          sky itself (#349). Its colours come from the config the conditions
+          presets resolve, not from literals in this file. */}
+      <hemisphereLight
+        args={[lights.hemisphere.sky, lights.hemisphere.ground, lights.hemisphere.intensity]}
+        position={[0, 50, 0]}
+      />
       
       <directionalLight
         ref={sunLightRef}
         position={sunLightPos}
         target={sunTarget}
-        intensity={sceneConfig.lighting.sunIntensity}
-        color={sceneConfig.lighting.sunColor}
+        intensity={lights.sun.intensity}
+        color={lights.sun.color}
         castShadow={performanceMode !== 'low'}
         shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
         shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
@@ -870,17 +891,6 @@ export const RowerScene: React.FC<
           matrix; the frame loop above moves it onto the boat. */}
       <primitive object={sunTarget} />
       
-      <ambientLight 
-        intensity={sceneConfig.lighting.ambientIntensity}
-        color={sceneConfig.lighting.ambientColor}
-      />
-      
-      <directionalLight
-        position={[-sunLightPos[0] * 0.6, 50, -sunLightPos[2] * 0.5]}
-        intensity={sceneConfig.lighting.fillIntensity}
-        color={sceneConfig.lighting.fillColor}
-      />
-
       {!IS_TEST_MODE && performanceMode === 'high' && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
@@ -888,7 +898,11 @@ export const RowerScene: React.FC<
         </mesh>
       )}
       
-      <PMREMEnvironment />
+      <SkyEnvironment
+        sky={sceneConfig.sky}
+        sunPosition={skySun}
+        intensity={lights.environmentIntensity}
+      />
       
       {routeCurve ? (
         <CurvedWaterChannel curve={routeCurve} enrichment={enrichment} performanceMode={performanceMode} />
