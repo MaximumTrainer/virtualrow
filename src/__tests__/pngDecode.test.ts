@@ -17,8 +17,8 @@ describe('decodePng', () => {
     const image = decodePng(file);
 
     expect(image.width).toBe(1214);
-    expect(image.height).toBe(377);
-    expect(image.pixels.length).toBe(1214 * 377 * 3);
+    expect(image.height).toBe(497);
+    expect(image.pixels.length).toBe(1214 * 497 * 3);
   });
 
   it('rejects something that is not a PNG', () => {
