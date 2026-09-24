@@ -36,6 +36,8 @@ import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
 import { resolvePerformanceMode } from './components/rower3d/constants';
 import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
+import { SoundPicker } from './components/SoundPicker';
+import { useRaceCues } from './hooks/useRaceCues';
 import { CrewPicker } from './components/CrewPicker';
 import { useCrewPreference } from './hooks/useCrewPreference';
 import { useRenderStats } from './hooks/useRenderStats';
@@ -99,7 +101,7 @@ function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {
 
 function App() {
   const { isAuthenticated, isLoading, login, user } = useAuth();
-  const { routeEnrichmentService, defaultRoutePreferenceStore } = useServices();
+  const { routeEnrichmentService, defaultRoutePreferenceStore, audioService } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -655,6 +657,13 @@ function App() {
     autoStart: isDemoMode,
   });
 
+  /*
+   * The count, "Row!", and the line (#339). Here rather than in the scene:
+   * these come from the start sequence and the finish, both of which live on
+   * this side of the canvas.
+   */
+  useRaceCues(audioService, startSequence.phase, startSequence.countdown, finish !== null);
+
   // While the demo is running, simulated rower data flows through exactly the
   // same pipeline as a real PM5, so nothing downstream needs to know it is fake.
   useEffect(() => {
@@ -887,9 +896,64 @@ function App() {
       ? heartRateSamples[heartRateSamples.length - 1].bpm
       : (pm5Data?.heartRate ?? null)
   ), [heartRateSamples, pm5Data]);
+  /**
+   * Sound, off until a rower asks for it (#339).
+   *
+   * A browser will not start an AudioContext without a gesture, so this is not
+   * a preference the app can honour quietly at load - the switch is the
+   * gesture. The volume is kept here so it survives switching the sound off
+   * and on again.
+   */
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundVolume, setSoundVolume] = useState(() => audioService.getVolume());
+
+  const handleSoundToggle = useCallback(
+    (enabled: boolean) => {
+      setSoundEnabled(enabled);
+      void (enabled ? audioService.enable() : audioService.disable());
+    },
+    [audioService],
+  );
+
+  const handleSoundVolume = useCallback(
+    (volume: number) => {
+      setSoundVolume(volume);
+      audioService.setVolume(volume);
+    },
+    [audioService],
+  );
+
+  /**
+   * The water bed runs with the row, not with the page.
+   *
+   * A loop that started when the sound was switched on would play under the
+   * route list and the settings panel, which are not on the water.
+   */
+  useEffect(() => {
+    if (!soundEnabled || !isWorkoutActive) {
+      audioService.stopWater();
+      return;
+    }
+    audioService.startWater();
+    return () => audioService.stopWater();
+  }, [audioService, soundEnabled, isWorkoutActive]);
+
   const workoutElapsedTimeMs = useMemo(() => (
     pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs
   ), [activityElapsedMs, pm5Data]);
+  /**
+   * How hard the strokes are landing, for how loud they sound (#339).
+   *
+   * From the power, because that is what the stroke actually cost: a light
+   * paddle and a racing catch are the same sound at different volumes, and a
+   * constant would make every stroke sound like the same stroke. Floored, so a
+   * quiet row is quiet rather than silent.
+   */
+  const strokeIntensity = useMemo(() => {
+    const watts = pm5Data?.power ?? 0;
+    return Math.min(1, Math.max(0.2, watts / 300));
+  }, [pm5Data?.power]);
+
   const activityProgressPercent = useMemo(() => (
     pm5Data && selectedRoute
       ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100)
@@ -1136,6 +1200,13 @@ function App() {
                     onChange={graphics.setQuality}
                   />
 
+                  <SoundPicker
+                    enabled={soundEnabled}
+                    volume={soundVolume}
+                    onToggle={handleSoundToggle}
+                    onVolume={handleSoundVolume}
+                  />
+
                   <CrewPicker
                     preference={crew.preference}
                     onChange={crew.setPreference}
@@ -1369,6 +1440,8 @@ function App() {
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
                       crew={resolveCrew(user?.gender, crew.preference)}
+                      audio={audioService}
+                      strokeIntensity={strokeIntensity}
                     />
                   </Suspense>
 

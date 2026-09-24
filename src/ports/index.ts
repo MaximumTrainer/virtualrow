@@ -27,6 +27,7 @@ import type { RouteEnrichmentService } from '../services/routeEnrichmentService'
 import type { DefaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivityService';
 import type { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
+import type { AudioService } from '../services/audioService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -181,6 +182,25 @@ export type DefaultRoutePreferencePort = Pick<
 export type ActivityUploadPort = Pick<IntervalsIcuActivityService, 'uploadActivity'>;
 
 /**
+ * Port for the synthesised sound bed (issue #339).
+ *
+ * Silent until a rower switches it on, so every call-site may be made before
+ * `enable()` and the service answers by doing nothing.
+ */
+export type AudioPort = Pick<
+  AudioService,
+  | 'enable'
+  | 'disable'
+  | 'isEnabled'
+  | 'setVolume'
+  | 'getVolume'
+  | 'splash'
+  | 'cue'
+  | 'startWater'
+  | 'stopWater'
+>;
+
+/**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
  */
@@ -197,4 +217,5 @@ export interface Services {
   routeEnrichmentService: RouteEnrichmentPort;
   defaultRoutePreferenceStore: DefaultRoutePreferencePort;
   intervalsIcuActivityService: ActivityUploadPort;
+  audioService: AudioPort;
 }
