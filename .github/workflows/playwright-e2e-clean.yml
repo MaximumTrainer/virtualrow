@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [bare, nofoliage, main]
+        variant: [pr398, main, bare-maintests]
         runner: [a, b]
     runs-on: windows-latest
     env:
@@ -21,7 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.variant == 'main' && 'main' || github.head_ref }}
+          ref: ${{ matrix.variant == 'main' && 'main' || matrix.variant == 'pr398' && 'claude/fix-waitforfunction-timeouts' || github.head_ref }}
+          fetch-depth: 0
+      - name: Main's test files
+        if: matrix.variant == 'bare-maintests'
+        shell: bash
+        run: git checkout origin/main -- playwright/ && git status --short | head
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
