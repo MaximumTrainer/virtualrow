@@ -232,3 +232,65 @@ describe('the horizon silhouette', () => {
     await renderer.unmount();
   });
 });
+
+/**
+ * Issue #349 — the sky lights the scene, not a black capture of it.
+ *
+ * `PMREMEnvironment` built `scene.environment` from the live scene on mount,
+ * before `Sky` had drawn, so the map was near-black and every physical
+ * material had nothing to reflect. This installs the sky-only map that #324
+ * already builds for the water, so it cannot depend on load order.
+ */
+describe('the sky as the scene’s environment', () => {
+  const texture = () => Object.assign(new THREE.Texture(), { dispose: vi.fn() });
+
+  const mountEnvironment = async (built: THREE.Texture | null, intensity = 0.7) => {
+    const made = built;
+    vi.doMock('../components/rower3d/skyEnvironment', async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      buildSkyEnvironment: () => made,
+    }));
+    vi.resetModules();
+    const { SkyEnvironment } = await import('../components/rower3d/skyComponents');
+    const { SCENE_CONFIG } = await import('../components/rower3d/themeConfig');
+
+    const renderer = await ReactThreeTestRenderer.create(
+      <SkyEnvironment sky={SCENE_CONFIG.sky} sunPosition={[0, 110, 0]} intensity={intensity} />,
+    );
+    return renderer;
+  };
+
+  it('installs the map it was given, at the tier’s strength', async () => {
+    const built = texture();
+    const renderer = await mountEnvironment(built, 0.7);
+
+    const scene = renderer.scene.instance as unknown as THREE.Scene;
+    expect(scene.environment).toBe(built);
+    expect(scene.environmentIntensity).toBe(0.7);
+
+    await renderer.unmount();
+  });
+
+  // A texture left behind is one the endurance traverse counts and one the GPU
+  // holds; the map is rebuilt whenever the sun moves, so this runs often.
+  it('takes the map down again, and disposes it', async () => {
+    const built = texture();
+    const renderer = await mountEnvironment(built);
+
+    await renderer.unmount();
+
+    expect(built.dispose).toHaveBeenCalled();
+  });
+
+  /**
+   * A browser with no GL to convolve with returns nothing rather than throwing
+   * (#324), and a river without a reflection is still a river.
+   */
+  it('leaves the scene alone when the sky could not be built', async () => {
+    const renderer = await mountEnvironment(null);
+
+    expect((renderer.scene.instance as unknown as THREE.Scene).environment).toBeNull();
+
+    await renderer.unmount();
+  });
+});

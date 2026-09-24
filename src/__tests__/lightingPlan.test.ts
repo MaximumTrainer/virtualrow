@@ -112,3 +112,16 @@ describe('every preset still lights a scene somebody can see', () => {
     }
   });
 });
+
+/**
+ * `performanceMode` is a string that arrives from a URL flag and from stored
+ * preferences, so a tier the table has never heard of is reachable without
+ * anybody writing a bug — and the scene still has to be lit.
+ */
+describe('a tier nobody planned for', () => {
+  it('is lit like the middle one rather than not at all', () => {
+    const unknown = lightingPlan('ultra' as never, SCENE_CONFIG);
+
+    expect(unknown.environmentIntensity).toBe(lightingPlan('auto', SCENE_CONFIG).environmentIntensity);
+  });
+});
