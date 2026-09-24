@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
@@ -220,6 +220,11 @@ describe('choosing what to race', () => {
  * every row would be lit the same way it always was.
  */
 describe('choosing the light a row is rowed in', () => {
+  // The choice is remembered in localStorage, so a test that asserts the
+  // default has to start from no stored choice — including one left by the
+  // test above it, or by another file sharing this jsdom.
+  beforeEach(() => localStorage.clear());
+
   it('offers the conditions beside the other things set once', () => {
     render(<App />);
 

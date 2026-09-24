@@ -18,6 +18,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  // Cleared *after* as well as before. This suite stores presets, and on a
+  // jsdom that outlives the file — which is CI's, though not every developer's
+  // — the last one written leaks into whatever runs next. It did: `app.test.tsx`
+  // read a stored `dusk` and failed an assertion about the default (#346).
+  localStorage.clear();
 });
 
 /** Freeze the wall clock at a given local hour. */
