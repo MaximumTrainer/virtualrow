@@ -179,7 +179,23 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
             // The instances move about the buffer as the cull packs it, so a
             // bounding sphere computed once would be wrong by the next cull.
             frustumCulled={false}
-            castShadow
+            /*
+             * No `castShadow` (#352).
+             *
+             * Two reasons, and the first is correctness. A billboard's facing
+             * and its sway are computed in a patched vertex shader, and three
+             * casts shadows through its own `MeshDepthMaterial`, which does
+             * not carry `onBeforeCompile` — so the shadow would be of an
+             * unrotated, unswaying quad rather than of the tree that is drawn.
+             * Casting it properly needs a matching `customDepthMaterial`,
+             * which is its own piece of work.
+             *
+             * The second is cost. This was set before #352, and did nothing:
+             * the shadow camera sat at the origin while the boat rowed away,
+             * so the forest was never inside it. With the frustum following
+             * the boat the forest is in it always, and drawing 400 trees a
+             * second time doubled what the forest costs.
+             */
           />
         ),
       )}

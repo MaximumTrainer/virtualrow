@@ -86,8 +86,12 @@ import {
 } from './rower3d/sunDirection';
 import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
-import { ContactShadows } from '@react-three/drei';
 import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
+import {
+  createContactShadowTexture,
+  CONTACT_SHADOW_RADIUS_M,
+  CONTACT_SHADOW_OPACITY,
+} from './rower3d/contactShadowTexture';
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { GhostBoat } from './rower3d/GhostBoat';
 import type { GhostSource } from './rower3d/ghost';
@@ -766,7 +770,11 @@ export const RowerScene: React.FC<
    */
   const sunLightRef = useRef<THREE.DirectionalLight>(null);
   const sunTarget = useMemo(() => new THREE.Object3D(), []);
-  const contactShadowRef = useRef<THREE.Group>(null);
+  const contactShadowRef = useRef<THREE.Mesh>(null);
+  const contactShadowTexture = useMemo(() => createContactShadowTexture(), []);
+  // The endurance traverse counts uploaded textures across a whole row, and an
+  // undisposed one is exactly what it exists to catch.
+  useEffect(() => () => contactShadowTexture.dispose(), [contactShadowTexture]);
 
   useFrame(() => {
     const light = sunLightRef.current;
@@ -978,21 +986,29 @@ export const RowerScene: React.FC<
 
       {/*
         A soft disc where the hull meets the water (#352).
-        Rendered once rather than every frame: it rides with the boat, so what
-        it captures does not change, and a per-frame depth pass is a cost the
-        `low` tier — the one that needs this most — cannot pay.
+
+        One textured quad, not drei's `ContactShadows`: that renders the whole
+        scene into a depth target to capture its blob, and its "render once"
+        guard resets on every React render, so it ran again and again. Measured
+        on the same CI runner it cost a full extra scene pass at every tier —
+        171 → 298 draw calls at `low`, 336 → 684 at `high` — and `low` is the
+        tier a contact shadow exists to help.
       */}
       {!IS_TEST_MODE && (
-        <group ref={contactShadowRef}>
-          <ContactShadows
-            scale={10}
-            resolution={performanceMode === 'low' ? 256 : 512}
-            blur={2}
-            opacity={0.35}
-            far={2}
-            frames={1}
+        <mesh
+          ref={contactShadowRef}
+          rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={1}
+        >
+          <planeGeometry args={[CONTACT_SHADOW_RADIUS_M * 2, CONTACT_SHADOW_RADIUS_M * 2]} />
+          <meshBasicMaterial
+            map={contactShadowTexture}
+            transparent
+            opacity={CONTACT_SHADOW_OPACITY}
+            color="#000000"
+            depthWrite={false}
           />
-        </group>
+        </mesh>
       )}
 
       {/*

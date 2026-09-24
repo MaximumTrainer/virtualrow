@@ -94,7 +94,26 @@ describe('BankFoliage', () => {
       expect(`#${material.color.getHexString()}`).toBe(entry.color);
       expect(material.map).toBeTruthy();
       expect(material.alphaTest).toBeGreaterThanOrEqual(0.5);
-      expect(mesh.castShadow).toBe(true);
+    }
+    await scene.renderer.unmount();
+  });
+
+  /**
+   * A billboard casts no shadow (#352).
+   *
+   * Its facing and its sway are computed in a patched vertex shader, and three
+   * casts shadows through its own `MeshDepthMaterial`, which does not carry
+   * `onBeforeCompile` — so the shadow would be of an unrotated, unswaying quad
+   * rather than of the tree that is drawn. It was set before #352 and did
+   * nothing, because the shadow camera sat at the origin while the boat rowed
+   * away; once the frustum followed the boat it drew 400 trees a second time
+   * and doubled what the forest costs.
+   */
+  it('does not cast a shadow it cannot cast correctly', async () => {
+    const scene = await mount(<BankFoliage curve={straightRoute(4_000)} viewDistance={600} />);
+
+    for (const mesh of scene.foliage()) {
+      expect(mesh.castShadow, mesh.name).toBe(false);
     }
     await scene.renderer.unmount();
   });
