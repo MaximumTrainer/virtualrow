@@ -1,5 +1,6 @@
 import type { WorkoutSession } from '../types/index';
 import { formatPace } from '../utils/formatters';
+import { RowBreakdown } from './RowBreakdown';
 import './GuestSessionSummary.css';
 
 interface GuestSessionSummaryProps {
@@ -92,6 +93,9 @@ export function GuestSessionSummary({ session, onRowAgain, onExit, onSignIn, isD
             </div>
           )}
         </div>
+
+        {/* No comparison with a best: a guest has no history to keep one in. */}
+        <RowBreakdown session={session} />
 
         <div className="guest-summary-actions">
           {onSignIn && (

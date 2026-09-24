@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <canvas data-testid="row-chart" />,
+}));
+
 import { SessionSummary } from '../components/SessionSummary';
 import { ServicesProvider } from '../context/ServicesContext';
 import { AuthContext, type AuthContextValue } from '../context/useAuth';
@@ -105,12 +109,14 @@ describe('SessionSummary (issue #221, R4)', () => {
 
     expect(screen.getByRole('heading', { name: /workout complete/i })).toBeInTheDocument();
     expect(screen.getByText('Willowbrook River')).toBeInTheDocument();
-    expect(screen.getByText('5.00 km')).toBeInTheDocument();
-    expect(screen.getByText('21:14')).toBeInTheDocument();
-    expect(screen.getByText(/2:07/)).toBeInTheDocument();
-    expect(screen.getByText('132')).toBeInTheDocument();  // avg HR
-    expect(screen.getByText('147')).toBeInTheDocument();  // max HR
-    expect(screen.getByText('149')).toBeInTheDocument();  // avg W
+    // The totals, which the splits below them repeat per 500 m (#337).
+    const totals = within(document.querySelector('.session-summary-stats') as HTMLElement);
+    expect(totals.getByText('5.00 km')).toBeInTheDocument();
+    expect(totals.getByText('21:14')).toBeInTheDocument();
+    expect(totals.getByText(/2:07/)).toBeInTheDocument();
+    expect(totals.getByText('132')).toBeInTheDocument();  // avg HR
+    expect(totals.getByText('147')).toBeInTheDocument();  // max HR
+    expect(totals.getByText('149')).toBeInTheDocument();  // avg W
   });
 
   it('offers Save to intervals.icu when signed in with samples (AC4.2)', () => {
@@ -309,5 +315,34 @@ describe('SessionSummary — guest and demo rows are never uploaded (issue #221,
     await user.click(screen.getByRole('button', { name: /^done$/i }));
 
     expect(uploadActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('SessionSummary — the row itself (#337)', () => {
+  const twoKm: ActivitySample[] = Array.from({ length: 501 }, (_, t) => ({
+    t,
+    distance: t * 4,
+    pace: 125,
+    power: 170,
+    cadence: 26,
+    heartRate: 141,
+  }));
+
+  it('lists a split per 500 m and draws the row', () => {
+    renderSummary({ session: makeSession({ distance: 2000, samples: twoKm }) });
+
+    const rows = within(screen.getByRole('table', { name: 'Splits' })).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(4);
+    expect(screen.getByTestId('row-chart')).toBeInTheDocument();
+  });
+
+  it('compares the row with the best on this route', () => {
+    renderSummary({ session: makeSession({ averagePace: 127 }), personalBest: 125 });
+    expect(screen.getByTestId('row-pb')).toHaveTextContent('Personal best 2:05/500m · +0:02 today');
+  });
+
+  it('calls a first row on the route a first row', () => {
+    renderSummary({ personalBest: null });
+    expect(screen.getByTestId('row-pb')).toHaveTextContent('First row on this route');
   });
 });

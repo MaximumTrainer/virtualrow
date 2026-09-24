@@ -1,0 +1,60 @@
+/* The row under the summary's totals (#337). */
+
+.row-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.row-breakdown-pb {
+  margin: 0;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-control);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--surface-secondary, rgba(127, 127, 127, 0.1));
+}
+
+.row-breakdown-pb[data-trend='faster'] {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.row-breakdown-chart {
+  position: relative;
+  height: 220px;
+}
+
+.row-breakdown-splits {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.row-breakdown-splits th,
+.row-breakdown-splits td {
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+}
+
+.row-breakdown-splits th:first-child,
+.row-breakdown-splits td:first-child {
+  text-align: left;
+}
+
+.row-breakdown-splits th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.row-breakdown-splits tbody tr:nth-child(odd) {
+  background: var(--surface-secondary, rgba(127, 127, 127, 0.08));
+}
+
+.btn-session-share {
+  min-height: 44px;
+  align-self: flex-end;
+}
