@@ -3,6 +3,7 @@ import { Billboard, Sky, Cloud } from '@react-three/drei';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
+import { skySunPosition } from './sunDirection';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
@@ -42,6 +43,8 @@ export const PhotorealisticSkydome: React.FC<{
   config?: SceneConfig;
 }> = ({ positionRef, performanceMode, config = SCENE_CONFIG }) => {
   const skyConfig = config.sky;
+  // Derived, never authored (#352): one sun, from the lighting angles.
+  const sunPosition = useMemo(() => skySunPosition(config.lighting), [config.lighting]);
   const cloudConfig = useMemo(
     () => cloudsFor(performanceMode, config),
     [performanceMode, config],
@@ -121,7 +124,7 @@ export const PhotorealisticSkydome: React.FC<{
       <Sky
         ref={skyRef}
         distance={500000}
-        sunPosition={skyConfig.sunPosition}
+        sunPosition={sunPosition}
         turbidity={skyConfig.turbidity}
         rayleigh={skyConfig.rayleigh}
         mieCoefficient={skyConfig.mieCoefficient}

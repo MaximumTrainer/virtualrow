@@ -78,9 +78,20 @@ import { isGlbSceneryEnabled } from './rower3d/sceneryAssets';
 import { getRouteSceneryTrack } from './rower3d/sceneryTrack';
 import { resolveRegion } from './rower3d/sceneryRegion';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
-import { sunPositionFrom } from './rower3d/conditions';
+import {
+  sunDirection,
+  followerLightPosition,
+  shadowFrustumCoversBoat,
+  SHADOW_HALF_EXTENT_M,
+} from './rower3d/sunDirection';
 import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
+import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
+import {
+  createContactShadowTexture,
+  CONTACT_SHADOW_RADIUS_M,
+  CONTACT_SHADOW_OPACITY,
+} from './rower3d/contactShadowTexture';
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
 import { GhostBoat } from './rower3d/GhostBoat';
 import type { GhostSource } from './rower3d/ghost';
@@ -740,10 +751,69 @@ export const RowerScene: React.FC<
    * another. Both now come from the same elevation and azimuth, through the
    * same function.
    */
+  const sunDir = useMemo(
+    () => sunDirection(sceneConfig.lighting),
+    [sceneConfig.lighting],
+  );
+
+  /**
+   * The sun's light follows the boat (#352).
+   *
+   * A directional light has no position in the physics, only a direction, so
+   * moving it changes nothing about how the scene is lit. What it changes is
+   * where the shadow map is *aimed*: the light used to stand still with a ±60 m
+   * shadow camera around the origin and no `target`, so a boat rowed out of its
+   * own shadow after about 60 m and the rest of the row had none at all.
+   *
+   * Refs and a frame loop rather than state: the boat moves every frame, and
+   * re-rendering the scene for it is what #331 took out.
+   */
+  const sunLightRef = useRef<THREE.DirectionalLight>(null);
+  const sunTarget = useMemo(() => new THREE.Object3D(), []);
+  const contactShadowRef = useRef<THREE.Mesh>(null);
+  const contactShadowTexture = useMemo(() => createContactShadowTexture(), []);
+  // The endurance traverse counts uploaded textures across a whole row, and an
+  // undisposed one is exactly what it exists to catch.
+  useEffect(() => () => contactShadowTexture.dispose(), [contactShadowTexture]);
+
+  useFrame(() => {
+    const light = sunLightRef.current;
+    if (!light) return;
+
+    const boat = boatPositionRef.current;
+    const [x, y, z] = followerLightPosition([boat.x, boat.y, boat.z], sunDir);
+    light.position.set(x, y, z);
+    sunTarget.position.copy(boat);
+    sunTarget.updateMatrixWorld();
+
+    // The contact shadow rides with the boat on the surface of the water.
+    // Without one the hull sits on the water rather than in it, however good
+    // the directional shadow is — and on `low`, which casts none, it is the
+    // only thing joining the boat to the river at all.
+    if (contactShadowRef.current) {
+      contactShadowRef.current.position.set(boat.x, WATER_SURFACE_Y + 0.02, boat.z);
+    }
+
+    try {
+      if (IS_TEST_MODE) {
+        window.__ROWER3D_SHADOW_FRUSTUM = {
+          containsBoat: shadowFrustumCoversBoat(
+            [boat.x, boat.y, boat.z],
+            [sunTarget.position.x, sunTarget.position.y, sunTarget.position.z],
+          ),
+          halfExtent: SHADOW_HALF_EXTENT_M,
+        };
+      }
+    } catch {
+      /* intentional: window access may fail in test environments */
+    }
+  });
+
+  // The sun disc and the god-rays source still need somewhere to be drawn, far
+  // enough out to read as the sun rather than as a lamp over the boat.
   const sunLightPos = useMemo(
-    (): [number, number, number] =>
-      sunPositionFrom(sceneConfig.lighting.sunElevation, sceneConfig.lighting.sunAzimuth, 200),
-    [sceneConfig.lighting.sunElevation, sceneConfig.lighting.sunAzimuth],
+    (): [number, number, number] => [sunDir[0] * 200, sunDir[1] * 200, sunDir[2] * 200],
+    [sunDir],
   );
 
   // State, not a ref: the god-rays pass dereferences the mesh every frame, and
@@ -774,19 +844,31 @@ export const RowerScene: React.FC<
       <hemisphereLight args={['#b4d7ff', '#3d5c3a', 0.9]} position={[0, 50, 0]} />
       
       <directionalLight
+        ref={sunLightRef}
         position={sunLightPos}
+        target={sunTarget}
         intensity={sceneConfig.lighting.sunIntensity}
         color={sceneConfig.lighting.sunColor}
         castShadow={performanceMode !== 'low'}
         shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
         shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
-        shadow-camera-near={0.1}
-        shadow-camera-far={performanceMode === 'high' ? 250 : 400}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
+        shadow-camera-near={1}
+        // Far enough to reach past the light, which now stands 150 m up-sun of
+        // the boat rather than 200 m from the origin (#352).
+        shadow-camera-far={400}
+        shadow-camera-left={-SHADOW_HALF_EXTENT_M}
+        shadow-camera-right={SHADOW_HALF_EXTENT_M}
+        shadow-camera-top={SHADOW_HALF_EXTENT_M}
+        shadow-camera-bottom={-SHADOW_HALF_EXTENT_M}
+        // Water is a near-flat surface lit at a grazing angle for half the
+        // presets, which is where shadow acne lives. `normalBias` offsets along
+        // the surface normal and costs nothing.
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
+      {/* The target has to be in the scene graph for three to read its world
+          matrix; the frame loop above moves it onto the boat. */}
+      <primitive object={sunTarget} />
       
       <ambientLight 
         intensity={sceneConfig.lighting.ambientIntensity}
@@ -900,6 +982,33 @@ export const RowerScene: React.FC<
             crew={crew}
           />
         </SceneErrorBoundary>
+      )}
+
+      {/*
+        A soft disc where the hull meets the water (#352).
+
+        One textured quad, not drei's `ContactShadows`: that renders the whole
+        scene into a depth target to capture its blob, and its "render once"
+        guard resets on every React render, so it ran again and again. Measured
+        on the same CI runner it cost a full extra scene pass at every tier —
+        171 → 298 draw calls at `low`, 336 → 684 at `high` — and `low` is the
+        tier a contact shadow exists to help.
+      */}
+      {!IS_TEST_MODE && (
+        <mesh
+          ref={contactShadowRef}
+          rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={1}
+        >
+          <planeGeometry args={[CONTACT_SHADOW_RADIUS_M * 2, CONTACT_SHADOW_RADIUS_M * 2]} />
+          <meshBasicMaterial
+            map={contactShadowTexture}
+            transparent
+            opacity={CONTACT_SHADOW_OPACITY}
+            color="#000000"
+            depthWrite={false}
+          />
+        </mesh>
       )}
 
       {/*
@@ -1206,7 +1315,10 @@ const Rower3D: React.FC<Rower3DProps> = (props) => {
           // strip is drawn to 7 km, and three's 2000-unit default would have
           // clipped both the moment the world stopped being ten metres wide.
           camera={{ position: [0, 2.5, 6], fov: 60, near: 0.1, far: 12000 }}
-          shadows={surface.shadows}
+          // 'soft' is R3F's PCFSoftShadowMap (#352): at the map sizes this
+          // scene can afford, the default hard edge makes a scull's shadow on
+          // open water read as a cut-out.
+          shadows={surface.softShadows ? 'soft' : surface.shadows}
           dpr={surface.dpr}
           gl={rendererOptions}
           onCreated={({ gl, scene }) => {

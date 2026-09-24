@@ -6,6 +6,7 @@ import { useFollowZ } from './followBoat';
 import { IS_TEST_MODE, SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
+import { skySunPosition } from './sunDirection';
 import { SCENE_CONFIG } from './themeConfig';
 import { attachGerstnerShader, attachWaterSurface, createWaterNormalMap } from './helpers';
 import { createRippleNormalMap } from './rippleTexture';
@@ -206,9 +207,11 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   // has drawn, so it is close to black — which is what "no environment map to
   // reflect" meant.
   const skyConfig = SCENE_CONFIG.sky;
+  // The sun the water reflects is the sun the scene is lit by (#352).
+  const sunPosition = useMemo(() => skySunPosition(SCENE_CONFIG.lighting), []);
   const environment = useMemo(
-    () => (IS_TEST_MODE ? null : buildSkyEnvironment(gl, skyConfig)),
-    [gl, skyConfig],
+    () => (IS_TEST_MODE ? null : buildSkyEnvironment(gl, skyConfig, sunPosition)),
+    [gl, skyConfig, sunPosition],
   );
   useEffect(() => () => environment?.dispose(), [environment]);
 

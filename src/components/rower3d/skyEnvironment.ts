@@ -37,7 +37,11 @@ export const SKY_ENVIRONMENT_BLUR = 0.04;
  * without a GL context: what went wrong before was *what was in the scene* at
  * the moment of capture, not the convolution.
  */
-export const buildSkyScene = (sky: SkyConfig): { scene: THREE.Scene; mesh: Sky } => {
+export const buildSkyScene = (
+  sky: SkyConfig,
+  /** Where the disc sits, derived from the lighting angles (#352). */
+  sunPosition: readonly [number, number, number],
+): { scene: THREE.Scene; mesh: Sky } => {
   const scene = new THREE.Scene();
   const mesh = new Sky();
   mesh.scale.setScalar(SKY_ENVIRONMENT_SCALE);
@@ -47,7 +51,7 @@ export const buildSkyScene = (sky: SkyConfig): { scene: THREE.Scene; mesh: Sky }
   uniforms.rayleigh.value = sky.rayleigh;
   uniforms.mieCoefficient.value = sky.mieCoefficient;
   uniforms.mieDirectionalG.value = sky.mieDirectionalG;
-  uniforms.sunPosition.value.set(...sky.sunPosition);
+  uniforms.sunPosition.value.set(...sunPosition);
   scene.add(mesh);
 
   return { scene, mesh };
@@ -63,12 +67,13 @@ export const buildSkyScene = (sky: SkyConfig): { scene: THREE.Scene; mesh: Sky }
 export const buildSkyEnvironment = (
   renderer: THREE.WebGLRenderer,
   sky: SkyConfig,
+  sunPosition: readonly [number, number, number],
 ): THREE.Texture | null => {
   let mesh: Sky | null = null;
   let generator: THREE.PMREMGenerator | null = null;
 
   try {
-    const built = buildSkyScene(sky);
+    const built = buildSkyScene(sky, sunPosition);
     mesh = built.mesh;
 
     generator = new THREE.PMREMGenerator(renderer);

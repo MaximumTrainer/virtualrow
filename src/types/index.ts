@@ -362,6 +362,12 @@ declare global {
     __ROWER3D_ARM_ANGLE?: number;
     /** Blade tip height in scene units, so a spec can watch it enter the water (#329). */
     __ROWER3D_BLADE_Y?: number;
+    /**
+     * Whether the boat is inside the sun's shadow camera (#352). Published in
+     * test mode so the endurance spec can assert it at a third, a half and the
+     * end of a row — it was false past 60 m before the light followed the boat.
+     */
+    __ROWER3D_SHADOW_FRUSTUM?: { containsBoat: boolean; halfExtent: number };
     /** The ghost boat's distance and world position, for the #338 E2E. */
     __ROWER3D_GHOST_METERS?: number;
     __ROWER3D_GHOST_POS?: [number, number, number];

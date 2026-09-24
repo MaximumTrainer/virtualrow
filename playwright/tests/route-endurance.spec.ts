@@ -135,6 +135,16 @@ interface Sample {
    * blades are over the bank.
    */
   clearanceM: number | null;
+  /**
+   * Whether the boat is inside the sun's shadow camera, or null before the
+   * frame loop runs (#352).
+   *
+   * The light used to stand still over the origin with a ±60 m shadow camera,
+   * so a boat rowed out of its own shadow after about 60 m and the rest of the
+   * row had none. A traverse is the only thing here that gets far enough from
+   * the start to notice.
+   */
+  shadowContainsBoat: boolean | null;
 }
 
 /**
@@ -174,6 +184,7 @@ async function sampleAndObserve(page: Page) {
               (1024 * 1024)
             : 0,
         clearanceM: window.__ROWER3D_CLEARANCE?.clearanceM ?? null,
+        shadowContainsBoat: window.__ROWER3D_SHADOW_FRUSTUM?.containsBoat ?? null,
       },
       observation: {
         contextLost: lostPerCanvas.some(Boolean),
@@ -355,6 +366,33 @@ function expectACleanTraverse(label: string, samples: Sample[], errors: string[]
     `${label}: the blades were ${Math.abs(narrowest).toFixed(2)} m over the bank at the ` +
       `narrowest point of the route`,
   ).toBeGreaterThan(0);
+
+  /**
+   * The boat is inside its own shadow camera for the whole row (#352).
+   *
+   * Not only at the start. The light stood still over the origin with a ±60 m
+   * frustum and no `target`, so this was true for the first few seconds of a
+   * row and false for the rest of it — and every published screenshot is taken
+   * in those first few seconds, which is why nobody saw it.
+   */
+  const shadowReadings = samples
+    .map((s) => ({ progress: s.progress, contains: s.shadowContainsBoat }))
+    .filter((r): r is { progress: number; contains: boolean } => r.contains !== null);
+
+  expect(
+    shadowReadings.length,
+    `${label}: the scene never reported whether the boat was in its shadow camera`,
+  ).toBeGreaterThan(3);
+
+  const unlit = shadowReadings.filter((r) => !r.contains);
+  console.log(
+    `[endurance ${label}] boat inside the shadow frustum for ` +
+      `${shadowReadings.length - unlit.length}/${shadowReadings.length} samples`,
+  );
+  expect(
+    unlit.map((r) => r.progress.toFixed(3)),
+    `${label}: the boat rowed out of its own shadow camera`,
+  ).toEqual([]);
 
   expect(geometry.length, `${label}: no geometry was ever measured`).toBeGreaterThan(3);
   expect(

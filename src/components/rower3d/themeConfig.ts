@@ -73,7 +73,15 @@ export interface AtmosphereConfig {
 }
 
 export interface SkyConfig {
-  sunPosition: [number, number, number];
+  /**
+   * No `sunPosition` here (#352).
+   *
+   * It was authored beside `lighting.sunElevation`/`sunAzimuth` and disagreed
+   * with them — the sky drew its disc at [90, 55, 35] while the light shone
+   * from 45° at 135°. #346 derived one from the other; removing the field is
+   * what stops them drifting apart again. `skySunPosition(lighting)` is the
+   * only way to get it now.
+   */
   turbidity: number;
   rayleigh: number;
   mieCoefficient: number;
@@ -192,7 +200,7 @@ export const SCENE_CONFIG: SceneConfig = {
     fogColor: '#a8d0f0', fogNear: 80, fogFar: 550,
   },
   sky: {
-    sunPosition: [90, 55, 35], turbidity: 3.5, rayleigh: 2.8,
+    turbidity: 3.5, rayleigh: 2.8,
     mieCoefficient: 0.008, mieDirectionalG: 0.82,
     exposure: 0.42,
   },
