@@ -122,9 +122,9 @@ function App() {
   const distanceMax = 100;
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
-  // The start and the finish of a row (#336). `strokeSeen` is a stroke this
-  // session saw, not the last reading the erg left behind from the one before.
-  const [strokeSeen, setStrokeSeen] = useState(false);
+  // The start and the finish of a row (#336). `strokeAt` is when this session
+  // saw its first stroke, not the last reading the erg left from the one before.
+  const [strokeAt, setStrokeAt] = useState<number | null>(null);
   const [finish, setFinish] = useState<{ distanceMeters: number; elapsedMs: number } | null>(null);
   const finishingRef = useRef(false);
   const strokeSeenRef = useRef(false);
@@ -368,7 +368,7 @@ function App() {
       finishingRef.current = false;
       setFinish(null);
       strokeSeenRef.current = false;
-      setStrokeSeen(false);
+      setStrokeAt(null);
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
@@ -485,7 +485,7 @@ function App() {
     finishingRef.current = false;
     setFinish(null);
     strokeSeenRef.current = false;
-    setStrokeSeen(false);
+    setStrokeAt(null);
     const completed = workoutService.endSession();
     stopStructuredWorkout();
     setIsWorkoutActive(false);
@@ -566,9 +566,11 @@ function App() {
     // it from a clean call stack, which is what the frame is for.
     if (isWorkoutActive && !strokeSeenRef.current && isStrokeReading(data)) {
       strokeSeenRef.current = true;
-      // Unless the row ended in between, which cleared the ref for the next.
+      // Stamped now, so the count runs from the drive however late the page
+      // renders it. Unless the row ended in between, which cleared the ref.
+      const at = Date.now();
       window.setTimeout(() => {
-        if (strokeSeenRef.current) setStrokeSeen(true);
+        if (strokeSeenRef.current) setStrokeAt(at);
       }, 0);
     }
 
@@ -640,7 +642,7 @@ function App() {
 
   const startSequence = useStartSequence({
     active: isWorkoutActive,
-    strokeSeen,
+    strokeAt,
     autoStart: isDemoMode,
   });
 
