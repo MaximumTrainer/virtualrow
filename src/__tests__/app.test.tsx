@@ -178,3 +178,36 @@ describe('App component', () => {
     });
   });
 });
+
+/**
+ * Issue #338 — the pre-row choice, on the screen it belongs to.
+ *
+ * `ghostPicker.test.tsx` covers the control itself. These are about it being
+ * wired to the route the rower is actually looking at: the best it offers to
+ * race has to be a row on *this* route, kept for *this* athlete.
+ */
+describe('choosing what to race', () => {
+  it('offers the choice on the route panel, before the row starts', () => {
+    render(<App />);
+
+    expect(screen.getByRole('group', { name: /row against/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /row alone/i })).toBeChecked();
+  });
+
+  // A visitor with no stored rows has nothing to race, and the option says so
+  // rather than disappearing: the rower has done nothing wrong.
+  it('cannot race a best that was never rowed, and says why', () => {
+    render(<App />);
+
+    expect(screen.getByRole('radio', { name: /my best/i })).toBeDisabled();
+    expect(screen.getByText(/first row on this route/i)).toBeInTheDocument();
+  });
+
+  it('asks for a target pace once a pace boat is chosen', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('radio', { name: /pace boat/i }));
+
+    expect(screen.getByLabelText(/target pace/i)).toHaveValue('2:00');
+  });
+});
