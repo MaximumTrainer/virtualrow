@@ -180,6 +180,7 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
             // bounding sphere computed once would be wrong by the next cull.
             frustumCulled={false}
             castShadow
+            renderOrder={import.meta.env.VITE_BENCH_VARIANT === 'foliagefirst' ? -1 : 0}
           />
         ),
       )}
