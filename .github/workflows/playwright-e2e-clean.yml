@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [bare, bare-kittrees, main]
+        variant: [bare-nomountains, bare-nobuildings, main]
         runner: [a, b]
     runs-on: windows-latest
     env:

@@ -331,6 +331,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
 
     switch (el.type) {
       case 'mountain':
+        if (import.meta.env.VITE_BENCH_VARIANT === 'bare-nomountains') return null;
         return (
           <group key={`${side}-mountain-${index}`} name={LANDSCAPE_ELEMENT_NAME} position={[el.position.x, 0, el.position.z]}>
             <mesh position={[0, 8 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
@@ -356,6 +357,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
           </group>
         );
       case 'building': {
+        if (import.meta.env.VITE_BENCH_VARIANT === 'bare-nobuildings') return null;
         const profileConfig = SCENERY_PROFILES[el.sceneryProfile];
         const [hMin, hMax] = profileConfig.buildings.heightRange;
         const buildingHeightMultiplier = hMin + seededRandom(index * 23 + 11) * (hMax - hMin);
@@ -416,7 +418,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     side: 'left' | 'right',
   ) =>
     elements.flatMap((element, index) => {
-      const p = ['oldmount', 'bare', 'bare-maintests', 'bare-kittrees'].includes(import.meta.env.VITE_BENCH_VARIANT ?? '') ? (index * 0.02) / 0.6 : element.progress;
+      const p = ['oldmount', 'bare', 'bare-maintests', 'bare-kittrees', 'bare-nomountains', 'bare-nobuildings'].includes(import.meta.env.VITE_BENCH_VARIANT ?? '') ? (index * 0.02) / 0.6 : element.progress;
       if (!withinMountRange(p, mountProgress)) return [];
       const nearShadow =
         Math.abs(p - chunkProgress) < RENDER_CONFIG.shadowNearProgressBand;
