@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { foliageBillboardChunks, foliageSwayChunks } from './shaderChunks';
 
 // ============================================================================
 // FOLIAGE SWAY — shared wind-sway vertex shader helper (#107)
@@ -8,15 +9,14 @@ export function makeSwayFoliageMaterial(
   uTime: THREE.IUniform<number>,
 ): THREE.MeshPhysicalMaterial {
   const mat = new THREE.MeshPhysicalMaterial(params);
+  // `shaders/foliageSway.vert.glsl` (#341).
+  const { declarations, sway } = foliageSwayChunks();
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
-    shader.vertexShader = 'uniform float uTime;\n' + shader.vertexShader;
+    shader.vertexShader = declarations + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
-      `#include <begin_vertex>
-float swayAmt = sin(uTime * 1.2 + position.x * 0.5) * 0.04 * max(0.0, position.y / 5.0);
-transformed.x += swayAmt;
-transformed.z += swayAmt * 0.7;`,
+      `#include <begin_vertex>\n${sway}`,
     );
   };
   return mat;
@@ -27,28 +27,16 @@ transformed.z += swayAmt * 0.7;`,
 // ============================================================================
 
 /**
- * The wind, in the tree's own space before its instance transform.
+ * The wind, from `shaders/foliageBillboard.glsl` (#341).
  *
- * Phased by where the tree stands so a bank does not sway in step, and scaled
- * by `uv.y` - zero at the ground, one at the crown - so the trunk stays
- * planted. The amplitude is a fraction of the tree's height, because the
- * instance matrix scales it with everything else: three centimetres of sway a
- * metre of tree, a third of a metre at the top of a twelve-metre oak.
- */
-export const FOLIAGE_SWAY_GLSL =
-  'float sway = sin(uTime * 1.3 + instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 0.4) * 0.03 * uv.y;\n' +
-  'transformed.x += sway; transformed.z += sway * 0.6;';
-
-/**
- * One tint a tree, from a hash of where it stands, in 0.82-1.18.
+ * This and the per-tree tint used to be string constants here. They are GLSL,
+ * so they live in a `.glsl` file an editor can colour and `shaders.test.ts`
+ * can parse; the reasoning that sat above each is now in that file, beside the
+ * lines it explains.
  *
- * Every tree of a species otherwise shares one colour exactly, and a bank of
- * identical greens reads as wallpaper. A per-instance colour attribute would
- * have to be compacted alongside the matrices each time the cull runs; hashed
- * from the matrix, the tint travels with it for nothing.
+ * Still exported because `foliageMaterial.test.ts` asserts on it.
  */
-const FOLIAGE_TINT_GLSL =
-  'vFoliageTint = 0.82 + 0.36 * fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);';
+export const FOLIAGE_SWAY_GLSL = foliageBillboardChunks().sway.trim();
 
 export interface FoliageBillboardParameters {
   /** The leaf mass, from `createFoliageTexture`. */
@@ -82,26 +70,24 @@ export function makeFoliageBillboardMaterial(
     alphaTest: 0.5,
     side: THREE.FrontSide,
   });
+  const chunks = foliageBillboardChunks();
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uTime;
     shader.vertexShader =
-      'uniform float uTime;\nvarying float vFoliageTint;\n' +
+      chunks.vertexDeclarations +
       shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
 #ifdef USE_INSTANCING
-${FOLIAGE_SWAY_GLSL}
-${FOLIAGE_TINT_GLSL}
-#else
+${chunks.sway}${chunks.tint}#else
 vFoliageTint = 1.0;
 #endif`,
       );
     shader.fragmentShader =
-      'varying float vFoliageTint;\n' +
+      chunks.fragmentDeclarations +
       shader.fragmentShader.replace(
         '#include <color_fragment>',
-        `#include <color_fragment>
-diffuseColor.rgb *= vFoliageTint;`,
+        `#include <color_fragment>\n${chunks.tintFragment}`,
       );
   };
   return material;

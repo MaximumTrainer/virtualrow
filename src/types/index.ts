@@ -414,6 +414,8 @@ declare global {
     __ROWER3D_OAR_ANGLE?: number;
     __ROWER3D_STROKE_RATE?: number;
     __ROWER3D_GPU_BACKEND?: string;
+    /** Shaders the driver refused to compile, in test mode only (#341). */
+    __ROWER3D_SHADER_ERRORS?: number;
     __ROWER3D_WEBGL_LOST?: boolean;
     __ROWER3D_MAX_ANISOTROPY?: number;
     __ROWER3D_FRAME_STATS?: {

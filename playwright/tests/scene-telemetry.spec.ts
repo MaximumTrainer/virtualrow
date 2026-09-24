@@ -59,6 +59,21 @@ test('the scene records what it was doing, and it survives a reload', async ({ p
   expect(kinds, 'the context being created went unrecorded').toContain('context-created');
   expect(kinds, 'the scene recorded nothing about itself while rowing').toContain('sample');
 
+  // Issue #341 — every shader the scene builds compiled.
+  //
+  // `shaders.test.ts` parses the GLSL this scene injects, which catches GLSL
+  // that is not GLSL. It cannot catch what only a driver knows: a `varying`
+  // the two halves of a program disagree about, or a built-in one GLSL version
+  // has and the next does not. Those are valid GLSL and a black scene, and
+  // three logs the refusal to the console and carries on - which is how a
+  // shader fault reaches a rower without failing anything.
+  //
+  // Zero, not "few": a shader that does not compile is not a degraded scene,
+  // it is a missing one.
+  const shaderErrors = await page.evaluate(() => window.__ROWER3D_SHADER_ERRORS ?? null);
+  expect(shaderErrors, 'the scene never reported whether its shaders compiled').not.toBeNull();
+  expect(shaderErrors, 'the driver refused to compile a shader this scene builds').toBe(0);
+
   // A sample says something worth reading.
   const sample = rowing.find((e) => e.kind === 'sample')!;
   expect(Object.keys(sample.detail as Record<string, unknown>)).toEqual(
