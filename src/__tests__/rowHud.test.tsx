@@ -199,3 +199,58 @@ describe('the row HUD', () => {
     });
   });
 });
+
+/**
+ * Issue #338 — the gap to the boat you are chasing.
+ *
+ * The ghost is only worth rowing against if you can see where it is, and on a
+ * phone against an erg the one thing you can look at is the strip. The gap sits
+ * above it: it is the reading a racing rower checks between strokes, and it
+ * belongs with the numbers rather than in the scene, where a boat two lengths
+ * up is off the edge of the shot.
+ */
+describe('the row HUD, racing a ghost', () => {
+  beforeEach(() => atWidth(1280));
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const gap = () => document.querySelector('.row-hud-gap');
+
+  it('says nothing at all when nothing is being chased', () => {
+    render(<RowHud {...props()} />);
+
+    expect(gap()).toBeNull();
+  });
+
+  it('shows the metres in hand, and what they are in hand of', () => {
+    render(<RowHud {...props({ ghost: { gapMeters: 12.4, label: 'your best' } })} />);
+
+    expect(gap()).toHaveTextContent('+12 m');
+    expect(gap()).toHaveTextContent(/your best/i);
+  });
+
+  // Words as well as the colour (#344): a rower who cannot tell the greens
+  // from the reds reads the same sign from the "+" and the "−".
+  it('does not leave the lead to a colour', () => {
+    const { rerender } = render(
+      <RowHud {...props({ ghost: { gapMeters: 12, label: 'your best' } })} />,
+    );
+    expect(gap()).toHaveAttribute('data-lead', 'ahead');
+
+    rerender(<RowHud {...props({ ghost: { gapMeters: -12, label: 'your best' } })} />);
+    expect(gap()).toHaveAttribute('data-lead', 'behind');
+    expect(gap()).toHaveTextContent('−12 m');
+
+    rerender(<RowHud {...props({ ghost: { gapMeters: 0.2, label: 'your best' } })} />);
+    expect(gap()).toHaveAttribute('data-lead', 'level');
+    expect(gap()).toHaveTextContent(/level/i);
+  });
+
+  // Before the first stroke there is no gap, only two boats on the line.
+  it('waits for a gap rather than showing a zero', () => {
+    render(<RowHud {...props({ ghost: { gapMeters: null, label: 'your best' } })} />);
+
+    expect(gap()).toBeNull();
+  });
+});

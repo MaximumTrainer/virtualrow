@@ -78,6 +78,8 @@ import { resolveRegion } from './rower3d/sceneryRegion';
 import { PhotorealisticSkydome, HorizonSilhouette } from './rower3d/skyComponents';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { RowingScull, BoatKinematicController, GltfScull } from './rower3d/boatComponents';
+import { GhostBoat } from './rower3d/GhostBoat';
+import type { GhostSource } from './rower3d/ghost';
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
 import { frozenClock, frozenProgress, frozenVelocity, readSceneFreeze } from './rower3d/sceneFreeze';
@@ -135,6 +137,16 @@ export interface Rower3DProps {
   sceneryEnabled?: boolean;
   /** Rower model to show, from the athlete's gender. Defaults to male. */
   crew?: Crew;
+  /**
+   * The boat being chased (#338), or nothing when rowing alone. Its distance
+   * is a pure function of elapsed time, so it is placed rather than simulated.
+   */
+  ghost?: GhostSource | null;
+  /**
+   * The row's clock, in seconds. A ref, because the ghost moves every frame
+   * and the row's elapsed time arrives with a BLE packet about once a second.
+   */
+  elapsedSecondsRef?: React.MutableRefObject<number>;
 }
 
 // ============================================================================
@@ -206,6 +218,8 @@ export const RowerScene: React.FC<
   debugMode = false,
   showRiverGuides = true,
   sceneryEnabled,
+  ghost = null,
+  elapsedSecondsRef,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -847,6 +861,25 @@ export const RowerScene: React.FC<
             crew={crew}
           />
         </SceneErrorBoundary>
+      )}
+
+      {/*
+        The boat being chased (#338). Outside the error boundary above, which
+        exists to keep a failing hull from taking the scene down: a ghost that
+        cannot be drawn is a missing opponent, and the row goes on without it.
+      */}
+      {ghost && elapsedSecondsRef && (
+        <GhostBoat
+          source={ghost}
+          routeCurve={routeCurve}
+          curveDistances={curveData.distances}
+          curveLength={curveData.length}
+          totalDistanceMeters={totalDistance}
+          elapsedSecondsRef={elapsedSecondsRef}
+          playing={Boolean(isPlaying) && !holdBoat && !finished}
+          cadence={cadence || 22}
+          crew={crew === 'male' ? 'female' : 'male'}
+        />
       )}
 
       {!IS_TEST_MODE && (

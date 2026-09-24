@@ -1715,3 +1715,75 @@ test.describe('activity distance integrity', () => {
     ).toBeGreaterThanOrEqual(1234);
   });
 });
+
+/**
+ * Issue #338 — the boat you are chasing.
+ *
+ * Raced against a pace boat rather than a seeded personal best: a best is read
+ * from the rows *this browser kept for this athlete*, so seeding one means
+ * authenticating first, and the mechanism under test — a second boat placed
+ * from elapsed time, and a gap that changes sign when it is overtaken — is the
+ * same either way. `ghost.test.ts` covers which row a "race my best" picks.
+ */
+test.describe('racing a ghost', () => {
+  test('a pace boat rows the course, and the gap changes hands', async ({ page }) => {
+    const initScript = fs.readFileSync(mockBluetoothPath, 'utf8');
+    await page.addInitScript({ content: initScript });
+    await page.goto('./');
+
+    await page.click('button:has-text("Connect PM5")');
+    await waitForPM5Connected(page);
+    await page.evaluate(() => {
+      const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+      const hrContainer = containers.find((c) =>
+        c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+      );
+      (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+    });
+    await waitForHRConnected(page);
+
+    // A slow pace boat: 5:00/500 m is 1.67 m/s, so the row overtakes it.
+    // Clicked through the DOM rather than with a real pointer: SwiftShader
+    // blocks the main thread while the scene builds, and a trusted click waits
+    // for it (#382).
+    await page.evaluate(() => {
+      const radios = Array.from(
+        document.querySelectorAll<HTMLInputElement>('.ghost-picker input[name="ghost"]'),
+      );
+      radios[radios.length - 1]?.click();
+    });
+    const paceField = page.getByLabel(/target pace/i);
+    await paceField.fill('5:00');
+
+    await page.evaluate(() => {
+      (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
+    });
+    await expect(page.locator('.activity-view')).toBeVisible({ timeout: 15_000 });
+    await expectSceneAlive(page);
+
+    // Behind after ten seconds of the ghost's row and none of ours.
+    await dispatchGeneralStatus(page, 0, 0);
+    await dispatchAdditionalStatus(page, { elapsedSeconds: 10, strokeRate: 24, heartRate: 140 });
+    await dispatchGeneralStatus(page, 1, 10);
+    const gap = page.locator('.row-hud-gap');
+    await expect(gap).toBeVisible({ timeout: 15_000 });
+    await expect(gap).toHaveAttribute('data-lead', 'behind');
+
+    // The ghost is on the water and moving.
+    const early = await page.evaluate(() => window.__ROWER3D_GHOST_METERS ?? null);
+    expect(early, 'the ghost never reached the scene').not.toBeNull();
+    expect(early!).toBeGreaterThan(0);
+
+    // Then 400 m by thirty seconds, which no pace boat at 5:00 matches.
+    await dispatchAdditionalStatus(page, { elapsedSeconds: 30, strokeRate: 28, heartRate: 150 });
+    await dispatchGeneralStatus(page, 400, 30);
+    await expect(gap).toHaveAttribute('data-lead', 'ahead', { timeout: 15_000 });
+    await expect(gap).toContainText(/\+\d+ m/);
+
+    // The ghost kept rowing while we overtook it. It runs on the row's clock,
+    // so this moved because the erg's elapsed time did — a ghost that ran on
+    // its own would have carried on past a paused row.
+    const later = await page.evaluate(() => window.__ROWER3D_GHOST_METERS ?? 0);
+    expect(later, 'the ghost stopped rowing').toBeGreaterThan(early!);
+  });
+});

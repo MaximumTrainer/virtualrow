@@ -1,0 +1,20 @@
+/*
+ * The result of the race, above the row's own numbers (#338).
+ * Words carry the result; the colour only agrees with them (#344).
+ */
+.ghost-verdict {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border-left: 3px solid var(--border-color);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  font-size: 0.95rem;
+}
+
+.ghost-verdict[data-result='won'] {
+  border-left-color: #4ade80;
+}
+
+.ghost-verdict[data-result='lost'] {
+  border-left-color: #fca5a5;
+}

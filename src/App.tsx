@@ -50,6 +50,16 @@ import { isStrokeReading, useStartSequence } from './hooks/useStartSequence';
 import { FinishBanner, StartCallout } from './components/RaceCallouts';
 import { loadSessions, markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import { bestPaceOnRoute } from './utils/sessionSummary';
+import { formatSplit } from './utils/formatters';
+import { GhostPicker, type GhostChoice } from './components/GhostPicker';
+import {
+  bestRowOnRoute,
+  gapMeters,
+  ghostDistanceAt,
+  ghostFinishSeconds,
+  paceGhost,
+  recordedGhost,
+} from './components/rower3d/ghost';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -513,6 +523,50 @@ function App() {
     setCompletedSession(completed);
   }, [isGuestSession, isDemoMode, stopDemoDevices, stopStructuredWorkout, user]);
 
+  /**
+   * What this row is being rowed against (#338), chosen before it starts.
+   *
+   * Rowing alone is the default, which is what the app did before there was
+   * anything to race.
+   */
+  const [ghostChoice, setGhostChoice] = useState<GhostChoice>({ kind: 'none' });
+
+  /** The quickest row this browser kept on the selected route, if any. */
+  const bestRowHere = useMemo(() => {
+    if (!user || !selectedRoute) return null;
+    return bestRowOnRoute(loadSessions(user.id), selectedRoute.id);
+  }, [user, selectedRoute]);
+
+  /**
+   * The ghost itself: a recorded row, a constant pace, or nothing.
+   *
+   * Falls back to rowing alone rather than to an empty boat if the best it was
+   * told to race has gone - a route changed under the picker, say.
+   */
+  const ghostSource = useMemo(() => {
+    if (ghostChoice.kind === 'pace') return paceGhost(ghostChoice.paceSPer500);
+    if (ghostChoice.kind === 'best' && bestRowHere) return recordedGhost(bestRowHere.samples);
+    return null;
+  }, [ghostChoice, bestRowHere]);
+
+  /** What is being chased, in the words the HUD and the summary both use. */
+  const ghostLabel = useMemo(
+    () =>
+      ghostChoice.kind === 'pace'
+        ? `a ${formatSplit(ghostChoice.paceSPer500)} pace`
+        : 'your best',
+    [ghostChoice],
+  );
+
+  /**
+   * The row's clock, for the scene.
+   *
+   * A ref: the ghost is placed every frame, and the erg reports elapsed time
+   * about once a second. Kept current during render because it is read by a
+   * frame loop rather than by React.
+   */
+  const elapsedSecondsRef = useRef(0);
+
   // This athlete's best on the route before this row, from the rows this
   // browser kept for them (#337). None for a demo row, which is not theirs to
   // compare, or without an athlete to ask about.
@@ -520,6 +574,21 @@ function App() {
     if (!completedSession || !user || completedSessionWasDemo) return undefined;
     return bestPaceOnRoute(loadSessions(user.id), completedSession);
   }, [completedSession, completedSessionWasDemo, user]);
+
+  /**
+   * How the race came out (#338).
+   *
+   * The ghost's time to the distance the row actually covered, so a row cut
+   * short is compared at the point it stopped rather than at a finish neither
+   * boat reached.
+   */
+  const completedGhost = useMemo(() => {
+    if (!completedSession || !ghostSource) return null;
+    return {
+      seconds: ghostFinishSeconds(ghostSource, completedSession.distance),
+      label: ghostLabel,
+    };
+  }, [completedSession, ghostSource, ghostLabel]);
 
   const handleSessionSaved = useCallback((activityId: string) => {
     if (user && completedSession) markSessionUploaded(user.id, completedSession.id, activityId);
@@ -890,6 +959,25 @@ function App() {
   const workoutElapsedTimeMs = useMemo(() => (
     pm5Data?.elapsedTime ? pm5Data.elapsedTime * 1000 : activityElapsedMs
   ), [activityElapsedMs, pm5Data]);
+  elapsedSecondsRef.current = workoutElapsedTimeMs / 1000;
+
+  /**
+   * The gap to the ghost, for the HUD (#338).
+   *
+   * Null until the row has actually started: two boats on the start line have
+   * no gap worth reading, and "level" before the first stroke is noise.
+   */
+  const ghostGap = useMemo(() => {
+    if (!ghostSource) return null;
+    const rowerMeters = pm5Data?.distance ?? 0;
+    const started = workoutElapsedTimeMs > 0 && rowerMeters > 0;
+    return {
+      gapMeters: started
+        ? gapMeters(rowerMeters, ghostDistanceAt(ghostSource, workoutElapsedTimeMs / 1000))
+        : null,
+      label: ghostLabel,
+    };
+  }, [ghostSource, ghostLabel, pm5Data?.distance, workoutElapsedTimeMs]);
   const activityProgressPercent = useMemo(() => (
     pm5Data && selectedRoute
       ? Math.min(100, (pm5Data.distance / 1000) / selectedRoute.distance * 100)
@@ -915,6 +1003,7 @@ function App() {
           onSaved={handleSessionSaved}
           isDemo={completedSessionWasDemo}
           personalBest={completedSessionBest}
+          ghost={completedGhost}
         />
       )}
 
@@ -1094,6 +1183,14 @@ function App() {
                   {selectedRouteEnrichmentLoading && (
                     <p className="route-enrichment-status">Loading route data…</p>
                   )}
+
+                  {/* Decided before the row, not during it (#338). */}
+                  <GhostPicker
+                    value={ghostChoice}
+                    onChange={setGhostChoice}
+                    hasBest={bestRowHere !== null}
+                    bestPace={bestRowHere?.averagePace ?? null}
+                  />
 
                   <button
                     className="btn btn-start-workout"
@@ -1369,6 +1466,8 @@ function App() {
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
                       crew={resolveCrew(user?.gender, crew.preference)}
+                      ghost={ghostSource}
+                      elapsedSecondsRef={elapsedSecondsRef}
                     />
                   </Suspense>
 
@@ -1421,6 +1520,7 @@ function App() {
                     onReset={handleResetWorkout}
                     onEnd={handleEndWorkout}
                     fullscreen={rowFullscreen}
+                    ghost={ghostGap}
                   />
                 </div>
 

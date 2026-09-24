@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { metricTiles, HUD_METRIC_LABEL, type HudMetric } from './rowHudPlan';
 import { formatSplit, formatTime } from '../utils/formatters';
+import { formatGap } from './rower3d/ghost';
 import type { FullscreenControl } from '../hooks/useFullscreen';
 import './RowHud.css';
 
@@ -31,6 +32,12 @@ export interface RowHudProps {
   onReset: () => void;
   onEnd: () => void;
   fullscreen: FullscreenControl;
+  /**
+   * The boat being chased (#338), or nothing when rowing alone. `gapMeters`
+   * is null until the row starts, when two boats on the line have no gap
+   * between them worth reading.
+   */
+  ghost?: { gapMeters: number | null; label: string } | null;
 }
 
 /**
@@ -130,6 +137,24 @@ export const RowHud: React.FC<RowHudProps> = (props) => {
           <span aria-hidden="true">{fullscreen.active ? '⤡' : '⛶'}</span>
         </button>
       </div>
+
+      {props.ghost && props.ghost.gapMeters !== null && (
+        <p
+          className="row-hud-gap"
+          // The lead is in the sign as well as in the colour (#344): a rower
+          // who cannot tell the greens from the reds reads the same thing.
+          data-lead={
+            Math.abs(props.ghost.gapMeters) < 1
+              ? 'level'
+              : props.ghost.gapMeters > 0
+                ? 'ahead'
+                : 'behind'
+          }
+        >
+          <span className="row-hud-gap-value">{formatGap(props.ghost.gapMeters)}</span>{' '}
+          <span className="row-hud-gap-label">on {props.ghost.label}</span>
+        </p>
+      )}
 
       <div className="row-hud-strip">
         {/* The class names are the ones the panel below the stage used. The
