@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+vi.mock('react-chartjs-2', () => ({
+  Line: () => <canvas data-testid="row-chart" />,
+}));
+
 import { GuestSessionSummary } from '../components/GuestSessionSummary';
 import type { WorkoutSession } from '../types/index';
 
@@ -93,5 +97,21 @@ describe('GuestSessionSummary', () => {
     await user.click(screen.getByRole('button', { name: /done/i }));
     expect(onRowAgain).toHaveBeenCalledTimes(1);
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GuestSessionSummary — the row itself (#337)', () => {
+  const samples = Array.from({ length: 501 }, (_, t) => ({ t, distance: t * 4, pace: 125, cadence: 24 }));
+
+  it('shows the splits and the chart a signed-in rower gets', () => {
+    render(<GuestSessionSummary session={makeSession({ distance: 2000, samples })} onRowAgain={vi.fn()} onExit={vi.fn()} />);
+    const rows = within(screen.getByRole('table', { name: 'Splits' })).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(4);
+    expect(screen.getByTestId('row-chart')).toBeInTheDocument();
+  });
+
+  it('makes no comparison with a best a guest has nowhere to keep', () => {
+    render(<GuestSessionSummary session={makeSession({ samples })} onRowAgain={vi.fn()} onExit={vi.fn()} />);
+    expect(screen.queryByTestId('row-pb')).toBeNull();
   });
 });

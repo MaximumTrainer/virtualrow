@@ -48,7 +48,8 @@ import { RowHud } from './components/RowHud';
 import { useFullscreen } from './hooks/useFullscreen';
 import { isStrokeReading, useStartSequence } from './hooks/useStartSequence';
 import { FinishBanner, StartCallout } from './components/RaceCallouts';
-import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
+import { loadSessions, markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
+import { bestPaceOnRoute } from './utils/sessionSummary';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
 import './App.css';
@@ -512,6 +513,14 @@ function App() {
     setCompletedSession(completed);
   }, [isGuestSession, isDemoMode, stopDemoDevices, stopStructuredWorkout, user]);
 
+  // This athlete's best on the route before this row, from the rows this
+  // browser kept for them (#337). None for a demo row, which is not theirs to
+  // compare, or without an athlete to ask about.
+  const completedSessionBest = useMemo(() => {
+    if (!completedSession || !user || completedSessionWasDemo) return undefined;
+    return bestPaceOnRoute(loadSessions(user.id), completedSession);
+  }, [completedSession, completedSessionWasDemo, user]);
+
   const handleSessionSaved = useCallback((activityId: string) => {
     if (user && completedSession) markSessionUploaded(user.id, completedSession.id, activityId);
   }, [completedSession, user]);
@@ -905,6 +914,7 @@ function App() {
           onDone={handleSessionDone}
           onSaved={handleSessionSaved}
           isDemo={completedSessionWasDemo}
+          personalBest={completedSessionBest}
         />
       )}
 

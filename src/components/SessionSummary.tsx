@@ -5,6 +5,7 @@ import { useAuth } from '../context/useAuth';
 import { useServices } from '../context/useServices';
 import { activityFileName, triggerBlobDownload } from '../utils/exporters';
 import { formatPace } from '../utils/formatters';
+import { RowBreakdown } from './RowBreakdown';
 import './SessionSummary.css';
 
 /**
@@ -26,6 +27,11 @@ interface SessionSummaryProps {
   onSaved?: (activityId: string) => void;
   /** True when the row ran on simulated devices. */
   isDemo?: boolean;
+  /**
+   * The athlete's best average split on this route before this row, null on
+   * a first row (#337). Left out, the comparison is not shown.
+   */
+  personalBest?: number | null;
 }
 
 /** Where the save has got to. */
@@ -55,7 +61,7 @@ async function encode(session: WorkoutSession): Promise<Uint8Array> {
   return encodeSession(session);
 }
 
-export function SessionSummary({ session, onDone, onSaved, isDemo }: SessionSummaryProps) {
+export function SessionSummary({ session, onDone, onSaved, isDemo, personalBest }: SessionSummaryProps) {
   const { isAuthenticated } = useAuth();
   const { intervalsIcuActivityService, authService } = useServices();
   const [save, setSave] = useState<SaveState>({ phase: 'idle' });
@@ -111,6 +117,8 @@ export function SessionSummary({ session, onDone, onSaved, isDemo }: SessionSumm
           {session.heartRateMax !== undefined && <Stat label="Max HR" value={session.heartRateMax} unit="bpm" />}
           {averagePower !== null && <Stat label="Avg Power" value={averagePower} unit="W" />}
         </div>
+
+        <RowBreakdown session={session} personalBest={personalBest} />
 
         {save.phase === 'error' && (
           <p className="session-summary-error" role="alert">{save.message}</p>

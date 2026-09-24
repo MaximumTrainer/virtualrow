@@ -170,6 +170,12 @@ test.describe('activity upload to intervals.icu (issue #221)', () => {
     await expect(summary).toContainText('Willowbrook River');
     await expect(summary.locator('.session-stat')).not.toHaveCount(0);
 
+    // The row itself under the totals (#337): the chart is a real canvas, and
+    // the 32 m rowed is one part-split.
+    await expect(summary.locator('.row-breakdown-chart canvas')).toBeVisible();
+    await expect(summary.getByRole('table', { name: 'Splits' }).locator('tbody tr')).toHaveCount(1);
+    await expect(summary.getByTestId('row-pb')).toBeVisible();
+
     const sampleCount = await page.evaluate(
       () => window.__workoutService!.getAllSessions().at(-1)!.samples.length,
     );
