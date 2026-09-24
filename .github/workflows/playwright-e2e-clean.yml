@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [bare-nomountains, bare-nobuildings, main]
+        variant: [mainland, main]
         runner: [a, b]
     runs-on: windows-latest
     env:
@@ -23,10 +23,10 @@ jobs:
         with:
           ref: ${{ matrix.variant == 'main' && 'main' || matrix.variant == 'pr398' && 'claude/fix-waitforfunction-timeouts' || github.head_ref }}
           fetch-depth: 0
-      - name: Main's test files
-        if: matrix.variant == 'bare-maintests'
+      - name: Main's landscape on #390
+        if: matrix.variant == 'mainland'
         shell: bash
-        run: git checkout origin/main -- playwright/ && git status --short | head
+        run: git checkout origin/main -- src/components/rower3d/landscapeLayout.ts src/components/rower3d/bankComponents.tsx src/components/rower3d/themeConfig.ts && rm src/__tests__/foliageComponents.test.tsx src/__tests__/sceneryRerender.test.tsx && git status --short
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
