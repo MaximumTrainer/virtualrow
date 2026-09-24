@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [mainland, mainland-notrees]
+        variant: [mainland, mainland-opaque, mainland-foliage]
         runner: [a, b]
     runs-on: windows-latest
     env:
@@ -26,7 +26,16 @@ jobs:
       - name: Main's landscape on #390
         if: startsWith(matrix.variant, 'mainland')
         shell: bash
-        run: git checkout origin/main -- src/components/rower3d/landscapeLayout.ts src/components/rower3d/bankComponents.tsx src/components/rower3d/themeConfig.ts && rm src/__tests__/foliageComponents.test.tsx src/__tests__/sceneryRerender.test.tsx && if [ "${{ matrix.variant }}" = mainland-notrees ]; then perl -0pi -e "s/      case 'tree':\n/      case 'tree':\n        return null;\n/" src/components/rower3d/bankComponents.tsx && grep -n -A2 "case 'tree'" src/components/rower3d/bankComponents.tsx; fi; git status --short
+        run: |
+          git checkout origin/main -- src/components/rower3d/landscapeLayout.ts src/components/rower3d/bankComponents.tsx src/components/rower3d/themeConfig.ts
+          rm src/__tests__/foliageComponents.test.tsx src/__tests__/sceneryRerender.test.tsx
+          case "${{ matrix.variant }}" in
+            mainland-opaque) cp bench/bankComponents.opaque.tsx src/components/rower3d/bankComponents.tsx ;;
+            mainland-foliage) cp bench/bankComponents.foliage.tsx src/components/rower3d/bankComponents.tsx ;;
+          esac
+          git status --short
+          grep -c "transmission: 0," src/components/rower3d/bankComponents.tsx || true
+          grep -c "<BankFoliage" src/components/rower3d/bankComponents.tsx || true
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
