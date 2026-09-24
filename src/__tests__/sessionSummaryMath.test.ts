@@ -74,6 +74,28 @@ describe('splitsFrom', () => {
     expect(last.paceSPer500).toBeGreaterThan(100);
   });
 
+  it('counts a sample past a boundary in the split it was rowed in, not the one before', () => {
+    // A single stroke at 60 spm, taken 3 m into the second split. Counted in
+    // the first as well, it dragged that split's rate toward the next one's.
+    const samples: ActivitySample[] = [
+      { t: 0, distance: 0, cadence: 20 },
+      { t: 60, distance: 250, cadence: 20 },
+      { t: 119, distance: 497, cadence: 20 },
+      { t: 120, distance: 503, cadence: 60 },
+      { t: 240, distance: 1000, cadence: 60 },
+    ];
+    expect(splitsFrom(samples).map((s) => s.spm)).toEqual([20, 60]);
+  });
+
+  it('counts a sample exactly on a boundary once, in the split it ends', () => {
+    const samples: ActivitySample[] = [
+      { t: 0, distance: 0, cadence: 20 },
+      { t: 120, distance: 500, cadence: 20 },
+      { t: 240, distance: 1000, cadence: 60 },
+    ];
+    expect(splitsFrom(samples).map((s) => s.spm)).toEqual([20, 60]);
+  });
+
   it('reports a metric no sample carried as missing, not zero', () => {
     const samples = twoKm().map(({ t, distance }) => ({ t, distance }));
     const [first] = splitsFrom(samples);
