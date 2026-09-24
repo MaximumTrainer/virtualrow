@@ -171,6 +171,16 @@ export const pick = (ids: SceneryModelId[], seed: number): SceneryModelId | null
 export const budgetFor = (mode: PerformanceMode): number =>
   mode === 'high' ? 1 : mode === 'low' ? 0.4 : 0.7;
 
+/**
+ * Whether the kit's own GLB trees are placed at a tier (#333).
+ *
+ * The banks are planted with billboard foliage at every tier now. The kit's
+ * trees are kept at `high` only, as the close-up hero trees: they are a
+ * handful per bank, and each is a cloned GLB of several meshes, which is what
+ * the billboards exist to avoid paying for below the top tier.
+ */
+export const keepsKitTrees = (mode: PerformanceMode): boolean => mode === 'high';
+
 /** Distinct scenery profiles present on the route (fallback when none). */
 export const distinctProfiles = (
   enrichment?: RouteEnrichmentData | null,
@@ -191,6 +201,11 @@ export interface PlacementInput {
   side: 'left' | 'right';
   /** Authored dressing, preferred over enrichment when the route has one (#232). */
   track?: SceneryTrack | null;
+  /**
+   * Place the kit's GLB trees along a curve (`keepsKitTrees`); on unless told
+   * otherwise. The flat scene keeps them: the billboard foliage plants routes.
+   */
+  kitTrees?: boolean;
 }
 
 /**
@@ -199,7 +214,7 @@ export interface PlacementInput {
  * bank. Pure — no R3F, no GLB loading.
  */
 export const computePlacements = (input: PlacementInput): Placement[] => {
-  const { curve, enrichment, resolvedByProfile, budget, side, track = null } = input;
+  const { curve, enrichment, resolvedByProfile, budget, side, track = null, kitTrees = true } = input;
   const out: Placement[] = [];
   const firstResolved = resolvedByProfile.values().next().value as ResolvedScenery | undefined;
   const fallback = resolvedByProfile.get('fallback') ?? firstResolved;
@@ -254,10 +269,13 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
         // left and right components each returned both banks and every object
         // was drawn twice at the same transform (review of #232).
         const put = sign === wantSign ? place : noPlace;
+        // Skipped rather than left out of the walk, like the other bank, so
+        // everything else keeps the seed it had (#333).
+        const putTree = kitTrees ? put : noPlace;
         seed += 5;
         const cat = SCHEDULE[(i + (sign < 0 ? 0 : 4)) % SCHEDULE.length];
-        put(cat, sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved);
-        if (i % 3 === 0) { seed += 5; put('trees', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
+        (cat === 'trees' ? putTree : put)(cat, sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved);
+        if (i % 3 === 0) { seed += 5; putTree('trees', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         if (i % 6 === 0) { seed += 5; put('surface', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         if (i % 8 === 0 && sign < 0) { seed += 5; put('landform', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }
         if (i % 12 === 0 && sign > 0) { seed += 5; put('backdrop', sign, t, point.x, point.z, perp.x, perp.z, y, baseRot, seed, resolved); }

@@ -118,6 +118,15 @@ describe('layoutLandscape', () => {
     expect(reading.nearestM).toBeGreaterThanOrEqual(SCENERY_WATER_MARGIN_METRES - 1e-6);
   });
 
+  it('leaves the trees to the billboard foliage, and the houses and mountains where they were', () => {
+    // #333: a slot that rolls a tree is left empty rather than re-rolled, so
+    // the seed stream - and with it every house and mountain - is unchanged.
+    const elements = everything(water(55));
+
+    expect(elements.length).toBeGreaterThan(10);
+    expect(new Set(elements.map((e) => e.type))).toEqual(new Set(['building', 'mountain']));
+  });
+
   it('places nothing without a curve', () => {
     expect(layoutLandscape({ curve: null, enrichment: water(55) })).toEqual({
       leftElements: [],

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import * as fs from 'fs';
 import { captureTestEvidence, captureErrorEvidence, highlightElement, annotateElement, clearAnnotations, captureGameplayCanvas } from '../utils/screenshot-helper';
-import { expectSceneAlive } from '../utils/scene-health';
+import { expectSceneAlive, SCENE_READY_TIMEOUT_MS } from '../utils/scene-health';
 import { simPortsForWorker } from '../utils/simPorts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -248,7 +248,7 @@ async function waitForPM5Connected(page: Page, timeout = 10_000): Promise<void> 
     if (!pm5) return false;
     const status = pm5.closest('.bluetooth-device-container')?.querySelector('.device-status');
     return !!(status && String(status.textContent).includes('Connected'));
-  }, { timeout });
+  }, undefined, { timeout });
 }
 
 // Helper: wait for HR Monitor to show as Connected in the UI
@@ -262,7 +262,7 @@ async function waitForHRConnected(page: Page, timeout = 10_000): Promise<void> {
     if (!hrContainer) return false;
     const status = hrContainer.querySelector('.device-status');
     return !!(status && String(status.textContent).includes('Connected'));
-  }, { timeout });
+  }, undefined, { timeout });
 }
 
 // Helper: connect FTMS device (used in FTMS tests)
@@ -278,7 +278,7 @@ async function connectFtms(page: Page) {
     if (!ftmsContainer) return false;
     const status = ftmsContainer.querySelector('.device-status');
     return status && String(status.textContent).includes('Connected');
-  }, { timeout: 10_000 });
+  }, undefined, { timeout: 10_000 });
 }
 
 // ===========================================================================
@@ -389,7 +389,7 @@ test.describe('device and connectivity guards', () => {
     // Confirm session is active
     await page.waitForFunction(
       () => !!window.__workoutService?.getCurrentSession?.(),
-      { timeout: 5000 },
+      undefined, { timeout: 10_000 },
     );
 
     // End session programmatically to keep the test fast
@@ -569,7 +569,7 @@ test.describe('Simulated e2e route playback', () => {
           const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
           return !!(btn && !btn.disabled);
         },
-        { timeout: 15_000 },
+        undefined, { timeout: 15_000 },
       );
       await annotateElement(page, '.btn-start-workout', 'Starting Workout', 'bottom');
       await captureTestEvidence(page, testInfo, '08-before-workout-start');
@@ -583,7 +583,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
-    }, { timeout: 10_000 });
+    }, undefined, { timeout: 10_000 });
 
     const started = await page.evaluate(async () => {
       try {
@@ -618,7 +618,7 @@ test.describe('Simulated e2e route playback', () => {
         (last.heartRateSamples?.length ?? 0) > 0 ||
         (last.splits?.some((split: { heartRate?: number }) => (split.heartRate ?? 0) > 0) ?? false)
       );
-    }, { timeout: 15000 });
+    }, undefined, { timeout: 15000 });
 
     // The simulator has been streaming PM5 frames for several seconds; they must have
     // landed in the live session. (The fallback branch above never connects a rower,
@@ -632,7 +632,16 @@ test.describe('Simulated e2e route playback', () => {
     // 3D canvas checks
     let canvasHandle = null;
     try {
-      canvasHandle = await page.waitForSelector('.rower3d-canvas-container canvas', { timeout: 5000, state: 'attached' });
+      // The same budget `expectSceneAlive` gives it two lines below, rather
+      // than five seconds. The two disagreed, and the impatient one was first:
+      // it took this spec out on windows shard 4 of run 35904598815 while the
+      // check that follows - which allows the scene twenty-five seconds, and
+      // sixty on CI - would have been satisfied. A canvas that never attaches
+      // still fails here; it is no longer a race against the lazy 3D chunk.
+      canvasHandle = await page.waitForSelector('.rower3d-canvas-container canvas', {
+        timeout: SCENE_READY_TIMEOUT_MS,
+        state: 'attached',
+      });
       await annotateElement(page, '.rower3d-canvas-container canvas', '3D View Canvas', 'top');
       await captureTestEvidence(page, testInfo, '10-3d-canvas-visible');
       await clearAnnotations(page);
@@ -864,7 +873,7 @@ test.describe('Simulated e2e route playback', () => {
             const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
             return !!(btn && !btn.disabled);
           },
-          { timeout: 8_000 },
+          undefined, { timeout: 10_000 },
         );
         await captureTestEvidence(page, testInfo, '04-starting-first-workout');
         // Use evaluate click to avoid 3D canvas pointer-event interception
@@ -883,7 +892,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
-    }, { timeout: 10_000 });
+    }, undefined, { timeout: 10_000 });
 
     const started1 = await page.evaluate(async () => {
       try {
@@ -989,7 +998,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.waitForFunction(() => {
       const svc = window.__workoutService;
       return svc?.getCurrentSession?.() != null;
-    }, { timeout: 5000 }).catch(() => console.warn('No active session before route2 data; proceeding anyway'));
+    }, undefined, { timeout: 10_000 }).catch(() => console.warn('No active session before route2 data; proceeding anyway'));
 
     const started2 = await page.evaluate(async () => {
       try {
@@ -1054,7 +1063,7 @@ test.describe('Simulated e2e route playback', () => {
     await page.click('button:has-text("Connect PM5")');
     let pm5Connected = false;
     try {
-      await waitForPM5Connected(page, 7000);
+      await waitForPM5Connected(page, 10_000);
       pm5Connected = true;
     } catch {
       pm5Connected = false;
@@ -1068,7 +1077,7 @@ test.describe('Simulated e2e route playback', () => {
       const hrContainer = containers.find((c) => c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'));
       (hrContainer?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
     });
-    await waitForHRConnected(page, 5000).catch(() => console.warn('HR Monitor connect timeout'));
+    await waitForHRConnected(page, 10_000).catch(() => console.warn('HR Monitor connect timeout'));
 
     // Select route and start
     if (pm5Connected) {
@@ -1079,7 +1088,7 @@ test.describe('Simulated e2e route playback', () => {
             const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
             return !!(btn && !btn.disabled);
           },
-          { timeout: 8_000 },
+          undefined, { timeout: 10_000 },
         );
       } catch {
         console.warn('Start button not enabled in time; attempting click anyway');
@@ -1107,7 +1116,7 @@ test.describe('Simulated e2e route playback', () => {
       const svc = window.__workoutService;
       const sessions = svc?.getAllSessions?.() ?? [];
       return sessions.length > 0 && (sessions[sessions.length - 1]?.heartRateSamples?.length ?? 0) > 0;
-    }, { timeout: 5000 }).catch(() => console.warn('HR samples not received in time'));
+    }, undefined, { timeout: 10_000 }).catch(() => console.warn('HR samples not received in time'));
 
     if (pm5Connected) {
       await expectSessionDistanceAdvances(page);
@@ -1125,7 +1134,7 @@ test.describe('Simulated e2e route playback', () => {
 
     await page.waitForFunction(
       () => (window.__ROWER3D_POS?.progress ?? 0) > 0.001,
-      { timeout: 3000 },
+      undefined, { timeout: 10_000 },
     ).catch(() => console.warn('Boat progress not detected; frames still captured'));
 
     for (let frame = 3; frame <= 5; frame++) {
@@ -1219,7 +1228,7 @@ test.describe('docs screenshots — other route heroes', () => {
           const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
           return !!(btn && !btn.disabled);
         },
-        { timeout: 10_000 },
+        undefined, { timeout: 10_000 },
       );
       await page.evaluate(() => {
         (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click();
@@ -1227,12 +1236,12 @@ test.describe('docs screenshots — other route heroes', () => {
 
       await page.waitForFunction(
         () => !!window.__workoutService?.getCurrentSession?.(),
-        { timeout: 5000 },
+        undefined, { timeout: 10_000 },
       );
       await page.waitForSelector('.activity-view', { timeout: 10_000 });
       await page.waitForFunction(
         () => !!window.__ROWER3D_GPU_BACKEND,
-        { timeout: 15_000 },
+        undefined, { timeout: 15_000 },
       );
 
       // Drive a few PM5 frames so the boat is placed on the route.
@@ -1245,7 +1254,7 @@ test.describe('docs screenshots — other route heroes', () => {
 
       await page.waitForFunction(
         () => (window.__ROWER3D_DISTANCE_M ?? 0) > 0,
-        { timeout: 5000 },
+        undefined, { timeout: 10_000 },
       ).catch(() => { /* non-critical — capture regardless */ });
       await page.waitForTimeout(1500);
 
@@ -1270,7 +1279,7 @@ test.describe('docs screenshots — other route heroes', () => {
         const summaryHidden = !summary || window.getComputedStyle(summary).display === 'none';
         const mapHidden = !mapOverlay || window.getComputedStyle(mapOverlay).display === 'none';
         return summaryHidden && mapHidden;
-      }, { timeout: 2000 });
+      }, undefined, { timeout: 10_000 });
 
       const stage = page.locator('.activity-route-stage');
       const stageBbox = await stage.boundingBox({ timeout: 5000 }).catch(() => null);
@@ -1473,7 +1482,7 @@ test.describe('activity distance integrity', () => {
     });
     await page.waitForFunction(
       () => !!(window as unknown as SimWindow).__workoutService,
-      { timeout: 5000 },
+      undefined, { timeout: 10_000 },
     );
     await expect(page.locator('.activity-view')).toBeVisible({ timeout: 5000 });
   });

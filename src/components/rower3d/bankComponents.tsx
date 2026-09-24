@@ -8,7 +8,8 @@ import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG } from './themeConfig';
 import { createBankTexture } from './bankTexture';
-import { makeSwayFoliageMaterial } from './foliageMaterial';
+import { BankFoliage } from './foliageComponents';
+import { isFoliageEnabled } from './foliagePlan';
 import {
   buildTerrainProfile,
   type RouteEnrichmentData,
@@ -227,7 +228,7 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
 };
 
 // ============================================================================
-// CURVED LANDSCAPE ELEMENTS - Trees and objects placed along curved path
+// CURVED LANDSCAPE ELEMENTS - Houses, mountains and the foliage along a curved path
 // ============================================================================
 /**
  * Frames between landscape culls. The same cadence the GLB scenery uses.
@@ -243,10 +244,12 @@ interface CurvedLandscapeProps {
   /**
    * Progress the mounted window is centred on (#331).
    *
-   * Not every element on the route: a tree here is a `coneGeometry` and a
-   * house a handful of `boxGeometry`, so everything mounted is geometry
+   * Not every element on the route: a mountain here is a handful of cones
+   * and a house a handful of `boxGeometry`, so everything mounted is geometry
    * resident on the GPU. Mounting the whole route took the #272 traverse from
-   * 412 uploaded geometries to 766 against a ceiling of 627. The window is the
+   * 412 uploaded geometries to 766 against a ceiling of 627. The trees are
+   * the exception since #333: instanced, all mounted, and culled per instance
+   * by `BankFoliage`, so the window no longer applies to them. The window is the
    * width it always was; what changed is that it moves about twenty times
    * across a route instead of three thousand.
    */
@@ -258,16 +261,8 @@ interface CurvedLandscapeProps {
   track?: SceneryTrack | null;
 }
 
-/**
- * Move the foliage sway on to `time`.
- *
- * A uniform is a handle the shader reads each frame, written in place by
- * design, so the write lives out here rather than inside the component where
- * the compiler would read it as a mutation of render state.
- */
-const advanceSway = (uniform: THREE.IUniform<number>, time: number) => {
-  uniform.value = time;
-};
+/** The name on each house and mountain group, so a test can find them. */
+export const LANDSCAPE_ELEMENT_NAME = 'LandscapeElement';
 
 export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   curve,
@@ -298,15 +293,15 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   const archConfig = SCENE_CONFIG.architecture;
   const { camera } = useThree();
 
-  const swayTime = useMemo<THREE.IUniform<number>>(() => ({ value: 0 }), []);
-  const curveFoliageMats = useMemo(() => [
-    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.78, metalness: 0.0, transmission: 0.08, thickness: 0.6, sheen: 0.45, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.7 }, swayTime),
-    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.74, metalness: 0.0, transmission: 0.10, thickness: 0.5, sheen: 0.52, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.65 }, swayTime),
-    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.70, metalness: 0.0, transmission: 0.12, thickness: 0.4, sheen: 0.58, sheenColor: new THREE.Color(colors.treeHighlight), sheenRoughness: 0.6 }, swayTime),
-    makeSwayFoliageMaterial({ color: colors.tree, roughness: 0.68, metalness: 0.0, transmission: 0.14, thickness: 0.3, sheen: 0.65, sheenColor: new THREE.Color(colors.treeHighlight) }, swayTime),
-  ], [colors, swayTime]);
-  useEffect(() => () => { curveFoliageMats.forEach(m => m.dispose()); }, [curveFoliageMats]);
-  useAnimationFrame((time) => advanceSway(swayTime, time));
+  // The houses the trees keep out of (#333).
+  const houses = useMemo(
+    () =>
+      [...landscapeElements.leftElements, ...landscapeElements.rightElements]
+        .filter((e) => e.type === 'building')
+        .map((e) => ({ x: e.position.x, z: e.position.z })),
+    [landscapeElements],
+  );
+  const foliageOn = isFoliageEnabled();
 
   // The elements are laid out once and switched on and off from here, rather
   // than filtered during render (#331). Every sixth frame: a tree on a bank
@@ -332,49 +327,12 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   
   
   const renderElement = (el: typeof landscapeElements.leftElements[0], index: number, side: string, castNearShadow: boolean) => {
-    const distToCamera = camera.position.distanceTo(el.position);
-    const isNearTree = distToCamera <= 40;
-    const isNearBuilding = distToCamera <= 60;
+    const isNearBuilding = camera.position.distanceTo(el.position) <= 60;
 
     switch (el.type) {
-      case 'tree':
-        return (
-          <group key={`${side}-tree-${index}`} position={[el.position.x, el.position.y, el.position.z]} rotation={[0, el.rotation, 0]}>
-            <mesh position={[0, 2 * el.scale, 0]} castShadow={castNearShadow}>
-              <cylinderGeometry args={[0.22 * el.scale, 0.42 * el.scale, 4.2 * el.scale, 16]} />
-              <meshPhysicalMaterial color={colors.treeBark} roughness={0.96} metalness={0.0} clearcoat={0.02} clearcoatRoughness={0.98} sheen={0.05} sheenColor="#2a1a10" />
-            </mesh>
-            <mesh position={[0, 0.15 * el.scale, 0]} castShadow={castNearShadow}>
-              <cylinderGeometry args={[0.38 * el.scale, 0.65 * el.scale, 0.45 * el.scale, 10]} />
-              <meshPhysicalMaterial color={colors.treeBark} roughness={0.97} metalness={0.0} sheen={0.03} sheenColor="#1a1008" />
-            </mesh>
-            {[0, 1.2, 2.4, 3.6, 4.8].map((angle, j) => (
-              <mesh key={j} position={[Math.cos(angle) * 0.5 * el.scale, 0.05, Math.sin(angle) * 0.5 * el.scale]} rotation={[0.3, angle, 0.4]} castShadow={castNearShadow}>
-                <cylinderGeometry args={[0.06 * el.scale, 0.1 * el.scale, 0.6 * el.scale, 6]} />
-                <meshPhysicalMaterial color={colors.treeBark} roughness={0.98} />
-              </mesh>
-            ))}
-            <mesh position={[0, 4.2 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[2.8 * el.scale, 4.8 * el.scale, isNearTree ? 16 : 4]} />
-              <primitive object={curveFoliageMats[0]} attach="material" />
-            </mesh>
-            <mesh position={[0, 5.8 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[2.1 * el.scale, 3.8 * el.scale, isNearTree ? 16 : 4]} />
-              <primitive object={curveFoliageMats[1]} attach="material" />
-            </mesh>
-            <mesh position={[0, 7.0 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[1.4 * el.scale, 3.0 * el.scale, isNearTree ? 14 : 4]} />
-              <primitive object={curveFoliageMats[2]} attach="material" />
-            </mesh>
-            <mesh position={[0, 8.0 * el.scale, 0]} castShadow={castNearShadow}>
-              <coneGeometry args={[0.6 * el.scale, 2.0 * el.scale, isNearTree ? 12 : 4]} />
-              <primitive object={curveFoliageMats[3]} attach="material" />
-            </mesh>
-          </group>
-        );
       case 'mountain':
         return (
-          <group key={`${side}-mountain-${index}`} position={[el.position.x, 0, el.position.z]}>
+          <group key={`${side}-mountain-${index}`} name={LANDSCAPE_ELEMENT_NAME} position={[el.position.x, 0, el.position.z]}>
             <mesh position={[0, 8 * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
               <coneGeometry args={[10 * el.scale, 20 * el.scale, 10]} />
               <meshPhysicalMaterial color={colors.mountain} roughness={0.94} metalness={0.03} clearcoat={0.015} clearcoatRoughness={0.96} sheen={0.05} sheenColor="#4a5540" />
@@ -405,7 +363,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
         const roofY = buildingHeight * 1.04;
         const halfHeight = buildingHeight / 2;
         return (
-          <group key={`${side}-building-${index}`} position={[el.position.x, 0, el.position.z]} rotation={[0, el.rotation, 0]}>
+          <group key={`${side}-building-${index}`} name={LANDSCAPE_ELEMENT_NAME} position={[el.position.x, 0, el.position.z]} rotation={[0, el.rotation, 0]}>
             <mesh position={[0, halfHeight * el.scale, 0]} castShadow={castNearShadow} receiveShadow>
               <boxGeometry args={[4.2 * el.scale, buildingHeight * el.scale, 4.2 * el.scale]} />
               <meshPhysicalMaterial color={archConfig.wallMaterial.color} roughness={archConfig.wallMaterial.roughness} metalness={0.08} clearcoat={0.12} clearcoatRoughness={0.75} sheen={0.1} sheenColor={colors.buildingAccent} />
@@ -444,33 +402,44 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
    *
    * This was two `.filter()` calls on a `boatProgress` prop pushed ten times a
    * second, so moving the boat rebuilt the JSX for every tree and house on the
-   * bank. It also computed each element's progress from its index *after* the
-   * filter, which is a different number from the one it was placed at - so
-   * `nearShadow` was wrong for everything but the first element of each side.
-   * Progress comes from the element's own index now, and the shadow band is
-   * measured from the chunk the boat is in, which changes on a cadence a
-   * render can afford.
+   * bank. The shadow band is measured from the chunk the boat is in, which
+   * changes on a cadence a render can afford.
+   *
+   * Mounted by the progress each element was placed at. It used to be read
+   * back from the element's index - `index * 0.02 / 0.6` - which matched where
+   * an element stood only for the first of each side, so the window mounted
+   * whichever elements happened to be fifteenth to thirtieth in the list
+   * rather than the ones near the boat (#333).
    */
-  const shadowCentre = chunkProgress;
-  const progressOf = (index: number) => (index * 0.02) / 0.6;
-
   const mounted = (
     elements: typeof landscapeElements.leftElements,
     side: 'left' | 'right',
   ) =>
     elements.flatMap((element, index) => {
-      const elementProgress = progressOf(index);
-      if (!withinMountRange(elementProgress, mountProgress)) return [];
+      if (!withinMountRange(element.progress, mountProgress)) return [];
       const nearShadow =
-        Math.abs(elementProgress - shadowCentre) < RENDER_CONFIG.shadowNearProgressBand;
+        Math.abs(element.progress - chunkProgress) < RENDER_CONFIG.shadowNearProgressBand;
       return [renderElement(element, index, side, nearShadow)];
     });
 
   return (
-    <group ref={elementsGroupRef}>
-      {mounted(landscapeElements.leftElements, 'left')}
-      {mounted(landscapeElements.rightElements, 'right')}
-    </group>
+    <>
+      <group ref={elementsGroupRef}>
+        {mounted(landscapeElements.leftElements, 'left')}
+        {mounted(landscapeElements.rightElements, 'right')}
+      </group>
+      {/* The trees: every one on the route, a mesh per species (#333). */}
+      {foliageOn && (
+        <BankFoliage
+          curve={curve}
+          positionRef={positionRef}
+          viewDistance={viewDistance}
+          enrichment={enrichment}
+          track={track}
+          avoid={houses}
+        />
+      )}
+    </>
   );
 };
 

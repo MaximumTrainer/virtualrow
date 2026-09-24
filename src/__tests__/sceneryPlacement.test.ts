@@ -4,6 +4,7 @@ import {
   MAX_INSTANCES_PER_SIDE,
   thinToCeiling,
   budgetFor,
+  keepsKitTrees,
   distinctProfiles,
   pick,
   computePlacements,
@@ -151,6 +152,41 @@ describe('computePlacements — curve mode', () => {
     if (surfaces.length > 0) {
       expect(surfaces.every((p) => Math.abs(p.position[1] - 0.15) < 1e-6)).toBe(true);
     }
+  });
+});
+
+describe('the kit trees beside the billboard foliage (#333)', () => {
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, -600),
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 600),
+  ]);
+  const treeIds = new Set<string>(fallbackResolved.trees);
+  const place = (kitTrees?: boolean) =>
+    computePlacements({
+      curve,
+      enrichment: enrichment(['fallback']),
+      resolvedByProfile: byProfile(),
+      budget: 1,
+      side: 'right',
+      kitTrees,
+    });
+
+  it('keeps the GLB trees at high only, as the close-up hero trees', () => {
+    expect(keepsKitTrees('high')).toBe(true);
+    expect(keepsKitTrees('auto')).toBe(false);
+    expect(keepsKitTrees('low')).toBe(false);
+  });
+
+  it('places the kit trees unless told not to', () => {
+    expect(treeIds.size).toBeGreaterThan(0);
+    expect(place().some((p) => treeIds.has(p.id))).toBe(true);
+    expect(place(false).some((p) => treeIds.has(p.id))).toBe(false);
+  });
+
+  it('leaves everything else where it was when the trees go', () => {
+    const withTrees = place(true).filter((p) => !treeIds.has(p.id));
+    expect(place(false)).toEqual(withTrees);
   });
 });
 

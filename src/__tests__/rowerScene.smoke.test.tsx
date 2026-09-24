@@ -146,7 +146,7 @@ describe('RowerScene', () => {
       const readings: NonNullable<Window['__ROWER3D_SCENERY_CLEARANCE']> =
         window.__ROWER3D_SCENERY_CLEARANCE ?? {};
 
-      expect(Object.keys(readings).sort()).toEqual(['landscape', 'scenery-left', 'structures']);
+      expect(Object.keys(readings).sort()).toEqual(['foliage', 'landscape', 'scenery-left', 'structures']);
       for (const [path, reading] of Object.entries(readings)) {
         expect(reading.count, path).toBeGreaterThan(0);
         expect(reading.nearestM, path).toBeGreaterThanOrEqual(reading.marginM - 0.01);

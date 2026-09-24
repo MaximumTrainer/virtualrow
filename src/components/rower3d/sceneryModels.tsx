@@ -45,6 +45,7 @@ import {
 import {
   budgetFor,
   distinctProfiles,
+  keepsKitTrees,
   computePlacements,
   type Placement,
 } from './sceneryPlacement';
@@ -176,11 +177,12 @@ const SceneryModelsChunk: React.FC<
   }, [ready, gltfs]);
 
   const budget = budgetFor(performanceMode);
+  const kitTrees = keepsKitTrees(performanceMode);
   const viewDistance = chunkViewDistanceFor();
 
   const placements = useMemo<Placement[]>(
-    () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side, track }),
-    [curve, enrichment, resolvedByProfile, budget, side, track],
+    () => computePlacements({ curve, enrichment, resolvedByProfile, budget, side, track, kitTrees }),
+    [curve, enrichment, resolvedByProfile, budget, side, track, kitTrees],
   );
 
   // Same terrain profile the scatter is lifted by, so bank furniture stands on

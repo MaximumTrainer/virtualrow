@@ -110,10 +110,15 @@ export default defineConfig({
         // into a tested module. Branches go up, now 0.93 clear of 84; lines
         // (0.81 clear of 92) and functions (0.74 clear of 88) stay, by the
         // same rule as above.
-        lines: 91,
-        statements: 91,
+        // #333 took main's 92.81 / 84.93 / 88.74 to 93.12 / 85.35 / 89.25 with
+        // the billboard foliage: four new modules, all measured and reached,
+        // and the cone trees they replace gone from an excluded file. Lines
+        // are now 1.12 clear of 92 and functions 1.25 clear of 88, so both
+        // move up a point; branches (0.35 clear of 85) stay.
+        lines: 92,
+        statements: 92,
         branches: 84,
-        functions: 87,
+        functions: 88,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
         // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch
@@ -131,6 +136,15 @@ export default defineConfig({
         // from the centreline while the water beside it widened.
         '**/sceneryClearance.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
         '**/landscapeLayout.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        // #333's foliage: the leaf texture and the material are reached in
+        // full, the plan and the component on every line with one branch each
+        // unreached (97.36 and 97.29). Pinned so the modules
+        // that decide where a forest stands, and what it costs to draw, stay
+        // measured the way the landscape beside them is.
+        '**/foliageTexture.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/foliageMaterial.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/foliagePlan.ts': { lines: 100, statements: 100, branches: 97, functions: 100 },
+        '**/foliageComponents.tsx': { lines: 100, statements: 100, branches: 97, functions: 100 },
         '**/boatComponents.tsx': { lines: 85, statements: 85, branches: 70, functions: 75 },
         // skyComponents was 60 / 100 / 50 when #343 admitted it. #325 mounts it
         // directly to prove the sky stays out of the fog, taking lines to 88.52
