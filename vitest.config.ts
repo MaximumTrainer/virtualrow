@@ -115,6 +115,14 @@ export default defineConfig({
         // and the cone trees they replace gone from an excluded file. Lines
         // are now 1.12 clear of 92 and functions 1.25 clear of 88, so both
         // move up a point; branches (0.35 clear of 85) stay.
+        //
+        // #335 and #344 then moved the metric strip out of App.tsx and onto
+        // the stage, turning ~90 lines of untested JSX in a 1600-line
+        // component into a component, a plan module and two hooks that are
+        // covered outright: 93.26 / 85.60 / 89.47. The floors stay where #333
+        // left them. Nothing is a point clear of the next integer - lines are
+        // 0.26 past 93, branches 0.60 past 85, functions 0.47 past 89 - and a
+        // floor set inside that margin is one that flaps.
         lines: 92,
         statements: 92,
         branches: 84,

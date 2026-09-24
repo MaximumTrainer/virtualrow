@@ -72,8 +72,26 @@ const COMPARISON = {
   timeout: CAPTURE_TIMEOUT_MS,
 } as const;
 
-/** The panels the hero hides so the scull is centre-stage. */
-const HERO_HIDDEN_OVERLAYS = ['.activity-route-summary', '.activity-map-overlay'] as const;
+/**
+ * The panels the hero hides so the scull is centre-stage.
+ *
+ * The HUD's two visible pieces joined them with #335, which put the metric
+ * strip on the stage. The hero is a picture of the river and the boat - that is
+ * what `heroScreenshot.test.ts` measures it as - and the strip is a band of
+ * live numbers across the bottom third of it. The activity shot below is the
+ * one that shows the HUD, which is what that picture is for.
+ *
+ * `.row-hud-strip` and `.row-hud-actions` rather than `.row-hud`: that is a
+ * full-stage layer with nothing drawn on it, and hiding it would take the two
+ * pieces with it - which is the same result by a less obvious route, until
+ * someone adds a third piece outside the strip and cannot see why it vanished.
+ */
+const HERO_HIDDEN_OVERLAYS = [
+  '.activity-route-summary',
+  '.activity-map-overlay',
+  '.row-hud-strip',
+  '.row-hud-actions',
+] as const;
 
 async function waitForRowScreen(page: Page) {
   await page.waitForSelector('.route-info-overlay h2', { timeout: 10_000 });
@@ -200,7 +218,14 @@ test('the published activity screen and hero are what the app renders', async ({
     await dispatchHeartRate(page);
     await page.waitForTimeout(600);
   }
-  await expect(page.locator('.activity-view')).toContainText('1000 m');
+  // The distance tile, by its own label rather than by a phrase in the page.
+  // It read `toContainText('1000 m')` until #344 moved the unit into the
+  // label - the tile is `1000` under `METERS` now - and because this wait sits
+  // ahead of the shutter, it did not fail loudly: `test:visual:update` stopped
+  // here and the published screenshots were quietly left as they were.
+  await expect(
+    page.locator('.activity-stat-card', { hasText: 'Meters' }).locator('.activity-stat-value'),
+  ).toHaveText('1000');
 
   await expectSceneAlive(page, 'the scene about to be compared with the published activity shot');
   await page.waitForFunction(() => window.__ROWER3D_ROUTE?.hasCurve === true, undefined, {

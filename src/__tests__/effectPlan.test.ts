@@ -201,3 +201,66 @@ describe('depth of field', () => {
     expect(auto).toBeLessThan(high);
   });
 });
+
+/**
+ * Issue #344 — a rower who asked for less motion does not get the effect whose
+ * job is to feel like movement.
+ *
+ * Chromatic aberration splits the frame into fringes that shift with the
+ * camera. At arm's length while rowing hard it reads as the picture swimming.
+ */
+describe('reduced motion', () => {
+  const TIERS = ['low', 'auto', 'high'] as const;
+
+  it('drops chromatic aberration at every tier that has it', () => {
+    for (const mode of TIERS) {
+      expect(
+        effectPlanFor(mode, { hasSun: true, reducedMotion: true }).effects,
+        `${mode} still splits the frame into fringes`,
+      ).not.toContain('chromaticAberration');
+    }
+  });
+
+  // Stated against the default rather than on its own: "no chromatic
+  // aberration" also describes a plan that failed to build.
+  it('is the only thing that changes', () => {
+    for (const mode of TIERS) {
+      const asAuthored = effectPlanFor(mode, { hasSun: true });
+      const still = effectPlanFor(mode, { hasSun: true, reducedMotion: true });
+
+      expect(still.effects).toEqual(
+        asAuthored.effects.filter((effect) => effect !== 'chromaticAberration'),
+      );
+      expect(still.composer).toBe(asAuthored.composer);
+      expect(still.normalPass).toBe(asAuthored.normalPass);
+      expect(still.ssaoSamples).toBe(asAuthored.ssaoSamples);
+      expect(still.toneMapOnRenderer).toBe(asAuthored.toneMapOnRenderer);
+    }
+  });
+
+  // The grade, the bloom and the vignette look the same in a frozen frame as in
+  // a moving one, and depth is not motion. None of them is a reason to make the
+  // scene plainer for someone who asked for stillness.
+  it('keeps the static grade, the depth and the sun', () => {
+    const still = effectPlanFor('high', { hasSun: true, reducedMotion: true });
+
+    for (const kept of ['bloom', 'hueSaturation', 'brightnessContrast', 'vignette', 'toneMapping', 'ssao', 'depthOfField', 'godRays'] as const) {
+      expect(still.effects, `${kept} was dropped for the wrong reason`).toContain(kept);
+    }
+  });
+
+  it('never makes a tier cost more than the one above it', () => {
+    const cost = (mode: (typeof TIERS)[number]) =>
+      effectCost(effectPlanFor(mode, { hasSun: true, reducedMotion: true }));
+
+    expect(cost('low')).toBeLessThan(cost('auto'));
+    expect(cost('auto')).toBeLessThan(cost('high'));
+  });
+
+  it('leaves the scene as authored when nothing was asked for', () => {
+    expect(effectPlanFor('auto', { hasSun: true, reducedMotion: false }).effects).toContain(
+      'chromaticAberration',
+    );
+    expect(effectPlanFor('auto', { hasSun: true }).effects).toContain('chromaticAberration');
+  });
+});

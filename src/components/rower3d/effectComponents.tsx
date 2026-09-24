@@ -4,6 +4,7 @@ import { EffectComposer, Bloom, ToneMapping, Vignette, DepthOfField, SSAO, GodRa
 import { ToneMappingMode, ChromaticAberrationEffect, type DepthOfFieldEffect } from 'postprocessing';
 import * as THREE from 'three';
 import { effectPlanFor, type EffectName } from './effectPlan';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { IS_TEST_MODE } from './constants';
 import { canInitialisePostProcessing } from './postProcessingGuard';
 import { sceneExposure } from './sceneExposure';
@@ -483,7 +484,11 @@ export const DynamicPostFx: React.FC<{
 
   const colorGrading: ColorGradingConfig = SCENE_CONFIG.colorGrading;
 
-  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh });
+  // Reduced motion is state rather than a ref here: which effects the composer
+  // mounts is a render-time decision, so a rower turning the setting on has to
+  // re-render the stack to be rid of the one that moves (#344).
+  const reducedMotion = useReducedMotion();
+  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh, reducedMotion });
 
   /**
    * Exactly one tone-mapping stage (#327) — and it is already the composer's.

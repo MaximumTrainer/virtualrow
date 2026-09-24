@@ -1390,9 +1390,11 @@ test.describe('PM5 data pipeline across view switches', () => {
       `.activity-stat-card:has(.activity-stat-label:has-text("${label}")) .activity-stat-value`,
     );
 
-    await expect(statValue('Meters')).toHaveText('734 m', { timeout: 5000 });
-    await expect(statValue('SPM')).toHaveText('26 spm', { timeout: 5000 });
-    await expect(statValue('Heart Rate')).toHaveText('148 bpm', { timeout: 5000 });
+    // The number alone: the unit moved into the label with #344, so the tile
+    // reads "148" under "Heart Rate (bpm)".
+    await expect(statValue('Meters')).toHaveText('734', { timeout: 5000 });
+    await expect(statValue('SPM')).toHaveText('26', { timeout: 5000 });
+    await expect(statValue('Heart Rate')).toHaveText('148', { timeout: 5000 });
   });
 });
 
@@ -1442,7 +1444,7 @@ test.describe('FTMS data pipeline across view switches', () => {
     await dispatchFtmsDistance(page, 1100);  // + 800 m
     await expect(
       page.locator('.activity-stat-card:has(.activity-stat-label:has-text("Meters")) .activity-stat-value'),
-    ).toHaveText('800 m', { timeout: 5000 });
+    ).toHaveText('800', { timeout: 5000 });
   });
 });
 
@@ -1542,7 +1544,9 @@ test.describe('activity distance integrity', () => {
     // software rasteriser for the main thread and the ubuntu runner missed the
     // window - three attempts, 'Received string: 0 m' each time, while macOS and
     // Windows passed. Waiting longer costs nothing when the display is prompt.
-    await expect(metersValue).toContainText('1234 m', { timeout: 20_000 });
+    // (The reading is '1234' rather than '1234 m' since #344 moved the unit
+    // into the label.)
+    await expect(metersValue).toHaveText('1234', { timeout: 20_000 });
 
     // Transient blip: a stale frame reports 0 m.
     await push(0, 241_000);
