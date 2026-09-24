@@ -312,8 +312,19 @@ function dispatchAdditionalStatus(
     v[6] = heartRate;
     v[7] = 0x1c; v[8] = 0x2e;   // currentPace 118.04 s/500m
     v[9] = 0x1c; v[10] = 0x2e;  // averagePace
+    // When, on the page's own clock, the frame went in (#336).
+    const at = performance.now();
     (window as unknown as PM5CharWindow).__pm5CharAdditional?._dispatch(new DataView(buf));
+    return at;
   }, { elapsedSeconds, strokeRate, heartRate });
+}
+
+/** One look at the start callout, taken in the page (#336). */
+interface CalloutReading {
+  t: number;
+  phase: string | null;
+  text: string;
+  progress: number | null;
 }
 
 function dispatchHeartRate(page: Page, bpm: number) {
@@ -1448,25 +1459,55 @@ test.describe('the start and the finish of a row (#336)', () => {
     await page.waitForTimeout(500);
     expect(await readHold(page)).toEqual({ phase: 'armed', progress: 0 });
 
+    // The count is recorded in the page, on the page's clock. Timed from here
+    // instead, every reading is a round trip to a page that a software
+    // rasteriser can keep busy for seconds, and the 3-2-1 on Windows came back
+    // as a missing count and a "1" that was really already "Row!".
+    await page.evaluate(() => {
+      const w = window as unknown as { __calloutLog: CalloutReading[] };
+      w.__calloutLog = [];
+      const record = () => {
+        const el = document.querySelector('[data-testid="start-callout"]');
+        w.__calloutLog.push({
+          t: performance.now(),
+          phase: el?.getAttribute('data-phase') ?? null,
+          text: el?.textContent ?? '',
+          progress: window.__ROWER3D_POS?.progress ?? null,
+        });
+      };
+      new MutationObserver(record).observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['data-phase'],
+      });
+      window.setInterval(record, 100);
+    });
+
     // The first drive.
-    const strokeAt = Date.now();
     await dispatchGeneralStatus(page, 6, 2);
-    await dispatchAdditionalStatus(page, { elapsedSeconds: 2, strokeRate: 24, heartRate: 140 });
+    const strokeAt = await dispatchAdditionalStatus(page, { elapsedSeconds: 2, strokeRate: 24, heartRate: 140 });
+
+    const log = () =>
+      page.evaluate(() => (window as unknown as { __calloutLog: CalloutReading[] }).__calloutLog);
+    await expect
+      .poll(async () => (await log()).some((r) => r.text === 'Row!'), {
+        timeout: 20_000,
+        message: '"Row!" never came',
+      })
+      .toBe(true);
+    const readings = await log();
 
     // Held through the count, however hard the erg says the rower is pulling.
-    const during: Array<{ phase: string | null; progress: number | null }> = [];
-    while (Date.now() - strokeAt < 2_500) {
-      during.push(await readHold(page));
-      await page.waitForTimeout(250);
-    }
-    const counting = during.filter((s) => s.phase === 'counting');
-    expect(counting.length, `never saw the count: ${JSON.stringify(during)}`).toBeGreaterThan(0);
-    expect(counting.every((s) => s.progress === 0), JSON.stringify(counting)).toBe(true);
+    const counting = readings.filter((r) => r.phase === 'counting');
+    expect(counting.length, 'never saw the count').toBeGreaterThan(0);
+    expect(counting.every((r) => r.progress === 0), JSON.stringify(counting)).toBe(true);
+    expect(counting.map((r) => r.text).filter((t, i, all) => all.indexOf(t) === i)).toEqual(['3', '2', '1']);
 
     // "Row!" within 4 s of the drive.
-    await expect(startCallout(page)).toHaveText('Row!', {
-      timeout: Math.max(1, 4_000 - (Date.now() - strokeAt)),
-    });
+    const rowAt = readings.find((r) => r.text === 'Row!')!.t;
+    expect(rowAt - strokeAt, 'ms from the first drive to "Row!"').toBeLessThanOrEqual(4_000);
   });
 
   test('shows the distance and time on the line, then opens the summary', async ({ page }) => {

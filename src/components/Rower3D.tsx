@@ -586,7 +586,8 @@ export const RowerScene: React.FC<
           y: boatPositionRef.current.y,
           z: boatPositionRef.current.z,
           progress: boatProgressRef.current,
-          angle: boatRotationRef.current
+          angle: boatRotationRef.current,
+          at: performance.now(),
         };
         // Is the boat actually between the banks, right now?
         //

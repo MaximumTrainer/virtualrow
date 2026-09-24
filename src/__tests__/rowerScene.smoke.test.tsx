@@ -232,6 +232,8 @@ describe('RowerScene', () => {
 
     await scene.tick(120);
     expect(window.__ROWER3D_POS?.progress, 'the boat left before "Row!"').toBe(0);
+    // Stamped with the frame's own time, which is what a spec times it by.
+    expect(Number.isFinite(window.__ROWER3D_POS?.at)).toBe(true);
 
     await scene.rerender({ ...props, holdBoat: false });
     await scene.tick(60);

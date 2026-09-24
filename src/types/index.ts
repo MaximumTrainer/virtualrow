@@ -338,7 +338,19 @@ declare global {
     };
     __PM5_SIMULATOR_PORT?: number;
     // Rower3D telemetry exposed for Playwright assertions
-    __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
+    __ROWER3D_POS?: {
+      x: number;
+      y: number;
+      z: number;
+      progress: number;
+      angle: number;
+      /**
+       * `performance.now()` when the frame that wrote this was drawn. On a
+       * starved page a reading can be seconds old, so a spec timing the boat
+       * times it by this rather than by its own clock.
+       */
+      at: number;
+    };
     __ROWER3D_CAMERA?: {
       position: [number, number, number];
       /** Which of the rig's views the camera is looking through (#328). */

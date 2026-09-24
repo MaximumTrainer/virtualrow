@@ -127,6 +127,7 @@ function App() {
   const [strokeSeen, setStrokeSeen] = useState(false);
   const [finish, setFinish] = useState<{ distanceMeters: number; elapsedMs: number } | null>(null);
   const finishingRef = useRef(false);
+  const strokeSeenRef = useRef(false);
   const activityTimerRef = useRef<number | null>(null);
   /**
    * The stage, and whether it is filling the screen (#335).
@@ -366,6 +367,7 @@ function App() {
     const onEnd = () => {
       finishingRef.current = false;
       setFinish(null);
+      strokeSeenRef.current = false;
       setStrokeSeen(false);
       setIsWorkoutActive(false);
       setCurrentSession(null);
@@ -482,6 +484,7 @@ function App() {
   const handleEndWorkout = useCallback(() => {
     finishingRef.current = false;
     setFinish(null);
+    strokeSeenRef.current = false;
     setStrokeSeen(false);
     const completed = workoutService.endSession();
     stopStructuredWorkout();
@@ -557,6 +560,18 @@ function App() {
     // Always update the service synchronously — no React render triggered here.
     workoutService.updateSessionWithPM5Data(data);
 
+    // The first stroke starts the countdown (#336) from a timer rather than
+    // from the frame below: a software renderer draws about a frame a second,
+    // and a count that waits for one starts a second late. A timer still runs
+    // it from a clean call stack, which is what the frame is for.
+    if (isWorkoutActive && !strokeSeenRef.current && isStrokeReading(data)) {
+      strokeSeenRef.current = true;
+      // Unless the row ended in between, which cleared the ref for the next.
+      window.setTimeout(() => {
+        if (strokeSeenRef.current) setStrokeSeen(true);
+      }, 0);
+    }
+
     // Defer React state updates to a requestAnimationFrame so they run from a
     // clean call-stack instead of deep inside the WS→CDP notification chain.
     // This prevents "Maximum call stack size exceeded" overflows during testing.
@@ -575,7 +590,6 @@ function App() {
         tickStructuredWorkout(latest);
 
         if (isWorkoutActive) {
-          if (isStrokeReading(latest)) setStrokeSeen(true);
           if (latest.heartRate) {
             const updated = workoutService.getCurrentSession();
             setHeartRateSamples(updated?.heartRateSamples ? [...updated.heartRateSamples] : []);
