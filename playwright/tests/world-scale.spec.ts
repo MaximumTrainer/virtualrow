@@ -65,21 +65,43 @@ test('the boat covers the ground its pace says it does', async ({ page }) => {
     })
     .toBeGreaterThan(DEMO_SPEED_MPS * 0.5);
 
+  // And for the countdown to have let it go (#336): the physics is at speed
+  // through the 3-2-1, but the boat is held on the line until "Row!".
+  await expect(page.getByTestId('start-callout')).toHaveCount(0, { timeout: 30_000 });
+
   const positionNow = () =>
     page.evaluate(() => {
       const pos = window.__ROWER3D_POS;
-      return pos ? { x: pos.x, y: pos.y, z: pos.z } : null;
+      return pos ? { x: pos.x, y: pos.y, z: pos.z, at: pos.at } : null;
     });
 
+  // A frame drawn after the release, not a held one still on the window.
+  const releasedAt = await page.evaluate(() => performance.now());
+  await expect
+    .poll(async () => (await positionNow())?.at ?? 0, {
+      timeout: 30_000,
+      message: 'the scene drew no frame after the boat was let go',
+    })
+    .toBeGreaterThan(releasedAt);
   const before = await positionNow();
   expect(before, 'the scene never published a boat position').not.toBeNull();
-  const startedAt = Date.now();
 
   await page.waitForTimeout(SAMPLE_GAP_MS);
 
+  // Timed by the frames that wrote the two positions, not by this runner's
+  // clock. On a software rasteriser a frame can arrive seconds apart, so the
+  // position read "before" was often seconds older than the moment it was
+  // read, and the boat appeared to have covered half as much ground again as
+  // its pace allows: 148 units against a 94 ceiling on main's Windows leg.
+  await expect
+    .poll(async () => ((await positionNow())?.at ?? 0) - before!.at, {
+      timeout: 30_000,
+      message: 'the scene stopped drawing frames',
+    })
+    .toBeGreaterThanOrEqual(SAMPLE_GAP_MS);
   const after = await positionNow();
   expect(after, 'the scene stopped publishing a boat position').not.toBeNull();
-  const elapsedSeconds = (Date.now() - startedAt) / 1000;
+  const elapsedSeconds = (after!.at - before!.at) / 1000;
 
   // Straight line rather than along the curve: over a couple of seconds the
   // route is near enough straight that the chord is the distance, and a chord

@@ -118,6 +118,13 @@ export interface Rower3DProps {
   paceSPer500?: number | null;
   distanceMeters?: number | null;
   isPlaying?: boolean;
+  /**
+   * Keep the boat where it is (#336): at the start, while the countdown runs.
+   * The crew still rows — it is the boat that waits for "Row!".
+   */
+  holdBoat?: boolean;
+  /** The boat has crossed the finish line: the blade foam bursts (#336). */
+  finished?: boolean;
   cadence?: number | null;
   performanceMode?: PerformanceMode;
   intensityFactor?: number;
@@ -190,6 +197,8 @@ export const RowerScene: React.FC<
   paceSPer500, 
   distanceMeters, 
   isPlaying, 
+  holdBoat = false,
+  finished = false,
   cadence,
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'auto',
@@ -362,7 +371,10 @@ export const RowerScene: React.FC<
     const renderedSpeedMps =
       (speedMps / visualDragMultiplier) * (1 + SURGE_AMPLITUDE * motion.surge);
     
-    if (isPlaying && speedMps > 0 && totalDistance > 0 && curveData.length > 0) {
+    if (holdBoat) {
+      // Neither integrated nor eased towards the erg's distance: the boat stays
+      // on the start line however far the erg counts during the countdown.
+    } else if (isPlaying && speedMps > 0 && totalDistance > 0 && curveData.length > 0) {
       const progressRate = renderedSpeedMps / totalDistance;
       targetProgress = Math.min(1, boatProgressRef.current + progressRate * delta);
       boatProgressRef.current = targetProgress;
@@ -575,7 +587,8 @@ export const RowerScene: React.FC<
           y: boatPositionRef.current.y,
           z: boatPositionRef.current.z,
           progress: boatProgressRef.current,
-          angle: boatRotationRef.current
+          angle: boatRotationRef.current,
+          at: performance.now(),
         };
         // Is the boat actually between the banks, right now?
         //
@@ -852,6 +865,7 @@ export const RowerScene: React.FC<
           strokePhase={strokePhase}
           foamColor={SCENE_CONFIG.water.foamColor}
           foamIntensity={SCENE_CONFIG.water.foamIntensity}
+          finished={finished}
         />
       )}
 

@@ -301,6 +301,11 @@ export interface WorkoutProgress {
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
+    /**
+     * Let a Playwright spec see a row finish (#336). The harness otherwise
+     * skips the auto-finish, so a spec that is not about it keeps its row.
+     */
+    __VIRTUALROW_AUTO_FINISH?: boolean;
     __PM5_DATA?: PM5Data;
     /**
      * Forces a performance mode, independent of `IS_TEST_MODE`.
@@ -333,7 +338,19 @@ declare global {
     };
     __PM5_SIMULATOR_PORT?: number;
     // Rower3D telemetry exposed for Playwright assertions
-    __ROWER3D_POS?: { x: number; y: number; z: number; progress: number; angle: number };
+    __ROWER3D_POS?: {
+      x: number;
+      y: number;
+      z: number;
+      progress: number;
+      angle: number;
+      /**
+       * `performance.now()` when the frame that wrote this was drawn. On a
+       * starved page a reading can be seconds old, so a spec timing the boat
+       * times it by this rather than by its own clock.
+       */
+      at: number;
+    };
     __ROWER3D_CAMERA?: {
       position: [number, number, number];
       /** Which of the rig's views the camera is looking through (#328). */

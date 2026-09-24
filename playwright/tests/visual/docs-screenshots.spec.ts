@@ -91,6 +91,9 @@ const HERO_HIDDEN_OVERLAYS = [
   '.activity-map-overlay',
   '.row-hud-strip',
   '.row-hud-actions',
+  // The start and finish callouts (#336). Gone by the time the hero is taken,
+  // since the row has been going for seconds; listed so it stays that way.
+  '.race-callout',
 ] as const;
 
 async function waitForRowScreen(page: Page) {

@@ -46,6 +46,8 @@ import { WorkoutLibrary } from './components/WorkoutLibrary';
 import { WorkoutOverlay } from './components/WorkoutOverlay';
 import { RowHud } from './components/RowHud';
 import { useFullscreen } from './hooks/useFullscreen';
+import { isStrokeReading, useStartSequence } from './hooks/useStartSequence';
+import { FinishBanner, StartCallout } from './components/RaceCallouts';
 import { markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
 import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
 import type { RouteEnrichmentData } from './services/routeEnrichmentService';
@@ -67,6 +69,9 @@ type ViewMode = 'routes' | 'route-search' | 'workouts' | 'workout';
 
 /** The bundled demo route, and the fallback when no default resolves. */
 const DEMO_ROUTE_ID = '1';
+
+/** How long the finish banner is up before the summary opens (#336). */
+const FINISH_BANNER_MS = 2000;
 
 /** Header nav. The workout screen is reached by starting a row, not by a tab. */
 const NAV_ITEMS: ReadonlyArray<{ view: ViewMode; label: string }> = [
@@ -117,6 +122,12 @@ function App() {
   const distanceMax = 100;
   // Local activity timer (ms elapsed since workout started)
   const [activityElapsedMs, setActivityElapsedMs] = useState(0);
+  // The start and the finish of a row (#336). `strokeAt` is when this session
+  // saw its first stroke, not the last reading the erg left from the one before.
+  const [strokeAt, setStrokeAt] = useState<number | null>(null);
+  const [finish, setFinish] = useState<{ distanceMeters: number; elapsedMs: number } | null>(null);
+  const finishingRef = useRef(false);
+  const strokeSeenRef = useRef(false);
   const activityTimerRef = useRef<number | null>(null);
   /**
    * The stage, and whether it is filling the screen (#335).
@@ -354,6 +365,10 @@ function App() {
       }
     };
     const onEnd = () => {
+      finishingRef.current = false;
+      setFinish(null);
+      strokeSeenRef.current = false;
+      setStrokeAt(null);
       setIsWorkoutActive(false);
       setCurrentSession(null);
       setCurrentView('routes');
@@ -467,6 +482,10 @@ function App() {
   }, []);
 
   const handleEndWorkout = useCallback(() => {
+    finishingRef.current = false;
+    setFinish(null);
+    strokeSeenRef.current = false;
+    setStrokeAt(null);
     const completed = workoutService.endSession();
     stopStructuredWorkout();
     setIsWorkoutActive(false);
@@ -541,6 +560,20 @@ function App() {
     // Always update the service synchronously — no React render triggered here.
     workoutService.updateSessionWithPM5Data(data);
 
+    // The first stroke starts the countdown (#336) from a timer rather than
+    // from the frame below: a software renderer draws about a frame a second,
+    // and a count that waits for one starts a second late. A timer still runs
+    // it from a clean call stack, which is what the frame is for.
+    if (isWorkoutActive && !strokeSeenRef.current && isStrokeReading(data)) {
+      strokeSeenRef.current = true;
+      // Stamped now, so the count runs from the drive however late the page
+      // renders it. Unless the row ended in between, which cleared the ref.
+      const at = Date.now();
+      window.setTimeout(() => {
+        if (strokeSeenRef.current) setStrokeAt(at);
+      }, 0);
+    }
+
     // Defer React state updates to a requestAnimationFrame so they run from a
     // clean call-stack instead of deep inside the WS→CDP notification chain.
     // This prevents "Maximum call stack size exceeded" overflows during testing.
@@ -569,18 +602,49 @@ function App() {
           const latestSession = workoutService.getCurrentSession();
           setCurrentSession(latestSession ? { ...latestSession } : null);
 
-          // Auto-end when distance reaches route length (skip in Playwright harness).
-          if (selectedRoute && typeof window !== 'undefined' && !window.__PLAYWRIGHT_TESTING) {
+          // Finish when distance reaches route length: the banner, then the
+          // summary (#336). Skipped in the Playwright harness, whose rows would
+          // otherwise end under specs that are not about the finish, unless a
+          // spec asks for it.
+          if (
+            selectedRoute &&
+            typeof window !== 'undefined' &&
+            (!window.__PLAYWRIGHT_TESTING || window.__VIRTUALROW_AUTO_FINISH)
+          ) {
             const routeDistanceMeters = selectedRoute.distance * 1000;
             const completionThreshold = routeDistanceMeters * 0.995;
-            if (latest.distance >= completionThreshold && routeDistanceMeters > 0) {
-              handleEndWorkout();
+            if (latest.distance >= completionThreshold && routeDistanceMeters > 0 && !finishingRef.current) {
+              finishingRef.current = true;
+              setFinish({
+                distanceMeters: routeDistanceMeters,
+                elapsedMs: latest.elapsedTime
+                  ? latest.elapsedTime * 1000
+                  : (latestSession?.duration ?? 0) * 1000,
+              });
             }
           }
         }
       });
     }
-  }, [isWorkoutActive, selectedRoute, handleEndWorkout, tickStructuredWorkout]);
+  }, [isWorkoutActive, selectedRoute, tickStructuredWorkout]);
+
+  // The finish banner stays up for FINISH_BANNER_MS, then the summary opens.
+  // Read through a ref so a re-created handler does not restart the wait.
+  const handleEndWorkoutRef = useRef(handleEndWorkout);
+  useEffect(() => {
+    handleEndWorkoutRef.current = handleEndWorkout;
+  }, [handleEndWorkout]);
+  useEffect(() => {
+    if (!finish) return undefined;
+    const id = window.setTimeout(() => handleEndWorkoutRef.current(), FINISH_BANNER_MS);
+    return () => window.clearTimeout(id);
+  }, [finish]);
+
+  const startSequence = useStartSequence({
+    active: isWorkoutActive,
+    strokeAt,
+    autoStart: isDemoMode,
+  });
 
   // While the demo is running, simulated rower data flows through exactly the
   // same pipeline as a real PM5, so nothing downstream needs to know it is fake.
@@ -1286,6 +1350,8 @@ function App() {
                       paceSPer500={pm5Data?.pace ? pm5Data.pace : undefined}
                       distanceMeters={pm5Data?.distance}
                       isPlaying={isWorkoutActive && sessionState === 'active'}
+                      holdBoat={startSequence.holdBoat}
+                      finished={finish !== null}
                       cadence={pm5Data?.cadence}
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
                       intensityFactor={structuredWorkout.speedFactor}
@@ -1322,6 +1388,12 @@ function App() {
                       progressPercent={activityProgressPercent}
                     />
                   </div>
+
+                  {finish ? (
+                    <FinishBanner distanceMeters={finish.distanceMeters} elapsedMs={finish.elapsedMs} />
+                  ) : (
+                    <StartCallout phase={startSequence.phase} countdown={startSequence.countdown} />
+                  )}
 
                   {/* On the stage, not under it (#335). Last inside the stage
                       so it layers over the canvas and the two overlays without

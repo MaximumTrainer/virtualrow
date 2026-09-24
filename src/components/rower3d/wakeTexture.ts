@@ -176,6 +176,15 @@ export const foamRingFor = (life: number): { scale: number; opacity: number } =>
   return { scale: 0.4 + (1 - remaining) * 1.0, opacity: remaining * 0.7 };
 };
 
+/**
+ * How strongly the blade foam shows at the finish (#336): a burst at the line,
+ * several times the theme's everyday foam, capped so it never reads as paint.
+ */
+export const FINISH_FOAM_BOOST = 2.5;
+
+export const foamIntensityFor = (base: number, finished: boolean): number =>
+  finished ? Math.min(1, base * FINISH_FOAM_BOOST) : base;
+
 const applyStops = (
   gradient: CanvasGradient,
   stops: readonly AlphaStop[],

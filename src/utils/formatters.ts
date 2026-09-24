@@ -42,3 +42,7 @@ export function formatTime(ms: number): string {
   }
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
+
+/** Metres grouped by thousands with a space, as a course is written: 2 000 m (#336). */
+export const formatCourseMetres = (metres: number): string =>
+  String(Math.round(metres)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
