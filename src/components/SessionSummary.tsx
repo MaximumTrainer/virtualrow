@@ -3,8 +3,11 @@ import type { ActivitySample, WorkoutSession } from '../types/index';
 import type { ActivityUploadResult } from '../services/intervalsIcuActivityService';
 import { useAuth } from '../context/useAuth';
 import { useServices } from '../context/useServices';
+import { workoutService } from '../services/workoutService';
 import { activityFileName, triggerBlobDownload } from '../utils/exporters';
 import { formatPace } from '../utils/formatters';
+import { SplitsTable } from './SplitsTable';
+import { PersonalBestLine } from './PersonalBestLine';
 import './SessionSummary.css';
 
 /**
@@ -111,6 +114,13 @@ export function SessionSummary({ session, onDone, onSaved, isDemo }: SessionSumm
           {session.heartRateMax !== undefined && <Stat label="Max HR" value={session.heartRateMax} unit="bpm" />}
           {averagePower !== null && <Stat label="Avg Power" value={averagePower} unit="W" />}
         </div>
+
+        <PersonalBestLine
+          averagePace={session.averagePace}
+          best={workoutService.bestPaceForRoute(session.routeId, { excludeId: session.id })}
+        />
+
+        <SplitsTable samples={session.samples ?? []} />
 
         {save.phase === 'error' && (
           <p className="session-summary-error" role="alert">{save.message}</p>

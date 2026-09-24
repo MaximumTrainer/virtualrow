@@ -1,0 +1,41 @@
+/* The row, split by split (#337).
+   Zebra rows and tabular numerals, because the column is there to be compared
+   down: a digit that changes width makes two splits look different when they
+   are not. */
+.splits-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+}
+
+.splits-table th,
+.splits-table td {
+  padding: var(--space-2xs) var(--space-xs);
+  text-align: right;
+}
+
+.splits-table thead th {
+  font-size: 0.6875rem; /* the 11px floor */
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.splits-table tbody th[scope='row'] {
+  text-align: left;
+  font-weight: 600;
+}
+
+.splits-table tbody tr:nth-child(even) {
+  background: var(--color-bg-secondary);
+}
+
+/* The part-split is not one of the others. Set apart rather than hidden, so a
+   rower sees the water they rowed without reading its pace as comparable. */
+.splits-table tbody tr[data-partial='true'] {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}

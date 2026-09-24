@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SessionSummary } from '../components/SessionSummary';
 import { ServicesProvider } from '../context/ServicesContext';
@@ -107,10 +107,16 @@ describe('SessionSummary (issue #221, R4)', () => {
     expect(screen.getByText('Willowbrook River')).toBeInTheDocument();
     expect(screen.getByText('5.00 km')).toBeInTheDocument();
     expect(screen.getByText('21:14')).toBeInTheDocument();
-    expect(screen.getByText(/2:07/)).toBeInTheDocument();
-    expect(screen.getByText('132')).toBeInTheDocument();  // avg HR
-    expect(screen.getByText('147')).toBeInTheDocument();  // max HR
-    expect(screen.getByText('149')).toBeInTheDocument();  // avg W
+
+    // Scoped to the totals since #337 put a splits table below them: a row's
+    // average heart rate and one split's average heart rate are the same
+    // number often enough that an unscoped `getByText` is ambiguous, and the
+    // claim here is about the totals.
+    const totals = within(document.querySelector('.session-summary-stats') as HTMLElement);
+    expect(totals.getByText(/2:07/)).toBeInTheDocument();
+    expect(totals.getByText('132')).toBeInTheDocument();  // avg HR
+    expect(totals.getByText('147')).toBeInTheDocument();  // max HR
+    expect(totals.getByText('149')).toBeInTheDocument();  // avg W
   });
 
   it('offers Save to intervals.icu when signed in with samples (AC4.2)', () => {

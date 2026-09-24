@@ -215,6 +215,37 @@ export class WorkoutService {
     return this.sessions.filter((session) => session.routeId === routeId);
   }
 
+  /**
+   * The quickest average pace the rower has managed on one route (#337).
+   *
+   * `getStats().bestPace` is the quickest across every session on any route.
+   * Held up beside a row on the Willowbrook it compares a 500 m sprint with a
+   * 5 km paddle and calls the paddle a failure, which is not a comparison a
+   * summary should draw.
+   *
+   * A guest row is never kept, a demo row was not rowed, a row still in
+   * progress has no average yet, and a stored pace of zero is a row that
+   * recorded none rather than a record nobody can beat. None of them is a best.
+   *
+   * `excludeId` leaves out the row just finished, so a summary can say "your
+   * best was 2:05" rather than comparing today with itself.
+   */
+  bestPaceForRoute(routeId: string, { excludeId }: { excludeId?: string } = {}): number | null {
+    const paces = this.sessions
+      .filter(
+        (session) =>
+          session.routeId === routeId &&
+          !session.isActive &&
+          !session.isGuest &&
+          session.id !== excludeId &&
+          Number.isFinite(session.averagePace) &&
+          session.averagePace > 0,
+      )
+      .map((session) => session.averagePace);
+
+    return paces.length > 0 ? Math.min(...paces) : null;
+  }
+
   getRecentSessions(days: number = 30): WorkoutSession[] {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);

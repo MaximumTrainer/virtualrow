@@ -1,0 +1,35 @@
+/* Today against the rower's best on this route (#337). */
+.personal-best {
+  margin: var(--space-sm) 0;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-control);
+  border-left: 3px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.personal-best-label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.personal-best-value {
+  font-weight: 700;
+}
+
+/* Colour is the encouragement, never the message: the delta says "faster
+   today" or "slower today" in words, so a rower who cannot tell the greens
+   from the greys reads the same thing (#344). */
+.personal-best[data-result='faster'] {
+  border-left-color: var(--color-success, #2e7d4f);
+}
+
+.personal-best[data-result='slower'] {
+  border-left-color: var(--color-border-hover, #999);
+}
+
+.personal-best--first {
+  border-left-color: var(--color-brand);
+  font-style: italic;
+}
