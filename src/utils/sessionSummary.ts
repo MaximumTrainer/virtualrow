@@ -66,7 +66,10 @@ export const splitsFrom = (samples: ActivitySample[], every = 500): Split[] => {
     // Every boundary this step crossed, in case one step spans more than one.
     let boundary = (Math.floor(startMetres / every) + 1) * every;
     while (b.distance >= boundary) {
-      inside.push(b);
+      // A sample belongs to the split it was taken in: one exactly on the
+      // boundary ends this split, one past it starts the next, and is added
+      // below once this one is closed.
+      if (b.distance === boundary) inside.push(b);
       close(boundary, timeAt(a, b, boundary));
       boundary += every;
     }
