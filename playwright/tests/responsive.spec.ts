@@ -355,6 +355,10 @@ test.describe('responsive layout', () => {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('f');
 
+    // The browser animates the change of display mode - macOS takes its time
+    // over it, and at 4K on a software renderer each frame of it is slow - so
+    // the transition gets a budget of its own rather than the 5 s default.
+    const TRANSITION = { timeout: 20_000 };
     const viewport = page.viewportSize()!;
     await expect
       .poll(() =>
@@ -367,14 +371,18 @@ test.describe('responsive layout', () => {
             headerCovered: !!onHeader?.closest('.activity-screen'),
           };
         }),
+        TRANSITION,
       )
       .toEqual({ box: [0, 0, viewport.width, viewport.height], headerCovered: true });
-    await expect(page.getByRole('button', { name: 'Exit fullscreen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Exit fullscreen' })).toBeVisible(TRANSITION);
 
     await page.keyboard.press('f');
-    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible(TRANSITION);
     await expect
-      .poll(() => page.evaluate(() => document.querySelector('.activity-screen')!.getBoundingClientRect().top))
+      .poll(
+        () => page.evaluate(() => document.querySelector('.activity-screen')!.getBoundingClientRect().top),
+        TRANSITION,
+      )
       .toBeGreaterThan(0);
   });
 
