@@ -9,7 +9,9 @@ import {
   recommendPerformanceMode,
 } from '../utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
-import { useReducedMotionRef } from '../hooks/useReducedMotion';
+import { useReducedMotionRef, useReducedMotion } from '../hooks/useReducedMotion';
+import { useStrokeAudio } from '../hooks/useStrokeAudio';
+import type { AudioPort } from '../ports';
 import {
   buildTerrainProfile,
   getDragMultiplierForProgress,
@@ -147,6 +149,14 @@ export interface Rower3DProps {
    * and the row's elapsed time arrives with a BLE packet about once a second.
    */
   elapsedSecondsRef?: React.MutableRefObject<number>;
+  /**
+   * The sound bed (#339). Passed down rather than resolved from `useServices`:
+   * this renders inside an R3F `Canvas`, which is a separate reconciler, and
+   * React context does not cross that boundary by itself.
+   */
+  audio?: AudioPort;
+  /** How hard the strokes are landing, 0..1, for how loud they sound. */
+  strokeIntensity?: number;
 }
 
 // ============================================================================
@@ -220,6 +230,8 @@ export const RowerScene: React.FC<
   sceneryEnabled,
   ghost = null,
   elapsedSecondsRef,
+  audio,
+  strokeIntensity = 1,
   gpuBackend,
 }) => {
   const { camera, scene, gl } = useThree();
@@ -334,6 +346,16 @@ export const RowerScene: React.FC<
   }, [route.coordinates]);
 
   const { boatStateRef, strokePhase, dispatchTick } = usePhysicsEngine();
+
+  /*
+   * The catch, heard (#339).
+   *
+   * Here rather than in `App`, because this is where the stroke phase is: the
+   * physics engine runs inside the canvas, and the transition into `catch` is
+   * the event the sound is hung on.
+   */
+  const reducedMotion = useReducedMotion();
+  useStrokeAudio(audio ?? null, strokePhase, strokeIntensity, reducedMotion);
 
   const strokeCycleTRef = useRef(0);
   const velocityRef = useRef(0);
