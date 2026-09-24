@@ -287,3 +287,62 @@ test('the scenery kit does not open a flood of parallel fetches', async ({ page 
     ).toBeLessThanOrEqual(20);
   }
 });
+
+/**
+ * Issue #332 — what a row actually downloads.
+ *
+ * The kit shipped uncompressed: 130 GLBs at 11.7 MB plus 5.7 MB of sculls, and
+ * a route fetches every model its placement plan names. The counts above say
+ * how many requests a row makes and how many run at once; neither says what any
+ * of them weighs, so the kit could have doubled in size without a single test
+ * noticing.
+ *
+ * Measured on the wire, from the built app, because that is the number a rower
+ * on a phone pays.
+ */
+const isGlb = (url: string): boolean => url.split('?')[0].toLowerCase().endsWith('.glb');
+
+test('a row downloads a few megabytes of scenery, compressed', async ({ page }) => {
+  const glbs: { url: string; bytes: number }[] = [];
+
+  page.on('response', async (response) => {
+    if (!isGlb(response.url())) return;
+    try {
+      const body = await response.body();
+      glbs.push({ url: response.url(), bytes: body.byteLength });
+    } catch {
+      // A response whose body has already gone (redirect, abort) says nothing
+      // about size, and counting it as zero would understate the total.
+    }
+  });
+
+  await rowGeneratedCourse(page, 'Kit Bytes Course', windingCourse(600, 3_000, 4));
+  await page.waitForTimeout(12_000);
+
+  const total = glbs.reduce((sum, glb) => sum + glb.bytes, 0);
+  console.log(`[kit] ${glbs.length} GLBs, ${(total / 1024 / 1024).toFixed(2)} MB transferred`);
+
+  // Only meaningful if the kit actually loaded something.
+  test.skip(glbs.length === 0, 'the kit loaded no models on this run');
+
+  expect(
+    total,
+    `the row pulled ${(total / 1024 / 1024).toFixed(2)} MB of scenery`,
+  ).toBeLessThanOrEqual(4 * 1024 * 1024);
+
+  /**
+   * Every model is meshopt-encoded, which is what makes that total reachable.
+   * A GLB carries its extension list in the JSON chunk, so this reads the bytes
+   * that actually arrived rather than trusting the manifest that said they
+   * would.
+   */
+  const uncompressed: string[] = [];
+  for (const glb of glbs) {
+    const body = await (await page.request.get(glb.url)).body();
+    const jsonLength = body.readUInt32LE(12);
+    const json = body.subarray(20, 20 + jsonLength).toString('utf8');
+    if (!json.includes('EXT_meshopt_compression')) uncompressed.push(glb.url.split('/').pop()!);
+  }
+
+  expect(uncompressed, `shipped uncompressed: ${uncompressed.join(', ')}`).toEqual([]);
+});

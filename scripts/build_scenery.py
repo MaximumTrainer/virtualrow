@@ -11,12 +11,17 @@ import numpy as np
 
 OUTPUT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("./output")
 ONLY = set(sys.argv[2:]) if len(sys.argv) > 2 else None
-RENDERS_DIR = OUTPUT_DIR / "renders"
 
 # STEP files are CAD provenance, not web assets: vite copies public/ into dist
 # verbatim, so a .step written beside the .glb is shipped to every browser that
 # cannot read it. Keep the sources outside the served tree (issue #232).
 CAD_OUTPUT_DIR = Path(os.environ.get("SCENERY_CAD_DIR", "./assets-src/scenery"))
+
+# The multi-view renders are provenance too, and they were the larger half of
+# the problem: 133 PNGs, 39 MB, written beside the GLBs and shipped to every
+# browser that loads one 90 kB model (issue #332). Nothing in the app or the
+# docs ever referenced them.
+RENDERS_DIR = Path(os.environ.get("SCENERY_RENDERS_DIR", "./assets-src/scenery/renders"))
 
 for d in (OUTPUT_DIR, RENDERS_DIR, CAD_OUTPUT_DIR):
     d.mkdir(parents=True, exist_ok=True)
