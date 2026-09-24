@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [head, oldmount, main]
+        variant: [bare, nofoliage, main]
         runner: [a, b]
     runs-on: windows-latest
     env:

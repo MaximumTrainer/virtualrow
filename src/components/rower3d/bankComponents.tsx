@@ -416,7 +416,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
     side: 'left' | 'right',
   ) =>
     elements.flatMap((element, index) => {
-      const p = import.meta.env.VITE_BENCH_VARIANT === 'oldmount' ? (index * 0.02) / 0.6 : element.progress;
+      const p = ['oldmount', 'bare'].includes(import.meta.env.VITE_BENCH_VARIANT ?? '') ? (index * 0.02) / 0.6 : element.progress;
       if (!withinMountRange(p, mountProgress)) return [];
       const nearShadow =
         Math.abs(p - chunkProgress) < RENDER_CONFIG.shadowNearProgressBand;

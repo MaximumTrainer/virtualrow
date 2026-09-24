@@ -295,4 +295,4 @@ export const createFoliageGeometry = (aspect: number): THREE.BufferGeometry => {
  * `__VIRTUALROW_SCENERY_MODELS` lets the kit's budget spec do the same.
  */
 export const isFoliageEnabled = (): boolean =>
-  window.__VIRTUALROW_FOLIAGE !== false;
+  !['nofoliage', 'bare'].includes(import.meta.env.VITE_BENCH_VARIANT ?? '') && window.__VIRTUALROW_FOLIAGE !== false;
