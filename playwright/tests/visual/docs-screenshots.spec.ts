@@ -218,7 +218,14 @@ test('the published activity screen and hero are what the app renders', async ({
     await dispatchHeartRate(page);
     await page.waitForTimeout(600);
   }
-  await expect(page.locator('.activity-view')).toContainText('1000 m');
+  // The distance tile, by its own label rather than by a phrase in the page.
+  // It read `toContainText('1000 m')` until #344 moved the unit into the
+  // label - the tile is `1000` under `METERS` now - and because this wait sits
+  // ahead of the shutter, it did not fail loudly: `test:visual:update` stopped
+  // here and the published screenshots were quietly left as they were.
+  await expect(
+    page.locator('.activity-stat-card', { hasText: 'Meters' }).locator('.activity-stat-value'),
+  ).toHaveText('1000');
 
   await expectSceneAlive(page, 'the scene about to be compared with the published activity shot');
   await page.waitForFunction(() => window.__ROWER3D_ROUTE?.hasCurve === true, undefined, {
