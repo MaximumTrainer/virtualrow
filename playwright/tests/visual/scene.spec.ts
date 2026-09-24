@@ -73,6 +73,8 @@ const HUD_SELECTORS = [
   '.activity-map-overlay',
   '.row-hud',
   '.row-hud-fullscreen',
+  // The camera view control (#328), which the row screen's top bar carries.
+  '.btn-camera-view',
 ] as const;
 
 /** Where on the route, and at what second, every shot is taken. */

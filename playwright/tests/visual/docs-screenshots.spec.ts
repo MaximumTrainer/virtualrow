@@ -73,12 +73,14 @@ const COMPARISON = {
 } as const;
 
 /** The panels the hero hides so the scull is centre-stage. */
-// The row HUD (#335) sits on the stage too: its tiles and the fullscreen button.
+// The row HUD (#335) sits on the stage too: its tiles, the fullscreen button
+// and the camera control beside it.
 const HERO_HIDDEN_OVERLAYS = [
   '.activity-route-summary',
   '.activity-map-overlay',
   '.row-hud',
   '.row-hud-fullscreen',
+  '.btn-camera-view',
 ] as const;
 
 async function waitForRowScreen(page: Page) {
