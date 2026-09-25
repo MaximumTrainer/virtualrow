@@ -20,6 +20,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
+import { litBySky } from './crewRig';
 import {
   loadSceneryManifest,
   orderByCost,
@@ -176,6 +177,14 @@ const SceneryModelsChunk: React.FC<
   const ready = useMemo(() => paths.slice(0, readyCount), [paths, readyCount]);
 
   const gltfs = useGLTF(ready) as unknown as Array<{ scene: THREE.Group }>;
+
+  // The kit is flat `baseColorFactor` and nothing else, so a little of the sky
+  // environment is what stops a white clubhouse reading as paper against a
+  // blue sky (#349). Applied to the cached scenes, which every instance of a
+  // model shares: it is idempotent, and the value never varies.
+  useEffect(() => {
+    for (const gltf of gltfs) if (gltf?.scene) litBySky(gltf.scene);
+  }, [gltfs]);
 
   // Rendering means the chunk resolved, so the next one may start.
   useEffect(() => {

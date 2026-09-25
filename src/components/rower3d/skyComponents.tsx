@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
+import { buildSkyEnvironment } from './skyEnvironment';
+import { useThree } from '@react-three/fiber';
+import { IS_TEST_MODE } from './constants';
+import type { SkyConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
@@ -256,4 +260,66 @@ export const HorizonSilhouette: React.FC<{
       </Billboard>
     </group>
   );
+};
+
+/**
+ * The sky, installed as the scene's environment (#349).
+ *
+ * `PMREMEnvironment` built this from the live scene on mount — before `Sky`
+ * had drawn — so the map was near-black, and every `MeshStandard` or
+ * `MeshPhysical` material in the scene had nothing to reflect. That is why the
+ * hull read as matte plastic and the metal rigger as dark grey.
+ *
+ * Built from a scene holding only the sky, which cannot depend on load order,
+ * and it is the same map the water already reflects (#324). Rebuilt only when
+ * the sky or the sun moves — a conditions change (#346) — and the texture it
+ * replaces is disposed with it.
+ */
+export const SkyEnvironment: React.FC<{
+  sky: SkyConfig;
+  sunPosition: readonly [number, number, number];
+  /** `scene.environmentIntensity`: how much of it reaches the materials. */
+  intensity: number;
+}> = ({ sky, sunPosition, intensity }) => {
+  const { gl, scene } = useThree();
+
+  useEffect(() => {
+    /*
+     * Not built under automation — like the `PMREMEnvironment` it replaces,
+     * and like the water's own map, which `waterComponents` also skips there.
+     *
+     * Measured rather than assumed. Generating it blocks the main thread for
+     * about four seconds on the software rasteriser CI draws with: probed
+     * against main on one machine, the longest tasks in a row went from 3.9 s
+     * to 5.3 s and 4.3 s. A `locator.evaluate` with a 10 s budget landing on
+     * one of those is three specs failing on a loaded runner, which is exactly
+     * what happened.
+     *
+     * Real hardware pays the same cost in milliseconds, so this is a cost of
+     * the rasteriser rather than of the feature. What automation gives up is
+     * the specular refinement the map exists for, at an intensity of
+     * 0.05–0.12; the hemisphere and the sun — which are what the contrast
+     * floors actually measure — are unchanged, and those floors pass.
+     *
+     * Building it once and sharing it with the water would let both have it
+     * for the price of one, and is its own piece of work.
+     */
+    if (IS_TEST_MODE) return;
+    const texture = buildSkyEnvironment(gl, sky, sunPosition);
+    if (!texture) return;
+
+    // react-hooks/immutability: `scene` is the live three.js graph handed over
+    // by useThree, not React state. Installing the environment map on it is
+    // the documented way to light an R3F scene.
+    // eslint-disable-next-line react-hooks/immutability
+    scene.environment = texture;
+    scene.environmentIntensity = intensity;
+
+    return () => {
+      texture.dispose();
+      scene.environment = null;
+    };
+  }, [gl, scene, sky, sunPosition, intensity]);
+
+  return null;
 };

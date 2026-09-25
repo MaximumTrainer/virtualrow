@@ -243,9 +243,7 @@ describe('RowerScene', () => {
   });
 
   // The low tier exists to cost less, and a shadow map is the most expensive
-  // single thing the sun does. There are two directional lights by design - a
-  // sun and a fill - so the fact worth asserting is which of them casts, not
-  // how many there are.
+  // single thing the sun does.
   it.each([
     ['low', 0],
     ['auto', 1],
@@ -257,8 +255,40 @@ describe('RowerScene', () => {
       .objects()
       .filter((o): o is THREE.DirectionalLight => (o as THREE.DirectionalLight).isDirectionalLight);
 
-    expect(suns.length, 'the scene lost a light').toBe(2);
+    expect(suns.length, 'the scene lost its sun').toBe(1);
     expect(suns.filter((s) => s.castShadow)).toHaveLength(casting);
+
+    await scene.unmount();
+  });
+
+  /**
+   * Issue #349 — one sun, one hemisphere, and the sky.
+   *
+   * The scene lit with four lights: a hemisphere, the sun, an ambient and a
+   * second directional fill. Three of those existed to fake what an
+   * environment map does, and the scene had no usable one — `PMREMEnvironment`
+   * captured the live scene before `Sky` had drawn, so the map was near-black.
+   * With a real sky environment the ambient and the fill only subtract
+   * contrast, so counting them is the test.
+   */
+  it('lights with the sun, a ground bounce and nothing else', async () => {
+    const scene = await renderScene({ performanceMode: 'high' });
+    const objects = scene.objects();
+
+    const count = (is: (o: THREE.Object3D) => boolean) => objects.filter(is).length;
+
+    expect(
+      count((o) => (o as THREE.DirectionalLight).isDirectionalLight === true),
+      'more than one directional light',
+    ).toBe(1);
+    expect(
+      count((o) => (o as THREE.HemisphereLight).isHemisphereLight === true),
+      'the ground bounce is missing',
+    ).toBe(1);
+    expect(
+      count((o) => (o as THREE.AmbientLight).isAmbientLight === true),
+      'an ambient light is flattening the scene',
+    ).toBe(0);
 
     await scene.unmount();
   });
