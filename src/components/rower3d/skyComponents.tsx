@@ -6,6 +6,7 @@ import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
 import { buildSkyEnvironment } from './skyEnvironment';
 import { useThree } from '@react-three/fiber';
+import { IS_TEST_MODE } from './constants';
 import type { SkyConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
@@ -284,19 +285,26 @@ export const SkyEnvironment: React.FC<{
 
   useEffect(() => {
     /*
-     * Built under automation too, unlike the `PMREMEnvironment` it replaces.
+     * Not built under automation — like the `PMREMEnvironment` it replaces,
+     * and like the water's own map, which `waterComponents` also skips there.
      *
-     * That one skipped test mode because it convolved the *live* scene, which
-     * is expensive and depends on load order. This builds a scene holding one
-     * sky mesh, which is neither — and skipping it now would matter, because
-     * the ambient light and the directional fill that used to carry the scene
-     * without an environment are gone (#349). `scene-contrast.spec.ts` said so
-     * immediately: with no environment and no fill, only 3% of the right of
-     * the frame was ground distinguishable from the water.
+     * Measured rather than assumed. Generating it blocks the main thread for
+     * about four seconds on the software rasteriser CI draws with: probed
+     * against main on one machine, the longest tasks in a row went from 3.9 s
+     * to 5.3 s and 4.3 s. A `locator.evaluate` with a 10 s budget landing on
+     * one of those is three specs failing on a loaded runner, which is exactly
+     * what happened.
      *
-     * A test that measures a scene lit differently from the shipping one is
-     * measuring the wrong scene.
+     * Real hardware pays the same cost in milliseconds, so this is a cost of
+     * the rasteriser rather than of the feature. What automation gives up is
+     * the specular refinement the map exists for, at an intensity of
+     * 0.05–0.12; the hemisphere and the sun — which are what the contrast
+     * floors actually measure — are unchanged, and those floors pass.
+     *
+     * Building it once and sharing it with the water would let both have it
+     * for the price of one, and is its own piece of work.
      */
+    if (IS_TEST_MODE) return;
     const texture = buildSkyEnvironment(gl, sky, sunPosition);
     if (!texture) return;
 
