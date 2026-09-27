@@ -21,6 +21,9 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { litBySky } from './crewRig';
+import { applyScenerySkyPass, isBuildingPath } from './scenerySkyPass';
+import { nightLevelFor, sharedNightUniform } from './windowMaterial';
+import { useConditions } from '../../hooks/useConditions';
 import {
   loadSceneryManifest,
   orderByCost,
@@ -182,9 +185,27 @@ const SceneryModelsChunk: React.FC<
   // environment is what stops a white clubhouse reading as paper against a
   // blue sky (#349). Applied to the cached scenes, which every instance of a
   // model shares: it is idempotent, and the value never varies.
+  //
+  // Building tiers (b/d/g) go further (#432): each flat-colour part is swapped
+  // for a facade material keyed by palette, or a window material when the
+  // colour matches the exporter's glaze range. Every other tier keeps the
+  // plain `litBySky` assist — a tree or a lock gate is not a facade.
   useEffect(() => {
-    for (const gltf of gltfs) if (gltf?.scene) litBySky(gltf.scene);
-  }, [gltfs]);
+    ready.forEach((path, i) => {
+      const gltf = gltfs[i];
+      if (!gltf?.scene) return;
+      if (isBuildingPath(path)) applyScenerySkyPass(gltf.scene, performanceMode);
+      else litBySky(gltf.scene);
+    });
+  }, [gltfs, ready, performanceMode]);
+
+  // `Conditions` drives how lit the interior of a window reads (#432). One
+  // shared uniform reaches every cloned window at once — writing `value`
+  // here propagates through the shader with no per-material walk.
+  const { conditions } = useConditions();
+  useEffect(() => {
+    sharedNightUniform.value = nightLevelFor(conditions);
+  }, [conditions]);
 
   // Rendering means the chunk resolved, so the next one may start.
   useEffect(() => {

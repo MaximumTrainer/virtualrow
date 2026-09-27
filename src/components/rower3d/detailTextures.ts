@@ -86,6 +86,125 @@ export const carbonWeaveNormalMap = (): THREE.CanvasTexture | null => {
 };
 
 /**
+ * A tiling normal map of brick, at roughly 0.2 m courses.
+ *
+ * Horizontal courses with a half-brick offset every other row: the eye reads
+ * a horizontal ruled pattern as bricks the moment it sees the offset stagger,
+ * and the mortar lines want to push the surface *back* along the normal.
+ */
+export const brickNormalMap = (): THREE.CanvasTexture | null => {
+  const cached = cache.get('brick');
+  if (cached) return cached;
+  const canvas = buildCanvas(TEXTURE_SIZE, (ctx, size) => {
+    const img = ctx.createImageData(size, size);
+    const rowHeight = 16;
+    const brickWidth = 32;
+    const mortar = 2;
+    for (let y = 0; y < size; y += 1) {
+      const row = Math.floor(y / rowHeight);
+      const offset = row % 2 === 0 ? 0 : brickWidth / 2;
+      const yInRow = y % rowHeight;
+      const nearYSeam = yInRow < mortar || yInRow >= rowHeight - mortar;
+      for (let x = 0; x < size; x += 1) {
+        const xInBrick = ((x + offset) % brickWidth + brickWidth) % brickWidth;
+        const nearXSeam = xInBrick < mortar || xInBrick >= brickWidth - mortar;
+        // Mortar sits back from the face; the tangent-space normal tilts
+        // toward the ridge as we cross the seam.
+        const rTilt = nearXSeam ? (xInBrick < mortar ? -1 : 1) : 0;
+        const gTilt = nearYSeam ? (yInRow < mortar ? -1 : 1) : 0;
+        const r = 128 + Math.round(rTilt * 36);
+        const g = 128 + Math.round(gTilt * 36);
+        const i = (y * size + x) * 4;
+        img.data[i] = r;
+        img.data[i + 1] = g;
+        img.data[i + 2] = 255;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+  if (!canvas) return null;
+  const texture = asRepeatingTexture(canvas);
+  cache.set('brick', texture);
+  return texture;
+};
+
+/**
+ * A tiling normal map of stucco/plaster at roughly 8 mm.
+ *
+ * Fine irregular bumps: a deterministic value-noise field so the same texture
+ * comes back from every call, and no seams — the noise is sampled on wrapping
+ * coordinates.
+ */
+export const plasterNormalMap = (): THREE.CanvasTexture | null => {
+  const cached = cache.get('plaster');
+  if (cached) return cached;
+  const canvas = buildCanvas(TEXTURE_SIZE, (ctx, size) => {
+    const img = ctx.createImageData(size, size);
+    const at = (i: number, j: number) => {
+      const ii = ((i % size) + size) % size;
+      const jj = ((j % size) + size) % size;
+      // Hash → [0, 1) — deterministic across builds; no crypto is involved.
+      const h = Math.sin(ii * 12.9898 + jj * 78.233) * 43758.5453;
+      return h - Math.floor(h);
+    };
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        // Central differences on the noise give a smoothed micro-normal.
+        const dx = at(x + 1, y) - at(x - 1, y);
+        const dy = at(x, y + 1) - at(x, y - 1);
+        const r = 128 + Math.round(dx * 22);
+        const g = 128 + Math.round(dy * 22);
+        const i = (y * size + x) * 4;
+        img.data[i] = r;
+        img.data[i + 1] = g;
+        img.data[i + 2] = 255;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+  if (!canvas) return null;
+  const texture = asRepeatingTexture(canvas);
+  cache.set('plaster', texture);
+  return texture;
+};
+
+/**
+ * A tiling normal map of clapboard timber at roughly 0.15 m boards.
+ *
+ * Horizontal boards with a slight bevel between them: sine wave in Y gives a
+ * soft ridge every 16 pixels, and the tilt reads as an overlapping edge.
+ */
+export const clapboardNormalMap = (): THREE.CanvasTexture | null => {
+  const cached = cache.get('clapboard');
+  if (cached) return cached;
+  const canvas = buildCanvas(TEXTURE_SIZE, (ctx, size) => {
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y += 1) {
+      // The board ridge: a sine wave whose gradient is the tilt.
+      const tilt = Math.sin((y / 16) * Math.PI);
+      const g = 128 + Math.round(tilt * 40);
+      for (let x = 0; x < size; x += 1) {
+        // A faint grain along the board, so a wall isn't a stack of ruled lines.
+        const grain = Math.sin(x * 0.6 + y * 0.01) * 4;
+        const r = 128 + Math.round(grain);
+        const i = (y * size + x) * 4;
+        img.data[i] = r;
+        img.data[i + 1] = g;
+        img.data[i + 2] = 255;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+  if (!canvas) return null;
+  const texture = asRepeatingTexture(canvas);
+  cache.set('clapboard', texture);
+  return texture;
+};
+
+/**
  * A tiling normal map of a lycra knit at roughly 1 mm.
  *
  * A dense grid of soft bumps: lycra reads as smooth cloth close up because the
