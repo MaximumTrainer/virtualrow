@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useCubeCamera, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import { useFollowZ } from './followBoat';
-import { IS_TEST_MODE, SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
+import { dropForCost, SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import type { PerformanceMode } from './constants';
 import { useAnimationFrame } from './animationFrame';
 import { skySunPosition } from './sunDirection';
@@ -82,7 +82,7 @@ export const PhotorealisticWater: React.FC<{
   }, [waterNormalMap]);
 
   useEffect(() => {
-    if (IS_TEST_MODE) return;
+    if (dropForCost()) return;
     const mat = materialRef.current;
     if (!mat) return;
     attachGerstnerShader(mat, timeUniformRef.current, 'z', 'flat', waterConfig.waveAmplitude, waterConfig.waveFrequency);
@@ -139,7 +139,7 @@ export const PhotorealisticWater: React.FC<{
           normalScale={new THREE.Vector2(0.15, 0.15)}
         />
       </mesh>
-      {!IS_TEST_MODE && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'low' && (
         <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} performanceMode={performanceMode} />
       )}
     </>
@@ -214,7 +214,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   // automation for the reason in `SkyEnvironment` — one convolution blocks
   // the software rasteriser's main thread for seconds.
   const environment = useMemo(() => {
-    if (IS_TEST_MODE) return null;
+    if (dropForCost()) return null;
     const handle = acquireSkyEnvironment(gl, skyConfig, sunPosition);
     return handle;
   }, [gl, skyConfig, sunPosition]);
@@ -274,7 +274,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   }, [rippleMap, curve, enrichment?.waterWidthMeters]);
 
   useEffect(() => {
-    if (IS_TEST_MODE) return;
+    if (dropForCost()) return;
     attachGerstnerShader(
       material,
       timeUniformRef.current,
@@ -326,7 +326,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
       buildChunk={buildChunk}
       viewDistance={chunkViewDistanceFor()}
       renderMaterial={
-        plan.useMirror && !IS_TEST_MODE
+        plan.useMirror && !dropForCost()
           ? () => (
               <MeshReflectorMaterial
                 resolution={512}
