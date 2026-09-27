@@ -3,6 +3,13 @@
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
+    /**
+     * A spec's opt-in to the shipping scene (#419): all the `IS_TEST_MODE`
+     * cost gates lift, so the sky PMREM, the water reflection, the wake, the
+     * contact shadow and the post-processing stack all render. Determinism
+     * and telemetry gates are unaffected. Read via `wantsShippingScene()`.
+     */
+    __VIRTUALROW_SHIPPING_SCENE?: boolean;
   }
 }
 
@@ -25,6 +32,40 @@ export const IS_TEST_MODE = typeof window !== 'undefined' && !!window.__PLAYWRIG
 export const isTelemetryPublished = (): boolean =>
   typeof window !== 'undefined' &&
   (!!window.__PLAYWRIGHT_TESTING || !!window.__VIRTUALROW_TELEMETRY);
+
+/**
+ * The scene automation measures is not the scene that ships (#419).
+ *
+ * `IS_TEST_MODE` gates fall into three kinds:
+ * - **telemetry**: publish `__ROWER3D_*` on `window` so a spec can read it;
+ * - **determinism**: swap the GLB scull for the procedural one so an
+ *   assertion does not race the network;
+ * - **cost**: skip a piece of rendering (the PMREM sky map, the mirror
+ *   reflection plane, the wake, the contact shadow, the post-processing
+ *   stack) because it blocks the software rasteriser for seconds.
+ *
+ * The first two have to stay. The third is what makes the scene automation
+ * looks at 186 draw calls where a rower sees 1114 — six times the work,
+ * outside the tests meant to catch it.
+ *
+ * `wantsShippingScene()` is the spec's opt-in. Set
+ * `window.__VIRTUALROW_SHIPPING_SCENE = true` before the SPA boots (via
+ * `page.addInitScript`) and every cost gate lifts, while the telemetry and
+ * determinism gates stay. The cheap suite unchanged; a slow spec can measure
+ * what ships, which is what #349 could not.
+ */
+export const wantsShippingScene = (): boolean =>
+  typeof window !== 'undefined' && !!window.__VIRTUALROW_SHIPPING_SCENE;
+
+/**
+ * True when automation is running and the spec has not asked for the shipping
+ * scene — the case where a cost-only gate should skip work.
+ *
+ * A spec that opts in via `window.__VIRTUALROW_SHIPPING_SCENE` renders the
+ * PMREM sky, the reflections, the wake and the post stack; every other spec
+ * keeps its current cost.
+ */
+export const dropForCost = (): boolean => IS_TEST_MODE && !wantsShippingScene();
 
 /**
  * Performance mode to render at.

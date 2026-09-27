@@ -6,7 +6,7 @@ import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
 import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { useThree } from '@react-three/fiber';
-import { IS_TEST_MODE } from './constants';
+import { dropForCost } from './constants';
 import type { SkyConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
@@ -296,8 +296,11 @@ export const SkyEnvironment: React.FC<{
      * sun — which the contrast floors measure — do not depend on this map,
      * so what automation gives up is a specular refinement no assertion
      * reads. Real hardware pays it in milliseconds, so users still get it.
+     *
+     * cost gate (#419) — a spec that opts into `__VIRTUALROW_SHIPPING_SCENE`
+     * lifts this, at the price of the four-second convolution.
      */
-    if (IS_TEST_MODE) return;
+    if (dropForCost()) return;
     const handle = acquireSkyEnvironment(gl, sky, sunPosition);
     if (!handle.texture) return;
 

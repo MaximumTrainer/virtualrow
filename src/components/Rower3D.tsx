@@ -36,6 +36,7 @@ import { RiverGuides } from './rower3d/RiverGuides';
 import {
   BOAT_GROUP_NAME,
   IS_TEST_MODE,
+  dropForCost,
   isTelemetryPublished,
   SCENE_SCALE,
   WATER_CHANNEL_WIDTH,
@@ -891,7 +892,7 @@ export const RowerScene: React.FC<
           matrix; the frame loop above moves it onto the boat. */}
       <primitive object={sunTarget} />
       
-      {!IS_TEST_MODE && performanceMode === 'high' && (
+      {!dropForCost() && performanceMode === 'high' && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
           <meshBasicMaterial color={sceneConfig.lighting.sunColor} />
@@ -910,7 +911,7 @@ export const RowerScene: React.FC<
         <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
       )}
 
-      {!IS_TEST_MODE && performanceMode !== 'low' && !routeCurve && (
+      {!dropForCost() && performanceMode !== 'low' && !routeCurve && (
         <WaterReflectionPlane followRef={sceneryFollowRef} />
       )}
       
@@ -1008,7 +1009,7 @@ export const RowerScene: React.FC<
         171 → 298 draw calls at `low`, 336 → 684 at `high` — and `low` is the
         tier a contact shadow exists to help.
       */}
-      {!IS_TEST_MODE && (
+      {!dropForCost() && (
         <mesh
           ref={contactShadowRef}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -1044,7 +1045,7 @@ export const RowerScene: React.FC<
         />
       )}
 
-      {!IS_TEST_MODE && (
+      {!dropForCost() && (
         <WakeEffect
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -1053,7 +1054,7 @@ export const RowerScene: React.FC<
         />
       )}
 
-      {!IS_TEST_MODE && (
+      {!dropForCost() && (
         <BladeEntryFoam
           positionRef={boatPositionRef}
           rotationRef={boatRotationRef}
@@ -1064,7 +1065,7 @@ export const RowerScene: React.FC<
         />
       )}
 
-      {!IS_TEST_MODE && (
+      {!dropForCost() && (
         <>
           <DriveSpray
             positionRef={boatPositionRef}
@@ -1100,15 +1101,15 @@ export const RowerScene: React.FC<
         </SceneErrorBoundary>
       )}
 
-      {!IS_TEST_MODE && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'low' && (
         <CausticsLight positionRef={boatPositionRef} />
       )}
 
-      {!IS_TEST_MODE && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'low' && (
         <GroundCover followRef={sceneryFollowRef} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 
-      {!IS_TEST_MODE && (
+      {!dropForCost() && (
         <HorizonSilhouette positionRef={boatPositionRef} />
       )}
     </AnimationProvider>
