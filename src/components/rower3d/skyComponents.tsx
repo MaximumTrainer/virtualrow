@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
-import { buildSkyEnvironment } from './skyEnvironment';
+import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { useThree } from '@react-three/fiber';
 import { IS_TEST_MODE } from './constants';
 import type { SkyConfig } from './themeConfig';
@@ -285,38 +285,33 @@ export const SkyEnvironment: React.FC<{
 
   useEffect(() => {
     /*
-     * Not built under automation — like the `PMREMEnvironment` it replaces,
-     * and like the water's own map, which `waterComponents` also skips there.
+     * Acquired through the shared cache (#418): the water is the other
+     * consumer, and both hold the same texture object. The PMREM convolution
+     * is paid once, and disposed when the last consumer releases.
      *
-     * Measured rather than assumed. Generating it blocks the main thread for
-     * about four seconds on the software rasteriser CI draws with: probed
-     * against main on one machine, the longest tasks in a row went from 3.9 s
-     * to 5.3 s and 4.3 s. A `locator.evaluate` with a 10 s budget landing on
-     * one of those is three specs failing on a loaded runner, which is exactly
-     * what happened.
-     *
-     * Real hardware pays the same cost in milliseconds, so this is a cost of
-     * the rasteriser rather than of the feature. What automation gives up is
-     * the specular refinement the map exists for, at an intensity of
-     * 0.05–0.12; the hemisphere and the sun — which are what the contrast
-     * floors actually measure — are unchanged, and those floors pass.
-     *
-     * Building it once and sharing it with the water would let both have it
-     * for the price of one, and is its own piece of work.
+     * Still skipped under automation: even one convolution blocks the main
+     * thread for about four seconds on the software rasteriser CI draws with,
+     * which flakes specs whose `locator.evaluate` lands on it. Halving the
+     * cost by sharing was measured but not enough. The hemisphere and the
+     * sun — which the contrast floors measure — do not depend on this map,
+     * so what automation gives up is a specular refinement no assertion
+     * reads. Real hardware pays it in milliseconds, so users still get it.
      */
     if (IS_TEST_MODE) return;
-    const texture = buildSkyEnvironment(gl, sky, sunPosition);
-    if (!texture) return;
+    const handle = acquireSkyEnvironment(gl, sky, sunPosition);
+    if (!handle.texture) return;
 
     // react-hooks/immutability: `scene` is the live three.js graph handed over
     // by useThree, not React state. Installing the environment map on it is
     // the documented way to light an R3F scene.
     // eslint-disable-next-line react-hooks/immutability
-    scene.environment = texture;
+    scene.environment = handle.texture;
     scene.environmentIntensity = intensity;
 
     return () => {
-      texture.dispose();
+      // The water may still hold a handle to this texture (#418); the cache
+      // disposes it when the last consumer releases, not when this one does.
+      handle.release();
       scene.environment = null;
     };
   }, [gl, scene, sky, sunPosition, intensity]);

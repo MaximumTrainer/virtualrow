@@ -10,7 +10,7 @@ import { skySunPosition } from './sunDirection';
 import { SCENE_CONFIG } from './themeConfig';
 import { attachGerstnerShader, attachWaterSurface, createWaterNormalMap } from './helpers';
 import { createRippleNormalMap } from './rippleTexture';
-import { buildSkyEnvironment } from './skyEnvironment';
+import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { rippleRepeat, rippleScroll, waterMaterialPlan } from './waterMaterial';
 import { curveLengthMeters } from './curve';
 import { createWaterChannelGeometry } from './waterGeometry';
@@ -209,11 +209,16 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   const skyConfig = SCENE_CONFIG.sky;
   // The sun the water reflects is the sun the scene is lit by (#352).
   const sunPosition = useMemo(() => skySunPosition(SCENE_CONFIG.lighting), []);
-  const environment = useMemo(
-    () => (IS_TEST_MODE ? null : buildSkyEnvironment(gl, skyConfig, sunPosition)),
-    [gl, skyConfig, sunPosition],
-  );
-  useEffect(() => () => environment?.dispose(), [environment]);
+  // Acquired through the shared cache (#418): the scene environment is the
+  // other consumer, and both hold the same texture object. Skipped under
+  // automation for the reason in `SkyEnvironment` — one convolution blocks
+  // the software rasteriser's main thread for seconds.
+  const environment = useMemo(() => {
+    if (IS_TEST_MODE) return null;
+    const handle = acquireSkyEnvironment(gl, skyConfig, sunPosition);
+    return handle;
+  }, [gl, skyConfig, sunPosition]);
+  useEffect(() => () => environment?.release(), [environment]);
 
   const waterConfig = useMemo(() => {
     const baseConfig = SCENE_CONFIG.water;
@@ -246,7 +251,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
         envMapIntensity: plan.envMapIntensity,
         normalMap: rippleMap ?? null,
         normalScale: new THREE.Vector2(plan.normalScale, plan.normalScale),
-        envMap: environment,
+        envMap: environment?.texture ?? null,
         side: THREE.DoubleSide,
       }),
     [waterConfig, plan, rippleMap, environment],
