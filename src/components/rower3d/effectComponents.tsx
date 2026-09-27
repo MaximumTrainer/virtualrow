@@ -5,7 +5,6 @@ import { ToneMappingMode, ChromaticAberrationEffect, type DepthOfFieldEffect } f
 import * as THREE from 'three';
 import { effectPlanFor, type EffectName } from './effectPlan';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { IS_TEST_MODE } from './constants';
 import { canInitialisePostProcessing } from './postProcessingGuard';
 import { sceneExposure } from './sceneExposure';
 import type { PerformanceMode } from './constants';
@@ -213,27 +212,7 @@ export const BladeEntryFoam: React.FC<{
 // PMREM ENVIRONMENT — generates env map from the procedural skydome via
 // PMREMGenerator (#121).
 // ============================================================================
-export const PMREMEnvironment: React.FC = () => {
-  const { gl, scene } = useThree();
-  useEffect(() => {
-    if (IS_TEST_MODE) return;
-    const pmremGen = new THREE.PMREMGenerator(gl);
-    pmremGen.compileEquirectangularShader();
-    const envRT = pmremGen.fromScene(scene);
-    // react-hooks/immutability: `scene` is the live three.js graph handed over
-    // by useThree, not React state. Installing the environment map on it is
-    // the documented way to light an R3F scene.
-    // eslint-disable-next-line react-hooks/immutability
-    scene.environment = envRT.texture;
-    return () => {
-      envRT.texture.dispose();
-      envRT.dispose();
-      pmremGen.dispose();
-      scene.environment = null;
-    };
-  }, [gl, scene]);
-  return null;
-};
+
 
 // ============================================================================
 // DRIVE SPRAY — small spray particles at blade-entry sites during 'drive' phase (#122)
