@@ -294,3 +294,42 @@ describe('the sky as the scene’s environment', () => {
     await renderer.unmount();
   });
 });
+
+/**
+ * Issue #418 — the water and the scene light from the same texture.
+ *
+ * The cache is exercised in `skyEnvironmentCache.test.ts`; this proves it is
+ * the seam `SkyEnvironment` uses.
+ */
+describe('the sky and the water share one environment map (#418)', () => {
+  it('acquires through the cache, and releases on unmount rather than disposing itself', async () => {
+    const built = Object.assign(new THREE.Texture(), { dispose: vi.fn() });
+    vi.doMock('../components/rower3d/skyEnvironment', async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
+      buildSkyEnvironment: vi.fn(() => built),
+    }));
+    vi.resetModules();
+    const { SkyEnvironment } = await import('../components/rower3d/skyComponents');
+    const { SCENE_CONFIG } = await import('../components/rower3d/themeConfig');
+    const cache = await import('../components/rower3d/skyEnvironmentCache');
+    cache.resetSkyEnvironmentCacheForTesting();
+
+    // A separate consumer takes the map first, the way `waterComponents`
+    // does when a scene mounts both.
+    const water = cache.acquireSkyEnvironment({} as THREE.WebGLRenderer, SCENE_CONFIG.sky, [0, 110, 0]);
+
+    const renderer = await ReactThreeTestRenderer.create(
+      <SkyEnvironment sky={SCENE_CONFIG.sky} sunPosition={[0, 110, 0]} intensity={0.7} />,
+    );
+    // Same texture as the water holds — one build for two consumers.
+    expect((renderer.scene.instance as unknown as THREE.Scene).environment).toBe(water.texture);
+    expect(cache.buildCountForTesting()).toBe(1);
+
+    await renderer.unmount();
+    // The water still holds it; unmounting `SkyEnvironment` must not dispose.
+    expect(built.dispose).not.toHaveBeenCalled();
+
+    water.release();
+    expect(built.dispose).toHaveBeenCalledTimes(1);
+  });
+});
