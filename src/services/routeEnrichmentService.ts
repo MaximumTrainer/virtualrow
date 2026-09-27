@@ -6,6 +6,7 @@ import {
   normalizeBearingDelta,
   routeTotalDistanceMeters,
 } from '../utils/geoUtils';
+import { waterBodyFromName } from '../utils/waterBodyFromName';
 
 export const OPEN_TOPO_DATA_BATCH_LIMIT = 100;
 export const ROUTE_SEGMENT_LENGTH_METERS = 50;
@@ -486,13 +487,19 @@ const inferFallbackSceneryProfile = (route: WaterRoute): SceneryProfile => {
   return 'fallback';
 };
 
-const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
+/**
+ * Curated tags are the trusted signal — a route explicitly tagged `river` and
+ * named `… Lake` is a river (AC5.2). The name is the guess we consult only when
+ * no tag says what the water is. That guess is what fixes rownative imports
+ * already sitting in `localStorage` without re-import (#413, AC5.1).
+ */
+export const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
   if (route.tags.includes('canal')) return 'canal';
   if (route.tags.includes('stream')) return 'stream';
   if (route.tags.includes('lake')) return 'lake';
   if (route.tags.includes('reservoir')) return 'reservoir';
   if (route.tags.includes('river')) return 'river';
-  return 'unknown';
+  return waterBodyFromName(route.name);
 };
 
 export const createFallbackRouteEnrichment = (

@@ -12,6 +12,7 @@ import {
   calculateBearingDeltaForSegments,
   createFallbackRouteEnrichment,
   getRouteEnrichmentCacheKey,
+  inferRouteWaterBodyType,
   loadCachedRouteEnrichment,
   mapOsmTagsToSceneryProfile,
   getTerrainReliefForProgress,
@@ -614,5 +615,67 @@ describe('RouteEnrichmentService', () => {
 
     expect(enrichment.source).toBe('network');
     expect(enrichment.waterBodyType).toBe('canal');
+  });
+});
+
+describe('inferRouteWaterBodyType (#413)', () => {
+  const untagged = (name: string): WaterRoute => ({
+    ...routeFixture,
+    id: `name-only:${name}`,
+    name,
+    tags: [],
+  });
+
+  it('prefers an explicit tag over the name (AC5.2)', () => {
+    const route: WaterRoute = { ...untagged('Regatta Lake'), tags: ['river'] };
+    expect(inferRouteWaterBodyType(route)).toBe('river');
+  });
+
+  it('falls back to the name when no water tag is present (AC5.1)', () => {
+    expect(inferRouteWaterBodyType(untagged('Regatta Lake'))).toBe('lake');
+    expect(inferRouteWaterBodyType(untagged('River Thames'))).toBe('river');
+  });
+
+  it('stays unknown when neither a tag nor the name says (AC5.3)', () => {
+    expect(inferRouteWaterBodyType(untagged('Championship Course'))).toBe(
+      'unknown',
+    );
+  });
+
+  it('keeps Mortlake a river (AC7.3)', () => {
+    expect(inferRouteWaterBodyType(untagged('Mortlake to Putney'))).not.toBe(
+      'lake',
+    );
+  });
+
+  it('reshapes a stored rownative Lake course to lake dressing (AC7.1)', () => {
+    // A route imported before #413 lives in localStorage tagged only
+    // `rownative`, `imported` and `geometry:*` — its fallback enrichment is
+    // built from that. The name-derived fallback in the classifier is what
+    // fixes it in place, without a re-import.
+    const legacyRoute: WaterRoute = {
+      ...routeFixture,
+      id: 'legacy',
+      name: 'Regatta Lake',
+      tags: ['rownative', 'imported', 'geometry:track'],
+    };
+    const enrichment = createFallbackRouteEnrichment(legacyRoute);
+    expect(enrichment.waterBodyType).toBe('lake');
+    expect(enrichment.waterWidthMeters).toBe(45);
+    expect(enrichment.waterColor).toBe('#3f7ea8');
+  });
+
+  it('a freshly imported route tagged `lake` gets beach scenery (AC4.4)', () => {
+    // The tag added by importRouteFromRownative also routes the fallback
+    // scenery to `beach` through the existing inferFallbackSceneryProfile.
+    const importedRoute: WaterRoute = {
+      ...routeFixture,
+      id: 'imported-lake',
+      name: 'Regatta Lake',
+      tags: ['rownative', 'imported', 'geometry:track', 'lake'],
+    };
+    const enrichment = createFallbackRouteEnrichment(importedRoute);
+    expect(enrichment.waterBodyType).toBe('lake');
+    expect(enrichment.segmentProfiles[0].sceneryProfile).toBe('beach');
   });
 });

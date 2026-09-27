@@ -212,6 +212,51 @@ describe('RouteService creation & search', () => {
     expect(route.coordinates[0].lng).toBeGreaterThan(0);
   });
 
+  it('tags a rownative course whose name says lake so the scene renders it as one (#413 AC4.1)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '900',
+      name: 'Regatta Lake',
+      country: 'Netherlands',
+      externalDistanceMeters: 2000,
+      geometrySource: 'gate-chain',
+      coordinates: [
+        { lat: 52.37, lng: 4.89 },
+        { lat: 52.38, lng: 4.9 },
+      ],
+      status: 'established',
+    });
+
+    expect(route.tags).toContain('lake');
+    // The existing tags and their order are unchanged; the water tag is
+    // added, not substituted (AC4.3).
+    expect(route.tags.indexOf('rownative')).toBeLessThan(
+      route.tags.indexOf('imported'),
+    );
+    expect(route.tags).toContain('status:established');
+    expect(route.tags).toContain('geometry:gate-chain');
+  });
+
+  it('does not add a water tag when the classifier cannot type the name (#413 AC4.2)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '901',
+      name: 'Mortlake to Putney',
+      country: 'United Kingdom',
+      externalDistanceMeters: 6800,
+      geometrySource: 'gate-chain',
+      coordinates: [
+        { lat: 51.47, lng: -0.26 },
+        { lat: 51.48, lng: -0.22 },
+      ],
+    });
+
+    // Whole-word matching keeps `Mortlake` a substring, not a lake.
+    expect(route.tags).not.toContain('lake');
+    expect(route.tags).not.toContain('unknown');
+    // Rows that carry no water tag are the ones the enrichment fallback
+    // consults the name for, so the tag list stays as it was.
+    expect(route.tags.filter((tag) => tag === 'rownative')).toHaveLength(1);
+  });
+
   it('does not add a status tag when rownative status is missing', () => {
     const route = routeService.importRouteFromRownative({
       id: '100',

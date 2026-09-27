@@ -12,6 +12,7 @@ import {
 } from '../utils/coordinateUtils';
 import { parseGeoJsonTrack, parseGpxTrack } from '../utils/trackParsers';
 import { routeTotalDistanceMeters } from '../utils/geoUtils';
+import { waterBodyFromName } from '../utils/waterBodyFromName';
 import type { GeometrySource } from '../types/index';
 
 /**
@@ -414,6 +415,16 @@ export class RouteService {
     const isGateChain = data.geometrySource === 'gate-chain';
     const coordinates = resampleCoordinates(data.coordinates, IMPORT_RESAMPLE_MAX_GAP_M);
 
+    // rownative gives us nothing about the water body itself, so a lake course
+    // like `Regatta Lake` used to land untyped and render as a narrow river.
+    // The name-derived tag is what routes it through the lake dressing that
+    // already exists further down the pipeline (#413, AC4.1). An unclassified
+    // name adds no tag: the list does not grow an `unknown` entry (AC4.2).
+    const waterBodyTag =
+      waterBodyFromName(data.name) === 'unknown'
+        ? undefined
+        : waterBodyFromName(data.name);
+
     return this.createRoute({
       name: data.name,
       description: `Imported from rownative.icu course ${data.id}.`,
@@ -428,6 +439,7 @@ export class RouteService {
         sourceTag,
         `${GEOMETRY_SOURCE_TAG_PREFIX}${data.geometrySource}`,
         isGateChain ? OUTLINE_ONLY_TAG : undefined,
+        waterBodyTag,
       ].filter((tag): tag is string => Boolean(tag)),
       source: 'rownative',
       externalId: data.id,
