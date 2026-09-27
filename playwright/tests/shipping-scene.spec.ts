@@ -19,7 +19,9 @@ import { test, expect, type Page } from '../fixtures/crash-watch';
 async function measureDrawCalls(target: Page, shipping: boolean): Promise<number> {
   await target.addInitScript((on) => {
     const w = window as unknown as Record<string, unknown>;
-    w.__VIRTUALROW_TELEMETRY = true;
+    // Automation mode has to be on for `dropForCost` to gate anything at all;
+    // the opt-in only lifts what automation would otherwise drop.
+    w.__PLAYWRIGHT_TESTING = true;
     w.__VIRTUALROW_PERFORMANCE_MODE = 'auto';
     if (on) w.__VIRTUALROW_SHIPPING_SCENE = true;
     // Freeze on the hero frame so both runs draw the same content.
