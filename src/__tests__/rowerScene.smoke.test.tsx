@@ -179,9 +179,15 @@ describe('RowerScene', () => {
     // Measured off the plane the scene actually built, not off the minimum:
     // it is sized from the route's own extent (groundPlane.test.ts covers that
     // arithmetic), and the demo route runs a good way from the origin.
-    const { width } = (ground.geometry as THREE.PlaneGeometry).parameters;
-    expect(Math.abs(boat.position.x - ground.position.x)).toBeLessThan(width / 2);
-    expect(Math.abs(boat.position.z - ground.position.z)).toBeLessThan(width / 2);
+    //
+    // The geometry is a world-oriented BufferGeometry since #431, so the plane's
+    // extent lives on its bounding box rather than on a PlaneGeometry parameter.
+    ground.geometry.computeBoundingBox();
+    const box = ground.geometry.boundingBox!;
+    expect(boat.position.x).toBeGreaterThan(box.min.x);
+    expect(boat.position.x).toBeLessThan(box.max.x);
+    expect(boat.position.z).toBeGreaterThan(box.min.z);
+    expect(boat.position.z).toBeLessThan(box.max.z);
 
     await scene.unmount();
   });

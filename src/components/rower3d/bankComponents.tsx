@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useFollowPoint } from './followBoat';
 import { withinMountRange } from './visibilityCull';
-import { RENDER_CONFIG } from './constants';
+import { RENDER_CONFIG, resolvePerformanceMode } from './constants';
 import { seededRandom } from './helpers';
 import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG } from './themeConfig';
@@ -18,6 +18,11 @@ import { SCENERY_PROFILES } from './sceneryConfig';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
 import { createShorelineTexture } from './shorelineTexture';
 import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } from './groundPlane';
+import {
+  buildGroundPlaneGeometry,
+  groundPlaneReliefFor,
+  groundPlaneSegmentsFor,
+} from './groundPlaneRelief';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
@@ -62,17 +67,33 @@ export const GroundPlane: React.FC<{
   curve: THREE.CatmullRomCurve3 | null;
 }> = ({ curve }) => {
   const color = SCENE_CONFIG.bank.flatColor;
+  const tier = resolvePerformanceMode();
 
   const plan = useMemo(() => groundPlaneFor(curve), [curve]);
+  /*
+   * A world-oriented BufferGeometry with the relief already baked in (#431).
+   *
+   * A rotated PlaneGeometry gave two triangles that map cleanly through a
+   * `-PI/2` on x; a 64×64 grid with per-vertex y offsets does not, so the
+   * geometry is built horizontal in world space and the mesh is mounted flat.
+   * `low` returns a 1-segment flat quad, exactly as before, so nothing about
+   * the cheap tier moves.
+   */
+  const geometry = useMemo(() => {
+    const vertices = groundPlaneReliefFor(plan, curve, tier);
+    const segments = groundPlaneSegmentsFor(tier, curve);
+    return buildGroundPlaneGeometry(vertices, segments);
+  }, [plan, curve, tier]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
     <mesh
       name={GROUND_PLANE_NAME}
-      position={[plan.centre[0], GROUND_PLANE_Y, plan.centre[1]]}
-      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, GROUND_PLANE_Y, 0]}
       receiveShadow
     >
-      <planeGeometry args={[plan.size, plan.size]} />
+      <primitive attach="geometry" object={geometry} />
       {/* Pushed away in depth as well as in space (#328).
           It sat five centimetres under the waterline, which is nothing against
           a depth buffer stretched from a 0.1 m near plane to a 12 km far one,
