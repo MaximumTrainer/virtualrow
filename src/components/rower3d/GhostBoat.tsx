@@ -2,7 +2,7 @@ import React, { useRef, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RowingScull, GltfScull } from './boatComponents';
-import { IS_TEST_MODE } from './constants';
+import { IS_TEST_MODE, RENDER_SHIPPING_EXTRAS } from './constants';
 import { getRoutePositionAtProgress, distanceToProgress } from './curve';
 import {
   ghostDistanceAt,
@@ -96,7 +96,7 @@ export const GhostBoat: React.FC<GhostBoatProps> = ({
 
   return (
     <group ref={groupRef} name={GHOST_GROUP_NAME}>
-      {IS_TEST_MODE ? (
+      {!RENDER_SHIPPING_EXTRAS ? (
         <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
       ) : (
         <Suspense fallback={<RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />}>

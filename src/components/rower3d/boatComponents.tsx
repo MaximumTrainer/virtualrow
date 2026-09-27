@@ -2,7 +2,7 @@ import React, { useRef, useMemo, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { BOAT_GROUP_NAME, IS_TEST_MODE } from './constants';
+import { BOAT_GROUP_NAME, IS_TEST_MODE, RENDER_SHIPPING_EXTRAS } from './constants';
 import { OAR_LEVER_RATIO, strokePose } from './strokePose';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import { GLB_ROWER_NODES, dressScull } from './crewRig';
@@ -454,8 +454,10 @@ export const BoatKinematicController: React.FC<{
 
   return (
     <group ref={groupRef} name={BOAT_GROUP_NAME}>
-      {IS_TEST_MODE ? (
+      {!RENDER_SHIPPING_EXTRAS ? (
         // Tests rely on the procedural boat's synchronous, asset-free oar signal.
+        // A spec that asks for the shipping scene via `__VIRTUALROW_SHIPPING_SCENE`
+        // drops into the GLB path below, exactly as a rower does.
         <RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />
       ) : (
         // Production HD scull; the procedural boat is the fallback while the GLB

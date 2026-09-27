@@ -3,6 +3,12 @@
 declare global {
   interface Window {
     __PLAYWRIGHT_TESTING?: boolean;
+    /**
+     * Ask automation to render the shipping scene: PMREM environment, water
+     * mirror, wake, spray, contact shadow and the GLB scull. See
+     * `RENDER_SHIPPING_EXTRAS`.
+     */
+    __VIRTUALROW_SHIPPING_SCENE?: boolean;
   }
 }
 
@@ -25,6 +31,41 @@ export const IS_TEST_MODE = typeof window !== 'undefined' && !!window.__PLAYWRIG
 export const isTelemetryPublished = (): boolean =>
   typeof window !== 'undefined' &&
   (!!window.__PLAYWRIGHT_TESTING || !!window.__VIRTUALROW_TELEMETRY);
+
+/**
+ * True when the scene should draw every costly extra a rower gets: the sky
+ * environment map, the water mirror and env map, the wake, the spray and blade
+ * foam, the contact shadow, the sun disc and the GLB scull. Outside test mode
+ * this is always true; under automation it is only true when the spec asked.
+ *
+ * Same shape as `__VIRTUALROW_TELEMETRY` (which split telemetry from
+ * automation, #342) and `__VIRTUALROW_PERFORMANCE_MODE` (which split the tier
+ * from automation, #197): the flag lets one automation concept — "measure the
+ * shipping scene" — be turned on without pulling the others with it.
+ *
+ * The gates that read this are cost gates (measured in #416, #342, #352):
+ *
+ * - the PMREM environment blocks the software rasteriser's main thread for
+ *   about four seconds and used to flake three specs on a loaded runner;
+ * - `WaterReflectionPlane` and `MeshReflectorMaterial` each render the scene
+ *   into a reflection target;
+ * - `ContactShadow` (this repo's textured quad, not drei's) put an extra 171
+ *   draw calls on `low` and 348 on `high`;
+ * - the wake, drive spray, blade foam and finish splash each take a particle
+ *   system through the frame;
+ * - the GLB scull loads asynchronously and dresses on top of the procedural
+ *   fallback the test-mode boat renders directly.
+ *
+ * Determinism gates (the `midday` conditions default, the telemetry publishes,
+ * the shader-error counter) stay keyed to `IS_TEST_MODE` — they are not what
+ * "the shipping scene" refers to.
+ *
+ * Read once at module load: `IS_TEST_MODE` is set the same way, and rewriting
+ * the flag mid-session would leave half the scene on the old value.
+ */
+export const RENDER_SHIPPING_EXTRAS: boolean =
+  !IS_TEST_MODE ||
+  (typeof window !== 'undefined' && !!window.__VIRTUALROW_SHIPPING_SCENE);
 
 /**
  * Performance mode to render at.

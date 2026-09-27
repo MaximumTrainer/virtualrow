@@ -6,7 +6,7 @@ import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
 import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { useThree } from '@react-three/fiber';
-import { IS_TEST_MODE } from './constants';
+import { RENDER_SHIPPING_EXTRAS } from './constants';
 import type { SkyConfig } from './themeConfig';
 import { cloudsFor } from './cloudPlan';
 import type { PerformanceMode } from './constants';
@@ -297,7 +297,7 @@ export const SkyEnvironment: React.FC<{
      * so what automation gives up is a specular refinement no assertion
      * reads. Real hardware pays it in milliseconds, so users still get it.
      */
-    if (IS_TEST_MODE) return;
+    if (!RENDER_SHIPPING_EXTRAS) return;
     const handle = acquireSkyEnvironment(gl, sky, sunPosition);
     if (!handle.texture) return;
 
