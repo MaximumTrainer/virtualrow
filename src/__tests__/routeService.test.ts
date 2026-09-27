@@ -212,6 +212,60 @@ describe('RouteService creation & search', () => {
     expect(route.coordinates[0].lng).toBeGreaterThan(0);
   });
 
+  /**
+   * Issue #413 — the name is the only water signal rownative gives us, so a
+   * lake course arrives with a `lake` tag. Nothing else is affected, and a
+   * name that carries no water word gains no tag (AC4.1-3).
+   */
+  it('adds a lake tag to a course named `… Lake`, in place, without disturbing the others (AC4.1, AC4.3)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '200',
+      name: 'Regatta Lake',
+      country: 'Italy',
+      externalDistanceMeters: 2000,
+      geometrySource: 'gate-chain',
+      coordinates: [
+        { lat: 45.9, lng: 8.5 },
+        { lat: 45.91, lng: 8.51 },
+      ],
+    });
+    // The order the import writes them: the water tag is added, not
+    // substituted, and comes after the existing rownative-shaped tags.
+    expect(route.tags).toEqual(['rownative', 'imported', 'geometry:gate-chain', 'outline-only', 'lake']);
+  });
+
+  it('adds no water tag to a course whose name has no water word (AC4.2)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '201',
+      name: 'Championship Course',
+      country: 'GB',
+      externalDistanceMeters: 6800,
+      geometrySource: 'gate-chain',
+      coordinates: [
+        { lat: 51.47, lng: -0.24 },
+        { lat: 51.48, lng: -0.22 },
+      ],
+    });
+    for (const water of ['lake', 'river', 'canal', 'stream', 'reservoir']) {
+      expect(route.tags, `${water} tag on a nameless course`).not.toContain(water);
+    }
+  });
+
+  it('does not lake-tag a Mortlake course (AC7.3)', () => {
+    const route = routeService.importRouteFromRownative({
+      id: '202',
+      name: 'Mortlake to Putney',
+      country: 'GB',
+      externalDistanceMeters: 6800,
+      geometrySource: 'gate-chain',
+      coordinates: [
+        { lat: 51.47, lng: -0.24 },
+        { lat: 51.48, lng: -0.22 },
+      ],
+    });
+    expect(route.tags).not.toContain('lake');
+  });
+
   it('does not add a status tag when rownative status is missing', () => {
     const route = routeService.importRouteFromRownative({
       id: '100',

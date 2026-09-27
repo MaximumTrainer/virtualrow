@@ -1,3 +1,4 @@
+import { waterBodyFromName } from '../utils/waterBodyFromName';
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
 import { WILLOWBROOK_ROUTE_ID } from '../components/rower3d/sceneryTrack';
 import {
@@ -91,6 +92,16 @@ export type KMLImportResult =
 
 
 // Data service for water routes
+/**
+ * A rownative import's water tag, from its name (#413). Returned as a tag
+ * string when the classifier finds one, else undefined so the `filter` drops
+ * it — the tag list does not grow an entry for `unknown` (AC4.2).
+ */
+const waterTagOrUndefined = (name: string): string | undefined => {
+  const type = waterBodyFromName(name);
+  return type === 'unknown' ? undefined : type;
+};
+
 export class RouteService {
   private routes: WaterRoute[] = [];
 
@@ -428,6 +439,11 @@ export class RouteService {
         sourceTag,
         `${GEOMETRY_SOURCE_TAG_PREFIX}${data.geometrySource}`,
         isGateChain ? OUTLINE_ONLY_TAG : undefined,
+        // The name is the only water signal rownative gives us (#413).
+        // Written here so the tag path in `inferRouteWaterBodyType` picks it
+        // up as it does any curated tag. `unknown` earns no tag — the list
+        // does not grow an entry for a guess (AC4.2).
+        waterTagOrUndefined(data.name),
       ].filter((tag): tag is string => Boolean(tag)),
       source: 'rownative',
       externalId: data.id,
