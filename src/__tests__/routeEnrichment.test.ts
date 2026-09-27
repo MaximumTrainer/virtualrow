@@ -616,3 +616,43 @@ describe('RouteEnrichmentService', () => {
     expect(enrichment.waterBodyType).toBe('canal');
   });
 });
+
+/**
+ * Issue #413 — rownative gives us the name and nothing about the water, so
+ * without this fallback every rownative import falls through to `unknown` and
+ * is drawn as a river channel.
+ */
+describe('createFallbackRouteEnrichment reads the water type from the name (#413)', () => {
+  const noWaterTags: string[] = ['rownative', 'imported', 'status:approved'];
+
+  it('lifts a lake course from a name where the tags say nothing (AC5.1, AC7.1)', () => {
+    const route: WaterRoute = { ...routeFixture, name: 'Regatta Lake', tags: [...noWaterTags] };
+    const enrichment = createFallbackRouteEnrichment(route);
+    expect(enrichment.waterBodyType).toBe('lake');
+    expect(enrichment.waterWidthMeters).toBe(45);
+  });
+
+  it('still treats Mortlake as a river the tags never mentioned (AC7.3)', () => {
+    const route: WaterRoute = {
+      ...routeFixture,
+      name: 'Mortlake to Putney',
+      tags: [...noWaterTags],
+    };
+    expect(createFallbackRouteEnrichment(route).waterBodyType).toBe('unknown');
+  });
+
+  it('lets an explicit tag win over the name (AC5.2)', () => {
+    const route: WaterRoute = { ...routeFixture, name: 'Regatta Lake', tags: ['river'] };
+    expect(createFallbackRouteEnrichment(route).waterBodyType).toBe('river');
+  });
+
+  it('still returns unknown for a name with no water word (AC5.3)', () => {
+    const route: WaterRoute = {
+      ...routeFixture,
+      name: 'Championship Course',
+      tags: [...noWaterTags],
+    };
+    expect(createFallbackRouteEnrichment(route).waterBodyType).toBe('unknown');
+  });
+});
+

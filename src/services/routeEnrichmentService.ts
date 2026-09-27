@@ -13,6 +13,7 @@ export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
 import { SCENE_SCALE } from '../utils/worldScale';
+import { waterBodyFromName } from '../utils/waterBodyFromName';
 
 export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
 const ROUTE_ENRICHMENT_CACHE_PREFIX = 'virtualrow:route-enrichment:';
@@ -487,12 +488,16 @@ const inferFallbackSceneryProfile = (route: WaterRoute): SceneryProfile => {
 };
 
 const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
+  // Tags are the curated signal: an explicit tag always wins over the name
+  // (AC5.2). rownative writes the classified type as a tag at import time
+  // (#413, AC4.1), so a course imported before this change reaches the name
+  // fallback below and is corrected in place — no re-import needed (AC5.1).
   if (route.tags.includes('canal')) return 'canal';
   if (route.tags.includes('stream')) return 'stream';
   if (route.tags.includes('lake')) return 'lake';
   if (route.tags.includes('reservoir')) return 'reservoir';
   if (route.tags.includes('river')) return 'river';
-  return 'unknown';
+  return waterBodyFromName(route.name);
 };
 
 export const createFallbackRouteEnrichment = (
