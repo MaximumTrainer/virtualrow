@@ -91,6 +91,14 @@ export const createBankGeometry = (
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
+  /**
+   * Distance from the waterline, in scene units, per vertex (#353).
+   *
+   * `0` on the inner edge and the bank's reach at that sample on the outer.
+   * A shader can then blend a wet-earth strip near the water into the grass
+   * further up without needing a separate mesh for the waterline.
+   */
+  const shoreDist: number[] = [];
 
   // Real elevations along the route (#202). Flat, or absent, leaves every
   // vertex exactly where it was before.
@@ -174,6 +182,10 @@ export const createBankGeometry = (
 
     uvs.push(0, t * 10);
     uvs.push(1, t * 10);
+
+    // Inner vertex sits on the waterline; the outer sits at the reach.
+    shoreDist.push(0);
+    shoreDist.push(Math.max(0, reaches[i] - waterHalfWidth));
     if (i < segments) {
       const base = i * 2;
       // Wound to match the side it is on.
@@ -196,6 +208,7 @@ export const createBankGeometry = (
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('shoreDist', new THREE.Float32BufferAttribute(shoreDist, 1));
   geometry.setIndex(indices);
   // A sloped bank lit by hardcoded (0,1,0) normals reads as flat, so the
   // relief would be invisible in anything but silhouette.
