@@ -5,6 +5,7 @@ import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG, type SceneConfig } from './themeConfig';
 import { skySunPosition } from './sunDirection';
 import { buildSkyEnvironment } from './skyEnvironment';
+import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { useThree } from '@react-three/fiber';
 import { IS_TEST_MODE } from './constants';
 import type { SkyConfig } from './themeConfig';
@@ -307,6 +308,21 @@ export const SkyEnvironment: React.FC<{
     if (IS_TEST_MODE) return;
     const texture = buildSkyEnvironment(gl, sky, sunPosition);
     if (!texture) return;
+     * Acquired through the shared cache (#418): the water is the other
+     * consumer, and both hold the same texture object. The PMREM convolution
+     * is paid once, and disposed when the last consumer releases.
+     *
+     * Still skipped under automation: even one convolution blocks the main
+     * thread for about four seconds on the software rasteriser CI draws with,
+     * which flakes specs whose `locator.evaluate` lands on it. Halving the
+     * cost by sharing was measured but not enough. The hemisphere and the
+     * sun — which the contrast floors measure — do not depend on this map,
+     * so what automation gives up is a specular refinement no assertion
+     * reads. Real hardware pays it in milliseconds, so users still get it.
+     */
+    if (IS_TEST_MODE) return;
+    const handle = acquireSkyEnvironment(gl, sky, sunPosition);
+    if (!handle.texture) return;
 
     // react-hooks/immutability: `scene` is the live three.js graph handed over
     // by useThree, not React state. Installing the environment map on it is
@@ -317,6 +333,13 @@ export const SkyEnvironment: React.FC<{
 
     return () => {
       texture.dispose();
+    scene.environment = handle.texture;
+    scene.environmentIntensity = intensity;
+
+    return () => {
+      // The water may still hold a handle to this texture (#418); the cache
+      // disposes it when the last consumer releases, not when this one does.
+      handle.release();
       scene.environment = null;
     };
   }, [gl, scene, sky, sunPosition, intensity]);
