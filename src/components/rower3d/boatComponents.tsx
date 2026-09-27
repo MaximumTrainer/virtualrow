@@ -2,10 +2,11 @@ import React, { useRef, useMemo, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { BOAT_GROUP_NAME, IS_TEST_MODE } from './constants';
+import { BOAT_GROUP_NAME, IS_TEST_MODE, resolvePerformanceMode } from './constants';
 import { OAR_LEVER_RATIO, strokePose } from './strokePose';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import { GLB_ROWER_NODES, dressScull } from './crewRig';
+import { applyMaterialPass } from './materialPass';
 import { createBoatNormalMap } from './helpers';
 import { CREW_URL, type Crew } from './crewModel';
 
@@ -340,6 +341,11 @@ const GltfScullBase: React.FC<{
   // it here means the cached source stays as it was loaded.
   const model = useMemo(() => {
     const clone = scene.clone(true);
+    // #354's material pass runs first — it authors the hull's carbon-weave
+    // clearcoat and the rower's sheen. `dressScull` then handles the rigger,
+    // the stays and the gates, which the pass leaves untouched: two-pass by
+    // design, since the mark on each material makes both idempotent.
+    applyMaterialPass(clone, { tier: resolvePerformanceMode() });
     dressScull(clone);
     return clone;
   }, [scene]);
