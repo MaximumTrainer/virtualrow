@@ -28,11 +28,22 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto'
  * Never zero, even at the bottom. The environment is what the flat-colour GLB
  * kit picks its sky tint up from, and with none of it the kit is the matte
  * plastic this issue is about.
+ *
+ * `high` dropped from 0.12 to 0.09 in #433. The three tiers' numbers were fit
+ * against the automation scene, which drops the PMREM sky map — so `high` was
+ * setting a strength for a term that was zero at measurement time. Under the
+ * shipping scene the sky map is present, and 0.12 pushed the water at high
+ * tier so far towards the sky's own colour that on dusk (a grey sky, a nearly
+ * black bank) the two collapsed into one another and the contrast classifier
+ * failed on that one combo — 14 of 15 shipping-scene cases passed, only
+ * high/dusk did not, at a bank-to-water distance of 15 RGB units where the
+ * classifier needs 40. Auto's 0.08 clears that combo cleanly; 0.09 keeps
+ * high a shade brighter than auto without paying the water back into the sky.
  */
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
   low: 0.05,
   auto: 0.08,
-  high: 0.12,
+  high: 0.09,
 };
 
 /**
