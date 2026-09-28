@@ -29,21 +29,20 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto'
  * kit picks its sky tint up from, and with none of it the kit is the matte
  * plastic this issue is about.
  *
- * `high` dropped from 0.12 to 0.09 in #433. The three tiers' numbers were fit
- * against the automation scene, which drops the PMREM sky map — so `high` was
- * setting a strength for a term that was zero at measurement time. Under the
- * shipping scene the sky map is present, and 0.12 pushed the water at high
- * tier so far towards the sky's own colour that on dusk (a grey sky, a nearly
- * black bank) the two collapsed into one another and the contrast classifier
- * failed on that one combo — 14 of 15 shipping-scene cases passed, only
- * high/dusk did not, at a bank-to-water distance of 15 RGB units where the
- * classifier needs 40. Auto's 0.08 clears that combo cleanly; 0.09 keeps
- * high a shade brighter than auto without paying the water back into the sky.
+ * `high` moves from the original 0.12 to 0.14 in #433, together with a
+ * matching lift to the dusk preset's `ambientIntensity` (0.9 → 1.05). The
+ * three tiers' numbers were fit against the automation scene, which drops
+ * the PMREM sky map — so under the shipping scene the water at `high`
+ * takes more sky than the numbers were calibrated for and the classifier
+ * used to lose the bank-water contrast at low sun. Raising `high` gives
+ * the water a little more of the sky's own colour so it moves away from a
+ * near-black bank rather than towards it; the twin lift on the dusk ambient
+ * carries the bank up a step at the preset both failures concentrated in.
  */
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
   low: 0.05,
   auto: 0.08,
-  high: 0.09,
+  high: 0.14,
 };
 
 /**
