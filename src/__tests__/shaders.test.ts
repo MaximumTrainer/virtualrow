@@ -185,7 +185,12 @@ describe('the scene’s GLSL parses', () => {
       const chunks = bankTriplanarChunks();
       const prelude = `${THREE_FRAGMENT_PRELUDE}\n${chunks.fragmentDeclarations}`;
 
-      expect(parseInMain(prelude, chunks.mapReplacement)).not.toThrow();
+      // The map and normal replacements land in the same main() one after the
+      // other; the map replacement declares `bankSlope` and `bankShore` that
+      // the normal replacement reads, so both parse together as one body.
+      expect(
+        parseInMain(prelude, `${chunks.mapReplacement}\n${chunks.normalReplacement}`),
+      ).not.toThrow();
     });
 
     it('carries the numbers the FR asked for', () => {
@@ -197,6 +202,18 @@ describe('the scene’s GLSL parses', () => {
       expect(chunks.mapReplacement).toContain('0.65');
       // FR4 macro noise at 64 m
       expect(chunks.mapReplacement).toContain('/ 64.0');
+    });
+
+    // #437: the normal replacement samples uGrassN/uEarthN triplanar, blends
+    // them by the same slope/shore weights as the albedo, and perturbs
+    // `normal` before lighting reads it.
+    it('samples the two normals triplanar and blends them (#437)', () => {
+      const chunks = bankTriplanarChunks();
+      expect(chunks.normalReplacement).toMatch(/bankTriplanar\(\s*uGrassN/);
+      expect(chunks.normalReplacement).toMatch(/bankTriplanar\(\s*uEarthN/);
+      expect(chunks.normalReplacement).toContain('bankSlope');
+      expect(chunks.normalReplacement).toContain('bankShore');
+      expect(chunks.normalReplacement).toContain('normal');
     });
   });
 

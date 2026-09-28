@@ -65,6 +65,10 @@ export const bankMaterial = (
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGrass = { value: grass.albedo };
     shader.uniforms.uEarth = { value: earth.albedo };
+    // #437: sample the normal maps `createDetailTexture` already returns, so
+    // grazing light picks up the tufts and clods the height noise carries.
+    shader.uniforms.uGrassN = { value: grass.normal };
+    shader.uniforms.uEarthN = { value: earth.normal };
     shader.vertexShader = chunks.vertexDeclarations + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
@@ -74,6 +78,13 @@ export const bankMaterial = (
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <map_fragment>',
       `#include <map_fragment>\n${chunks.mapReplacement}`,
+    );
+    // The bank has no bound `normalMap`, so three's own <normal_fragment_maps>
+    // is a no-op here; replace it with a triplanar sample of `uGrassN`/`uEarthN`
+    // that perturbs `normal` before lighting.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>\n${chunks.normalReplacement}`,
     );
   };
   // A distinct cache key so three does not confuse this program with any
