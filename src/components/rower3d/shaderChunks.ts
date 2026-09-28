@@ -2,6 +2,7 @@ import gerstnerSource from './shaders/gerstner.vert.glsl?raw';
 import waterSurfaceSource from './shaders/waterSurface.frag.glsl?raw';
 import foliageBillboardSource from './shaders/foliageBillboard.glsl?raw';
 import foliageSwaySource from './shaders/foliageSway.vert.glsl?raw';
+import bankTriplanarSource from './shaders/bankTriplanar.glsl?raw';
 
 /**
  * The GLSL this scene injects into three's shaders, read from files (#341).
@@ -83,6 +84,7 @@ const gerstner = splitChunks(gerstnerSource);
 const waterSurface = splitChunks(waterSurfaceSource);
 const foliageBillboard = splitChunks(foliageBillboardSource);
 const foliageSway = splitChunks(foliageSwaySource);
+const bankTriplanar = splitChunks(bankTriplanarSource);
 
 export interface GerstnerValues {
   /** Where the wave is sampled, in the mesh's own axes. */
@@ -146,4 +148,13 @@ export const foliageBillboardChunks = () => ({
 export const foliageSwayChunks = () => ({
   declarations: foliageSway.declarations,
   sway: foliageSway.sway,
+});
+
+/** The bank's triplanar grass/earth chunks (#430). No placeholders — the
+ *  tile size (0.5 m) and macro period (64 m) live in the GLSL itself. */
+export const bankTriplanarChunks = () => ({
+  vertexDeclarations: bankTriplanar.vertexDeclarations,
+  vertexAssign: bankTriplanar.vertexAssign,
+  fragmentDeclarations: bankTriplanar.fragmentDeclarations,
+  mapReplacement: bankTriplanar.mapReplacement,
 });

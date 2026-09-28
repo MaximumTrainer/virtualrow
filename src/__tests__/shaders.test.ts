@@ -7,6 +7,7 @@ import {
   waterSurfaceChunks,
   foliageBillboardChunks,
   foliageSwayChunks,
+  bankTriplanarChunks,
 } from '../components/rower3d/shaderChunks';
 import { WATER_FRESNEL_F0, WATER_FRESNEL_STRENGTH } from '../components/rower3d/helpers';
 import { countShaderErrors } from '../components/rower3d/shaderErrors';
@@ -169,6 +170,34 @@ describe('the scene’s GLSL parses', () => {
         chunks.sway,
       ),
     ).not.toThrow();
+  });
+
+  describe('the bank triplanar chunks (#430)', () => {
+    it('builds a valid vertex shader', () => {
+      const chunks = bankTriplanarChunks();
+      const prelude = `${THREE_VERTEX_PRELUDE}\nuniform mat4 modelMatrix;\n${chunks.vertexDeclarations}`;
+      const body = `vec3 transformed = position;\n${chunks.vertexAssign}`;
+
+      expect(parseInMain(prelude, body)).not.toThrow();
+    });
+
+    it('builds a valid fragment shader', () => {
+      const chunks = bankTriplanarChunks();
+      const prelude = `${THREE_FRAGMENT_PRELUDE}\n${chunks.fragmentDeclarations}`;
+
+      expect(parseInMain(prelude, chunks.mapReplacement)).not.toThrow();
+    });
+
+    it('carries the numbers the FR asked for', () => {
+      const chunks = bankTriplanarChunks();
+      // FR2 slope
+      expect(chunks.mapReplacement).toMatch(/smoothstep\(\s*0\.3\s*,\s*0\.7/);
+      // FR3 shore + wet-earth ×0.65
+      expect(chunks.mapReplacement).toMatch(/smoothstep\(\s*0\.0\s*,\s*2\.5/);
+      expect(chunks.mapReplacement).toContain('0.65');
+      // FR4 macro noise at 64 m
+      expect(chunks.mapReplacement).toContain('/ 64.0');
+    });
   });
 
   /**
