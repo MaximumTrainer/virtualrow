@@ -29,20 +29,22 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto'
  * kit picks its sky tint up from, and with none of it the kit is the matte
  * plastic this issue is about.
  *
- * `high` moves from the original 0.12 to 0.14 in #433, together with a
- * matching lift to the dusk preset's `ambientIntensity` (0.9 → 1.05). The
- * three tiers' numbers were fit against the automation scene, which drops
- * the PMREM sky map — so under the shipping scene the water at `high`
- * takes more sky than the numbers were calibrated for and the classifier
- * used to lose the bank-water contrast at low sun. Raising `high` gives
- * the water a little more of the sky's own colour so it moves away from a
- * near-black bank rather than towards it; the twin lift on the dusk ambient
- * carries the bank up a step at the preset both failures concentrated in.
+ * `high` moves from the original 0.12 to 0.24 across #433's retune, together
+ * with a matching lift to the dusk preset's `ambientIntensity` (0.9 → 1.05).
+ * The three tiers' numbers were fit against the automation scene, which drops
+ * the PMREM sky map — so under the shipping scene the water at `high` takes
+ * more sky than the numbers were calibrated for and the classifier used to
+ * lose the bank-water contrast at low sun. The shipping water shader at
+ * `high` samples the environment map for its reflection, and at dusk the
+ * sky is dim enough that the water read near-black and collapsed into the
+ * bank at 0.14; only the `high` tier is affected, so the lift is here rather
+ * than a change to the dusk sky. The twin lift on the dusk ambient carries
+ * the bank up a step at the preset the last failure concentrated in.
  */
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
   low: 0.05,
   auto: 0.08,
-  high: 0.14,
+  high: 0.24,
 };
 
 /**
