@@ -160,7 +160,11 @@ const PRESETS: Record<Conditions, Preset> = {
     sunColor: '#ff9a5a',
     ambientColor: '#6a7a9a',
     sunIntensity: 0.5,
-    ambientIntensity: 0.9,
+    // Lifted from 0.9 to 1.05 in #433 so the near-shade bank keeps enough
+    // green under a dusk sky to stay apart from the water in the shipping
+    // scene's contrast check. High-tier env carries the water side of that
+    // gap in `lightingPlan.ts`; this preset carries the bank side.
+    ambientIntensity: 1.05,
     turbidity: 6.5,
     fogColor: '#8a90b0',
     fogFar: 0.7,
