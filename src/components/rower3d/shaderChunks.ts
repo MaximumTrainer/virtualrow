@@ -150,11 +150,13 @@ export const foliageSwayChunks = () => ({
   sway: foliageSway.sway,
 });
 
-/** The bank's triplanar grass/earth chunks (#430). No placeholders — the
- *  tile size (0.5 m) and macro period (64 m) live in the GLSL itself. */
+/** The bank's triplanar grass/earth chunks (#430, extended for normals in
+ *  #437). No placeholders — the tile size (0.5 m) and macro period (64 m)
+ *  live in the GLSL itself. */
 export const bankTriplanarChunks = () => ({
   vertexDeclarations: bankTriplanar.vertexDeclarations,
   vertexAssign: bankTriplanar.vertexAssign,
   fragmentDeclarations: bankTriplanar.fragmentDeclarations,
   mapReplacement: bankTriplanar.mapReplacement,
+  normalReplacement: bankTriplanar.normalReplacement,
 });

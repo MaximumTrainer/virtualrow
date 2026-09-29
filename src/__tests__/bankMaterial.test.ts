@@ -43,7 +43,8 @@ describe('bankMaterial (#430)', () => {
       vertexShader:
         'placeholder-vertex\n#include <begin_vertex>\nplaceholder-vertex-end',
       fragmentShader:
-        'placeholder-fragment\n#include <map_fragment>\nplaceholder-fragment-end',
+        'placeholder-fragment\n#include <map_fragment>\n' +
+        '#include <normal_fragment_maps>\nplaceholder-fragment-end',
     };
     mat.onBeforeCompile!(
       shader as unknown as THREE.WebGLProgramParametersWithUniforms,
@@ -63,6 +64,65 @@ describe('bankMaterial (#430)', () => {
     expect(shader.fragmentShader).toContain('0.65');
     // FR4: macro noise at 64 m.
     expect(shader.fragmentShader).toContain('/ 64.0');
+  });
+
+  it('installs the normal maps and samples them triplanar at auto (#437)', () => {
+    resetDetailTextureCacheForTesting();
+    const mat = bankMaterial(theme, 'auto');
+
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader:
+        'placeholder-vertex\n#include <begin_vertex>\nplaceholder-vertex-end',
+      fragmentShader:
+        'placeholder-fragment\n#include <map_fragment>\n' +
+        '#include <normal_fragment_maps>\nplaceholder-fragment-end',
+    };
+    mat.onBeforeCompile!(
+      shader as unknown as THREE.WebGLProgramParametersWithUniforms,
+      {} as THREE.WebGLRenderer,
+    );
+
+    // FR1: the two normal uniforms are installed.
+    expect(shader.uniforms.uGrassN).toBeDefined();
+    expect(shader.uniforms.uEarthN).toBeDefined();
+    // FR2: each is sampled triplanar (same helper as the albedo) and the two
+    // are blended by the same slope weight before `<normal_fragment_maps>`.
+    expect(shader.fragmentShader).toContain('uGrassN');
+    expect(shader.fragmentShader).toContain('uEarthN');
+    expect(shader.fragmentShader).toMatch(/bankTriplanar\(\s*uGrassN/);
+    expect(shader.fragmentShader).toMatch(/bankTriplanar\(\s*uEarthN/);
+  });
+
+  it('leaves the shader alone at high past what auto installs (#437)', () => {
+    resetDetailTextureCacheForTesting();
+    const mat = bankMaterial(theme, 'high');
+
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader:
+        'placeholder-vertex\n#include <begin_vertex>\nplaceholder-vertex-end',
+      fragmentShader:
+        'placeholder-fragment\n#include <map_fragment>\n' +
+        '#include <normal_fragment_maps>\nplaceholder-fragment-end',
+    };
+    mat.onBeforeCompile!(
+      shader as unknown as THREE.WebGLProgramParametersWithUniforms,
+      {} as THREE.WebGLRenderer,
+    );
+
+    expect(shader.uniforms.uGrassN).toBeDefined();
+    expect(shader.uniforms.uEarthN).toBeDefined();
+  });
+
+  it('installs no normal maps at low (#437)', () => {
+    resetDetailTextureCacheForTesting();
+    const mat = bankMaterial(theme, 'low');
+
+    // Low returns a plain MeshStandardMaterial with no shader edit, so nothing
+    // installs uGrassN/uEarthN. onBeforeCompile stays the base no-op.
+    expect(mat.userData?.virtualrowBank).toBeUndefined();
+    expect(mat.normalMap).toBeNull();
   });
 
   it('names a custom program cache key so a swap does not miss', () => {

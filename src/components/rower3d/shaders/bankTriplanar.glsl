@@ -23,6 +23,8 @@ vBankShoreDist = shoreDist;
 // @chunk:fragmentDeclarations
 uniform sampler2D uGrass;
 uniform sampler2D uEarth;
+uniform sampler2D uGrassN;
+uniform sampler2D uEarthN;
 varying vec3 vBankWorldPos;
 varying vec3 vBankWorldNormal;
 varying float vBankShoreDist;
@@ -66,3 +68,19 @@ bankAlbedo = mix(bankWet, bankAlbedo, bankShore);
 float bankMacro = 0.85 + 0.25 * bankMacroNoise(vBankWorldPos.xz / 64.0);
 bankAlbedo *= bankMacro;
 diffuseColor.rgb *= bankAlbedo;
+
+// @chunk:normalReplacement
+// `<normal_fragment_maps>` samples a bound `normalMap` and perturbs `normal`;
+// replace it so the bank perturbs `normal` from the same triplanar
+// grass/earth blend the albedo uses (#437). The two tangent-space normals are
+// sampled with the same 0.5 m tiling and `abs(worldNormal)^2` weighting, then
+// mixed by the slope and shore weights so a wet-earth strip lights as earth.
+// The tangent space is approximated by the world-space perturbation itself —
+// the banks are near-horizontal at every pixel where this material shows, and
+// three's own `<normal_fragment_maps>` is a no-op here since no `normalMap` is
+// bound (the `USE_NORMALMAP` define is not set).
+vec3 bankGrassN = bankTriplanar(uGrassN, vBankWorldPos, vBankWorldNormal) * 2.0 - 1.0;
+vec3 bankEarthN = bankTriplanar(uEarthN, vBankWorldPos, vBankWorldNormal) * 2.0 - 1.0;
+vec3 bankBlendN = mix(bankEarthN, bankGrassN, bankSlope);
+bankBlendN = mix(bankEarthN, bankBlendN, bankShore);
+normal = normalize(normal + vec3(bankBlendN.x, 0.0, bankBlendN.y));
