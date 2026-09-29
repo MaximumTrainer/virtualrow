@@ -1244,14 +1244,6 @@ function App() {
                     })()}
                   </div>
 
-                  <div className="route-tags">
-                    {selectedRoute.tags.map((tag) => (
-                      <span key={tag} className="tag">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
                   {selectedRouteEnrichmentLoading && (
                     <p className="route-enrichment-status">Loading route data…</p>
                   )}

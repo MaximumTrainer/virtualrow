@@ -740,22 +740,6 @@ body {
   border-color: transparent;
 }
 
-.route-info-overlay .route-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2xs);
-  pointer-events: none;
-}
-
-.route-info-overlay .route-tags .tag {
-  padding: 0.1rem var(--space-sm);
-  background: var(--color-bg-secondary);
-  border-radius: var(--radius-control);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
 /* ============================================================================
    ROUTES LIST — lives on the Routes screen (issue #219, R3)
    ============================================================================ */

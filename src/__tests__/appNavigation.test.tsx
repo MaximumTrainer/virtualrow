@@ -263,6 +263,21 @@ describe('default route (issue #219, R6)', () => {
 
     expect(container.querySelector('.route-info-overlay h2')).toHaveTextContent('Willowbrook River');
   });
+
+  // #442: the pre-workout main screen used to render `route.tags` as a strip
+  // of raw pill chips (`scenic`, `meadow`, `rownative`, `status:established`,
+  // `outline-only`, …) between the meta-badges and the ghost picker. The
+  // strings were a mix of curated labels, scenery hints and internal
+  // provenance flags — noise without the same actionable content the
+  // meta-badges already carry — so the strip is gone, but the `WaterRoute.tags`
+  // field, the search filter, the scenery inference and the provenance
+  // fallback all keep reading it.
+  it('AC1 (#442): no chip strip of raw route tags appears on the main screen', () => {
+    const { container } = render(<App />);
+
+    expect(container.querySelector('.route-info-overlay h2')).toHaveTextContent('Willowbrook River');
+    expect(container.querySelector('.route-tags')).toBeNull();
+  });
 });
 
 /* ==========================================================================
