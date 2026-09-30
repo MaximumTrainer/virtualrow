@@ -1,5 +1,5 @@
 {
-  "_about": "Seconds each (project, spec file) took on its first attempt on windows-latest, the slowest runner, in run 35855541966 on main (858b45b). scripts/e2e-shards.mjs packs CI shards by these. Refresh when a spec's cost changes a lot; a spec missing here is weighed at DEFAULT_UNIT_SECONDS.",
+  "_about": "Seconds each (project, spec file) took on its first attempt on windows-latest, the slowest runner. scripts/e2e-shards.mjs packs CI shards by these. Refresh when a spec's cost changes a lot; a spec missing here is weighed at DEFAULT_UNIT_SECONDS. Baseline from run 35855541966 on main (858b45b); shipping-scene, shipping-scene-contrast, intervals-login and load-todays-workout added from later observations (#445) after shard 3 timed out on their default weight.",
   "seconds": {
     "default:activity-upload.spec.ts": 86,
     "default:auth.spec.ts": 20,
@@ -7,7 +7,9 @@
     "default:crew-model-loading.spec.ts": 69,
     "default:default-route-performance.spec.ts": 320,
     "default:gl-context-budget.spec.ts": 75,
+    "default:intervals-login.spec.ts": 20,
     "default:kml-projection.spec.ts": 23,
+    "default:load-todays-workout.spec.ts": 20,
     "default:login-integration.spec.ts": 8,
     "default:oar-clearance.spec.ts": 124,
     "default:pm5-power.spec.ts": 20,
@@ -27,9 +29,10 @@
     "default:scene-quality-match.spec.ts": 71,
     "default:scene-telemetry.spec.ts": 19,
     "default:scenery-kit-budgets.spec.ts": 129,
+    "default:shipping-scene-contrast.spec.ts": 600,
+    "default:shipping-scene.spec.ts": 192,
     "default:signed-out-test-drive.spec.ts": 96,
     "default:sim-ports.spec.ts": 6,
-    "default:structured-workout.spec.ts": 10,
     "default:virtualrow.spec.ts": 81,
     "default:webgl-context-recovery.spec.ts": 142,
     "default:world-scale.spec.ts": 37,
