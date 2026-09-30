@@ -1,49 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { Decoder, Stream } from '@garmin/fitsdk';
 import { encodeSession, FIT_EPOCH_OFFSET_SECONDS } from '../services/fitEncoderService';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import { FIXTURE_START as START, makeSample, makeSession } from './__helpers__/fitFixture';
 
 /**
  * The encoder's primary gate (issue #221, AC2.2): every assertion here goes
  * through Garmin's own `Decoder`, so a bug in our writer cannot be masked by a
  * matching bug in our reader. The SDK is a devDependency — none of it ships.
+ *
+ * `makeSample` / `makeSession` moved to `__helpers__/fitFixture.ts` (issue
+ * #446, FR1) so the round-trip integration test and this file share one
+ * factory.
  */
-
-const START = new Date('2026-03-14T08:00:00Z');
-
-function makeSample(t: number, overrides: Partial<ActivitySample> = {}): ActivitySample {
-  return {
-    t,
-    distance: t * 4,
-    pace: 125,
-    power: 180,
-    cadence: 24,
-    heartRate: 132,
-    lat: 51.5 + t * 0.0001,
-    lng: -0.9 + t * 0.0002,
-    ...overrides,
-  };
-}
-
-function makeSession(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
-  return {
-    id: '1773475200000',
-    routeId: 'r1',
-    routeName: 'Willowbrook River',
-    startTime: START,
-    endTime: new Date(START.getTime() + 10_000),
-    duration: 10,
-    distance: 36,
-    averagePace: 125,
-    calories: 12,
-    splits: [],
-    isActive: false,
-    heartRateAvg: 132,
-    heartRateMax: 147,
-    samples: Array.from({ length: 10 }, (_, t) => makeSample(t)),
-    ...overrides,
-  };
-}
 
 /**
  * Decode with the SDK, asserting the file is intact on the way through.

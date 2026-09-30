@@ -139,8 +139,18 @@ export default defineConfig({
         // the rule above, branches and functions are each more than a point
         // clear of the next integer (1.14 and 1.16), so both move up; lines
         // are 0.60 past 93 and stay.
-        lines: 92,
-        statements: 92,
+        //
+        // #446 added the FIT upload round-trip test and its byte-stable
+        // fixture, reaching every remaining path in `fitEncoderService.ts`
+        // that the unit test's short-session sample missed (three-lap laps
+        // header, split-derived lap durations, the 1250-record path). The
+        // reading is 94.04 / 86.83 / 90.98. Lines and statements are each
+        // more than a point clear of the next integer (2.04 clear of 92), so
+        // both move up; branches (1.83 clear) and functions (1.98 clear) are
+        // less than a point clear of their next integer once ratcheted, so
+        // both stay.
+        lines: 93,
+        statements: 93,
         branches: 85,
         functions: 89,
         // boatComponents moved on every axis when #322 took the physics engine

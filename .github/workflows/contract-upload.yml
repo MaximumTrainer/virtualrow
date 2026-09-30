@@ -1,0 +1,47 @@
+# Nightly live intervals.icu FIT upload contract check (issue #446, FR5).
+#
+# The mocked E2E covers the request shape, the round-trip test covers the
+# encoder's semantics — this job is the third leg: a real POST to a real
+# intervals.icu account, from the fixture the encoder produces today, deleted
+# again in the same run. A silent regression in the FIT wire format or the
+# multipart shape is caught within 24 h.
+#
+# Skipped on forks — the required secrets aren't available there and the job
+# would fail on missing env vars. Runs at 04:17 UTC daily to avoid the working
+# day, matching the shape of `route-stress.yml`.
+
+name: FIT Upload Contract Check (scheduled)
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-upload:
+    # Forks don't get the secrets; skip so the job doesn't fail red on every
+    # fork PR's schedule inheritance.
+    if: github.repository == 'MaximumTrainer/virtualrow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the live FIT upload contract check
+        env:
+          INTERVALS_ICU_CONTRACT_CHECK: '1'
+          INTERVALS_ICU_TEST_API_KEY: ${{ secrets.INTERVALS_ICU_TEST_API_KEY }}
+          INTERVALS_ICU_TEST_ATHLETE_ID: ${{ secrets.INTERVALS_ICU_TEST_ATHLETE_ID }}
+        run: npm run test:contract:upload
+        timeout-minutes: 5
