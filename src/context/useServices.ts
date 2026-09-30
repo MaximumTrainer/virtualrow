@@ -10,7 +10,6 @@ import { createContext, useContext } from 'react';
 import type { Services } from '../ports';
 import { workoutService } from '../services/workoutService';
 import { routeService } from '../services/routeService';
-import { workoutGeneratorService } from '../services/workoutGeneratorService';
 import { bluetoothService } from '../services/bluetoothService';
 import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
 import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
@@ -43,7 +42,6 @@ export function pickRowerTargets(source: 'simulator' | 'ftms' | 'pm5'): RowerTar
 export const defaultServices: Services = {
   workoutService,
   routeService,
-  workoutGeneratorService,
   pm5BluetoothService: bluetoothService,
   ftmsBluetoothService,
   heartRateBluetoothService,

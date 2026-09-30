@@ -19,7 +19,6 @@ import type {
 import type { FTMSBluetoothService } from '../services/ftmsBluetoothService';
 import type { HeartRateBluetoothService } from '../services/heartRateBluetoothService';
 import type { RouteService } from '../services/routeService';
-import type { WorkoutGeneratorService } from '../services/workoutGeneratorService';
 import type { WorkoutService } from '../services/workoutService';
 import type { AuthService } from '../services/authService';
 import type { RownativeService } from '../services/rownativeService';
@@ -73,29 +72,13 @@ export type RoutePort = Pick<
   | 'findRouteByRownativeId'
 >;
 
-/** Port for the structured-workout generator. */
-export type WorkoutGeneratorPort = Pick<
-  WorkoutGeneratorService,
-  | 'getAllWorkouts'
-  | 'getWorkoutById'
-  | 'addWorkout'
-  | 'startWorkout'
-  | 'endWorkout'
-  | 'updateProgress'
-  | 'getCurrentProgress'
-  | 'getCurrentWorkout'
-  | 'getExpandedCurrentSegments'
-  | 'expandSegments'
-  | 'getSpeedAdjustmentFactor'
-  | 'importFromIntervalsICU'
-  | 'resumeAfterGap'
->;
-
 /**
  * Port for the athlete's planned workouts on intervals.icu.
  *
  * Reached with the OAuth access token a signed-in rower already has, so the
- * calendar is available without asking them for an API key (#67).
+ * calendar is available without asking them for an API key (#67 and #445 —
+ * this port is now the only way in, the local library was retired with the
+ * `workoutGeneratorService` it lived in).
  */
 export type IntervalsIcuWorkoutPort = Pick<
   IntervalsIcuWorkoutService,
@@ -220,7 +203,6 @@ export type AudioPort = Pick<
 export interface Services {
   workoutService: WorkoutPort;
   routeService: RoutePort;
-  workoutGeneratorService: WorkoutGeneratorPort;
   intervalsIcuWorkoutService: IntervalsIcuWorkoutPort;
   pm5BluetoothService: PM5BluetoothPort;
   ftmsBluetoothService: FTMSBluetoothPort;

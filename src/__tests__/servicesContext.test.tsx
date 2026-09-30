@@ -74,7 +74,6 @@ describe('ServicesProvider / useServices', () => {
     const expected: Array<keyof Services> = [
       'workoutService',
       'routeService',
-      'workoutGeneratorService',
       'pm5BluetoothService',
       'ftmsBluetoothService',
       'heartRateBluetoothService',
