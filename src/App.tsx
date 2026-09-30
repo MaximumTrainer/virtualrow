@@ -21,6 +21,7 @@ import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
+import { debugPreferencesStore } from './services/debugPreferencesStore';
 import { useAuth } from './context/useAuth';
 import { resolveCrew, effectiveCrewPreference, CREW_URL } from './components/rower3d/crewModel';
 import { RouteLoadingBar } from './components/RouteLoadingBar';
@@ -169,6 +170,12 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // Signed-in athletes don't see the demo-row CTA on the main flow (#453);
+  // this toggle in the debug panel puts it back for testing and dogfooding,
+  // persisted per browser so a reload doesn't fight a tester (FR3, FR4).
+  const [showDemoCtaOverride, setShowDemoCtaOverride] = useState(() =>
+    debugPreferencesStore.getShowDemoCtaOverride(),
+  );
   // The river guides draw the channel centreline and its water edges (#268).
   // Given their own switch so they can be turned off without losing the rest of
   // the debug window (#270).
@@ -479,9 +486,21 @@ function App() {
    * hardware. Offered signed-in as well as signed-out (issue #219, AC7.2) — the
    * session is still flagged as a demo and still not recorded as a real workout.
    */
+  // The demo CTA is offered to guests (issue #219 AC7.2), and to Playwright
+  // regardless of sign-in, so existing demo specs stay green (#453 D4, FR7).
+  // Signed-in athletes only see it when the debug-panel override is on
+  // (FR1, FR3). `handleStartDemo` guards the same gate so a future deep link
+  // or shortcut cannot bypass it (FR5).
+  const demoCtaVisible =
+    !isAuthenticated ||
+    !user ||
+    !!window.__PLAYWRIGHT_TESTING ||
+    showDemoCtaOverride;
+
   const handleStartDemo = useCallback(() => {
     if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
     if (!selectedRoute) return;
+    if (!demoCtaVisible) return;
     isStartingSessionRef.current = true;
     try {
       setIsDemoMode(true);
@@ -507,7 +526,7 @@ function App() {
     } finally {
       isStartingSessionRef.current = false;
     }
-  }, [isGuestSession, isWorkoutActive, selectedRoute]);
+  }, [demoCtaVisible, isGuestSession, isWorkoutActive, selectedRoute]);
 
   const stopDemoDevices = useCallback(() => {
     pm5Simulator.stop();
@@ -1317,20 +1336,24 @@ function App() {
                     Change route
                   </button>
 
-                  {/* Offered to everyone, not only guests (issue #219, AC7.2). */}
-                  <div className="demo-row-cta">
-                    <button
-                      className="btn btn-try-demo"
-                      onClick={handleStartDemo}
-                      type="button"
-                    >
-                      ▶ Try a demo row — no rowing machine needed
-                    </button>
-                    <p className="demo-row-note">
-                      Rows this route on simulated rower and heart-rate data, so you can see how it
-                      feels before connecting anything.
-                    </p>
-                  </div>
+                  {/* Offered to guests always (issue #219 AC7.2) and to
+                      signed-in athletes only via the debug-panel override
+                      (#453 FR1, FR3, FR7). */}
+                  {demoCtaVisible && (
+                    <div className="demo-row-cta">
+                      <button
+                        className="btn btn-try-demo"
+                        onClick={handleStartDemo}
+                        type="button"
+                      >
+                        ▶ Try a demo row — no rowing machine needed
+                      </button>
+                      <p className="demo-row-note">
+                        Rows this route on simulated rower and heart-rate data, so you can see how it
+                        feels before connecting anything.
+                      </p>
+                    </div>
+                  )}
 
                   <GraphicsQualityPicker
                     quality={graphics.quality}
@@ -1666,6 +1689,24 @@ function App() {
             <button className="debug-close-btn" onClick={() => setDebugMode(false)}>✕</button>
           </div>
           
+          {/* Session-flow overrides (#453 FR6). Sits above PM5 Simulator so
+              a tester finds it before scrolling. */}
+          <div className="debug-section">
+            <h5>Session</h5>
+            <label className="debug-toggle-row">
+              <input
+                type="checkbox"
+                checked={showDemoCtaOverride}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setShowDemoCtaOverride(next);
+                  debugPreferencesStore.setShowDemoCtaOverride(next);
+                }}
+              />
+              <span>Show demo-row control on the main screen (signed in)</span>
+            </label>
+          </div>
+
           {/* PM5 Simulator Controls */}
           <div className="debug-section debug-simulator-section">
             <h5>PM5 Simulator</h5>

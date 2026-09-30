@@ -357,11 +357,18 @@ describe('demo row (issue #219, R7)', () => {
     expect(demo.closest('.debug-info-panel')).toBeNull();
   });
 
-  it('AC7.2: is offered to signed-in users too', () => {
+  it('AC7.2 (superseded by #453): is NOT offered to signed-in users by default', () => {
+    // #219 AC7.2 originally offered the demo row to signed-in users too;
+    // #453 narrows that — a signed-in athlete has committed to real hardware
+    // and a real intervals.icu account, so the demo control is now hidden
+    // for them unless flipped back on from the debug panel. The full gate is
+    // covered in `demoCtaVisibility.test.tsx`.
     mockSignedIn();
     render(<App />);
 
-    expect(screen.getByRole('button', { name: /try a demo row/i })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: /try a demo row/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
