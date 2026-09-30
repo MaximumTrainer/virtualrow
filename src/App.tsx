@@ -22,7 +22,7 @@ import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { useAuth } from './context/useAuth';
-import { resolveCrew, CREW_URL } from './components/rower3d/crewModel';
+import { resolveCrew, effectiveCrewPreference, CREW_URL } from './components/rower3d/crewModel';
 import { RouteLoadingBar } from './components/RouteLoadingBar';
 import { useRouteLoadProgress } from './hooks/useRouteLoadProgress';
 import { isGlbSceneryEnabled } from './components/rower3d/sceneryAssets';
@@ -414,7 +414,7 @@ function App() {
   // precisely so App can name the file without pulling the 3D bundle in.
   const routeLoadProgress = useRouteLoadProgress(
     currentView === 'workout' && isWorkoutActive,
-    CREW_URL[resolveCrew(user?.gender, crew.preference)],
+    CREW_URL[resolveCrew(user?.gender, effectiveCrewPreference(user?.gender, crew.preference))],
   );
 
   const handleStartWorkout = () => {
@@ -1312,10 +1312,27 @@ function App() {
                     onVolume={handleSoundVolume}
                   />
 
-                  <CrewPicker
-                    preference={crew.preference}
-                    onChange={crew.setPreference}
-                  />
+                  {/* Signed-in athletes whose intervals.icu profile carries a
+                      `sex` read the rower from that profile alone — the picker
+                      is only for guests, demo rows and profiles without the
+                      field (issue #443, keeps #232's fix for the last case). */}
+                  {!user?.gender ? (
+                    <CrewPicker
+                      preference={crew.preference}
+                      onChange={crew.setPreference}
+                    />
+                  ) : (
+                    <p className="crew-profile-hint" data-testid="crew-profile-hint">
+                      Rower matches your intervals.icu profile ·{' '}
+                      <a
+                        href="https://intervals.icu/settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Update on intervals.icu ↗
+                      </a>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1544,7 +1561,7 @@ function App() {
                       debugMode={debugMode}
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
-                      crew={resolveCrew(user?.gender, crew.preference)}
+                      crew={resolveCrew(user?.gender, effectiveCrewPreference(user?.gender, crew.preference))}
                       ghost={ghostSource}
                       elapsedSecondsRef={elapsedSecondsRef}
                       audio={audioService}

@@ -1383,6 +1383,19 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Shown in place of the CrewPicker for a signed-in athlete whose intervals.icu
+   profile carries a `sex` (issue #443). One line, no controls, plain text. */
+.crew-profile-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.crew-profile-hint a {
+  color: var(--color-text-secondary);
+}
+
 /* ============================================================================
    DEBUG PANEL — dev affordance, kept dark so it reads as "not the app"
    ============================================================================ */

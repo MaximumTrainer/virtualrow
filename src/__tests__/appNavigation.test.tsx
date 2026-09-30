@@ -21,9 +21,9 @@ afterAll(() => uninstallCanvas());
 
 const ATHLETE_ID = 'i12345';
 
-function signedIn(id = ATHLETE_ID): AuthContextValue {
+function signedIn(id = ATHLETE_ID, gender?: 'male' | 'female'): AuthContextValue {
   return {
-    user: { id, name: 'Test User', email: 'test@example.com' },
+    user: { id, name: 'Test User', email: 'test@example.com', gender },
     isAuthenticated: true,
     isLoading: false,
     authError: null,
@@ -35,8 +35,8 @@ function signedIn(id = ATHLETE_ID): AuthContextValue {
   };
 }
 
-function mockSignedIn(id = ATHLETE_ID) {
-  vi.spyOn(UseAuth, 'useAuth').mockReturnValue(signedIn(id));
+function mockSignedIn(id = ATHLETE_ID, gender?: 'male' | 'female') {
+  vi.spyOn(UseAuth, 'useAuth').mockReturnValue(signedIn(id, gender));
 }
 
 /** Walk to the Routes screen through the header nav, as a user would. */
@@ -277,6 +277,71 @@ describe('default route (issue #219, R6)', () => {
 
     expect(container.querySelector('.route-info-overlay h2')).toHaveTextContent('Willowbrook River');
     expect(container.querySelector('.route-tags')).toBeNull();
+  });
+});
+
+/* ==========================================================================
+   #443 — the CrewPicker is for guests / demo rows / signed-in athletes with
+   no intervals.icu `sex`; a signed-in athlete whose gender is known reads
+   the rower from their profile without a separate control.
+   ========================================================================== */
+describe('Rower panel (issue #443)', () => {
+  it('AC1: hidden for a signed-in athlete whose intervals.icu profile has a sex', () => {
+    mockSignedIn(ATHLETE_ID, 'female');
+
+    render(<App />);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Rower appearance' })).toBeNull();
+  });
+
+  it('AC1: hidden for a male-gendered signed-in athlete too', () => {
+    mockSignedIn(ATHLETE_ID, 'male');
+
+    render(<App />);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Rower appearance' })).toBeNull();
+  });
+
+  it('AC3: still shown to a signed-in athlete whose profile has no sex', () => {
+    mockSignedIn(ATHLETE_ID, undefined);
+
+    render(<App />);
+
+    expect(screen.getByRole('radiogroup', { name: 'Rower appearance' })).toBeInTheDocument();
+  });
+
+  it('AC4: still shown to a signed-out visitor', () => {
+    render(<App />);
+
+    expect(screen.getByRole('radiogroup', { name: 'Rower appearance' })).toBeInTheDocument();
+  });
+
+  it('AC5: shows a "matches your intervals.icu profile" hint with a link to settings', () => {
+    mockSignedIn(ATHLETE_ID, 'female');
+
+    render(<App />);
+
+    const hint = screen.getByTestId('crew-profile-hint');
+    expect(hint).toHaveTextContent(/intervals\.icu/i);
+    const link = within(hint).getByRole('link', { name: /intervals\.icu/i });
+    expect(link).toHaveAttribute('href', 'https://intervals.icu/settings');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
+  });
+
+  it('AC5: the hint is absent for a signed-out visitor', () => {
+    render(<App />);
+
+    expect(screen.queryByTestId('crew-profile-hint')).toBeNull();
+  });
+
+  it('AC5: the hint is absent for a signed-in athlete without a known sex', () => {
+    mockSignedIn(ATHLETE_ID, undefined);
+
+    render(<App />);
+
+    expect(screen.queryByTestId('crew-profile-hint')).toBeNull();
   });
 });
 

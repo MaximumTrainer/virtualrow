@@ -12,9 +12,11 @@ export interface CrewPickerProps {
 /**
  * Lets a rower choose who is in the boat (#232).
  *
- * The scene takes the rower's gender from their intervals.icu profile, which
- * works for a signed-in athlete who filled that in. A guest, a demo row, or a
- * profile without the field was given the male model and no say in it.
+ * Since #443 this only renders for guests, demo rows and signed-in athletes
+ * whose intervals.icu profile has no `sex` field — an athlete whose profile
+ * carries a `sex` reads the rower from that profile alone and gets a short
+ * hint pointing at their intervals.icu settings instead. The picker itself is
+ * otherwise unchanged and still writes `virtualrow:crew` for the guest case.
  */
 export const CrewPicker: React.FC<CrewPickerProps> = ({ preference, onChange }) => (
   <fieldset className="graphics-quality">
