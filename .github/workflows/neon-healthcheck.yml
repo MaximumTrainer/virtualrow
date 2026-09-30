@@ -8,8 +8,11 @@
 # single "ok" or "fail" line; the connection string, host and query results
 # are never printed (NFR-S4 / NFR6).
 #
-# Runs weekly and on manual dispatch. On forks it silently skips: the secret
-# is not present, so there is nothing to check.
+# Runs weekly and on manual dispatch. On forks and while the Neon project /
+# secret have not yet been provisioned, the job SKIPS with a `::warning::`
+# annotation naming the missing secret — main stays green, but the warning
+# is visible on every scheduled run until Phase 1 of #441 is done. Once a
+# URL is present, the TLS and channel-binding assertions are hard-red.
 
 name: Neon healthcheck
 
@@ -39,17 +42,26 @@ jobs:
       - name: Install pg client
         run: npm install --no-save --no-audit --no-fund pg@8.13.0
 
-      - name: Refuse when the secret is missing
+      - name: Check whether the Neon secret is configured
+        id: gate
         env:
           NEON_CI_READONLY_URL: ${{ secrets.NEON_CI_READONLY_URL }}
         run: |
+          # When the secret is absent (Phase 1 of #441 not yet done, or a
+          # fork), skip the live check with a visible warning annotation.
+          # Main stays green, but the warning surfaces on every scheduled
+          # run until Dan populates the secret.
           if [ -z "${NEON_CI_READONLY_URL:-}" ]; then
-            echo "fail: NEON_CI_READONLY_URL is not set on this repository"
-            exit 1
+            echo "::warning title=Neon healthcheck skipped::NEON_CI_READONLY_URL is not set on this repository — see docs/postgres.md Phase 1"
+            echo "skip: NEON_CI_READONLY_URL is not set on this repository"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          # Sanity-check the URL shape WITHOUT printing it. Only the two
-          # required parameters are inspected; the connection string itself
-          # never reaches the log.
+          # URL is present, so its shape must be right — a URL that talks
+          # to Neon without verify-full or channel_binding IS a real
+          # security problem, and this step goes red (AC11 / AC12).
+          # Only the two required parameters are inspected; the connection
+          # string itself never reaches the log.
           case "$NEON_CI_READONLY_URL" in
             *"sslmode=verify-full"*) : ;;
             *) echo "fail: NEON_CI_READONLY_URL is missing sslmode=verify-full"; exit 1;;
@@ -59,8 +71,10 @@ jobs:
             *) echo "fail: NEON_CI_READONLY_URL is missing channel_binding=require"; exit 1;;
           esac
           echo "ok: NEON_CI_READONLY_URL declares verify-full + channel_binding"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Connect, query, assert TLS posture
+        if: steps.gate.outputs.configured == 'true'
         env:
           NEON_CI_READONLY_URL: ${{ secrets.NEON_CI_READONLY_URL }}
         run: node .github/scripts/neon-healthcheck.mjs

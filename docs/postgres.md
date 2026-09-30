@@ -96,7 +96,7 @@ Each `*_URL_*` secret **must** include both `sslmode=verify-full` **and**
 
 | Workflow | Reads | Purpose |
 |---|---|---|
-| `.github/workflows/neon-healthcheck.yml` | `NEON_CI_READONLY_URL` | Weekly `SELECT 1`; refuses to run if the secret is missing or lacks the TLS parameters |
+| `.github/workflows/neon-healthcheck.yml` | `NEON_CI_READONLY_URL` | Weekly `SELECT 1`. Skips green with a `::warning::` annotation while the secret is unset (main stays green during Phase 1); fails red once a URL is present but lacks the TLS parameters or the live TLS posture is wrong |
 | (future) `db-migrate.yml` (#37) | `NEON_MIGRATION_URL_MAIN` OR `NEON_MIGRATION_URL_DEV` | Applies pending migrations against the target branch |
 | (future) proxy build (#441 D4 follow-up) | `NEON_DATABASE_URL_MAIN` | Server-side only — never reaches the browser |
 

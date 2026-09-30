@@ -74,8 +74,19 @@ describe('neon-healthcheck.yml (#441, NFR-S4 / AC13)', () => {
     expect(WORKFLOW).not.toMatch(/GITHUB_ENV[^\n]*NEON_CI_READONLY_URL/);
   });
 
-  it('refuses to run when the secret is missing or lacks the TLS params (AC4/AC11/AC12)', () => {
-    expect(WORKFLOW).toMatch(/NEON_CI_READONLY_URL is not set/);
+  it('skips (not red-fails) when the secret is missing, with a visible warning annotation (AC4)', () => {
+    // Main must stay green while Phase 1 of #441 is pending, so a missing
+    // secret is a skip with a `::warning::` annotation naming the secret
+    // — never a red fail. The TLS-param assertions still fail red when a
+    // URL IS present (below).
+    expect(WORKFLOW).toMatch(/::warning[^:]*::NEON_CI_READONLY_URL is not set/);
+    expect(WORKFLOW).toMatch(/configured=false/);
+    expect(WORKFLOW).toMatch(/configured=true/);
+    // The connect step is gated on that output, so it does not run on a skip.
+    expect(WORKFLOW).toMatch(/if:\s*steps\.gate\.outputs\.configured\s*==\s*'true'/);
+  });
+
+  it('fails red when a URL is present but lacks the TLS params (AC11/AC12)', () => {
     expect(WORKFLOW).toMatch(/missing sslmode=verify-full/);
     expect(WORKFLOW).toMatch(/missing channel_binding=require/);
   });
