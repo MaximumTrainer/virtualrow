@@ -34,6 +34,12 @@ npm run test:visual      # Visual baselines (#340). Compares one frozen frame pe
 npm run test:visual:update # Re-record those baselines (CI only, see above)
 npm run verify           # Lint + type-check + full unit suite (what pre-push runs)
 npm run test:contract    # Live check against the rownative mirror (network, opt-in)
+npm run test:contract:upload # Live check that intervals.icu accepts our FIT bytes
+                         #   (network, opt-in behind INTERVALS_ICU_CONTRACT_CHECK=1
+                         #   + INTERVALS_ICU_TEST_API_KEY + INTERVALS_ICU_TEST_ATHLETE_ID;
+                         #   the created activity is deleted in a finally). #446.
+npm run test:fit-csv     # Optional FIT structural gate via Garmin's FitCSVTool.jar
+                         #   (tools/FitCSVTool.jar; skipped when the JAR or java is missing). #446.
 npm run verify:staged    # TDD guard alone, against the current git index
 npm run hooks:install    # Point git at .githooks (also runs on npm install)
 ```
@@ -71,6 +77,7 @@ playwright/       E2E tests, mock BLE, simulators
   pin the newly measured file with a per-file threshold and say so in the config comment (#343).
 - **BLE frames match parsers**: test frames in mock-bluetooth.js and Playwright specs must match the wire format in `src/vendor/pm5-base.js` and `src/services/ftmsBluetoothService.ts`.
 - **The FIT encoder is ours**: `fitEncoderService` is hand-written and lazy-loaded. `@garmin/fitsdk` is a **devDependency** used only by the round-trip decode test — never import it from `src/`.
+- **FIT / intervals.icu upload verification**: when a PR touches `fitEncoderService.ts`, `intervalsIcuActivityService.ts`, `authService.ts` or `SessionSummary.tsx`'s upload button, walk [docs/fit-upload-verification.md](docs/fit-upload-verification.md) end-to-end against a real intervals.icu account and attach the activity URL + a screenshot + the `external_id` to the PR. #446.
 
 ## Shared agent skills
 

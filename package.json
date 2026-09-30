@@ -17,6 +17,8 @@
     "coverage": "vitest run --coverage",
     "pretest:e2e": "npx playwright install --with-deps",
     "test:contract": "node scripts/run-contract-check.mjs",
+    "test:contract:upload": "node scripts/run-fit-upload-contract-check.mjs",
+    "test:fit-csv": "node scripts/run-fit-csv-check.mjs",
     "test:e2e": "npx playwright test --config=playwright/playwright.config.ts",
     "test:e2e:ci": "npx playwright test --config=playwright/playwright.config.ci.ts --retries=2",
     "test:e2e:endurance": "npx playwright test --config=playwright/playwright.config.endurance.ts",

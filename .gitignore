@@ -93,6 +93,11 @@ src/wasm-pkg/*.wasm
 
 .copilot-specs-cache/
 
+# FIT structural-gate JAR is kept out of the repo (Garmin licence — issue #446, D5(a)).
+# `scripts/run-fit-csv-check.mjs` skips when the JAR or its CSV output isn't present.
+tools/FitCSVTool.jar
+tools/sample-session*
+
 # Claude Code agent state — worktrees and local settings are per-machine;
 # settings.json is tracked deliberately as shared permissions.
 .claude/*
