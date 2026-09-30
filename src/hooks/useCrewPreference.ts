@@ -7,7 +7,12 @@ import type { Crew } from '../components/rower3d/crewModel';
  * `auto` takes the gender from the intervals.icu profile, which is right for a
  * signed-in athlete who filled it in. Everyone else — guests, demo rows, and
  * any profile without a `sex` field — was silently given the male model with no
- * way to say otherwise (issue #232).
+ * way to say otherwise (issue #232). Since #443 the picker only shows for those
+ * remaining cases; a signed-in athlete with a known `sex` reads the rower from
+ * their intervals.icu profile without a separate control (see
+ * `effectiveCrewPreference` in crewModel.ts). The stored value is kept in
+ * `virtualrow:crew` regardless, so it still applies to a guest / demo row in
+ * the same browser after a signed-in session.
  */
 export type CrewPreference = 'auto' | Crew;
 

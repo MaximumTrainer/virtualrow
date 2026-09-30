@@ -38,6 +38,20 @@ export const resolveCrew = (
   return gender === 'female' ? 'female' : 'male';
 };
 
+/**
+ * The preference to feed `resolveCrew` for a given athlete (issue #443).
+ *
+ * A signed-in athlete whose intervals.icu profile carries a `sex` reads the
+ * rower from that profile alone: the CrewPicker is hidden from them and any
+ * older `virtualrow:crew` value is ignored while their gender is known. Guests,
+ * demo rows and signed-in athletes without a `sex` field keep their stored
+ * choice as before (that's still the fix from #232).
+ */
+export const effectiveCrewPreference = (
+  gender?: 'male' | 'female' | null,
+  stored: 'auto' | Crew = 'auto',
+): 'auto' | Crew => (gender ? 'auto' : stored);
+
 /** The GLB URL for an athlete's gender. */
 export const crewModelUrl = (gender?: 'male' | 'female' | null): string =>
   CREW_URL[resolveCrew(gender)];

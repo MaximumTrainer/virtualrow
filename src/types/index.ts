@@ -189,7 +189,12 @@ export interface AuthUser {
   name: string;
   email: string;
   avatarUrl?: string;
-  /** Athlete gender from the intervals.icu profile `sex` field; undefined if unset. */
+  /**
+   * Athlete gender from the intervals.icu profile `sex` field; undefined if
+   * unset. When set, this is the authoritative source for the on-screen
+   * rower model — the CrewPicker is hidden from that athlete and any stored
+   * `virtualrow:crew` value is ignored (issues #232, #443).
+   */
   gender?: 'male' | 'female';
 }
 
