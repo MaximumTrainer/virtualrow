@@ -1355,13 +1355,10 @@ function App() {
                     </div>
                   )}
 
-                  <GraphicsQualityPicker
-                    quality={graphics.quality}
-                    onChange={graphics.setQuality}
-                  />
-
-                  {/* The same kind of decision as the tier above it: set once,
-                      changing how every row looks (#346). */}
+                  {/* The Graphics picker moved to the debug panel (#454
+                      Phase 1). #346's ConditionsPicker below is still on the
+                      Row screen — it is a per-row mood control, not a
+                      once-and-done device tuning. */}
                   <ConditionsPicker
                     choice={conditions.choice}
                     resolved={conditions.conditions}
@@ -1705,6 +1702,19 @@ function App() {
               />
               <span>Show demo-row control on the main screen (signed in)</span>
             </label>
+          </div>
+
+          {/* Graphics tier picker (#454 Phase 1, FR5).
+              Moved off the Row screen so it does not compete with the
+              Start-Workout controls. `useGraphicsQuality()` still owns the
+              underlying `virtualrow:graphics-quality` key (#454 D9), so the
+              picker's storage contract is unchanged. */}
+          <div className="debug-section">
+            <h5>Graphics</h5>
+            <GraphicsQualityPicker
+              quality={graphics.quality}
+              onChange={graphics.setQuality}
+            />
           </div>
 
           {/* PM5 Simulator Controls */}
