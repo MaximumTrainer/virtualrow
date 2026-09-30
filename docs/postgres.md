@@ -321,10 +321,10 @@ Postgres:
 ## What's not in this issue
 
 - Schema, migrations, seed data — tracked in **#37**.
-- The runtime path from a browser to Postgres — tracked as the D4 follow-up
-  named in #441. Whatever proxy lands there **must** enforce
-  `sslmode=verify-full` + `channel_binding=require` on its own outbound
-  connection and hold `NEON_DATABASE_URL_*` server-side only.
+- The runtime path from a browser to Postgres — tracked as **#451**
+  (the D4 follow-up named in #441). Whatever proxy lands there **must**
+  enforce `sslmode=verify-full` + `channel_binding=require` on its own
+  outbound connection and hold `NEON_DATABASE_URL_*` server-side only.
 - Porting the existing `localStorageWorkoutStore` / `defaultRoutePreferenceStore`
   / `trackAttachmentStore` off the browser.
 - IP allowlisting: not available on Neon's free tier; #441 relies on TLS +
