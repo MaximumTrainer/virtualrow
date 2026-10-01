@@ -34,8 +34,11 @@ import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
 import { OUTLINE_ONLY_TAG } from './services/routeService';
 import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
 import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
-import { resolvePerformanceMode } from './components/rower3d/constants';
 import { useGraphicsQuality } from './hooks/useGraphicsQuality';
+import {
+  useDevicePerformance,
+  resolvePerformanceModeFromProbe,
+} from './hooks/useDevicePerformance';
 import { GraphicsQualityPicker } from './components/GraphicsQualityPicker';
 import { SoundPicker } from './components/SoundPicker';
 import { useRaceCues } from './hooks/useRaceCues';
@@ -211,6 +214,12 @@ function App() {
   // The rower's own call on graphics quality, overruling hardware detection
   // when they know better than the heuristic does (#224).
   const graphics = useGraphicsQuality();
+  // Device-performance probe (#454 Phase 2): runs once at app boot, before the
+  // Row screen mounts a canvas, and gives `graphics.quality === 'auto'` a
+  // measured answer rather than the renderer-string heuristic alone. User
+  // choices (`low`/`high`) still win; `useDevicePerformance` is the seam the
+  // five-tier widening in #455 will slot its new tiers into.
+  const devicePerformance = useDevicePerformance();
   const crew = useCrewPreference();
 
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
@@ -1581,7 +1590,14 @@ function App() {
                       sits over the stage for the whole of it. */}
                   <RouteLoadingBar progress={routeLoadProgress} />
 
+                  {/* #454 Phase 2 (NFR2): withhold the canvas until the
+                      device probe resolves, so the tier is picked before the
+                      scene mounts for the selected route. The
+                      {@link RouteLoadingBar} above still covers the wait;
+                      cold-cache boot is capped at 200 ms (BENCHMARK_WALL_
+                      CLOCK_BUDGET_MS) and a cache hit returns in O(1). */}
                   <Suspense fallback={null}>
+                    {devicePerformance.ready && (
                     <Rower3D
                       route={selectedRoute!}
                       enrichment={selectedRouteEnrichment}
@@ -1591,7 +1607,10 @@ function App() {
                       holdBoat={startSequence.holdBoat}
                       finished={finish !== null}
                       cadence={pm5Data?.cadence}
-                      performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
+                      performanceMode={resolvePerformanceModeFromProbe(
+                        graphics.quality,
+                        devicePerformance.result?.tier ?? null,
+                      )}
                       intensityFactor={currentWorkout.speedFactor}
                       debugMode={debugMode}
                       showRiverGuides={showRiverGuides}
@@ -1603,6 +1622,7 @@ function App() {
                       strokeIntensity={strokeIntensity}
                       sceneConfig={conditions.sceneConfig}
                     />
+                    )}
                   </Suspense>
 
                   {currentWorkout.current && currentWorkout.progress && (
