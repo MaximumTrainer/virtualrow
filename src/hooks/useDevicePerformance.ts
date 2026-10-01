@@ -133,6 +133,10 @@ export const resolvePerformanceModeFromProbe = (
   probedTier: 'low' | 'auto' | 'high' | null,
 ): 'low' | 'auto' | 'high' => {
   if (userChoice && userChoice !== 'auto') return userChoice;
-  if (probedTier) return probedTier;
+  // `'auto'` from the probe means "no decision", not "pick auto": fall through
+  // to the global default so Playwright (where `__PLAYWRIGHT_TESTING` makes
+  // `resolvePerformanceMode()` return `'low'`) stays on low — otherwise the
+  // visual baseline flips tiers from one PR to the next.
+  if (probedTier && probedTier !== 'auto') return probedTier;
   return resolvePerformanceMode();
 };
