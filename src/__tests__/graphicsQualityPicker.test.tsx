@@ -9,23 +9,24 @@ describe('GraphicsQualityPicker', () => {
 
     const group = screen.getByRole('radiogroup', { name: /graphics quality/i });
     expect(group).toBeInTheDocument();
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    // #455 FR6: six options — auto plus the five tiers (basic/low/medium/high/extra-high).
+    expect(screen.getAllByRole('radio')).toHaveLength(6);
   });
 
   it('marks the current choice as checked, and only that one', () => {
-    render(<GraphicsQualityPicker quality="low" onChange={vi.fn()} />);
+    render(<GraphicsQualityPicker quality="basic" onChange={vi.fn()} />);
 
-    expect(screen.getByRole('radio', { name: 'Low' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Basic' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Auto' })).not.toBeChecked();
-    expect(screen.getByRole('radio', { name: 'High' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Extra High' })).not.toBeChecked();
   });
 
   it('reports the tier the rower picked', async () => {
     const onChange = vi.fn();
     render(<GraphicsQualityPicker quality="auto" onChange={onChange} />);
 
-    await userEvent.click(screen.getByRole('radio', { name: 'High' }));
-    expect(onChange).toHaveBeenCalledWith('high');
+    await userEvent.click(screen.getByRole('radio', { name: 'Extra High' }));
+    expect(onChange).toHaveBeenCalledWith('extra-high');
   });
 
   it('explains what each tier does', () => {
@@ -34,7 +35,7 @@ describe('GraphicsQualityPicker', () => {
       'title',
       'Match the graphics card',
     );
-    expect(screen.getByRole('radio', { name: 'Low' })).toHaveAttribute(
+    expect(screen.getByRole('radio', { name: 'Basic' })).toHaveAttribute(
       'title',
       'No shadows or effects',
     );

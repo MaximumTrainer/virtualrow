@@ -69,7 +69,7 @@ describe('RowerScene', () => {
   // Every tier, because they do not build the same graph: `low` drops the
   // effect stack and the shadow-casting sun, and a tier that throws on mount is
   // a tier nobody discovers until a rower with that hardware opens the page.
-  it.each(['low', 'auto', 'high'] as const)('builds a scene graph at %s', async (tier) => {
+  it.each(['basic', 'medium', 'extra-high'] as const)('builds a scene graph at %s', async (tier) => {
     const scene = await renderScene({ performanceMode: tier });
 
     const names = scene.objects().map((o) => o.name);
@@ -98,7 +98,7 @@ describe('RowerScene', () => {
   // numbers existed in the config for the whole life of the project and
   // nothing ever mounted them.
   it('fogs the scene with the distance the config authored', async () => {
-    const scene = await renderScene({ performanceMode: 'low' });
+    const scene = await renderScene({ performanceMode: 'basic' });
     // `instance` is typed as the base Object3D; the root of an R3F tree is a Scene.
     const { fog } = scene.renderer.scene.instance as unknown as THREE.Scene;
 
@@ -120,19 +120,19 @@ describe('RowerScene', () => {
       scene.objects().filter((o) => o.name === SCENERY_MODELS_NAME);
 
     it('is not mounted on the low tier, even when switched on', async () => {
-      const scene = await renderScene({ performanceMode: 'low', sceneryEnabled: true });
+      const scene = await renderScene({ performanceMode: 'basic', sceneryEnabled: true });
       expect(mountedScenery(scene)).toHaveLength(0);
       await scene.unmount();
     });
 
     it('is mounted on the auto tier when switched on', async () => {
-      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: true });
+      const scene = await renderScene({ performanceMode: 'medium', sceneryEnabled: true });
       expect(mountedScenery(scene).length).toBeGreaterThan(0);
       await scene.unmount();
     });
 
     it('is not mounted on the auto tier when switched off', async () => {
-      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: false });
+      const scene = await renderScene({ performanceMode: 'medium', sceneryEnabled: false });
       expect(mountedScenery(scene)).toHaveLength(0);
       await scene.unmount();
     });
@@ -142,7 +142,7 @@ describe('RowerScene', () => {
     // browser.
     it('reports every placement path standing clear of the water', async () => {
       delete window.__ROWER3D_SCENERY_CLEARANCE;
-      const scene = await renderScene({ performanceMode: 'auto', sceneryEnabled: true });
+      const scene = await renderScene({ performanceMode: 'medium', sceneryEnabled: true });
       const readings: NonNullable<Window['__ROWER3D_SCENERY_CLEARANCE']> =
         window.__ROWER3D_SCENERY_CLEARANCE ?? {};
 
@@ -162,7 +162,7 @@ describe('RowerScene', () => {
   // page's own gradient showed through, as a tear of background between the
   // bank and the horizon on every bend.
   it('puts opaque ground under the whole world', async () => {
-    const scene = await renderScene({ performanceMode: 'low' });
+    const scene = await renderScene({ performanceMode: 'basic' });
 
     const ground = scene.objects().find((o) => o.name === GROUND_PLANE_NAME);
     expect(ground, 'nothing is behind the banks').toBeDefined();
@@ -171,7 +171,7 @@ describe('RowerScene', () => {
   });
 
   it('covers the route it was built for', async () => {
-    const scene = await renderScene({ performanceMode: 'low' });
+    const scene = await renderScene({ performanceMode: 'basic' });
 
     const ground = scene.objects().find((o) => o.name === GROUND_PLANE_NAME) as THREE.Mesh;
     const boat = scene.objects().find((o) => o.name === BOAT_GROUP_NAME)!;
@@ -197,7 +197,7 @@ describe('RowerScene', () => {
   // them asked where the boat was a second later.
   it('rows the boat along the route as the frames go by', async () => {
     const scene = await renderScene({
-      performanceMode: 'low',
+      performanceMode: 'basic',
       paceSPer500: PACE_S_PER_500,
       cadence: 30,
       isPlaying: true,
@@ -227,7 +227,7 @@ describe('RowerScene', () => {
   // the rower is pulling, and goes once it is let go.
   it('holds the boat at the start while the countdown runs', async () => {
     const props = {
-      performanceMode: 'low' as const,
+      performanceMode: 'basic' as const,
       paceSPer500: PACE_S_PER_500,
       cadence: 30,
       distanceMeters: 20,
@@ -251,9 +251,9 @@ describe('RowerScene', () => {
   // The low tier exists to cost less, and a shadow map is the most expensive
   // single thing the sun does.
   it.each([
-    ['low', 0],
-    ['auto', 1],
-    ['high', 1],
+    ['basic', 0],
+    ['medium', 1],
+    ['extra-high', 1],
   ] as const)('has %s shadow-casting sun(s) at that tier: %i', async (tier, casting) => {
     const scene = await renderScene({ performanceMode: tier });
 
@@ -278,7 +278,7 @@ describe('RowerScene', () => {
    * contrast, so counting them is the test.
    */
   it('lights with the sun, a ground bounce and nothing else', async () => {
-    const scene = await renderScene({ performanceMode: 'high' });
+    const scene = await renderScene({ performanceMode: 'extra-high' });
     const objects = scene.objects();
 
     const count = (is: (o: THREE.Object3D) => boolean) => objects.filter(is).length;
@@ -308,7 +308,7 @@ describe('RowerScene', () => {
    */
   it('pitches the boat about its own beam, not about world X', async () => {
     const scene = await renderScene({
-      performanceMode: 'low',
+      performanceMode: 'basic',
       paceSPer500: PACE_S_PER_500,
       cadence: 30,
       isPlaying: true,

@@ -59,7 +59,9 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
       baseOptions({ openContext, testSuppressed: true }),
     );
     expect(result.source).toBe('test-suppressed');
-    expect(result.tier).toBe('auto');
+    // Under #455 test-suppressed returns `basic` so the Playwright visual
+    // baseline matches today's lowest tier (which is now `basic`).
+    expect(result.tier).toBe('basic');
     // The gl-context-budget spec ratchets contexts opened before the scene's
     // own; a throwaway probe context would blow the #261 budget from 4 to 5.
     expect(openContext).not.toHaveBeenCalled();
@@ -67,16 +69,16 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
     expect(result.capabilities).toBeNull();
   });
 
-  it('AC1 / AC8 (FR7): no WebGL2 → static with capabilities=null and tier=auto', () => {
+  it('AC1 / AC8 (FR7): no WebGL2 → static with capabilities=null and tier=medium', () => {
     const result = runDeviceProbe(baseOptions({ openContext: () => null }));
     expect(result).toMatchObject({
       source: 'static',
-      tier: 'auto',
+      tier: 'medium',
       capabilities: null,
     });
   });
 
-  it('AC1 (FR1): a benchmark with a fast median returns source=benchmark, tier=auto', () => {
+  it('AC1 (FR1): a benchmark with a fast median returns source=benchmark, tier=medium', () => {
     const fakeContext = {
       clearColor: vi.fn(),
       clear: vi.fn(),
@@ -98,13 +100,13 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
       }),
     );
     expect(result.source).toBe('benchmark');
-    expect(result.tier).toBe('auto');
+    expect(result.tier).toBe('medium');
     expect(result.benchmark?.framesRendered).toBeGreaterThan(0);
     expect(result.benchmark?.medianFrameMs).toBe(2);
     expect(frame).toBeGreaterThan(0);
   });
 
-  it('AC1 (FR1, D1): a benchmark with slow median returns tier=low', () => {
+  it('AC1 (FR1, D1): a benchmark with slow median returns tier=basic', () => {
     const fakeContext = {
       clearColor: vi.fn(),
       clear: vi.fn(),
@@ -122,7 +124,7 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
       }),
     );
     expect(result.source).toBe('benchmark');
-    expect(result.tier).toBe('low');
+    expect(result.tier).toBe('basic');
   });
 
   it('AC9 (NFR1): the probe aborts the benchmark once the wall-clock budget is exceeded', () => {
@@ -191,7 +193,7 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
   it('AC2 (FR3): a cache hit opens no WebGL context and returns source=cache', () => {
     const now = () => 1_000;
     const stored = JSON.stringify({
-      tier: 'low',
+      tier: 'basic',
       fingerprint: '16384|integrated|Intel Iris',
       storedAt: now() - 10,
       capabilities: { maxTextureSize: 16384, renderer: 'Intel Iris' },
@@ -207,14 +209,14 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
     });
 
     expect(result.source).toBe('cache');
-    expect(result.tier).toBe('low');
+    expect(result.tier).toBe('basic');
     expect(openContext).not.toHaveBeenCalled();
   });
 
   it('AC2 (FR3): an expired cache entry is ignored and the probe re-runs', () => {
     const now = () => DEVICE_PERFORMANCE_CACHE_TTL_MS + 10_000;
     const stored = JSON.stringify({
-      tier: 'low',
+      tier: 'basic',
       fingerprint: 'old',
       storedAt: 0,
       capabilities: null,
@@ -242,7 +244,7 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
       openContext: () => null,
     });
     expect(result.source).toBe('static');
-    expect(result.tier).toBe('auto');
+    expect(result.tier).toBe('medium');
   });
 
   it('AC11 (FR9): publishes to window.__VIRTUALROW_DEVICE_PROBE when telemetry is on', () => {
@@ -273,46 +275,64 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
     expect(published).toHaveLength(0);
   });
 
-  describe('tier mapping helpers (tier-generic seam for #455)', () => {
-    it('staticTierFor returns auto when capabilities are null (D6: never low on silence)', () => {
-      expect(staticTierFor(null)).toBe('auto');
+  describe('tier mapping helpers (#455 five-tier codomain)', () => {
+    it('staticTierFor returns medium when capabilities are null (D6: never basic on silence)', () => {
+      expect(staticTierFor(null)).toBe('medium');
     });
 
-    it('staticTierFor returns low for small texture budgets', () => {
-      expect(staticTierFor({ maxTextureSize: 2048, renderer: 'something' })).toBe('low');
+    it('staticTierFor returns basic for small texture budgets', () => {
+      expect(staticTierFor({ maxTextureSize: 2048, renderer: 'something' })).toBe('basic');
     });
 
-    it('staticTierFor returns low for an integrated renderer', () => {
+    it('staticTierFor returns basic for an integrated renderer', () => {
       expect(
         staticTierFor({ maxTextureSize: 16384, renderer: 'Intel Iris Xe Graphics' }),
-      ).toBe('low');
+      ).toBe('basic');
     });
 
-    it('staticTierFor returns auto for an unknown or discrete renderer', () => {
+    it('staticTierFor returns medium for an unknown or discrete renderer', () => {
       expect(staticTierFor({ maxTextureSize: 16384, renderer: 'Something new' })).toBe(
-        'auto',
+        'medium',
       );
     });
 
-    it('benchmarkTierFor demotes to low on an expensive median frame', () => {
+    it('staticTierFor never returns high or extra-high (user-elective, FR7)', () => {
+      // Even the most capable-looking renderer gets `medium` at most from
+      // the static heuristic; `high` / `extra-high` require a user pin.
+      expect(staticTierFor({ maxTextureSize: 32768, renderer: 'NVIDIA RTX 4090' })).not.toBe('high');
+      expect(staticTierFor({ maxTextureSize: 32768, renderer: 'NVIDIA RTX 4090' })).not.toBe('extra-high');
+    });
+
+    it('benchmarkTierFor demotes to basic on an expensive median frame', () => {
       expect(
         benchmarkTierFor(
           { framesRendered: 8, medianFrameMs: 42, wallClockMs: 300 },
           { maxTextureSize: 16384, renderer: 'Discrete' },
         ),
+      ).toBe('basic');
+    });
+
+    it('benchmarkTierFor returns low for a middle median frame (10 < ms <= 20)', () => {
+      expect(
+        benchmarkTierFor(
+          { framesRendered: 8, medianFrameMs: 15, wallClockMs: 120 },
+          { maxTextureSize: 16384, renderer: 'Discrete' },
+        ),
       ).toBe('low');
     });
 
-    it('benchmarkTierFor stays at auto when the median is comfortably inside budget', () => {
+    it('benchmarkTierFor stays at medium when the median is comfortably inside budget', () => {
       expect(
         benchmarkTierFor(
           { framesRendered: 8, medianFrameMs: 3, wallClockMs: 50 },
           { maxTextureSize: 16384, renderer: 'Discrete' },
         ),
-      ).toBe('auto');
+      ).toBe('medium');
     });
 
-    it('benchmarkTierFor is pinned to low when the static heuristic says low', () => {
+    it('benchmarkTierFor is pinned to low when the static heuristic says basic', () => {
+      // A clearing-the-10ms benchmark is one tier better than the static
+      // read gave: low rather than basic.
       expect(
         benchmarkTierFor(
           { framesRendered: 8, medianFrameMs: 3, wallClockMs: 50 },

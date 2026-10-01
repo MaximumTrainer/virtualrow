@@ -58,7 +58,7 @@ async function waitForDeviceConnected(page: Page, deviceLabel: string) {
   );
 }
 
-async function rowAt(page: Page, mode: 'low' | 'auto' | 'high') {
+async function rowAt(page: Page, mode: 'basic' | 'medium' | 'extra-high') {
   await page.addInitScript((m) => {
     (
       window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string }
@@ -91,7 +91,7 @@ async function rowAt(page: Page, mode: 'low' | 'auto' | 'high') {
     .toBeGreaterThan(0);
 }
 
-for (const tier of ['low', 'auto', 'high'] as const) {
+for (const tier of ['basic', 'medium', 'extra-high'] as const) {
   test(`the ${tier} tier keeps drawing and keeps its context`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

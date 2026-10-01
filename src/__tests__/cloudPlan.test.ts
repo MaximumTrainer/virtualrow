@@ -18,27 +18,27 @@ const authored = SCENE_CONFIG.clouds;
 
 describe('cloudsFor', () => {
   it('draws no clouds at all on the low tier', () => {
-    expect(cloudsFor('low').count).toBe(0);
+    expect(cloudsFor('basic').count).toBe(0);
   });
 
   it('keeps auto to a handful', () => {
-    expect(cloudsFor('auto').count).toBeLessThanOrEqual(6);
+    expect(cloudsFor('medium').count).toBeLessThanOrEqual(6);
   });
 
   it('never asks for more than the config authored', () => {
-    for (const mode of ['low', 'auto', 'high'] as const) {
+    for (const mode of ['basic', 'medium', 'extra-high'] as const) {
       expect(cloudsFor(mode).count).toBeLessThanOrEqual(authored.count);
     }
   });
 
   // The segment count is the per-cloud cost, and it is the one that multiplies.
   it('spends the authored detail only where there is room for it', () => {
-    expect(cloudsFor('high').segments).toBe(authored.segments);
-    expect(cloudsFor('auto').segments).toBeLessThan(authored.segments);
+    expect(cloudsFor('extra-high').segments).toBe(authored.segments);
+    expect(cloudsFor('medium').segments).toBeLessThan(authored.segments);
   });
 
   it('gives back the rest of the config untouched', () => {
-    const plan = cloudsFor('auto');
+    const plan = cloudsFor('medium');
 
     expect(plan.color).toBe(authored.color);
     expect(plan.opacity).toBe(authored.opacity);
@@ -60,15 +60,15 @@ describe('clouds under the conditions presets', () => {
   };
 
   it('reads the config it is handed, not the authored one', () => {
-    expect(cloudsFor('high', overcast).opacity).toBe(0.9);
+    expect(cloudsFor('extra-high', overcast).opacity).toBe(0.9);
   });
 
   it('still caps the count at what the tier can draw', () => {
-    expect(cloudsFor('high', overcast).count).toBeLessThanOrEqual(12);
-    expect(cloudsFor('low', overcast).count).toBe(0);
+    expect(cloudsFor('extra-high', overcast).count).toBeLessThanOrEqual(12);
+    expect(cloudsFor('basic', overcast).count).toBe(0);
   });
 
   it('falls back to the authored config when handed none', () => {
-    expect(cloudsFor('high').opacity).toBe(SCENE_CONFIG.clouds.opacity);
+    expect(cloudsFor('extra-high').opacity).toBe(SCENE_CONFIG.clouds.opacity);
   });
 });

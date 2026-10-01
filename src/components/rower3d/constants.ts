@@ -70,14 +70,42 @@ export const dropForCost = (): boolean => IS_TEST_MODE && !wantsShippingScene();
 /**
  * Performance mode to render at.
  *
- * An explicit override wins; otherwise automation defaults to `low` for speed
- * and determinism, and real users get `auto`.
+ * An explicit override wins; otherwise automation defaults to `basic` for speed
+ * and determinism (the renamed-in-place #455 successor to today's `low`), and
+ * real users get `medium` (the renamed successor to today's `auto`).
+ *
+ * The legacy pin values (`low`, `auto`, `high`) are accepted for one release
+ * (#455 AC11 / NFR6) and mapped to their new homes: `low` → `basic`,
+ * `auto` → `medium`, `high` → `extra-high`.
  */
-export function resolvePerformanceMode(): 'low' | 'auto' | 'high' {
-  if (typeof window === 'undefined') return 'auto';
-  const override = window.__VIRTUALROW_PERFORMANCE_MODE;
-  if (override === 'low' || override === 'auto' || override === 'high') return override;
-  return window.__PLAYWRIGHT_TESTING ? 'low' : 'auto';
+export function resolvePerformanceMode(): PerformanceMode {
+  if (typeof window === 'undefined') return 'medium';
+  const override = normalizePerformanceModeOverride(window.__VIRTUALROW_PERFORMANCE_MODE);
+  if (override) return override;
+  return window.__PLAYWRIGHT_TESTING ? 'basic' : 'medium';
+}
+
+/**
+ * Accept the new five-tier names on the `__VIRTUALROW_PERFORMANCE_MODE` pin.
+ * The legacy `auto` string is kept for one release and aliases `medium`
+ * (#455 AC11 / NFR6). The old `low` and `high` strings are now the five-tier
+ * `low` and `high` by name (both middle tiers) — specs that want today's
+ * extremes update to `basic` or `extra-high` as part of #455.
+ */
+export function normalizePerformanceModeOverride(
+  override: unknown,
+): PerformanceMode | null {
+  if (
+    override === 'basic' ||
+    override === 'low' ||
+    override === 'medium' ||
+    override === 'high' ||
+    override === 'extra-high'
+  ) {
+    return override as PerformanceMode;
+  }
+  if (override === 'auto') return 'medium';
+  return null;
 }
 
 /**
@@ -103,8 +131,7 @@ export { SCENE_SCALE } from '../../utils/worldScale';
  */
 export function hasExplicitPerformanceMode(): boolean {
   if (typeof window === 'undefined') return true;
-  const override = window.__VIRTUALROW_PERFORMANCE_MODE;
-  return override === 'low' || override === 'auto' || override === 'high' || IS_TEST_MODE;
+  return normalizePerformanceModeOverride(window.__VIRTUALROW_PERFORMANCE_MODE) !== null || IS_TEST_MODE;
 }
 
 // The waterway, in metres.
@@ -138,4 +165,26 @@ export const RENDER_CONFIG = {
  * telemetry log that #232 and #309 read (#345).
  */
 export type GPUBackend = 'webgl' | 'none';
-export type PerformanceMode = 'auto' | 'high' | 'low';
+/**
+ * Rendering tier the scene draws at (#455).
+ *
+ * Five tiers, weakest first: `basic` (the old `low`), `low` (new middle-low),
+ * `medium` (the old `auto`), `high` (new upper-mid), `extra-high` (the old
+ * `high`). The two extremes keep today's pixel-level behaviour; the three
+ * middle tiers slide along axes the code already uses (dpr, shadowMapSize,
+ * MOST_CLOUDS, budgetFor, water uniforms, effect stack).
+ *
+ * `auto` is no longer a tier at runtime — it stays in `GraphicsQuality`
+ * (`useGraphicsQuality.ts`) as the picker's "let the app decide" choice,
+ * which resolves to one of the five via the #454 probe.
+ */
+export type PerformanceMode = 'basic' | 'low' | 'medium' | 'high' | 'extra-high';
+
+/** Five tiers in order, weakest first. One source of truth for every table. */
+export const ALL_PERFORMANCE_MODES: readonly PerformanceMode[] = [
+  'basic',
+  'low',
+  'medium',
+  'high',
+  'extra-high',
+] as const;

@@ -217,18 +217,24 @@ const FlatRiverbanks: React.FC<{
  * is left exactly as it was asked for, and so is an explicit `low` or `high`:
  * only `auto` is up for negotiation.
  */
-const useHardwarePerformanceMode = (requested: PerformanceMode): PerformanceMode => {
+const useHardwarePerformanceMode = (
+  requested: PerformanceMode | 'auto',
+): PerformanceMode => {
   const gl = useThree((state) => state.gl);
 
   return useMemo(() => {
-    if (requested !== 'auto' || hasExplicitPerformanceMode()) return requested;
+    if (requested !== 'auto') return requested;
+    if (hasExplicitPerformanceMode()) return 'medium';
     const renderer = gl as Partial<THREE.WebGLRenderer>;
     const context =
       typeof renderer.getContext === 'function' ? renderer.getContext() : null;
-    return recommendPerformanceMode({
+    const legacy = recommendPerformanceMode({
       maxTextureSize: renderer.capabilities?.maxTextureSize,
       renderer: describeUnmaskedRenderer(context),
     });
+    // Widened for #455: recommendPerformanceMode still returns the legacy
+    // three-tier codomain, which maps to the two safe five-tier picks.
+    return legacy === 'low' ? 'basic' : 'medium';
   }, [gl, requested]);
 };
 
@@ -245,7 +251,7 @@ export const RowerScene: React.FC<
   finished = false,
   cadence,
   intensityFactor,
-  performanceMode: requestedPerformanceMode = 'auto',
+  performanceMode: requestedPerformanceMode = 'medium',
   crew = 'male',
   debugMode = false,
   showRiverGuides = true,
@@ -736,7 +742,7 @@ export const RowerScene: React.FC<
       <ProceduralTerrain side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
       <PineTrees side="left" followRef={sceneryFollowRef} enrichment={enrichment} />
       <PineTrees side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
-      {performanceMode !== 'low' && sceneryOn && (
+      {performanceMode !== 'basic' && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels side="left" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
           <SceneryModels side="right" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
@@ -871,9 +877,9 @@ export const RowerScene: React.FC<
         target={sunTarget}
         intensity={lights.sun.intensity}
         color={lights.sun.color}
-        castShadow={performanceMode !== 'low'}
-        shadow-mapSize-width={performanceMode === 'high' ? 2048 : 1024}
-        shadow-mapSize-height={performanceMode === 'high' ? 2048 : 1024}
+        castShadow={performanceMode !== 'basic'}
+        shadow-mapSize-width={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
+        shadow-mapSize-height={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
         shadow-camera-near={1}
         // Far enough to reach past the light, which now stands 150 m up-sun of
         // the boat rather than 200 m from the origin (#352).
@@ -892,7 +898,7 @@ export const RowerScene: React.FC<
           matrix; the frame loop above moves it onto the boat. */}
       <primitive object={sunTarget} />
       
-      {!dropForCost() && performanceMode === 'high' && (
+      {!dropForCost() && performanceMode === 'extra-high' && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
           <meshBasicMaterial color={sceneConfig.lighting.sunColor} />
@@ -911,7 +917,7 @@ export const RowerScene: React.FC<
         <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
       )}
 
-      {!dropForCost() && performanceMode !== 'low' && !routeCurve && (
+      {!dropForCost() && performanceMode !== 'basic' && !routeCurve && (
         <WaterReflectionPlane followRef={sceneryFollowRef} />
       )}
       
@@ -951,7 +957,7 @@ export const RowerScene: React.FC<
         renderFlatLandscape()
       )}
 
-      {routeCurve && performanceMode !== 'low' && sceneryOn && (
+      {routeCurve && performanceMode !== 'basic' && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}
@@ -1083,7 +1089,7 @@ export const RowerScene: React.FC<
       {/* Gated on performance mode alone (not IS_TEST_MODE) so a spec can opt
           into the effect stack via __VIRTUALROW_PERFORMANCE_MODE — see #197.
           Automation still defaults to 'low', which excludes this. */}
-      {performanceMode !== 'low' && (
+      {performanceMode !== 'basic' && (
         // Scoped so the effect stack cannot take the scene with it. The guard
         // inside DynamicPostFx catches the context that reports no attributes,
         // but `postprocessing` dereferences them again inside addPass, on a
@@ -1101,11 +1107,11 @@ export const RowerScene: React.FC<
         </SceneErrorBoundary>
       )}
 
-      {!dropForCost() && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'basic' && (
         <CausticsLight positionRef={boatPositionRef} />
       )}
 
-      {!dropForCost() && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'basic' && (
         <GroundCover followRef={sceneryFollowRef} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 

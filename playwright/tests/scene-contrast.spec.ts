@@ -72,7 +72,7 @@ async function waitForDeviceConnected(page: Page, label: string) {
  * the reflection plane are gated, so the surface measured here is flatter than
  * the one in a real session.
  */
-async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
+async function rowAndClassify(page: Page, tier: 'basic' | 'medium' | 'extra-high') {
   await page.addInitScript((m) => {
     (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
       .__VIRTUALROW_PERFORMANCE_MODE = m as string;
@@ -316,7 +316,7 @@ async function rowAndClassify(page: Page, tier: 'low' | 'auto' | 'high') {
 // do not draw the same picture: auto and high add the effect stack over the same
 // geometry, and a grade that washes the banks out would be invisible to a check
 // that only ever looked at low.
-for (const tier of ['low', 'auto', 'high'] as const) {
+for (const tier of ['basic', 'medium', 'extra-high'] as const) {
   test(`the waterway and the ground either side are told apart at ${tier}`, async ({ page }) => {
     test.slow();
 

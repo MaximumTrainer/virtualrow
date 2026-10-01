@@ -41,7 +41,7 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const vertices = groundPlaneReliefFor(plan, curve, 'auto');
+    const vertices = groundPlaneReliefFor(plan, curve, 'medium');
 
     const expected = (GROUND_PLANE_SEGMENTS + 1) ** 2;
     expect(vertices.length).toBe(expected);
@@ -51,7 +51,7 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const vertices = groundPlaneReliefFor(plan, curve, 'auto');
+    const vertices = groundPlaneReliefFor(plan, curve, 'medium');
 
     for (const v of vertices) {
       const dist = distanceToRoute(v.x, v.z, curve);
@@ -68,7 +68,7 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const vertices = groundPlaneReliefFor(plan, curve, 'auto');
+    const vertices = groundPlaneReliefFor(plan, curve, 'medium');
 
     for (const v of vertices) {
       expect(Math.abs(v.y)).toBeLessThanOrEqual(GROUND_PLANE_RELIEF_AMPLITUDE_M + 1e-6);
@@ -79,7 +79,7 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const vertices = groundPlaneReliefFor(plan, curve, 'auto');
+    const vertices = groundPlaneReliefFor(plan, curve, 'medium');
 
     const displaced = vertices.filter((v) => Math.abs(v.y) > 0.1);
     // A 64×64 grid over a kilometres-wide plan puts most vertices well past
@@ -92,7 +92,7 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const vertices = groundPlaneReliefFor(plan, curve, 'low');
+    const vertices = groundPlaneReliefFor(plan, curve, 'basic');
 
     for (const v of vertices) {
       expect(v.y).toBe(0);
@@ -102,7 +102,7 @@ describe('groundPlaneReliefFor (#431)', () => {
   it('returns a flat plane when there is no route yet', () => {
     const plan = groundPlaneFor(null);
 
-    const vertices = groundPlaneReliefFor(plan, null, 'auto');
+    const vertices = groundPlaneReliefFor(plan, null, 'medium');
 
     for (const v of vertices) {
       expect(v.y).toBe(0);
@@ -113,8 +113,8 @@ describe('groundPlaneReliefFor (#431)', () => {
     const curve = routeAlongX();
     const plan = groundPlaneFor(curve);
 
-    const a = groundPlaneReliefFor(plan, curve, 'auto');
-    const b = groundPlaneReliefFor(plan, curve, 'auto');
+    const a = groundPlaneReliefFor(plan, curve, 'medium');
+    const b = groundPlaneReliefFor(plan, curve, 'medium');
 
     expect(a).toEqual(b);
   });

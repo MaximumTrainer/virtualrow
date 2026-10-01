@@ -100,7 +100,14 @@ export const effectPlanFor = (
   mode: PerformanceMode,
   { hasSun, reducedMotion = false }: { hasSun: boolean; reducedMotion?: boolean },
 ): EffectPlan => {
-  if (mode === 'high') {
+  // Five tiers (#455 D1). The extremes keep today's plans intact:
+  //   basic == old `low` (EMPTY), medium == old `auto` (composer + grade only),
+  //   extra-high == old `high` (full stack with godRays).
+  // `low` keeps `basic`'s EMPTY — the budget earned by this tier goes to
+  // shadows/scenery, not the composer. `high` is medium + SSAO + depth of
+  // field (upper-mid): the new intermediate between `medium`'s grade-only
+  // composer and `extra-high`'s full stack with godRays.
+  if (mode === 'extra-high') {
     return {
       composer: true,
       normalPass: true,
@@ -113,11 +120,22 @@ export const effectPlanFor = (
     };
   }
 
-  if (mode === 'auto') {
+  if (mode === 'high') {
+    return {
+      composer: true,
+      normalPass: true,
+      effects: withoutMotion([...GRADE, 'ssao', 'depthOfField'], reducedMotion),
+      ssaoSamples: 16,
+      toneMapOnRenderer: false,
+    };
+  }
+
+  if (mode === 'medium') {
     // No depth of field. At worldFocusDistance 10 and range 25, from a camera
     // six metres behind the boat, everything past about thirty-five metres was
     // bokeh - which since #321 made a unit a metre is the entire far bank,
-    // permanently. It survives at high, where it is focused on the boat (#327).
+    // permanently. It survives at high and extra-high, where it is focused on
+    // the boat (#327).
     return {
       composer: true,
       normalPass: false,
@@ -126,6 +144,8 @@ export const effectPlanFor = (
     };
   }
 
+  // basic and low: no composer at all. The budget here is on shadows and
+  // scenery, not the effect stack (#345).
   return EMPTY;
 };
 
@@ -153,4 +173,4 @@ export const effectCost = (plan: EffectPlan): number =>
 export const godRaysSun = (
   mode: PerformanceMode,
   sunMesh: THREE.Mesh | null | undefined,
-): THREE.Mesh | null => (mode === 'high' && sunMesh ? sunMesh : null);
+): THREE.Mesh | null => (mode === 'extra-high' && sunMesh ? sunMesh : null);

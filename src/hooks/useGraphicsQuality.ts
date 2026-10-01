@@ -4,10 +4,9 @@ import type { PerformanceMode } from '../components/rower3d/constants';
 /**
  * The rower's graphics-quality choice.
  *
- * `auto` lets the scene pick from what the GPU reports (#224 4G). The other
- * three are the rower overriding that — someone who knows their hardware, or
- * who would rather have frames than shadows, should not have to argue with a
- * heuristic.
+ * Six choices after #455: `auto` lets the probe pick from what the GPU
+ * reports (#224 4G, now via `useDevicePerformance`), and the five tiers
+ * are the rower overriding that pick.
  */
 export type GraphicsQuality = 'auto' | PerformanceMode;
 
@@ -19,17 +18,46 @@ export const GRAPHICS_QUALITY_OPTIONS: ReadonlyArray<{
   hint: string;
 }> = [
   { value: 'auto', label: 'Auto', hint: 'Match the graphics card' },
-  { value: 'low', label: 'Low', hint: 'No shadows or effects' },
-  { value: 'high', label: 'High', hint: 'Everything on' },
+  { value: 'basic', label: 'Basic', hint: 'No shadows or effects' },
+  { value: 'low', label: 'Low', hint: 'Shadows on, no post-processing' },
+  { value: 'medium', label: 'Medium', hint: 'Shadows, normal maps and colour grade' },
+  { value: 'high', label: 'High', hint: 'SSAO and depth of field' },
+  { value: 'extra-high', label: 'Extra High', hint: 'Everything on' },
 ];
 
 const isQuality = (value: unknown): value is GraphicsQuality =>
-  value === 'auto' || value === 'low' || value === 'high';
+  value === 'auto' ||
+  value === 'basic' ||
+  value === 'low' ||
+  value === 'medium' ||
+  value === 'high' ||
+  value === 'extra-high';
+
+/**
+ * #455 D3 / FR5 storage migration.
+ *
+ * Reads `virtualrow:graphics-quality` and maps legacy three-tier values to
+ * the five-tier scheme:
+ *   - `'low'`  → `'basic'`     (today's lowest tier keeps its pixels)
+ *   - `'high'` → `'extra-high'` (today's top tier keeps its pixels)
+ *   - `'auto'` → `'auto'`      (still the picker's "let the app decide")
+ *   - new five-tier values pass through
+ *   - anything else → `'auto'`
+ *
+ * The caller rewrites the key with the migrated value so a second read is
+ * free. Same key, bumped shape.
+ */
+const migrateLegacyQuality = (stored: unknown): GraphicsQuality => {
+  if (stored === 'low') return 'basic';
+  if (stored === 'high') return 'extra-high';
+  if (isQuality(stored)) return stored;
+  return 'auto';
+};
 
 const readStored = (): GraphicsQuality => {
   try {
     const stored = localStorage.getItem(GRAPHICS_QUALITY_STORAGE_KEY);
-    return isQuality(stored) ? stored : 'auto';
+    return migrateLegacyQuality(stored);
   } catch {
     // Private browsing, or storage disabled. The default is no worse for it.
     return 'auto';
@@ -68,3 +96,5 @@ export const useGraphicsQuality = (): GraphicsQualityControl => {
     performanceMode: quality === 'auto' ? undefined : quality,
   };
 };
+
+export { migrateLegacyQuality };

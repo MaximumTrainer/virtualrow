@@ -66,7 +66,7 @@ const hullRule: Rule = {
         clearcoatRoughness: 0.08,
         envMapIntensity: 1.2,
       }),
-      o.tier === 'low'
+      o.tier === 'basic'
         ? {}
         : { normalMap: carbonWeaveNormalMap(), normalScale: new THREE.Vector2(0.4, 0.4) },
     ),
@@ -85,7 +85,7 @@ const rowerClothRule: Rule = {
         sheen: 0.25,
         sheenColor: src.color,
       }),
-      o.tier === 'low'
+      o.tier === 'basic'
         ? {}
         : { normalMap: lycraKnitNormalMap(), normalScale: new THREE.Vector2(0.3, 0.3) },
     ),

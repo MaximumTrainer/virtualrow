@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   IS_TEST_MODE,
   isTelemetryPublished,
+  normalizePerformanceModeOverride,
   resolvePerformanceMode,
+  type PerformanceMode,
 } from '../components/rower3d/constants';
 import {
   runDeviceProbe,
@@ -53,12 +55,7 @@ export interface UseDevicePerformanceOptions
 
 const resolveExplicit = (): DevicePerformanceProbeOptions['explicitPerformanceMode'] => {
   if (typeof window === 'undefined') return null;
-  const override = window.__VIRTUALROW_PERFORMANCE_MODE;
-  if (override === 'low' || override === 'auto' || override === 'high') return override;
-  // IS_TEST_MODE is handled through testSuppressed below; a tier is derived
-  // from `resolvePerformanceMode()` only when the pin is set, so we return
-  // null here so the caller can decide to suppress the benchmark instead.
-  return null;
+  return normalizePerformanceModeOverride(window.__VIRTUALROW_PERFORMANCE_MODE);
 };
 
 export function useDevicePerformance(
@@ -112,7 +109,7 @@ const runProbeSafe = (
   } catch {
     // D6 / FR7: probe failure never propagates into the React tree.
     return {
-      tier: 'auto',
+      tier: 'medium',
       source: 'static',
       capabilities: null,
       fingerprint: 'probe-threw',
@@ -122,21 +119,23 @@ const runProbeSafe = (
 
 /**
  * Convenience: a mode handed to the scene given the user's choice and the
- * probe. User-set `low` / `high` always wins; `auto` becomes the probed tier.
+ * probe. User-set `basic` / `low` / `medium` / `high` / `extra-high` always
+ * wins; `auto` becomes the probed tier (which under #455 is one of
+ * `basic` / `low` / `medium` — the top two tiers stay user-elective per
+ * #345 / FR7).
  *
- * Keep this co-located with the hook: when #455 widens `PerformanceMode`,
- * only the hook's output type and this seam change — the App call-site stays
- * the same shape.
+ * Widened for #455. The App call-site stays the same shape.
  */
 export const resolvePerformanceModeFromProbe = (
-  userChoice: 'low' | 'auto' | 'high' | undefined,
-  probedTier: 'low' | 'auto' | 'high' | null,
-): 'low' | 'auto' | 'high' => {
+  userChoice: 'auto' | PerformanceMode | undefined,
+  probedTier: PerformanceMode | null,
+): PerformanceMode => {
   if (userChoice && userChoice !== 'auto') return userChoice;
-  // `'auto'` from the probe means "no decision", not "pick auto": fall through
-  // to the global default so Playwright (where `__PLAYWRIGHT_TESTING` makes
-  // `resolvePerformanceMode()` return `'low'`) stays on low — otherwise the
-  // visual baseline flips tiers from one PR to the next.
-  if (probedTier && probedTier !== 'auto') return probedTier;
+  // The probe is allowed to return `basic`, `low` or `medium` (FR7).
+  // Anything else — null, or a `high`/`extra-high` from a future codomain —
+  // falls through to the global default so Playwright
+  // (`__PLAYWRIGHT_TESTING` makes `resolvePerformanceMode()` return `basic`)
+  // stays on basic and the visual baseline matches.
+  if (probedTier && probedTier !== 'high' && probedTier !== 'extra-high') return probedTier;
   return resolvePerformanceMode();
 };

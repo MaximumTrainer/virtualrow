@@ -50,7 +50,7 @@ export const facadeMaterial = (
     roughness: 0.85,
     metalness: 0,
   };
-  if (options.tier === 'low') return new THREE.MeshStandardMaterial(base);
+  if (options.tier === 'basic') return new THREE.MeshStandardMaterial(base);
 
   const normal = NORMAL_FOR[kind]();
   if (!normal) return new THREE.MeshStandardMaterial(base);

@@ -16,7 +16,7 @@ import type { PerformanceMode } from '../components/rower3d/constants';
  * rower's laptop.
  */
 
-const ORDER: PerformanceMode[] = ['low', 'auto', 'high'];
+const ORDER: PerformanceMode[] = ['basic', 'low', 'medium', 'high', 'extra-high'];
 
 /** Ranks a surface setting so "never richer than the tier above" is checkable. */
 const rank = (surface: CanvasSurface) => ({
@@ -40,7 +40,7 @@ describe('QUALITY_TIERS', () => {
 });
 
 describe('the low tier asks for nothing it cannot afford', () => {
-  const low = canvasSurfaceFor('low');
+  const low = canvasSurfaceFor('basic');
 
   it.each([
     ['multisampling', () => low.antialias, false],
@@ -61,7 +61,7 @@ describe('the low tier asks for nothing it cannot afford', () => {
 });
 
 describe('the high tier gets what it pays for', () => {
-  const high = canvasSurfaceFor('high');
+  const high = canvasSurfaceFor('extra-high');
 
   it('takes multisampling, shadows and the discrete adapter', () => {
     expect(high.antialias).toBe(true);
@@ -75,7 +75,9 @@ describe('the high tier gets what it pays for', () => {
 });
 
 describe('the middle tier sits between the two, not alongside high', () => {
-  const [low, medium, high] = ORDER.map(canvasSurfaceFor);
+  const low = canvasSurfaceFor('basic');
+  const medium = canvasSurfaceFor('medium');
+  const high = canvasSurfaceFor('extra-high');
 
   it('keeps shadows but not the largest shadow map', () => {
     expect(medium.shadows).toBe(true);
@@ -126,7 +128,7 @@ describe('no setting ever goes backwards as quality rises', () => {
  */
 describe('how hard the shadow edges are', () => {
   it('asks for soft shadows wherever shadows are drawn', () => {
-    for (const tier of ['auto', 'high'] as const) {
+    for (const tier of ['medium', 'extra-high'] as const) {
       const surface = canvasSurfaceFor(tier);
 
       expect(surface.shadows, tier).toBe(true);
@@ -136,7 +138,7 @@ describe('how hard the shadow edges are', () => {
 
   // Nothing to soften: the low tier draws no shadow map at all.
   it('asks for nothing on a tier that draws no shadows', () => {
-    const surface = canvasSurfaceFor('low');
+    const surface = canvasSurfaceFor('basic');
 
     expect(surface.shadows).toBe(false);
     expect(surface.softShadows).toBe(false);

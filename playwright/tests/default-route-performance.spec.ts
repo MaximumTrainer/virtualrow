@@ -96,7 +96,7 @@ interface FrameSample {
   maxMs: number;
 }
 
-async function bootAt(page: Page, mode: 'low' | 'auto' | 'high') {
+async function bootAt(page: Page, mode: 'basic' | 'medium' | 'extra-high') {
   await page.addInitScript({ content: fs.readFileSync(mockBluetoothPath, 'utf8') });
   await page.addInitScript((m) => {
     (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
@@ -258,7 +258,7 @@ async function rowPhase(
   return { distance, seconds, drew: after > before, delivered, frameCostMs };
 }
 
-for (const tier of ['low', 'auto', 'high'] as const) {
+for (const tier of ['basic', 'medium', 'extra-high'] as const) {
   test(`the default route holds up at ${tier} across rower speeds (#255)`, async ({ page }) => {
     test.slow();
 
@@ -432,7 +432,7 @@ test('progress and the camera survive a stall and an absurd speed (#255)', async
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await bootAt(page, 'low');
+  await bootAt(page, 'basic');
   await page.goto('./');
   await connectHardwareAndStart(page);
   await page.waitForTimeout(3_000);

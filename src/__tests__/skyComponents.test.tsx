@@ -115,7 +115,7 @@ describe('the sky follows the boat', () => {
    * run frames. `AnimationProvider` owns the single `useFrame` the followers
    * subscribe to, which is the real path rather than a stand-in for it.
    */
-  const skyAt = async (x: number, z: number, mode: 'low' | 'auto' | 'high' = 'high') => {
+  const skyAt = async (x: number, z: number, mode: 'basic' | 'medium' | 'extra-high' = 'extra-high') => {
     const renderer = await ReactThreeTestRenderer.create(
       <AnimationProvider>
         <PhotorealisticSkydome positionRef={boatAt(x, z)} performanceMode={mode} />
@@ -175,7 +175,7 @@ describe('the sky follows the boat', () => {
   // claimed.
   it('draws clouds for high and none for low', async () => {
     const high = await skyAt(0, 0);
-    const low = await skyAt(0, 0, 'low');
+    const low = await skyAt(0, 0, 'basic');
 
     expect(high.layer?.children.length, 'the sky built no clouds at all').toBeGreaterThan(0);
     expect(low.layer?.children ?? [], 'the low tier is paying for clouds').toHaveLength(0);
