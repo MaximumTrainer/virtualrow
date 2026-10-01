@@ -60,7 +60,17 @@ import { easeProgressTowards } from './rower3d/progressEasing';
 import { CONTEXT_LOST_MESSAGE, CONTEXT_UNRECOVERABLE_MESSAGE } from '../utils/sceneHealth';
 import { recordTelemetry } from '../utils/sceneTelemetryLog';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
-import { canvasSurfaceFor, maxDpr } from './rower3d/canvasSurface';
+import {
+  canvasSurfaceFor,
+  drawsCaustics,
+  drawsGroundCover,
+  drawsPostStack,
+  drawsScenery,
+  drawsShadows,
+  drawsSunMesh,
+  drawsWaterReflection,
+  maxDpr,
+} from './rower3d/canvasSurface';
 import {
   probeRenderCapabilities,
   selectBrowserGlOptions,
@@ -742,7 +752,7 @@ export const RowerScene: React.FC<
       <ProceduralTerrain side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
       <PineTrees side="left" followRef={sceneryFollowRef} enrichment={enrichment} />
       <PineTrees side="right" followRef={sceneryFollowRef} enrichment={enrichment} />
-      {performanceMode !== 'basic' && sceneryOn && (
+      {drawsScenery(performanceMode) && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels side="left" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
           <SceneryModels side="right" positionRef={boatPositionRef} enrichment={enrichment} performanceMode={performanceMode} track={sceneryTrack} region={sceneryRegion} coordinates={route.coordinates} />
@@ -877,7 +887,7 @@ export const RowerScene: React.FC<
         target={sunTarget}
         intensity={lights.sun.intensity}
         color={lights.sun.color}
-        castShadow={performanceMode !== 'basic'}
+        castShadow={drawsShadows(performanceMode)}
         shadow-mapSize-width={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
         shadow-mapSize-height={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
         shadow-camera-near={1}
@@ -898,7 +908,7 @@ export const RowerScene: React.FC<
           matrix; the frame loop above moves it onto the boat. */}
       <primitive object={sunTarget} />
       
-      {!dropForCost() && performanceMode === 'extra-high' && (
+      {!dropForCost() && drawsSunMesh(performanceMode) && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>
           <sphereGeometry args={[5, 8, 8]} />
           <meshBasicMaterial color={sceneConfig.lighting.sunColor} />
@@ -917,7 +927,7 @@ export const RowerScene: React.FC<
         <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
       )}
 
-      {!dropForCost() && performanceMode !== 'basic' && !routeCurve && (
+      {!dropForCost() && drawsWaterReflection(performanceMode) && !routeCurve && (
         <WaterReflectionPlane followRef={sceneryFollowRef} />
       )}
       
@@ -957,7 +967,7 @@ export const RowerScene: React.FC<
         renderFlatLandscape()
       )}
 
-      {routeCurve && performanceMode !== 'basic' && sceneryOn && (
+      {routeCurve && drawsScenery(performanceMode) && sceneryOn && (
         <Suspense fallback={null}>
           <SceneryModels
             curve={routeCurve}
@@ -1089,7 +1099,7 @@ export const RowerScene: React.FC<
       {/* Gated on performance mode alone (not IS_TEST_MODE) so a spec can opt
           into the effect stack via __VIRTUALROW_PERFORMANCE_MODE — see #197.
           Automation still defaults to 'low', which excludes this. */}
-      {performanceMode !== 'basic' && (
+      {drawsPostStack(performanceMode) && (
         // Scoped so the effect stack cannot take the scene with it. The guard
         // inside DynamicPostFx catches the context that reports no attributes,
         // but `postprocessing` dereferences them again inside addPass, on a
@@ -1107,11 +1117,11 @@ export const RowerScene: React.FC<
         </SceneErrorBoundary>
       )}
 
-      {!dropForCost() && performanceMode !== 'basic' && (
+      {!dropForCost() && drawsCaustics(performanceMode) && (
         <CausticsLight positionRef={boatPositionRef} />
       )}
 
-      {!dropForCost() && performanceMode !== 'basic' && (
+      {!dropForCost() && drawsGroundCover(performanceMode) && (
         <GroundCover followRef={sceneryFollowRef} performanceMode={performanceMode} enrichment={enrichment} />
       )}
 
