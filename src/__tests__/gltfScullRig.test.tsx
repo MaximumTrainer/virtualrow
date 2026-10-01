@@ -36,14 +36,38 @@ vi.mock('@react-three/drei', async () => {
       'LeftArm_Fore',
       'RightArm_Fore',
     ];
+    // The real GLB wraps the whole scull in two ±90° rotations about X
+    // (`scull_root` cancels the glTF exporter's Z-up → Y-up, `scull` is the
+    // CadQuery assembly below it). The oar's local axes are decided by that
+    // parent chain, so a mock that drops it animates about a different axis
+    // than production and would have let #462 sit unnoticed. See
+    // `scripts/build_crew.py:231-236` and the GLB inspection in #462's body.
+    const sculRoot = new three.Group();
+    sculRoot.name = 'scull_root';
+    sculRoot.quaternion.set(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+    const scull = new three.Group();
+    scull.name = 'scull';
+    scull.quaternion.set(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+    sculRoot.add(scull);
+    scene.add(sculRoot);
     for (const name of names) {
       const node = new three.Group();
       node.name = name;
       // Authored away from the origin, as the rig authors them, so the frame
       // loop has a real rest position to measure its offsets from.
-      if (name.endsWith('Oar')) node.position.set(0, 0.3, 0);
+      if (name.endsWith('Oar')) {
+        node.position.set(0, 0.3, 0);
+        // Give the oar a blade sub-node along its local X axis (shaft axis),
+        // as the real GLB does, so a test can watch where the blade ends up
+        // in world space — not just read back the local rotation.
+        const sign = name === 'LeftOar' ? -1 : 1;
+        const blade = new three.Group();
+        blade.name = `${name}_Blade`;
+        blade.position.set(sign * 1.75, 0, 0);
+        node.add(blade);
+      }
       if (name === 'Seat') node.position.set(0, 0, 0.2);
-      scene.add(node);
+      scull.add(node);
     }
     return { scene };
   };
@@ -86,9 +110,17 @@ const mountAt = async (phase: number) => {
       await renderer.advanceFrames(2, 1 / 60);
     });
 
-    const pose: Record<string, { x: number; y: number; z: number; rx: number; ry: number; rz: number }> = {};
-    (renderer.scene.instance as unknown as THREE.Scene).traverse((object) => {
+    const pose: Record<string, {
+      x: number; y: number; z: number;
+      rx: number; ry: number; rz: number;
+      wx: number; wy: number; wz: number;
+    }> = {};
+    const sceneRoot = renderer.scene.instance as unknown as THREE.Scene;
+    sceneRoot.updateMatrixWorld(true);
+    const w = new THREE.Vector3();
+    sceneRoot.traverse((object) => {
       if (!object.name) return;
+      object.getWorldPosition(w);
       pose[object.name] = {
         x: object.position.x,
         y: object.position.y,
@@ -96,6 +128,9 @@ const mountAt = async (phase: number) => {
         rx: object.rotation.x,
         ry: object.rotation.y,
         rz: object.rotation.z,
+        wx: w.x,
+        wy: w.y,
+        wz: w.z,
       };
     });
     return pose;
@@ -128,14 +163,48 @@ describe('the GLB scull', () => {
 
   // #329. Before it, the blades swept over the water at a constant height and
   // squared throughout — the one thing a sculler never does.
+  //
+  // The feather is a roll about the oar's own shaft (its local X axis, which
+  // is the direction `build_crew.py` lays the loom down). Rotating about the
+  // oar node's Z instead tilted the shaft out of horizontal and left the
+  // blades swinging above the rower (#462), so this reads back the X-axis
+  // rotation specifically.
   it('squares the blades on the drive and feathers them on the recovery', async () => {
     const scull = await mountAt(MID_DRIVE);
 
     const drive = await scull.at(MID_DRIVE);
-    expect(drive.LeftOar.rz, 'the blade is feathered mid-drive').toBeCloseTo(0, 5);
+    expect(drive.LeftOar.rx, 'the blade is squared mid-drive').toBeCloseTo(0, 5);
+    expect(drive.LeftOar.rz, 'nothing rolls the shaft out of horizontal').toBeCloseTo(0, 5);
 
     const recovery = await scull.at(MID_RECOVERY);
-    expect(recovery.LeftOar.rz).toBeCloseTo(FEATHER_RAD, 5);
+    expect(recovery.LeftOar.rx).toBeCloseTo(FEATHER_RAD, 5);
+    expect(recovery.LeftOar.rz, 'the shaft stays horizontal on the recovery (#462)').toBeCloseTo(0, 5);
+
+    await scull.renderer.unmount();
+  });
+
+  // #462. The oars appeared to swing vertically above the rower rather than
+  // sweeping horizontally fore-and-aft. Reading local rotation values alone
+  // can miss this — the parent chain decides where each local axis lands in
+  // world space — so this measures the blade's world position relative to
+  // the gate and asserts the shaft stays in the horizontal plane.
+  it('keeps the shaft horizontal in world space across the whole stroke (#462)', async () => {
+    const scull = await mountAt(0);
+
+    const samples = [0, 0.1, MID_DRIVE, STROKE_DRIVE_FRACTION - 0.001, MID_RECOVERY, 0.9];
+    for (const phase of samples) {
+      const nodes = await scull.at(phase);
+      // The blade sub-node's world position is derived through the full
+      // scull_root → scull → LeftOar → LeftOar_Blade chain. If the fix at
+      // #462 regresses, the blade lifts off the horizontal plane here.
+      const gateY = nodes.LeftOar.wy;
+      const bladeY = nodes.LeftOar_Blade?.wy ?? gateY;
+      const shaftRise = Math.abs(bladeY - gateY);
+      expect(
+        shaftRise,
+        `shaft tipped out of horizontal at phase ${phase}: ΔY=${shaftRise}`,
+      ).toBeLessThan(0.2);
+    }
 
     await scull.renderer.unmount();
   });
@@ -213,8 +282,15 @@ describe('the GLB scull', () => {
       const atCatch = await scull.at(0);
       const atFinish = await scull.at(STROKE_DRIVE_FRACTION - 0.001);
 
-      expect(Object.keys(atCatch), 'the bare model grew nodes').toEqual([]);
-      expect(Object.keys(atFinish)).toEqual([]);
+      // The wrapper nodes (`scull_root`, `scull`) are always present — the
+      // real GLB carries them for the glTF Y-up transform. What matters is
+      // that no rig node (`LeftOar`, `Seat`, `Rower_*`) appeared on a model
+      // that was told it has none.
+      const WRAPPERS = new Set(['scull_root', 'scull']);
+      const rigAt = (p: typeof atCatch) =>
+        Object.keys(p).filter((n) => !WRAPPERS.has(n));
+      expect(rigAt(atCatch), 'the bare model grew nodes').toEqual([]);
+      expect(rigAt(atFinish)).toEqual([]);
 
       await scull.renderer.unmount();
     } finally {
