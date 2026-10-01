@@ -24,13 +24,10 @@ describe('how strongly the sky lights the scene', () => {
       (tier) => lightingPlan(tier, SCENE_CONFIG).environmentIntensity,
     );
 
-    // Non-decreasing: a higher tier never lights the scene less brightly than
-    // a lower one. `high` and `extra-high` share 0.24 by design — the dusk
-    // water shader samples the environment map and collapses toward the dark
-    // bank below that threshold (see ENVIRONMENT_INTENSITY in lightingPlan.ts),
-    // so both tiers have to clear it. Their quality distinction lives in the
-    // effect plan (godRays only at extra-high, DoF+SSAO at high).
     expect(strengths).toEqual([...strengths].sort((a, b) => a - b));
+    expect(new Set(strengths).size, 'two tiers light the scene identically').toBe(
+      QUALITY_TIERS_BY_LIGHT.length,
+    );
   });
 
   // Never zero, even at the bottom: the environment is what the flat-colour

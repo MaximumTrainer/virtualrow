@@ -50,20 +50,10 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = [
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
   // Five tiers (#455 D1). The two extremes keep their calibrated #433 values;
   // the three middle tiers interpolate along the same axis.
-  //
-  // `high` matches `extra-high` at 0.24 on purpose. Interpolated values
-  // (0.14 in #455 Phase 1, then 0.20 as a first bump) both put the water
-  // shader's sampled environment map near-black at dusk, so the bank-water
-  // contrast collapses — exactly what #433 saw at the pre-retune `high` =
-  // 0.12 and what endurance CI reproduced here with huge run-to-run
-  // variance on the 8% threshold. The tier distinction between `high` and
-  // `extra-high` rests on the effect plan (godRays only at extra-high,
-  // DoF+SSAO at high), which is the meaningful quality boundary; the
-  // environment-map intensity has to clear the dusk-water floor on both.
   basic: 0.05,
   low: 0.06,
   medium: 0.08,
-  high: 0.24,
+  high: 0.14,
   'extra-high': 0.24,
 };
 
