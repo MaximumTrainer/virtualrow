@@ -483,6 +483,13 @@ declare global {
     /** Per-frame render cost, sampled before the effect composer runs (#232). */
     /** Publish render and frame telemetry without entering test mode (#342). */
     __VIRTUALROW_TELEMETRY?: boolean;
+    /**
+     * The result of the boot-time device-performance probe (#454 Phase 2),
+     * published when `isTelemetryPublished()` is true so specs and the debug
+     * telemetry panel can read the branch the probe took and the resolved
+     * tier. See `src/utils/devicePerformanceProbe.ts` for the full shape.
+     */
+    __VIRTUALROW_DEVICE_PROBE?: unknown;
     /** `false` leaves the billboard foliage out, so a spec can measure its cost (#333). */
     __VIRTUALROW_FOLIAGE?: boolean;
     /**
