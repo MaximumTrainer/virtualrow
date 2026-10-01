@@ -148,6 +148,30 @@ async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
     };
     const apart = (a: [number, number, number], b: [number, number, number]) =>
       Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    /**
+     * Chromaticity: colour normalised by its own brightness, so a dim bluish
+     * pixel and a dim brownish pixel sit far apart even when both end up near
+     * (20,20,30) in sRGB. The euclidean `apart` above compresses that gap to
+     * nothing at `high` + `dusk`, where the dusk env map darkens the water
+     * mirror pass toward the bank's own luminance — the pixels are still
+     * clearly different hues, just at the same brightness.
+     *
+     * Returned distance is in [0, √2]; 0.05 is wide enough to tell a bluish
+     * water from a brownish bank at dusk and tight enough that it does not
+     * add noise to the daylight cases (left + right ground share only grows
+     * under this test, never shrinks, so every currently-passing combo stays
+     * passing). #455 Phase 4 follow-up to Phase 2's deferred `high` tier.
+     */
+    const chromaticity = (c: [number, number, number]) => {
+      const total = Math.max(1, c[0] + c[1] + c[2]);
+      return [c[0] / total, c[1] / total, c[2] / total] as [number, number, number];
+    };
+    const chromaticApart = (a: [number, number, number], b: [number, number, number]) => {
+      const ca = chromaticity(a);
+      const cb = chromaticity(b);
+      return Math.hypot(ca[0] - cb[0], ca[1] - cb[1], ca[2] - cb[2]);
+    };
+    const CHROMATIC_APART = 0.05;
     const median = (values: number[]) => {
       if (!values.length) return 0;
       values.sort((a, b) => a - b);
@@ -208,7 +232,15 @@ async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
           const [r, g, b] = at(x, y);
           if (isSky([r, g, b], y)) continue;
           nonSky += 1;
-          if (apart([r, g, b], water) > groundApart) ground += 1;
+          const pixel: [number, number, number] = [r, g, b];
+          // Euclidean apart catches a daylight bank; chromaticApart catches a
+          // dusk bank that lives at the same brightness as the water but a
+          // different hue (see note on `chromaticApart`).
+          if (
+            apart(pixel, water) > groundApart ||
+            chromaticApart(pixel, water) > CHROMATIC_APART
+          )
+            ground += 1;
         }
       }
       return nonSky ? ground / nonSky : 0;
@@ -239,21 +271,19 @@ async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
 }
 
 // #455 D7: push CI runs the three overlapping tiers (`basic`/`medium`/
-// `extra-high`), one per Windows shard; endurance CI picks up `low` as
-// an extra when VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS=1 is set in
-// its workflow step. `high` is deferred: endurance consistently flags
-// `shipping scene, high, dusk` as 1% ground share vs an 8% threshold
-// at every tested ENVIRONMENT_INTENSITY.high value (0.14, 0.20, 0.24).
-// The water shader at `high` samples the environment map and the dusk
-// sky is dim enough that the water collapses toward the dark bank; the
-// pre-existing coordinator analysis (memory, #448) called for a fix to
-// the spec's wait/sampling, not more ENV retuning. Taken up as a #455
-// Phase 2 follow-up. 4 of 5 tiers run in CI; log lines prefixed
-// `[shipping-contrast]` so a grep pulls the whole grid out of a run.
+// `extra-high`), one per Windows shard; endurance CI picks up `low` and
+// `high` as extras when VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS=1 is
+// set in its workflow step. All five tiers run between push and endurance.
+// `high`+`dusk` was deferred from PR #460 because the water mirror pass
+// at dusk darkens to the same brightness as the bank, collapsing the
+// RGB-euclidean `GROUND_APART` gate; the chromaticApart disjunctive
+// classifier added above fixes that, so endurance now covers `high` too.
+// Log lines prefixed `[shipping-contrast]` so a grep pulls the whole
+// grid out of a run.
 const ENDURANCE_ONLY_EXTRAS =
   process.env.VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS === '1';
 const TIERS: readonly Tier[] = ENDURANCE_ONLY_EXTRAS
-  ? (['low'] as const)
+  ? (['low', 'high'] as const)
   : (['basic', 'medium', 'extra-high'] as const);
 const PRESETS: readonly Preset[] = ['dawn', 'midday', 'golden', 'overcast', 'dusk'] as const;
 
