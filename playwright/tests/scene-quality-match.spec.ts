@@ -34,7 +34,7 @@ async function waitForDeviceConnected(page: Page, deviceLabel: string) {
   );
 }
 
-async function rowTheDemoRoute(page: Page, mode?: 'low' | 'auto' | 'high') {
+async function rowTheDemoRoute(page: Page, mode?: 'basic' | 'medium' | 'extra-high') {
   if (mode) {
     await page.addInitScript((m) => {
       (
@@ -99,12 +99,12 @@ const canvasSurface = (page: Page) =>
 
 /** What each tier is allowed to ask the browser for. Mirrors canvasSurface.ts. */
 const EXPECTED = {
-  low: { antialias: false, adapter: 'low-power', maxDpr: 1 },
-  auto: { antialias: true, adapter: 'default', maxDpr: 1.5 },
-  high: { antialias: true, adapter: 'high-performance', maxDpr: 2 },
+  basic: { antialias: false, adapter: 'low-power', maxDpr: 1 },
+  medium: { antialias: true, adapter: 'default', maxDpr: 1.5 },
+  'extra-high': { antialias: true, adapter: 'high-performance', maxDpr: 2 },
 } as const;
 
-for (const tier of ['low', 'auto', 'high'] as const) {
+for (const tier of ['basic', 'medium', 'extra-high'] as const) {
   test(`the ${tier} tier gets the surface the ${tier} tier is allowed`, async ({ page }) => {
     await rowTheDemoRoute(page, tier);
 
@@ -129,7 +129,7 @@ test('no tier draws at a higher pixel ratio or richer adapter than the one above
 }) => {
   const readings: Array<{ tier: string; adapter: number; dpr: number; antialias: number }> = [];
 
-  for (const tier of ['low', 'auto', 'high'] as const) {
+  for (const tier of ['basic', 'medium', 'extra-high'] as const) {
     const context = await page.context().newPage();
     await rowTheDemoRoute(context, tier);
     const surface = await canvasSurface(context);
@@ -151,7 +151,7 @@ test('no tier draws at a higher pixel ratio or richer adapter than the one above
 });
 
 test('the scene reports which renderer is drawing, not which was detected', async ({ page }) => {
-  await rowTheDemoRoute(page, 'low');
+  await rowTheDemoRoute(page, 'basic');
 
   const drawing = await page.evaluate(() => window.__ROWER3D_RENDER_STATS?.drawing);
 
