@@ -3,22 +3,22 @@ import { effectPlanFor, godRaysSun, effectCost, EFFECT_NAMES } from '../componen
 import { QUALITY_TIERS } from '../components/rower3d/canvasSurface';
 import type { PerformanceMode } from '../components/rower3d/constants';
 
-const ORDER: PerformanceMode[] = ['low', 'auto', 'high'];
+const ORDER: PerformanceMode[] = ['basic', 'medium', 'extra-high'];
 const withSun = { hasSun: true };
 
 describe('the low tier runs no effects at all', () => {
   it('has an empty plan, whether or not a sun is available', () => {
-    expect(effectPlanFor('low', withSun).effects).toEqual([]);
-    expect(effectPlanFor('low', { hasSun: false }).effects).toEqual([]);
+    expect(effectPlanFor('basic', withSun).effects).toEqual([]);
+    expect(effectPlanFor('basic', { hasSun: false }).effects).toEqual([]);
   });
 
   it('needs no composer, so none is mounted', () => {
-    expect(effectPlanFor('low', withSun).composer).toBe(false);
+    expect(effectPlanFor('basic', withSun).composer).toBe(false);
   });
 });
 
 describe('the middle tier is genuinely lighter than the top', () => {
-  const auto = effectPlanFor('auto', withSun);
+  const auto = effectPlanFor('medium', withSun);
 
   it('does not run ambient occlusion', () => {
     // SSAO is the expensive one: a full-resolution pass that also forces the
@@ -44,7 +44,7 @@ describe('the middle tier is genuinely lighter than the top', () => {
 });
 
 describe('the high tier keeps everything it had', () => {
-  const high = effectPlanFor('high', withSun);
+  const high = effectPlanFor('extra-high', withSun);
 
   it('runs ambient occlusion with the normal pass it needs', () => {
     expect(high.effects).toContain('ssao');
@@ -53,7 +53,7 @@ describe('the high tier keeps everything it had', () => {
 
   it('runs god rays only when there is a sun to cast them', () => {
     expect(high.effects).toContain('godRays');
-    expect(effectPlanFor('high', { hasSun: false }).effects).not.toContain('godRays');
+    expect(effectPlanFor('extra-high', { hasSun: false }).effects).not.toContain('godRays');
   });
 });
 
@@ -83,7 +83,7 @@ describe('no tier runs an effect the tier above it skips', () => {
 describe('every tier has a plan of its own', () => {
   it('covers each quality tier, so none falls through to another tier’s stack', () => {
     // The old code chose by if/else and ended on an unguarded `return` holding
-    // the second-heaviest stack — reachable by any mode that was not 'auto'
+    // the second-heaviest stack — reachable by any mode that was not 'medium'
     // and had no sun.
     for (const tier of QUALITY_TIERS) {
       expect(() => effectPlanFor(tier, withSun)).not.toThrow();
@@ -93,7 +93,7 @@ describe('every tier has a plan of its own', () => {
   it('treats an unknown mode as the lightest, not the heaviest', () => {
     const unknown = effectPlanFor('nonsense' as PerformanceMode, withSun);
 
-    expect(effectCost(unknown)).toBeLessThanOrEqual(effectCost(effectPlanFor('auto', withSun)));
+    expect(effectCost(unknown)).toBeLessThanOrEqual(effectCost(effectPlanFor('medium', withSun)));
   });
 });
 
@@ -101,7 +101,7 @@ describe('godRaysSun — the light source the pass is given (#233)', () => {
   // GodRaysEffect.update dereferences this.lightSource.parent every frame, so
   // the pass must never be constructed without a live mesh.
   //
-  // The old caller computed `performanceMode === 'high' ? sunMeshRef : undefined`
+  // The old caller computed `performanceMode === 'extra-high' ? sunMeshRef : undefined`
   // and the composer guarded on `!!sunMeshRef`. Both test the *ref object*,
   // which useRef makes truthy from the first render — the mesh is on `.current`,
   // and it is null until the mesh mounts, or forever in test mode where the mesh
@@ -109,27 +109,27 @@ describe('godRaysSun — the light source the pass is given (#233)', () => {
   const mesh = { isMesh: true } as unknown as import('three').Mesh;
 
   it('gives the pass a real mesh only in high mode', () => {
-    expect(godRaysSun('high', mesh)).toBe(mesh);
+    expect(godRaysSun('extra-high', mesh)).toBe(mesh);
   });
 
   it('gives nothing when the mesh has not mounted yet', () => {
     // The case the ref hid: high mode, but no light source in the scene.
-    expect(godRaysSun('high', null)).toBeNull();
+    expect(godRaysSun('extra-high', null)).toBeNull();
   });
 
   it('gives nothing below high mode, mesh or not', () => {
-    expect(godRaysSun('auto', mesh)).toBeNull();
-    expect(godRaysSun('low', mesh)).toBeNull();
+    expect(godRaysSun('medium', mesh)).toBeNull();
+    expect(godRaysSun('basic', mesh)).toBeNull();
   });
 
   it('keeps the plan and the light source in step', () => {
     // hasSun must be derived from the same answer the composer renders with,
     // or the plan can ask for a pass the composer has no sun for.
-    const sun = godRaysSun('high', null);
-    expect(effectPlanFor('high', { hasSun: !!sun }).effects).not.toContain('godRays');
+    const sun = godRaysSun('extra-high', null);
+    expect(effectPlanFor('extra-high', { hasSun: !!sun }).effects).not.toContain('godRays');
 
-    const live = godRaysSun('high', mesh);
-    expect(effectPlanFor('high', { hasSun: !!live }).effects).toContain('godRays');
+    const live = godRaysSun('extra-high', mesh);
+    expect(effectPlanFor('extra-high', { hasSun: !!live }).effects).toContain('godRays');
   });
 });
 
@@ -147,13 +147,13 @@ describe('godRaysSun — the light source the pass is given (#233)', () => {
  */
 describe('exactly one tone-mapping stage', () => {
   it('leaves it on the renderer when there is no composer', () => {
-    const plan = effectPlanFor('low', { hasSun: false });
+    const plan = effectPlanFor('basic', { hasSun: false });
 
     expect(plan.composer, 'the low tier grew a composer').toBe(false);
     expect(plan.toneMapOnRenderer, 'nothing would tone-map the frame at all').toBe(true);
   });
 
-  it.each(['auto', 'high'] as const)('hands it to the composer at %s', (mode) => {
+  it.each(['medium', 'extra-high'] as const)('hands it to the composer at %s', (mode) => {
     const plan = effectPlanFor(mode, { hasSun: true });
 
     expect(plan.composer).toBe(true);
@@ -164,7 +164,7 @@ describe('exactly one tone-mapping stage', () => {
   });
 
   it('never tone-maps in both places, whatever the tier', () => {
-    for (const mode of ['low', 'auto', 'high'] as const) {
+    for (const mode of ['basic', 'medium', 'extra-high'] as const) {
       const plan = effectPlanFor(mode, { hasSun: true });
       const inComposer = plan.composer && plan.effects.includes('toneMapping');
 
@@ -185,17 +185,17 @@ describe('exactly one tone-mapping stage', () => {
  */
 describe('depth of field', () => {
   it('is not in the auto stack at all', () => {
-    expect(effectPlanFor('auto', { hasSun: true }).effects).not.toContain('depthOfField');
+    expect(effectPlanFor('medium', { hasSun: true }).effects).not.toContain('depthOfField');
   });
 
   it('is kept for high, where it is focused on the boat each frame', () => {
-    expect(effectPlanFor('high', { hasSun: true }).effects).toContain('depthOfField');
+    expect(effectPlanFor('extra-high', { hasSun: true }).effects).toContain('depthOfField');
   });
 
   it('keeps the tiers in cost order with it gone from auto', () => {
-    const low = effectCost(effectPlanFor('low', { hasSun: true }));
-    const auto = effectCost(effectPlanFor('auto', { hasSun: true }));
-    const high = effectCost(effectPlanFor('high', { hasSun: true }));
+    const low = effectCost(effectPlanFor('basic', { hasSun: true }));
+    const auto = effectCost(effectPlanFor('medium', { hasSun: true }));
+    const high = effectCost(effectPlanFor('extra-high', { hasSun: true }));
 
     expect(low).toBeLessThan(auto);
     expect(auto).toBeLessThan(high);
@@ -210,7 +210,7 @@ describe('depth of field', () => {
  * camera. At arm's length while rowing hard it reads as the picture swimming.
  */
 describe('reduced motion', () => {
-  const TIERS = ['low', 'auto', 'high'] as const;
+  const TIERS = ['basic', 'medium', 'extra-high'] as const;
 
   it('drops chromatic aberration at every tier that has it', () => {
     for (const mode of TIERS) {
@@ -242,7 +242,7 @@ describe('reduced motion', () => {
   // a moving one, and depth is not motion. None of them is a reason to make the
   // scene plainer for someone who asked for stillness.
   it('keeps the static grade, the depth and the sun', () => {
-    const still = effectPlanFor('high', { hasSun: true, reducedMotion: true });
+    const still = effectPlanFor('extra-high', { hasSun: true, reducedMotion: true });
 
     for (const kept of ['bloom', 'hueSaturation', 'brightnessContrast', 'vignette', 'toneMapping', 'ssao', 'depthOfField', 'godRays'] as const) {
       expect(still.effects, `${kept} was dropped for the wrong reason`).toContain(kept);
@@ -253,14 +253,14 @@ describe('reduced motion', () => {
     const cost = (mode: (typeof TIERS)[number]) =>
       effectCost(effectPlanFor(mode, { hasSun: true, reducedMotion: true }));
 
-    expect(cost('low')).toBeLessThan(cost('auto'));
-    expect(cost('auto')).toBeLessThan(cost('high'));
+    expect(cost('basic')).toBeLessThan(cost('medium'));
+    expect(cost('medium')).toBeLessThan(cost('extra-high'));
   });
 
   it('leaves the scene as authored when nothing was asked for', () => {
-    expect(effectPlanFor('auto', { hasSun: true, reducedMotion: false }).effects).toContain(
+    expect(effectPlanFor('medium', { hasSun: true, reducedMotion: false }).effects).toContain(
       'chromaticAberration',
     );
-    expect(effectPlanFor('auto', { hasSun: true }).effects).toContain('chromaticAberration');
+    expect(effectPlanFor('medium', { hasSun: true }).effects).toContain('chromaticAberration');
   });
 });

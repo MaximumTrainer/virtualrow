@@ -125,7 +125,7 @@ const SceneryModelsChunk: React.FC<
   mountProgress = 0,
   enrichment,
   terrainY = 0,
-  performanceMode = 'high',
+  performanceMode = 'extra-high',
   curve = null,
   track = null,
   region = null,

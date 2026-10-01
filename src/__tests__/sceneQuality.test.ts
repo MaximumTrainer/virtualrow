@@ -13,40 +13,34 @@ const DISCRETE = {
 };
 
 describe('resolveSceneQuality', () => {
-  it('reads auto as low on an integrated GPU, before the canvas is built', () => {
+  it('reads auto as basic on an integrated GPU, before the canvas is built', () => {
     // The whole point: the canvas used to treat 'auto' as high quality and turn
-    // on shadows, MSAA and dpr 2, while the scene inside resolved to low.
-    expect(resolveSceneQuality({ requested: 'auto', capabilities: INTEGRATED })).toBe('low');
+    // on shadows, MSAA and dpr 2, while the scene inside resolved to basic.
+    expect(resolveSceneQuality({ requested: 'auto', capabilities: INTEGRATED })).toBe('basic');
   });
 
   it('leaves capable hardware alone', () => {
-    expect(resolveSceneQuality({ requested: 'auto', capabilities: DISCRETE })).not.toBe('low');
+    expect(resolveSceneQuality({ requested: 'auto', capabilities: DISCRETE })).not.toBe('basic');
   });
 
   it('obeys a mode the rower chose', () => {
     expect(resolveSceneQuality({ requested: 'high', capabilities: INTEGRATED })).toBe('high');
-    expect(resolveSceneQuality({ requested: 'low', capabilities: DISCRETE })).toBe('low');
+    expect(resolveSceneQuality({ requested: 'basic', capabilities: DISCRETE })).toBe('basic');
   });
 
-  it('obeys a mode a test pinned, whatever the hardware says', () => {
-    expect(
-      resolveSceneQuality({ requested: 'auto', capabilities: INTEGRATED, explicit: true }),
-    ).toBe('auto');
+  it('does not guess when the probe learned nothing (D6: silence = medium)', () => {
+    // No capabilities means no evidence; silence resolves to the middle tier
+    // (never basic on no evidence, per #345/#455 FR7).
+    expect(resolveSceneQuality({ requested: 'auto', capabilities: {} })).toBe('medium');
+    expect(resolveSceneQuality({ requested: 'auto', capabilities: null })).toBe('medium');
   });
 
-  it('does not guess when the probe learned nothing', () => {
-    // No capabilities means no evidence; treat it as the caller asked rather
-    // than inventing a downgrade.
-    expect(resolveSceneQuality({ requested: 'auto', capabilities: {} })).toBe('auto');
-    expect(resolveSceneQuality({ requested: 'auto', capabilities: null })).toBe('auto');
-  });
-
-  it('drops to low when the GPU cannot hold a large texture', () => {
+  it('drops to basic when the GPU cannot hold a large texture', () => {
     expect(
       resolveSceneQuality({
         requested: 'auto',
         capabilities: { maxTextureSize: 2048, renderer: DISCRETE.renderer },
       }),
-    ).toBe('low');
+    ).toBe('basic');
   });
 });

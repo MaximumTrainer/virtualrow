@@ -36,8 +36,14 @@ export const bankMaterial = (
   tier: PerformanceMode,
 ): THREE.MeshStandardMaterial => {
   const grass = createDetailTexture('grass');
-  if (tier === 'low') {
-    // One albedo, no shader. Matches the FR5 spec for low.
+  // Five tiers (#455 FR3): the two lowest (`basic` and `low`) return the
+  // single-albedo material (today's `low` branch); `medium`, `high` and
+  // `extra-high` return the triplanar material with normal maps. The split
+  // sits here because normal-mapping the triplanar bank is the newer cost
+  // added in #437 — a middle tier that cannot afford the extra sample belongs
+  // at `low`, not a half-shader.
+  if (tier === 'basic' || tier === 'low') {
+    // One albedo, no shader. Matches the FR5 spec for the lowest two tiers.
     return new THREE.MeshStandardMaterial({
       color: theme.color,
       map: grass.albedo,

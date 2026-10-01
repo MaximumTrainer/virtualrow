@@ -59,9 +59,9 @@ const validPlacement = (p: Placement) => {
 
 describe('budgetFor', () => {
   it('scales instance count by performance mode', () => {
-    expect(budgetFor('high')).toBe(1);
-    expect(budgetFor('low')).toBe(0.4);
-    expect(budgetFor('auto')).toBe(0.7);
+    expect(budgetFor('extra-high')).toBe(1);
+    expect(budgetFor('basic')).toBe(0.4);
+    expect(budgetFor('medium')).toBe(0.7);
   });
 });
 
@@ -173,9 +173,9 @@ describe('the kit trees beside the billboard foliage (#333)', () => {
     });
 
   it('keeps the GLB trees at high only, as the close-up hero trees', () => {
-    expect(keepsKitTrees('high')).toBe(true);
-    expect(keepsKitTrees('auto')).toBe(false);
-    expect(keepsKitTrees('low')).toBe(false);
+    expect(keepsKitTrees('extra-high')).toBe(true);
+    expect(keepsKitTrees('medium')).toBe(false);
+    expect(keepsKitTrees('basic')).toBe(false);
   });
 
   it('places the kit trees unless told not to', () => {

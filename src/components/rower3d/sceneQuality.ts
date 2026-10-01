@@ -25,7 +25,14 @@ export interface RenderCapabilities {
 }
 
 export interface SceneQualityInput {
-  requested: PerformanceMode;
+  /**
+   * The tier the caller asks for. Takes a `PerformanceMode` or the legacy
+   * picker value `'auto'`; under #454 the App resolves `'auto'` via the
+   * device probe *before* calling here, so in practice this always arrives
+   * as a resolved tier, but the shape kept `'auto'` for callers that still
+   * negotiate inside the scene.
+   */
+  requested: PerformanceMode | 'auto';
   capabilities: RenderCapabilities | null | undefined;
   /** A mode pinned by a test or by `__VIRTUALROW_PERFORMANCE_MODE` is final. */
   explicit?: boolean;
@@ -43,13 +50,20 @@ export const resolveSceneQuality = ({
   capabilities,
   explicit = false,
 }: SceneQualityInput): PerformanceMode => {
-  if (explicit || requested !== 'auto') return requested;
+  if (explicit && requested !== 'auto') return requested;
+  if (requested !== 'auto') return requested;
   if (!capabilities || (capabilities.maxTextureSize === undefined && !capabilities.renderer)) {
-    return requested;
+    // D6: silence resolves to `medium` — never `basic` (today's `low`) on
+    // no evidence (#345 preserved under five tiers).
+    return 'medium';
   }
 
-  return recommendPerformanceMode({
+  const legacy = recommendPerformanceMode({
     maxTextureSize: capabilities.maxTextureSize,
     renderer: capabilities.renderer ?? null,
   });
+  // Widened for #455: the legacy three-tier recommendation still answers
+  // yes/no on capability; map `low` → `basic` and `auto` → `medium`. The top
+  // tiers (`high`/`extra-high`) remain user-elective (#345 / FR7).
+  return legacy === 'low' ? 'basic' : 'medium';
 };

@@ -34,7 +34,7 @@ describe('applyMaterialPass (#354)', () => {
 
   it('the hull becomes a physical material with a clearcoat and a normal map at auto', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const hull = root.getObjectByName('Hull_part') as THREE.Mesh;
     const mat = hull.material as THREE.MeshPhysicalMaterial;
     expect(mat).toBeInstanceOf(THREE.MeshPhysicalMaterial);
@@ -47,7 +47,7 @@ describe('applyMaterialPass (#354)', () => {
 
   it('cloth on the rower gets sheen and a lycra normal map at auto', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const torso = root.getObjectByName('Rower_Torso') as THREE.Mesh;
     const mat = torso.material as THREE.MeshPhysicalMaterial;
     expect(mat).toBeInstanceOf(THREE.MeshPhysicalMaterial);
@@ -58,7 +58,7 @@ describe('applyMaterialPass (#354)', () => {
 
   it('skin gets its own sheen colour without a normal map', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const head = root.getObjectByName('Rower_Head') as THREE.Mesh;
     const mat = head.material as THREE.MeshPhysicalMaterial;
     expect(mat).toBeInstanceOf(THREE.MeshPhysicalMaterial);
@@ -69,7 +69,7 @@ describe('applyMaterialPass (#354)', () => {
 
   it('the blade becomes a physical material with a light clearcoat', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const blade = root.getObjectByName('LeftOar_Blade_part') as THREE.Mesh;
     const mat = blade.material as THREE.MeshPhysicalMaterial;
     expect(mat).toBeInstanceOf(THREE.MeshPhysicalMaterial);
@@ -79,7 +79,7 @@ describe('applyMaterialPass (#354)', () => {
 
   it('the low tier drops every normal map', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'low' });
+    applyMaterialPass(root, { tier: 'basic' });
     const hull = root.getObjectByName('Hull_part') as THREE.Mesh;
     const torso = root.getObjectByName('Rower_Torso') as THREE.Mesh;
     expect((hull.material as THREE.MeshPhysicalMaterial).normalMap).toBeNull();
@@ -91,7 +91,7 @@ describe('applyMaterialPass (#354)', () => {
     const hull = root.getObjectByName('Hull_part') as THREE.Mesh;
     const sourceMat = hull.material as THREE.MeshStandardMaterial;
     const dispose = vi.spyOn(sourceMat, 'dispose');
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
@@ -99,22 +99,22 @@ describe('applyMaterialPass (#354)', () => {
     const root = scullFixture();
     const other = root.getObjectByName('UnknownPart') as THREE.Mesh;
     const originalMat = other.material as THREE.MeshStandardMaterial;
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     expect(other.material).toBe(originalMat);
   });
 
   it('a second pass on the same node is a no-op', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const hull = root.getObjectByName('Hull_part') as THREE.Mesh;
     const firstReplacement = hull.material;
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     expect(hull.material).toBe(firstReplacement);
   });
 
   it('the base colour of each part is preserved', () => {
     const root = scullFixture();
-    applyMaterialPass(root, { tier: 'auto' });
+    applyMaterialPass(root, { tier: 'medium' });
     const hull = root.getObjectByName('Hull_part') as THREE.Mesh;
     const hex = (hull.material as THREE.MeshPhysicalMaterial).color.getHexString();
     expect(hex).toBe('e0e0e0');

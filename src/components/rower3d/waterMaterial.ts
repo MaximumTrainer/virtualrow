@@ -85,7 +85,11 @@ export interface WaterMaterialPlan {
  * the extra budget buys, and a mirror on a rough surface is wasted.
  */
 export const waterMaterialPlan = (mode: PerformanceMode): WaterMaterialPlan => {
-  if (mode === 'high') {
+  // Five tiers (#455 D1). Pre-migration behaviour preserved at the extremes:
+  //   basic == old `low`, medium == old `auto`, extra-high == old `high`.
+  // `low` reuses the old `low` material (budget is on canvas/shadows, not water).
+  // `high` reuses medium's material and turns on the mirror pass (upper-mid).
+  if (mode === 'extra-high') {
     return {
       normalScale: 0.35,
       roughness: 0.12,
@@ -94,7 +98,16 @@ export const waterMaterialPlan = (mode: PerformanceMode): WaterMaterialPlan => {
       useMirror: true,
     };
   }
-  if (mode === 'auto') {
+  if (mode === 'high') {
+    return {
+      normalScale: 0.3,
+      roughness: 0.18,
+      metalness: 0,
+      envMapIntensity: 0.9,
+      useMirror: true,
+    };
+  }
+  if (mode === 'medium') {
     return {
       normalScale: 0.3,
       roughness: 0.18,
@@ -103,6 +116,7 @@ export const waterMaterialPlan = (mode: PerformanceMode): WaterMaterialPlan => {
       useMirror: false,
     };
   }
+  // basic and low: cheap material, no mirror pass.
   return {
     normalScale: 0.2,
     roughness: 0.3,

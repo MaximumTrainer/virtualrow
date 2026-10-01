@@ -17,7 +17,7 @@ import type { PerformanceMode } from './constants';
 import type { PowerPreference } from './glContext';
 
 /** Every tier the scene can run at, weakest first. */
-export const QUALITY_TIERS: PerformanceMode[] = ['low', 'auto', 'high'];
+export const QUALITY_TIERS: PerformanceMode[] = ['basic', 'low', 'medium', 'high', 'extra-high'];
 
 export interface CanvasSurface {
   antialias: boolean;
@@ -46,7 +46,9 @@ export interface CanvasSurface {
  * drawing buffer below retina.
  */
 const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
-  low: {
+  // basic = the fallback that shipped as `low` before #455: no AA, no shadows,
+  // dpr 1, low-power. Pixel-equal to today's low (FR10).
+  basic: {
     antialias: false,
     shadows: false,
     softShadows: false,
@@ -54,7 +56,19 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     dpr: 1,
     powerPreference: 'low-power',
   },
-  auto: {
+  // low = the new middle-low (#455 D1): shadows at a small map, still dpr 1
+  // and still low-power so a weak-but-real GPU gets the depth of a shadow
+  // without the bandwidth of 1.5x pixels.
+  low: {
+    antialias: false,
+    shadows: true,
+    softShadows: true,
+    shadowMapSize: 512,
+    dpr: 1,
+    powerPreference: 'low-power',
+  },
+  // medium = today's `auto`: AA + shadows + dpr up to 1.5, default adapter.
+  medium: {
     antialias: true,
     shadows: true,
     softShadows: true,
@@ -62,7 +76,19 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     dpr: [1, 1.5],
     powerPreference: 'default',
   },
+  // high = new upper-mid (#455 D1): everything medium has plus 2x dpr and a
+  // 1536 shadow map, now on the high-performance adapter.
   high: {
+    antialias: true,
+    shadows: true,
+    softShadows: true,
+    shadowMapSize: 1536,
+    dpr: [1, 2],
+    powerPreference: 'high-performance',
+  },
+  // extra-high = today's `high` (#455 FR10). Keeps 2048 shadow map so visual
+  // baseline matches the pre-migration PNG for the top tier.
+  'extra-high': {
     antialias: true,
     shadows: true,
     softShadows: true,
@@ -73,7 +99,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
 };
 
 export const canvasSurfaceFor = (mode: PerformanceMode): CanvasSurface =>
-  SURFACE_BY_TIER[mode] ?? SURFACE_BY_TIER.auto;
+  SURFACE_BY_TIER[mode] ?? SURFACE_BY_TIER.medium;
 
 /** The largest device pixel ratio a surface will draw at. */
 export const maxDpr = (dpr: number | [number, number]): number =>

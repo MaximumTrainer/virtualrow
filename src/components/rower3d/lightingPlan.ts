@@ -20,7 +20,13 @@ import type { SceneConfig } from './themeConfig';
  */
 
 /** Tiers, dimmest first, so a test can assert the order rather than restate it. */
-export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto', 'high'] as const;
+export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = [
+  'basic',
+  'low',
+  'medium',
+  'high',
+  'extra-high',
+] as const;
 
 /**
  * How much of the sky's light reaches the materials, per tier.
@@ -42,9 +48,13 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = ['low', 'auto'
  * the bank up a step at the preset the last failure concentrated in.
  */
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
-  low: 0.05,
-  auto: 0.08,
-  high: 0.24,
+  // Five tiers (#455 D1). The two extremes keep their calibrated #433 values;
+  // the three middle tiers interpolate along the same axis.
+  basic: 0.05,
+  low: 0.06,
+  medium: 0.08,
+  high: 0.14,
+  'extra-high': 0.24,
 };
 
 /**
@@ -88,7 +98,7 @@ export interface LightingPlan {
 }
 
 export const lightingPlan = (mode: PerformanceMode, config: SceneConfig): LightingPlan => ({
-  environmentIntensity: ENVIRONMENT_INTENSITY[mode] ?? ENVIRONMENT_INTENSITY.auto,
+  environmentIntensity: ENVIRONMENT_INTENSITY[mode] ?? ENVIRONMENT_INTENSITY.medium,
   hemisphere: {
     sky: config.lighting.ambientColor,
     ground: config.bank.flatColor,

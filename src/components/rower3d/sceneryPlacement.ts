@@ -167,19 +167,32 @@ export const thinToCeiling = (
 export const pick = (ids: SceneryModelId[], seed: number): SceneryModelId | null =>
   ids.length === 0 ? null : ids[Math.floor(seededRandom(seed) * ids.length)];
 
-/** Instance-count multiplier for the performance mode. */
-export const budgetFor = (mode: PerformanceMode): number =>
-  mode === 'high' ? 1 : mode === 'low' ? 0.4 : 0.7;
+/**
+ * Instance-count multiplier for the performance mode.
+ *
+ * Five tiers (#455 D1): extremes preserve today's values (`basic` → 0.4,
+ * `extra-high` → 1.0); middle tiers interpolate.
+ */
+const SCENERY_BUDGET: Record<PerformanceMode, number> = {
+  basic: 0.4,
+  low: 0.5,
+  medium: 0.7,
+  high: 0.85,
+  'extra-high': 1,
+};
+export const budgetFor = (mode: PerformanceMode): number => SCENERY_BUDGET[mode] ?? SCENERY_BUDGET.medium;
 
 /**
  * Whether the kit's own GLB trees are placed at a tier (#333).
  *
  * The banks are planted with billboard foliage at every tier now. The kit's
- * trees are kept at `high` only, as the close-up hero trees: they are a
- * handful per bank, and each is a cloned GLB of several meshes, which is what
- * the billboards exist to avoid paying for below the top tier.
+ * trees are kept at the upper two tiers (`high` and `extra-high`) as the
+ * close-up hero trees: they are a handful per bank, and each is a cloned GLB
+ * of several meshes, which is what the billboards exist to avoid paying for
+ * on the three lower tiers.
  */
-export const keepsKitTrees = (mode: PerformanceMode): boolean => mode === 'high';
+export const keepsKitTrees = (mode: PerformanceMode): boolean =>
+  mode === 'high' || mode === 'extra-high';
 
 /** Distinct scenery profiles present on the route (fallback when none). */
 export const distinctProfiles = (

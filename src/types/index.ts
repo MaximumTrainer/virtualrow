@@ -331,7 +331,21 @@ declare global {
      * spec that has to cast to reach a hook is a spec that keeps compiling
      * after the hook is renamed (#340).
      */
-    __VIRTUALROW_PERFORMANCE_MODE?: 'low' | 'auto' | 'high';
+    /**
+     * Pin the rendering tier. #455 widened the codomain from the old
+     * three tiers to five: `basic` | `low` | `medium` | `high` | `extra-high`.
+     * The legacy `auto` string is accepted for one release and aliases
+     * `medium` (#455 AC11); legacy `low`/`high` now mean the new five-tier
+     * `low`/`high` (both middle tiers), so specs that want today's extremes
+     * pin `basic` or `extra-high` explicitly.
+     */
+    __VIRTUALROW_PERFORMANCE_MODE?:
+      | 'basic'
+      | 'low'
+      | 'medium'
+      | 'high'
+      | 'extra-high'
+      | 'auto';
     /**
      * The live WorkoutService, exposed only under __PLAYWRIGHT_TESTING so an
      * E2E test can start and end sessions without driving the UI.

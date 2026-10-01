@@ -65,8 +65,9 @@ describe('useDevicePerformance (#454 Phase 2)', () => {
       expect(getByTestId('probe-ready').textContent).toBe('ready');
     });
     expect(captured.length).toBeGreaterThan(0);
-    // No WebGL2, so the hook lands on the static fallback with tier=auto.
-    expect(captured[captured.length - 1].tierAfterReady).toBe('auto');
+    // No WebGL2, so the hook lands on the static fallback with tier=medium
+    // (#455 D6: silence resolves to medium, never basic).
+    expect(captured[captured.length - 1].tierAfterReady).toBe('medium');
   });
 
   it('synchronous: true returns a ready state inside the first render for App tests', () => {
@@ -80,27 +81,39 @@ describe('useDevicePerformance (#454 Phase 2)', () => {
   });
 
   describe('resolvePerformanceModeFromProbe', () => {
-    it('user-set low always wins over the probe', () => {
-      expect(resolvePerformanceModeFromProbe('low', 'auto')).toBe('low');
+    it('user-set basic always wins over the probe', () => {
+      expect(resolvePerformanceModeFromProbe('basic', 'medium')).toBe('basic');
     });
 
-    it('user-set high always wins over the probe', () => {
-      expect(resolvePerformanceModeFromProbe('high', 'low')).toBe('high');
+    it('user-set extra-high always wins over the probe', () => {
+      expect(resolvePerformanceModeFromProbe('extra-high', 'basic')).toBe('extra-high');
     });
 
     it('user-set auto defers to the probed tier', () => {
-      expect(resolvePerformanceModeFromProbe('auto', 'low')).toBe('low');
+      expect(resolvePerformanceModeFromProbe('auto', 'basic')).toBe('basic');
+    });
+
+    it('user-set auto with a medium probe returns medium', () => {
+      expect(resolvePerformanceModeFromProbe('auto', 'medium')).toBe('medium');
     });
 
     it('undefined user choice (undefined → auto) defers to the probed tier', () => {
-      expect(resolvePerformanceModeFromProbe(undefined, 'low')).toBe('low');
+      expect(resolvePerformanceModeFromProbe(undefined, 'basic')).toBe('basic');
+    });
+
+    it('a high/extra-high probed tier is treated as no-answer and falls through', () => {
+      // The probe never returns high/extra-high today (FR7), but the resolver
+      // defends against a future codomain by falling through to the global
+      // default rather than silently promoting the scene.
+      const highValue = resolvePerformanceModeFromProbe('auto', 'high');
+      expect(['basic', 'low', 'medium']).toContain(highValue);
+      const extraHighValue = resolvePerformanceModeFromProbe('auto', 'extra-high');
+      expect(['basic', 'low', 'medium']).toContain(extraHighValue);
     });
 
     it('falls through to resolvePerformanceMode() when neither the user nor the probe decides', () => {
-      // The default under non-Playwright is `auto`; we only care that this
-      // path is safe (no throw) and returns one of the three legal tiers.
       const value = resolvePerformanceModeFromProbe('auto', null);
-      expect(['low', 'auto', 'high']).toContain(value);
+      expect(['basic', 'low', 'medium', 'high', 'extra-high']).toContain(value);
     });
   });
 });

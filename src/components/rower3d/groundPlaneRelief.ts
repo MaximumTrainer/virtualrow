@@ -44,7 +44,7 @@ export const groundPlaneReliefFor = (
   curve: THREE.CatmullRomCurve3 | null,
   tier: PerformanceMode,
 ): GroundPlaneVertex[] => {
-  const dropRelief = tier === 'low' || curve === null;
+  const dropRelief = tier === 'basic' || curve === null;
   const segments = dropRelief ? 1 : GROUND_PLANE_SEGMENTS;
   const step = plan.size / segments;
   const x0 = plan.centre[0] - plan.size / 2;
@@ -164,4 +164,4 @@ export const buildGroundPlaneGeometry = (
 export const groundPlaneSegmentsFor = (
   tier: PerformanceMode,
   curve: THREE.CatmullRomCurve3 | null,
-): number => (tier === 'low' || curve === null ? 1 : GROUND_PLANE_SEGMENTS);
+): number => (tier === 'basic' || curve === null ? 1 : GROUND_PLANE_SEGMENTS);

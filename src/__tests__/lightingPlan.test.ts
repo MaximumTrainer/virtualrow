@@ -49,7 +49,7 @@ describe('the lights that remain', () => {
    * they are subtracting contrast for nothing.
    */
   it('keeps a hemisphere for the ground bounce and nothing else but the sun', () => {
-    const plan = lightingPlan('high', SCENE_CONFIG);
+    const plan = lightingPlan('extra-high', SCENE_CONFIG);
 
     expect(plan.hemisphere).toBeTruthy();
     expect(plan.sun).toBeTruthy();
@@ -58,7 +58,7 @@ describe('the lights that remain', () => {
   });
 
   it('takes every colour from the config rather than from a literal', () => {
-    const plan = lightingPlan('high', SCENE_CONFIG);
+    const plan = lightingPlan('extra-high', SCENE_CONFIG);
 
     expect(plan.hemisphere.sky).toBe(SCENE_CONFIG.lighting.ambientColor);
     expect(plan.hemisphere.ground).toBe(SCENE_CONFIG.bank.flatColor);
@@ -66,7 +66,7 @@ describe('the lights that remain', () => {
   });
 
   it('carries the sun’s own angles, so one function places it everywhere', () => {
-    const plan = lightingPlan('high', SCENE_CONFIG);
+    const plan = lightingPlan('extra-high', SCENE_CONFIG);
 
     expect(plan.sun.elevation).toBe(SCENE_CONFIG.lighting.sunElevation);
     expect(plan.sun.azimuth).toBe(SCENE_CONFIG.lighting.sunAzimuth);
@@ -85,8 +85,8 @@ describe('the lights that remain', () => {
     const overcast = applyConditions(SCENE_CONFIG, 'overcast');
     const dusk = applyConditions(SCENE_CONFIG, 'dusk');
 
-    expect(lightingPlan('high', overcast).hemisphere.intensity).toBeGreaterThan(
-      lightingPlan('high', dusk).hemisphere.intensity,
+    expect(lightingPlan('extra-high', overcast).hemisphere.intensity).toBeGreaterThan(
+      lightingPlan('extra-high', dusk).hemisphere.intensity,
     );
   });
 
@@ -102,7 +102,7 @@ describe('the lights that remain', () => {
    * something to reflect, not to relight the world.
    */
   it('lights the distance as strongly as it always did', () => {
-    expect(lightingPlan('high', SCENE_CONFIG).hemisphere.intensity).toBeCloseTo(0.9, 6);
+    expect(lightingPlan('extra-high', SCENE_CONFIG).hemisphere.intensity).toBeCloseTo(0.9, 6);
   });
 });
 
@@ -131,6 +131,6 @@ describe('a tier nobody planned for', () => {
   it('is lit like the middle one rather than not at all', () => {
     const unknown = lightingPlan('ultra' as never, SCENE_CONFIG);
 
-    expect(unknown.environmentIntensity).toBe(lightingPlan('auto', SCENE_CONFIG).environmentIntensity);
+    expect(unknown.environmentIntensity).toBe(lightingPlan('medium', SCENE_CONFIG).environmentIntensity);
   });
 });

@@ -14,7 +14,14 @@ import type { PerformanceMode } from './constants';
  */
 
 /** The most clouds a tier will draw, whatever the config asks for. */
-const MOST_CLOUDS: Record<PerformanceMode, number> = { low: 0, auto: 6, high: 12 };
+// Five tiers (#455 D1). Extremes keep today's counts; middle tiers slide.
+const MOST_CLOUDS: Record<PerformanceMode, number> = {
+  basic: 0,
+  low: 3,
+  medium: 6,
+  high: 9,
+  'extra-high': 12,
+};
 
 /** Segments per cloud below the top tier, where the authored count stands. */
 const PLAIN_SEGMENTS = 12;
@@ -29,6 +36,6 @@ export const cloudsFor = (
   return {
     ...authored,
     count: Math.min(authored.count, MOST_CLOUDS[mode]),
-    segments: mode === 'high' ? authored.segments : Math.min(authored.segments, PLAIN_SEGMENTS),
+    segments: mode === 'extra-high' ? authored.segments : Math.min(authored.segments, PLAIN_SEGMENTS),
   };
 };

@@ -15,19 +15,19 @@ const theme = { color: '#7a8a3c', roughness: 0.9, metalness: 0 };
 describe('bankMaterial (#430)', () => {
   it('carries the triplanar shader at auto', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'auto');
+    const mat = bankMaterial(theme, 'medium');
     expect(isBankTriplanarMaterial(mat)).toBe(true);
     expect(mat.onBeforeCompile).toBeDefined();
   });
 
   it('carries the triplanar shader at high', () => {
     resetDetailTextureCacheForTesting();
-    expect(isBankTriplanarMaterial(bankMaterial(theme, 'high'))).toBe(true);
+    expect(isBankTriplanarMaterial(bankMaterial(theme, 'extra-high'))).toBe(true);
   });
 
   it('drops the triplanar shader at low, no shader edit', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'low');
+    const mat = bankMaterial(theme, 'basic');
     expect(isBankTriplanarMaterial(mat)).toBe(false);
     // A plain onBeforeCompile default on THREE.Material is a no-op function
     // that returns void; identity through cloning is not required here.
@@ -36,7 +36,7 @@ describe('bankMaterial (#430)', () => {
 
   it('installs uGrass, uEarth and the shore varying at auto', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'auto');
+    const mat = bankMaterial(theme, 'medium');
 
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
@@ -68,7 +68,7 @@ describe('bankMaterial (#430)', () => {
 
   it('installs the normal maps and samples them triplanar at auto (#437)', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'auto');
+    const mat = bankMaterial(theme, 'medium');
 
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
@@ -96,7 +96,7 @@ describe('bankMaterial (#430)', () => {
 
   it('leaves the shader alone at high past what auto installs (#437)', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'high');
+    const mat = bankMaterial(theme, 'extra-high');
 
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
@@ -117,7 +117,7 @@ describe('bankMaterial (#430)', () => {
 
   it('installs no normal maps at low (#437)', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'low');
+    const mat = bankMaterial(theme, 'basic');
 
     // Low returns a plain MeshStandardMaterial with no shader edit, so nothing
     // installs uGrassN/uEarthN. onBeforeCompile stays the base no-op.
@@ -127,19 +127,19 @@ describe('bankMaterial (#430)', () => {
 
   it('names a custom program cache key so a swap does not miss', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'auto');
+    const mat = bankMaterial(theme, 'medium');
     expect(mat.customProgramCacheKey!()).toBe('virtualrow-bank-triplanar');
   });
 
   it('carries the authored colour as albedo tint', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'auto');
+    const mat = bankMaterial(theme, 'medium');
     expect(mat.color.getHexString()).toBe('7a8a3c');
   });
 
   it('at low, keeps the grass albedo as `map` and no shader', () => {
     resetDetailTextureCacheForTesting();
-    const mat = bankMaterial(theme, 'low');
+    const mat = bankMaterial(theme, 'basic');
     expect(mat.map).not.toBeNull();
   });
 });

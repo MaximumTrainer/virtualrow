@@ -29,7 +29,7 @@ export const WaterReflectionProbe: React.FC<{
 }> = ({ materialRef, meshRef, performanceMode }) => {
   const { fbo, update } = useCubeCamera({ resolution: 64, near: 0.5, far: 600 });
   const frameRef = useRef(0);
-  const interval = performanceMode === 'auto' ? 60 : 30;
+  const interval = performanceMode === 'medium' ? 60 : 30;
 
   useFrame(() => {
     frameRef.current++;
@@ -111,7 +111,7 @@ export const PhotorealisticWater: React.FC<{
   return (
     <>
       <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[1000, 1000, performanceMode !== 'low' ? 64 : 32, performanceMode !== 'low' ? 64 : 32]} />
+        <planeGeometry args={[1000, 1000, performanceMode !== 'basic' ? 64 : 32, performanceMode !== 'basic' ? 64 : 32]} />
         <meshPhysicalMaterial
           ref={materialRef}
           color={waterConfig.color}
@@ -139,7 +139,7 @@ export const PhotorealisticWater: React.FC<{
           normalScale={new THREE.Vector2(0.15, 0.15)}
         />
       </mesh>
-      {!dropForCost() && performanceMode !== 'low' && (
+      {!dropForCost() && performanceMode !== 'basic' && (
         <WaterReflectionProbe materialRef={materialRef} meshRef={meshRef} performanceMode={performanceMode} />
       )}
     </>
@@ -185,7 +185,7 @@ export interface CurvedWaterChannelProps {
 export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   curve,
   enrichment,
-  performanceMode = 'auto',
+  performanceMode = 'medium',
 }) => {
   const timeUniformRef = useRef({ value: 0 });
   const { gl } = useThree();

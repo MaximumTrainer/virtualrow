@@ -61,7 +61,7 @@ describe('applyScenerySkyPass (#432)', () => {
       { name: 'wall2', hex: '#f0e8d0' },
     ]);
 
-    applyScenerySkyPass(scene, 'auto');
+    applyScenerySkyPass(scene, 'medium');
 
     const meshes = scene.children as THREE.Mesh[];
     expect(meshes[0].material).toBeInstanceOf(THREE.MeshStandardMaterial);
@@ -74,7 +74,7 @@ describe('applyScenerySkyPass (#432)', () => {
       { name: 'window', hex: '#2a3a44' },
     ]);
 
-    applyScenerySkyPass(scene, 'auto');
+    applyScenerySkyPass(scene, 'medium');
 
     const mesh = scene.children[0] as THREE.Mesh;
     expect(mesh.material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
@@ -83,9 +83,9 @@ describe('applyScenerySkyPass (#432)', () => {
   it('is idempotent — a second pass leaves the swapped materials in place', () => {
     const scene = buildingWithParts([{ name: 'wall', hex: '#a24c2e' }]);
 
-    applyScenerySkyPass(scene, 'auto');
+    applyScenerySkyPass(scene, 'medium');
     const first = (scene.children[0] as THREE.Mesh).material;
-    applyScenerySkyPass(scene, 'auto');
+    applyScenerySkyPass(scene, 'medium');
     const second = (scene.children[0] as THREE.Mesh).material;
 
     expect(second).toBe(first);
@@ -94,7 +94,7 @@ describe('applyScenerySkyPass (#432)', () => {
   it('lifts every replacement with the scenery env-map intensity', () => {
     const scene = buildingWithParts([{ name: 'wall', hex: '#a24c2e' }]);
 
-    applyScenerySkyPass(scene, 'auto');
+    applyScenerySkyPass(scene, 'medium');
 
     const mat = (scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
     expect(mat.envMapIntensity).toBeGreaterThan(0);
@@ -103,7 +103,7 @@ describe('applyScenerySkyPass (#432)', () => {
   it('drops the normal map on low tier facades', () => {
     const scene = buildingWithParts([{ name: 'wall', hex: '#a24c2e' }]);
 
-    applyScenerySkyPass(scene, 'low');
+    applyScenerySkyPass(scene, 'basic');
 
     const mat = (scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
     expect(mat.normalMap).toBeNull();

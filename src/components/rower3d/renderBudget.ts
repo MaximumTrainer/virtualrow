@@ -51,10 +51,23 @@ export interface RenderBudget {
   p95Ms: number;
 }
 
+/**
+ * Five tiers (#455 D6). The extremes keep today's measured ceilings
+ * (`basic` == old `low`, `extra-high` == old `high`); the three middle rows
+ * are provisional, interpolated from the measured low/auto/high. A follow-up
+ * will re-measure the two new rows (`low`, `high`) on real hardware and
+ * tighten the ceilings.
+ *
+ * NFR2: `triangles` and `p95Ms` MUST be monotone non-decreasing across the
+ * tiers in list order. `drawCalls` need not order strictly (see the comment
+ * above): it is still budgeted so a regression at any tier is caught.
+ */
 export const RENDER_BUDGET: Record<PerformanceMode, RenderBudget> = {
-  low: { drawCalls: 450, triangles: 400_000, p95Ms: 20 },
-  auto: { drawCalls: 550, triangles: 600_000, p95Ms: 24 },
-  high: { drawCalls: 650, triangles: 900_000, p95Ms: 33 },
+  basic: { drawCalls: 450, triangles: 400_000, p95Ms: 20 },
+  low: { drawCalls: 500, triangles: 500_000, p95Ms: 22 },
+  medium: { drawCalls: 550, triangles: 600_000, p95Ms: 24 },
+  high: { drawCalls: 600, triangles: 750_000, p95Ms: 28 },
+  'extra-high': { drawCalls: 650, triangles: 900_000, p95Ms: 33 },
 };
 
 /** A frame's measured cost. Anything left out is not checked. */

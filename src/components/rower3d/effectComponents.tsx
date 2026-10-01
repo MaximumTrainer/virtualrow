@@ -473,7 +473,7 @@ export const DynamicPostFx: React.FC<{
   // mounts is a render-time decision, so a rower turning the setting on has to
   // re-render the stack to be rid of the one that moves (#344).
   const reducedMotion = useReducedMotion();
-  const plan = effectPlanFor(performanceMode ?? 'auto', { hasSun: !!sunMesh, reducedMotion });
+  const plan = effectPlanFor(performanceMode ?? 'medium', { hasSun: !!sunMesh, reducedMotion });
 
   /**
    * Exactly one tone-mapping stage (#327) — and it is already the composer's.

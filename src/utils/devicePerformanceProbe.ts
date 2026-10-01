@@ -125,27 +125,29 @@ const SAFE_INTEGER_MAX = Number.MAX_SAFE_INTEGER;
 /**
  * The static mapping from capabilities to a tier.
  *
- * Wraps `recommendPerformanceMode`; isolated here so the mapping can widen
- * for #455 without touching the probe shape. Returns `'auto'` when there is
- * nothing to go on (default, D6).
+ * Widened for #455 (D4 / FR7): the probe may return `basic`, `low` or
+ * `medium`. `high` and `extra-high` stay user-elective (#345), so the old
+ * three-tier `'low'`/`'auto'` from `recommendPerformanceMode` maps to
+ * `'basic'`/`'medium'` here. Returns `'medium'` when there is nothing to go
+ * on (D6): never `'basic'` on silence.
  */
 export const staticTierFor = (
   capabilities: RenderCapabilities | null,
 ): PerformanceMode => {
-  if (!capabilities) return 'auto';
-  return recommendPerformanceMode({
+  if (!capabilities) return 'medium';
+  const legacy = recommendPerformanceMode({
     maxTextureSize: capabilities.maxTextureSize,
     renderer: capabilities.renderer ?? null,
   });
+  return legacy === 'low' ? 'basic' : 'medium';
 };
 
 /**
  * The benchmark → tier mapping.
  *
- * Thresholds here are the same shape the static heuristic uses: if frames are
- * clearly expensive the device gets `'low'`, otherwise `'auto'`. The top tier
- * is reserved for a user's own choice (#345, D5(a)); under #455 this returns
- * one of `'basic' | 'low' | 'medium'`.
+ * Returns one of `basic`, `low` or `medium` (#455 D4 / FR7). A clearly slow
+ * median frame maps to `basic`; a slow-but-not-glacial device gets `low`;
+ * everything else lands at `medium`.
  */
 export const benchmarkTierFor = (
   benchmark: DevicePerformanceBenchmark,
@@ -156,12 +158,17 @@ export const benchmarkTierFor = (
 
   // A median frame over 20 ms on a 1-pixel benchmark means the GPU struggled
   // with the compile+draw loop itself; the real scene will not be kinder.
-  if (benchmark.medianFrameMs > 20) return 'low';
+  if (benchmark.medianFrameMs > 20) return 'basic';
+  // Low median but static evidence of a weak renderer: land one tier above
+  // the fallback so the scene gets shadows but not the composer.
+  if (benchmark.medianFrameMs > 10) return 'low';
 
-  // Everything else lands in the middle. Static evidence tightens it.
+  // Everything else lands at medium. Static evidence of a weak renderer
+  // still demotes to `low` (not `basic`): a benchmark that cleared the
+  // 10 ms bar is already stronger than the renderer-string heuristic.
   const staticHint = staticTierFor(capabilities);
-  if (staticHint === 'low') return 'low';
-  return 'auto';
+  if (staticHint === 'basic') return 'low';
+  return 'medium';
 };
 
 const buildFingerprint = (capabilities: RenderCapabilities | null): string => {
@@ -177,7 +184,7 @@ const buildFingerprint = (capabilities: RenderCapabilities | null): string => {
 };
 
 const DEFAULT_RESULT = (fingerprint: string): DevicePerformanceResult => ({
-  tier: 'auto',
+  tier: 'medium',
   source: 'static',
   capabilities: null,
   fingerprint,
@@ -215,7 +222,11 @@ const readCachedEntry = (
 };
 
 const isPerformanceMode = (value: string): value is PerformanceMode =>
-  value === 'low' || value === 'auto' || value === 'high';
+  value === 'basic' ||
+  value === 'low' ||
+  value === 'medium' ||
+  value === 'high' ||
+  value === 'extra-high';
 
 const readCapabilitiesFrom = (
   context: WebGL2RenderingContext | null,
@@ -371,11 +382,13 @@ export function runDeviceProbe(
   // ratchets contexts opened before the scene's own, so even a throwaway probe
   // context would push the budget from 4 → 5. Specs that pin a mode go through
   // the `explicit` branch above; specs that don't still render under
-  // `__PLAYWRIGHT_TESTING`, where `resolvePerformanceModeFromProbe` resolves
-  // `'auto'` to the same answer `resolvePerformanceMode()` gives in test mode.
+  // `__PLAYWRIGHT_TESTING`, where returning `basic` keeps the visual baseline
+  // on the lowest tier (which under #455 is what today's `low` pixels become,
+  // FR10). The App resolver still treats this as "no answer" per
+  // `resolvePerformanceModeFromProbe`, so a user pin on top still wins.
   if (testSuppressed) {
     const result: DevicePerformanceResult = {
-      tier: 'auto',
+      tier: 'basic',
       source: 'test-suppressed',
       capabilities: null,
       fingerprint: 'test-suppressed',

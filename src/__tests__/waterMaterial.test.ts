@@ -19,7 +19,7 @@ import type { PerformanceMode } from '../components/rower3d/constants';
  * blue plane with a light behind it.
  */
 
-const TIERS: PerformanceMode[] = ['low', 'auto', 'high'];
+const TIERS: PerformanceMode[] = ['basic', 'medium', 'extra-high'];
 
 describe('waterMaterialPlan', () => {
   it('has a plan for every tier', () => {
@@ -29,27 +29,27 @@ describe('waterMaterialPlan', () => {
   });
 
   it('gets smoother as the tier rises, because a mirror needs a smooth surface', () => {
-    expect(waterMaterialPlan('auto').roughness).toBeLessThan(
-      waterMaterialPlan('low').roughness,
+    expect(waterMaterialPlan('medium').roughness).toBeLessThan(
+      waterMaterialPlan('basic').roughness,
     );
-    expect(waterMaterialPlan('high').roughness).toBeLessThan(
-      waterMaterialPlan('auto').roughness,
+    expect(waterMaterialPlan('extra-high').roughness).toBeLessThan(
+      waterMaterialPlan('medium').roughness,
     );
   });
 
   it('reflects more of the sky as the tier rises', () => {
-    expect(waterMaterialPlan('auto').envMapIntensity).toBeGreaterThan(
-      waterMaterialPlan('low').envMapIntensity,
+    expect(waterMaterialPlan('medium').envMapIntensity).toBeGreaterThan(
+      waterMaterialPlan('basic').envMapIntensity,
     );
-    expect(waterMaterialPlan('high').envMapIntensity).toBeGreaterThan(
-      waterMaterialPlan('auto').envMapIntensity,
+    expect(waterMaterialPlan('extra-high').envMapIntensity).toBeGreaterThan(
+      waterMaterialPlan('medium').envMapIntensity,
     );
   });
 
   it('puts the planar mirror on the high tier alone', () => {
-    expect(waterMaterialPlan('low').useMirror).toBe(false);
-    expect(waterMaterialPlan('auto').useMirror, 'auto is paying for a mirror').toBe(false);
-    expect(waterMaterialPlan('high').useMirror).toBe(true);
+    expect(waterMaterialPlan('basic').useMirror).toBe(false);
+    expect(waterMaterialPlan('medium').useMirror, 'auto is paying for a mirror').toBe(false);
+    expect(waterMaterialPlan('extra-high').useMirror).toBe(true);
   });
 
   it('never leaves the water metallic, which renders it as a hole', () => {
