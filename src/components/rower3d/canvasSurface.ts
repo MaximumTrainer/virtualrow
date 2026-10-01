@@ -104,3 +104,34 @@ export const canvasSurfaceFor = (mode: PerformanceMode): CanvasSurface =>
 /** The largest device pixel ratio a surface will draw at. */
 export const maxDpr = (dpr: number | [number, number]): number =>
   Array.isArray(dpr) ? dpr[1] : dpr;
+
+/**
+ * Named predicates for the tier gates in `Rower3D.tsx` (#455 FR4).
+ *
+ * The scene has a handful of switches that read as "does this tier draw X at
+ * all". Expressed inline, each one is a string equality against a tier name,
+ * and a tier added or removed later has to be chased through every site. One
+ * named predicate per gate instead, so a boundary moves by editing one line.
+ *
+ * The boundaries follow #455 D1: `basic` is the cost-floor that draws no
+ * decoration, so everything meaningful starts at `low`; the ground-relief
+ * mesh is `extra-high`-only (today's #353 behaviour kept on the top tier).
+ */
+export const drawsShadows = (mode: PerformanceMode): boolean =>
+  canvasSurfaceFor(mode).shadows;
+export const drawsScenery = (mode: PerformanceMode): boolean =>
+  mode !== 'basic';
+export const drawsPostStack = (mode: PerformanceMode): boolean =>
+  mode !== 'basic';
+export const drawsGroundCover = (mode: PerformanceMode): boolean =>
+  mode !== 'basic';
+export const drawsWaterReflection = (mode: PerformanceMode): boolean =>
+  mode !== 'basic';
+export const drawsCaustics = (mode: PerformanceMode): boolean =>
+  mode !== 'basic';
+/**
+ * The sun sphere that `godRays` samples as its source occluder. Only the top
+ * tier runs `godRays` (see `effectPlan.ts`), so the mesh is on only there.
+ */
+export const drawsSunMesh = (mode: PerformanceMode): boolean =>
+  mode === 'extra-high';

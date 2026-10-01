@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   QUALITY_TIERS,
   canvasSurfaceFor,
+  drawsCaustics,
+  drawsGroundCover,
+  drawsPostStack,
+  drawsScenery,
+  drawsShadows,
+  drawsSunMesh,
+  drawsWaterReflection,
   maxDpr,
   type CanvasSurface,
 } from '../components/rower3d/canvasSurface';
@@ -142,5 +152,67 @@ describe('how hard the shadow edges are', () => {
 
     expect(surface.shadows).toBe(false);
     expect(surface.softShadows).toBe(false);
+  });
+});
+
+/**
+ * #455 FR4 / AC3 — Rower3D.tsx's tier gates read named predicates.
+ *
+ * Inline string equalities against tier names leave each gate independently
+ * authored, so a new tier (or a renamed one) has to be chased through every
+ * site. The predicates in canvasSurface.ts carry the boundary; a change there
+ * changes every gate it names. The grep below is the contract: no literal
+ * tier comparison SHALL survive in Rower3D.tsx.
+ */
+describe('tier gates in Rower3D.tsx', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const rowerSrc = readFileSync(
+    resolve(here, '../components/Rower3D.tsx'),
+    'utf8',
+  );
+
+  it.each([
+    "performanceMode === 'basic'",
+    "performanceMode !== 'basic'",
+    "performanceMode === 'low'",
+    "performanceMode !== 'low'",
+    "performanceMode === 'medium'",
+    "performanceMode !== 'medium'",
+    "performanceMode === 'high'",
+    "performanceMode !== 'high'",
+    "performanceMode === 'extra-high'",
+    "performanceMode !== 'extra-high'",
+  ])('does not spell "%s" inline', (fragment) => {
+    expect(rowerSrc).not.toContain(fragment);
+  });
+});
+
+describe('named predicates for the Rower3D gates', () => {
+  it('turns scenery/post/water/caustics/ground-cover on from `low` upwards', () => {
+    for (const predicate of [
+      drawsScenery,
+      drawsPostStack,
+      drawsWaterReflection,
+      drawsCaustics,
+      drawsGroundCover,
+    ]) {
+      expect(predicate('basic'), predicate.name).toBe(false);
+      for (const tier of ['low', 'medium', 'high', 'extra-high'] as const) {
+        expect(predicate(tier), `${predicate.name}(${tier})`).toBe(true);
+      }
+    }
+  });
+
+  it('turns shadows on wherever the surface asks for them', () => {
+    for (const tier of QUALITY_TIERS) {
+      expect(drawsShadows(tier), tier).toBe(canvasSurfaceFor(tier).shadows);
+    }
+  });
+
+  it('turns the godRays sun sphere on only at extra-high', () => {
+    for (const tier of ['basic', 'low', 'medium', 'high'] as const) {
+      expect(drawsSunMesh(tier), tier).toBe(false);
+    }
+    expect(drawsSunMesh('extra-high')).toBe(true);
   });
 });
