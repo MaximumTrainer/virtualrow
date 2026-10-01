@@ -53,15 +53,18 @@ describe('devicePerformanceProbe (#454 Phase 2)', () => {
     expect(openContext).not.toHaveBeenCalled();
   });
 
-  it('AC3 (FR8, D10): Playwright suppresses the benchmark but keeps the static read', () => {
+  it('AC3 (FR8, D10): Playwright suppresses the benchmark AND opens no WebGL context (#261)', () => {
     const openContext = vi.fn(() => null);
     const result = runDeviceProbe(
       baseOptions({ openContext, testSuppressed: true }),
     );
     expect(result.source).toBe('test-suppressed');
     expect(result.tier).toBe('auto');
-    expect(openContext).toHaveBeenCalledTimes(1);
+    // The gl-context-budget spec ratchets contexts opened before the scene's
+    // own; a throwaway probe context would blow the #261 budget from 4 to 5.
+    expect(openContext).not.toHaveBeenCalled();
     expect(result.benchmark).toBeUndefined();
+    expect(result.capabilities).toBeNull();
   });
 
   it('AC1 / AC8 (FR7): no WebGL2 → static with capabilities=null and tier=auto', () => {

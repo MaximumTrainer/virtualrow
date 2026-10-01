@@ -367,26 +367,21 @@ export function runDeviceProbe(
 
   // D10 / FR8: the shader-warmup benchmark MUST NOT run under Playwright, so
   // `shipping-scene-contrast` and friends keep measuring the tier they pinned.
-  // The static probe still runs (same as today), so the resolved tier is still
-  // right for a real browser signed in under the Playwright flag.
+  // We also open *no* WebGL2 context here: the gl-context-budget guard (#261)
+  // ratchets contexts opened before the scene's own, so even a throwaway probe
+  // context would push the budget from 4 → 5. Specs that pin a mode go through
+  // the `explicit` branch above; specs that don't still render under
+  // `__PLAYWRIGHT_TESTING`, where `resolvePerformanceModeFromProbe` resolves
+  // `'auto'` to the same answer `resolvePerformanceMode()` gives in test mode.
   if (testSuppressed) {
-    const openContext = options.openContext ?? defaultOpenContext;
-    let context: WebGL2RenderingContext | null = null;
-    try {
-      context = openContext();
-      const capabilities = readCapabilitiesFrom(context);
-      const fingerprint = buildFingerprint(capabilities);
-      const result: DevicePerformanceResult = {
-        tier: staticTierFor(capabilities),
-        source: 'test-suppressed',
-        capabilities,
-        fingerprint,
-      };
-      publishIfEnabled(options, result);
-      return result;
-    } finally {
-      releaseContext(context);
-    }
+    const result: DevicePerformanceResult = {
+      tier: 'auto',
+      source: 'test-suppressed',
+      capabilities: null,
+      fingerprint: 'test-suppressed',
+    };
+    publishIfEnabled(options, result);
+    return result;
   }
 
   // Cache hit path. We still need the live capabilities to compute the
