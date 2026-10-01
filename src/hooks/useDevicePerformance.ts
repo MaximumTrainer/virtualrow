@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  hasExplicitPerformanceMode,
   IS_TEST_MODE,
   isTelemetryPublished,
   resolvePerformanceMode,
@@ -68,15 +67,22 @@ export function useDevicePerformance(
   const { synchronous = false, ...probeOverrides } = options;
 
   const probeArgs = useMemo<DevicePerformanceProbeOptions>(
-    () => ({
-      ...probeOverrides,
-      explicitPerformanceMode:
-        probeOverrides.explicitPerformanceMode ?? resolveExplicit(),
-      testSuppressed:
-        probeOverrides.testSuppressed ?? (IS_TEST_MODE && !hasExplicitPerformanceMode()),
-      telemetryEnabled:
-        probeOverrides.telemetryEnabled ?? isTelemetryPublished(),
-    }),
+    () => {
+      const explicit = probeOverrides.explicitPerformanceMode ?? resolveExplicit();
+      return {
+        ...probeOverrides,
+        explicitPerformanceMode: explicit,
+        // Test-suppressed when IS_TEST_MODE and no user pin. We cannot use
+        // hasExplicitPerformanceMode() here: it treats IS_TEST_MODE itself as
+        // "explicit", so `IS_TEST_MODE && !hasExplicitPerformanceMode()` is
+        // always false under Playwright and the benchmark would run, opening
+        // a WebGL2 context the #261 gl-context-budget guard counts.
+        testSuppressed:
+          probeOverrides.testSuppressed ?? (IS_TEST_MODE && !explicit),
+        telemetryEnabled:
+          probeOverrides.telemetryEnabled ?? isTelemetryPublished(),
+      };
+    },
     // Probe inputs are read once at boot; downstream users cannot change them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
