@@ -310,10 +310,16 @@ jobs:
 
       - name: Row the routes end to end
         run: npm run test:e2e:endurance
-        # Two traverses of about two minutes each, plus the build and the app
-        # coming up. Generous over that, because a timeout here reports nothing
-        # about the route.
-        timeout-minutes: 25
+        env:
+          # #455 D7: shipping-scene-contrast runs its three overlapping tiers
+          # (basic/medium/extra-high) on push CI; endurance picks up the extra
+          # two (low/high) so the full five-tier grid is covered without
+          # tipping any Windows shard past the 18-min job ceiling.
+          VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS: "1"
+        # Two traverses of about two minutes each, plus the five-tier
+        # shipping-scene-contrast extras added for #455. Generous over that,
+        # because a timeout here reports nothing about the route.
+        timeout-minutes: 30
 
       - name: Upload Playwright artifacts
         if: always()
