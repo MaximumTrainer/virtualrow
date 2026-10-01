@@ -18,7 +18,7 @@ import { expectSceneAlive } from '../utils/scene-health';
  */
 
 /** Boot the app at a given performance mode, before the SPA initialises. */
-async function bootAt(page: Page, mode: 'low' | 'auto' | 'high') {
+async function bootAt(page: Page, mode: 'basic' | 'medium' | 'extra-high') {
   await page.addInitScript((m) => {
     (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string }).__VIRTUALROW_PERFORMANCE_MODE = m;
   }, mode);
@@ -134,7 +134,7 @@ async function startDemoRow(page: Page) {
 
 test.describe('3D postprocessing', () => {
   test('mounts at auto without throwing, and the scene still renders', async ({ page }) => {
-    await bootAt(page, 'auto');
+    await bootAt(page, 'medium');
     await observeMount(page);
 
     await startDemoRow(page);
@@ -184,7 +184,7 @@ test.describe('3D postprocessing', () => {
   });
 
   test('degrades deliberately when the context reports no attributes', async ({ page }) => {
-    await bootAt(page, 'auto');
+    await bootAt(page, 'medium');
     // Force the condition #197 hit in software GL: getContextAttributes() → null.
     await page.addInitScript(() => {
       for (const proto of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) {
@@ -215,7 +215,7 @@ test.describe('3D postprocessing', () => {
     //
     // Modelled on the auto test rather than added as a heavier one: the same
     // single demo row, the same observation window.
-    await bootAt(page, 'high');
+    await bootAt(page, 'extra-high');
     const errors = collectErrors(page);
 
     await startDemoRow(page);
@@ -241,7 +241,7 @@ test.describe('3D postprocessing', () => {
   });
 
   test('low mode still skips the effect stack entirely', async ({ page }) => {
-    await bootAt(page, 'low');
+    await bootAt(page, 'basic');
     const errors = collectErrors(page);
 
     await startDemoRow(page);
@@ -280,14 +280,14 @@ test.describe('one tone-mapping stage', () => {
    * above deliberately install no BLE harness - which is what normally sets
    * that flag. These read the renderer, so they need it set.
    */
-  const bootReporting = async (page: Page, mode: 'low' | 'auto' | 'high') => {
+  const bootReporting = async (page: Page, mode: 'basic' | 'medium' | 'extra-high') => {
     await page.addInitScript(() => {
       window.__PLAYWRIGHT_TESTING = true;
     });
     await bootAt(page, mode);
   };
 
-  for (const mode of ['low', 'auto', 'high'] as const) {
+  for (const mode of ['basic', 'medium', 'extra-high'] as const) {
     test(`grades the frame once at ${mode}`, async ({ page }) => {
       await bootReporting(page, mode);
       await startDemoRow(page);
@@ -334,7 +334,7 @@ test.describe('the water under the boat', () => {
     await page.addInitScript(() => {
       window.__PLAYWRIGHT_TESTING = true;
     });
-    await bootAt(page, 'auto');
+    await bootAt(page, 'medium');
     await startDemoRow(page);
     await expectSceneAlive(page, 'the wake scene');
 

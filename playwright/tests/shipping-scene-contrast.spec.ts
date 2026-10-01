@@ -47,7 +47,7 @@ async function waitForDeviceConnected(page: Page, label: string) {
   );
 }
 
-type Tier = 'low' | 'auto' | 'high';
+type Tier = 'basic' | 'medium' | 'extra-high';
 type Preset = 'dawn' | 'midday' | 'golden' | 'overcast' | 'dusk';
 
 async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
@@ -240,7 +240,7 @@ async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
 
 // The full 5×3 matrix the retune needs to see. Log lines are prefixed
 // `[shipping-contrast]` so a grep pulls the whole grid out of one CI run.
-const TIERS: readonly Tier[] = ['low', 'auto', 'high'] as const;
+const TIERS: readonly Tier[] = ['basic', 'medium', 'extra-high'] as const;
 const PRESETS: readonly Preset[] = ['dawn', 'midday', 'golden', 'overcast', 'dusk'] as const;
 
 for (const tier of TIERS) {
