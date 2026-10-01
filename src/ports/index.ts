@@ -19,7 +19,6 @@ import type {
 import type { FTMSBluetoothService } from '../services/ftmsBluetoothService';
 import type { HeartRateBluetoothService } from '../services/heartRateBluetoothService';
 import type { RouteService } from '../services/routeService';
-import type { WorkoutGeneratorService } from '../services/workoutGeneratorService';
 import type { WorkoutService } from '../services/workoutService';
 import type { AuthService } from '../services/authService';
 import type { RownativeService } from '../services/rownativeService';
@@ -27,6 +26,7 @@ import type { RouteEnrichmentService } from '../services/routeEnrichmentService'
 import type { DefaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
 import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivityService';
 import type { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
+import type { SimulatorRowerTargetService } from '../services/simulatorRowerTargetService';
 import type { AudioService } from '../services/audioService';
 
 /** Port for the PM5 Bluetooth integration. */
@@ -72,29 +72,13 @@ export type RoutePort = Pick<
   | 'findRouteByRownativeId'
 >;
 
-/** Port for the structured-workout generator. */
-export type WorkoutGeneratorPort = Pick<
-  WorkoutGeneratorService,
-  | 'getAllWorkouts'
-  | 'getWorkoutById'
-  | 'addWorkout'
-  | 'startWorkout'
-  | 'endWorkout'
-  | 'updateProgress'
-  | 'getCurrentProgress'
-  | 'getCurrentWorkout'
-  | 'getExpandedCurrentSegments'
-  | 'expandSegments'
-  | 'getSpeedAdjustmentFactor'
-  | 'importFromIntervalsICU'
-  | 'resumeAfterGap'
->;
-
 /**
  * Port for the athlete's planned workouts on intervals.icu.
  *
  * Reached with the OAuth access token a signed-in rower already has, so the
- * calendar is available without asking them for an API key (#67).
+ * calendar is available without asking them for an API key (#67 and #445 —
+ * this port is now the only way in, the local library was retired with the
+ * `workoutGeneratorService` it lived in).
  */
 export type IntervalsIcuWorkoutPort = Pick<
   IntervalsIcuWorkoutService,
@@ -182,6 +166,18 @@ export type DefaultRoutePreferencePort = Pick<
 export type ActivityUploadPort = Pick<IntervalsIcuActivityService, 'uploadActivity'>;
 
 /**
+ * Port for driving prescribed workout targets into whatever the current rower
+ * source is (issue #445).
+ *
+ * The simulator implementation records the pace/power targets for the physics
+ * hook to read back; the FTMS and PM5 implementations stub the write out with
+ * a one-time console warning (D3(a), NFR5). `useWorkoutTargetController`
+ * depends only on this port so a follow-up issue can wire real hardware
+ * without touching the panel or controller.
+ */
+export type RowerTargetPort = Pick<SimulatorRowerTargetService, 'setTargets'>;
+
+/**
  * Port for the synthesised sound bed (issue #339).
  *
  * Silent until a rower switches it on, so every call-site may be made before
@@ -207,7 +203,6 @@ export type AudioPort = Pick<
 export interface Services {
   workoutService: WorkoutPort;
   routeService: RoutePort;
-  workoutGeneratorService: WorkoutGeneratorPort;
   intervalsIcuWorkoutService: IntervalsIcuWorkoutPort;
   pm5BluetoothService: PM5BluetoothPort;
   ftmsBluetoothService: FTMSBluetoothPort;
@@ -217,5 +212,6 @@ export interface Services {
   routeEnrichmentService: RouteEnrichmentPort;
   defaultRoutePreferenceStore: DefaultRoutePreferencePort;
   intervalsIcuActivityService: ActivityUploadPort;
+  rowerTargets: RowerTargetPort;
   audioService: AudioPort;
 }

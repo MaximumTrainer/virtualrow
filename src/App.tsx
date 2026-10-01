@@ -21,6 +21,7 @@ import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
+import { debugPreferencesStore } from './services/debugPreferencesStore';
 import { useAuth } from './context/useAuth';
 import { resolveCrew, effectiveCrewPreference, CREW_URL } from './components/rower3d/crewModel';
 import { RouteLoadingBar } from './components/RouteLoadingBar';
@@ -45,9 +46,11 @@ import { useCrewPreference } from './hooks/useCrewPreference';
 import { useRenderStats } from './hooks/useRenderStats';
 import { RENDER_BUDGET, overBudget } from './components/rower3d/renderBudget';
 import type { PerformanceMode } from './components/rower3d/constants';
-import { useStructuredWorkout } from './hooks/useStructuredWorkout';
-import { WorkoutLibrary } from './components/WorkoutLibrary';
-import { WorkoutOverlay } from './components/WorkoutOverlay';
+import { useCurrentWorkout } from './hooks/useCurrentWorkout';
+import { WorkoutBlockPanel } from './components/WorkoutBlockPanel';
+import { LoadTodaysWorkoutButton } from './components/LoadTodaysWorkoutButton';
+import { useWorkoutTargetController } from './hooks/useWorkoutTargetController';
+import { pickRowerTargets } from './context/useServices';
 import { RowHud } from './components/RowHud';
 import { useFullscreen } from './hooks/useFullscreen';
 import { isStrokeReading, useStartSequence } from './hooks/useStartSequence';
@@ -80,7 +83,7 @@ type SessionState = 'idle' | 'active' | 'paused';
  * addressable URLs beyond the rownative deep link, so adding one would buy
  * nothing.
  */
-type ViewMode = 'routes' | 'route-search' | 'workouts' | 'workout';
+type ViewMode = 'routes' | 'route-search' | 'workout';
 
 /** The bundled demo route, and the fallback when no default resolves. */
 const DEMO_ROUTE_ID = '1';
@@ -92,7 +95,6 @@ const FINISH_BANNER_MS = 2000;
 const NAV_ITEMS: ReadonlyArray<{ view: ViewMode; label: string }> = [
   { view: 'routes', label: 'Row' },
   { view: 'route-search', label: 'Routes' },
-  { view: 'workouts', label: 'Workouts' },
 ];
 
 /** Extract the rownative.icu status value from route tags (e.g. "status:provisional" → "provisional"). */
@@ -113,7 +115,13 @@ function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {
 
 function App() {
   const { isAuthenticated, isLoading, login, user } = useAuth();
-  const { routeEnrichmentService, defaultRoutePreferenceStore, audioService } = useServices();
+  const {
+    routeEnrichmentService,
+    defaultRoutePreferenceStore,
+    audioService,
+    authService,
+    intervalsIcuWorkoutService,
+  } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
   const isGuestSession = !isAuthenticated && !window.__PLAYWRIGHT_TESTING;
@@ -162,6 +170,12 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // Signed-in athletes don't see the demo-row CTA on the main flow (#453);
+  // this toggle in the debug panel puts it back for testing and dogfooding,
+  // persisted per browser so a reload doesn't fight a tester (FR3, FR4).
+  const [showDemoCtaOverride, setShowDemoCtaOverride] = useState(() =>
+    debugPreferencesStore.getShowDemoCtaOverride(),
+  );
   // The river guides draw the channel centreline and its water edges (#268).
   // Given their own switch so they can be turned off without losing the rest of
   // the debug window (#270).
@@ -359,12 +373,26 @@ function App() {
     activeRowerType === 'pm5' ? pm5Connected : ftmsConnected
   ), [activeRowerType, ftmsConnected, pm5Connected]);
 
-  // The structured workout, if one is selected. With none, every flow below is
-  // exactly as it was — a free row (#67 §2).
-  const structuredWorkout = useStructuredWorkout(selectedRowerConnected);
-  // The hook's callbacks are stable; the object around them is not, so pull
-  // out the two the memoised handlers below close over.
-  const { stop: stopStructuredWorkout, tick: tickStructuredWorkout } = structuredWorkout;
+  // The structured workout, if one is loaded (issue #445). With none, every
+  // flow below is exactly as it was — a free row (#67 §2). The hook's
+  // callbacks are stable; the object around them is not, so pull out the two
+  // the memoised handlers below close over.
+  const currentWorkout = useCurrentWorkout(selectedRowerConnected);
+  const { stop: stopStructuredWorkout, tick: tickStructuredWorkout } = currentWorkout;
+  // The rower-target port matches the current source. Simulator by default,
+  // switched to the stubbed FTMS / PM5 implementations when a real erg is
+  // connected (#445 D3(a)).
+  const rowerTargets = useMemo(() => {
+    if (activeRowerType === 'ftms' && ftmsConnected) return pickRowerTargets('ftms');
+    if (activeRowerType === 'pm5' && pm5Connected) return pickRowerTargets('pm5');
+    return pickRowerTargets('simulator');
+  }, [activeRowerType, ftmsConnected, pm5Connected]);
+  useWorkoutTargetController({
+    segment: currentWorkout.progress?.currentSegment,
+    currentPaceSecondsPer500: pm5Data?.pace,
+    rowerTargets,
+    active: isWorkoutActive && currentView === 'workout' && currentWorkout.isRunning,
+  });
 
   // Listen to programmatic session events from the workoutService to update UI state
   useEffect(() => {
@@ -436,10 +464,9 @@ function App() {
         isGuestSession,
         selectedRoute.coordinates,
       );
-      // A selected structured workout runs over the top of the session. If it
-      // cannot start, the row still goes ahead as a free row and the library
-      // shows why (#67 §2, F.3).
-      structuredWorkout.start();
+      // A loaded structured workout runs over the top of the session. If it
+      // cannot start, the row still goes ahead as a free row (#67 §2, F.3).
+      currentWorkout.start();
 
       setCurrentSession(session);
       setIsWorkoutActive(true);
@@ -459,9 +486,21 @@ function App() {
    * hardware. Offered signed-in as well as signed-out (issue #219, AC7.2) — the
    * session is still flagged as a demo and still not recorded as a real workout.
    */
+  // The demo CTA is offered to guests (issue #219 AC7.2), and to Playwright
+  // regardless of sign-in, so existing demo specs stay green (#453 D4, FR7).
+  // Signed-in athletes only see it when the debug-panel override is on
+  // (FR1, FR3). `handleStartDemo` guards the same gate so a future deep link
+  // or shortcut cannot bypass it (FR5).
+  const demoCtaVisible =
+    !isAuthenticated ||
+    !user ||
+    !!window.__PLAYWRIGHT_TESTING ||
+    showDemoCtaOverride;
+
   const handleStartDemo = useCallback(() => {
     if (isStartingSessionRef.current || isWorkoutActive || workoutService.getCurrentSession()) return;
     if (!selectedRoute) return;
+    if (!demoCtaVisible) return;
     isStartingSessionRef.current = true;
     try {
       setIsDemoMode(true);
@@ -487,7 +526,7 @@ function App() {
     } finally {
       isStartingSessionRef.current = false;
     }
-  }, [isGuestSession, isWorkoutActive, selectedRoute]);
+  }, [demoCtaVisible, isGuestSession, isWorkoutActive, selectedRoute]);
 
   const stopDemoDevices = useCallback(() => {
     pm5Simulator.stop();
@@ -1256,6 +1295,26 @@ function App() {
                     bestPace={bestRowHere?.averagePace ?? null}
                   />
 
+                  {/* Signed-in athletes can load today's planned rowing
+                      session from intervals.icu, or search a nearby day
+                      (issue #445 FR2/FR3/FR7). Guests get neither control. */}
+                  {user && authService.getAccessToken() && (
+                    <LoadTodaysWorkoutButton
+                      authService={authService}
+                      intervalsIcuWorkoutService={intervalsIcuWorkoutService}
+                      athleteId={user.id}
+                      onLoad={(workout) => {
+                        currentWorkout.set(workout);
+                      }}
+                    />
+                  )}
+
+                  {currentWorkout.current && (
+                    <p className="loaded-workout-name" data-testid="loaded-workout-name">
+                      Loaded: {currentWorkout.current.name}
+                    </p>
+                  )}
+
                   <button
                     className="btn btn-start-workout"
                     onClick={handleStartWorkout}
@@ -1277,20 +1336,24 @@ function App() {
                     Change route
                   </button>
 
-                  {/* Offered to everyone, not only guests (issue #219, AC7.2). */}
-                  <div className="demo-row-cta">
-                    <button
-                      className="btn btn-try-demo"
-                      onClick={handleStartDemo}
-                      type="button"
-                    >
-                      ▶ Try a demo row — no rowing machine needed
-                    </button>
-                    <p className="demo-row-note">
-                      Rows this route on simulated rower and heart-rate data, so you can see how it
-                      feels before connecting anything.
-                    </p>
-                  </div>
+                  {/* Offered to guests always (issue #219 AC7.2) and to
+                      signed-in athletes only via the debug-panel override
+                      (#453 FR1, FR3, FR7). */}
+                  {demoCtaVisible && (
+                    <div className="demo-row-cta">
+                      <button
+                        className="btn btn-try-demo"
+                        onClick={handleStartDemo}
+                        type="button"
+                      >
+                        ▶ Try a demo row — no rowing machine needed
+                      </button>
+                      <p className="demo-row-note">
+                        Rows this route on simulated rower and heart-rate data, so you can see how it
+                        feels before connecting anything.
+                      </p>
+                    </div>
+                  )}
 
                   <GraphicsQualityPicker
                     quality={graphics.quality}
@@ -1507,31 +1570,6 @@ function App() {
             </div>
           )}
 
-          {currentView === 'workouts' && (
-            <div className="view-container view-container--workouts">
-              <WorkoutLibrary
-                library={structuredWorkout.library}
-                selected={structuredWorkout.selected}
-                onSelect={structuredWorkout.select}
-                validationErrors={structuredWorkout.validationErrors}
-                onImport={structuredWorkout.importFromIntervalsIcu}
-                canUseSession={structuredWorkout.canUseIntervalsIcuSession}
-                plannedWorkouts={structuredWorkout.plannedWorkouts}
-                plannedLoading={structuredWorkout.plannedLoading}
-                plannedError={structuredWorkout.plannedError}
-                onLoadPlanned={structuredWorkout.loadPlannedWorkouts}
-                onAddPlanned={structuredWorkout.addPlannedWorkout}
-              />
-              <button
-                className="btn btn-back-to-row"
-                type="button"
-                onClick={() => setCurrentView('routes')}
-              >
-                Back to Row
-              </button>
-            </div>
-          )}
-
           {currentView === 'workout' && isWorkoutActive && currentSession && (
             <div
               className={`view-container activity-view${
@@ -1557,7 +1595,7 @@ function App() {
                       finished={finish !== null}
                       cadence={pm5Data?.cadence}
                       performanceMode={graphics.performanceMode ?? resolvePerformanceMode()}
-                      intensityFactor={structuredWorkout.speedFactor}
+                      intensityFactor={currentWorkout.speedFactor}
                       debugMode={debugMode}
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
@@ -1570,11 +1608,13 @@ function App() {
                     />
                   </Suspense>
 
-                  {structuredWorkout.selected && structuredWorkout.progress && (
-                    <WorkoutOverlay
-                      workout={structuredWorkout.selected}
-                      segments={structuredWorkout.segments}
-                      progress={structuredWorkout.progress}
+                  {currentWorkout.current && currentWorkout.progress && (
+                    <WorkoutBlockPanel
+                      workout={currentWorkout.current}
+                      segments={currentWorkout.segments}
+                      progress={currentWorkout.progress}
+                      currentPaceSecondsPer500={pm5Data?.pace ?? null}
+                      currentPowerWatts={pm5Data?.power ?? null}
                       deviceConnected={selectedRowerConnected}
                     />
                   )}
@@ -1649,6 +1689,24 @@ function App() {
             <button className="debug-close-btn" onClick={() => setDebugMode(false)}>✕</button>
           </div>
           
+          {/* Session-flow overrides (#453 FR6). Sits above PM5 Simulator so
+              a tester finds it before scrolling. */}
+          <div className="debug-section">
+            <h5>Session</h5>
+            <label className="debug-toggle-row">
+              <input
+                type="checkbox"
+                checked={showDemoCtaOverride}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setShowDemoCtaOverride(next);
+                  debugPreferencesStore.setShowDemoCtaOverride(next);
+                }}
+              />
+              <span>Show demo-row control on the main screen (signed in)</span>
+            </label>
+          </div>
+
           {/* PM5 Simulator Controls */}
           <div className="debug-section debug-simulator-section">
             <h5>PM5 Simulator</h5>

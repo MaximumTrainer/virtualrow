@@ -644,6 +644,10 @@ test.describe('responsive layout', () => {
       sessionStorage.setItem('vr_auth_user', JSON.stringify({
         id: 'i12345', name: 'Test Athlete', email: 'athlete@example.com',
       }));
+      // #453 hides the demo-row CTA for a signed-in athlete on a fresh
+      // browser; Playwright is the exception (FR7), so set the flag so
+      // startDemo() can still find `.btn-try-demo` and drive the flow.
+      (window as unknown as { __PLAYWRIGHT_TESTING?: boolean }).__PLAYWRIGHT_TESTING = true;
     });
     await page.goto('./');
     await startDemo(page);

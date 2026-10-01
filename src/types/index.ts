@@ -249,6 +249,13 @@ export interface StructuredWorkout {
   routeId?: string; // Optional: specific route to use with this workout
 }
 
+/**
+ * One step of an intervals.icu planned workout, as returned by their
+ * `/api/v1/athlete/<id>/events` endpoint and mapped through
+ * `intervalsIcuWorkoutService.buildBlocks` (issue #445). This is the shape
+ * the fetch layer speaks; `WorkoutSegment` is the shape the rest of the app
+ * runs against, and `toStructuredWorkout` bridges the two.
+ */
 export interface IntervalBlock {
   id: string;
   type: WorkoutSegment['type'];
