@@ -50,10 +50,18 @@ export const QUALITY_TIERS_BY_LIGHT: readonly PerformanceMode[] = [
 const ENVIRONMENT_INTENSITY: Record<PerformanceMode, number> = {
   // Five tiers (#455 D1). The two extremes keep their calibrated #433 values;
   // the three middle tiers interpolate along the same axis.
+  //
+  // `high` was 0.14 in #455 Phase 1 by linear interpolation. The endurance
+  // shipping-scene-contrast run surfaced what the docstring above already
+  // warned about: at 0.14 the water samples the environment map and reads
+  // near-black at dusk, so the bank-water contrast collapses (the same
+  // behaviour #433 saw at the pre-retune `high` = 0.12). Bumped to 0.20
+  // so the new intermediate tier clears dusk reliably while staying a
+  // step below `extra-high` = 0.24.
   basic: 0.05,
   low: 0.06,
   medium: 0.08,
-  high: 0.14,
+  high: 0.20,
   'extra-high': 0.24,
 };
 
