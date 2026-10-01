@@ -191,7 +191,7 @@ test('reports frame telemetry while rowing a 5,000-point winding route', async (
  * run at each tier against `RENDER_BUDGET`, which is the same table the debug
  * panel shows a rower.
  */
-for (const tier of ['low', 'auto', 'high'] as const) {
+for (const tier of ['basic', 'medium', 'extra-high'] as const) {
   test(`keeps the demo route inside its ${tier} render budget`, async ({ page }) => {
     await page.addInitScript((mode) => {
       (window as unknown as { __VIRTUALROW_PERFORMANCE_MODE?: string })
