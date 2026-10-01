@@ -354,11 +354,16 @@ const GltfScullBase: React.FC<{
   const oarRestYRef = useRef(0);
   useEffect(() => {
     const left = model.getObjectByName('LeftOar') ?? null;
-    oarsRef.current = {
-      left,
-      right: model.getObjectByName('RightOar') ?? null,
-    };
+    const right = model.getObjectByName('RightOar') ?? null;
+    oarsRef.current = { left, right };
     if (left) oarRestYRef.current = left.position.y;
+    // Switch each oar node to a 'YXZ' Euler so `rotation.x` (feather, a roll
+    // about the shaft) is applied BEFORE `rotation.y` (sweep). Three.js's
+    // default 'XYZ' order applies X last, which would tip the swept shaft out
+    // of horizontal and resurrect #462's "oars go vertical above the rower"
+    // symptom even with the correct axis chosen.
+    if (left) left.rotation.order = 'YXZ';
+    if (right) right.rotation.order = 'YXZ';
   }, [model]);
 
   // The rig authors these alongside the oars (scripts/build_crew.py), and they
@@ -391,9 +396,15 @@ const GltfScullBase: React.FC<{
     // The blades square up and go in, and feather and come out (#329). The oar
     // pivots at the gate, so the shaft's own roll is the feather, and lifting
     // the gate end by the lever ratio puts the tip at the height asked for.
+    //
+    // Rolled about the oar node's local X — the shaft axis `build_crew.py`
+    // authors the oar along (`oar_assembly`'s `strut((sign*-OAR_INBOARD, 0, 0),
+    // (sign*shaft_end, 0, 0), …)`). The feather used to go on `rotation.z`,
+    // which tilts the X-aligned shaft up into Y and left the blades swinging
+    // vertically above the rower on the recovery — the symptom of #462.
     for (const oar of [oars.left, oars.right]) {
       if (!oar) continue;
-      oar.rotation.z = pose.bladeFeatherRad;
+      oar.rotation.x = pose.bladeFeatherRad;
       oar.position.y = oarRestYRef.current + pose.bladeHeightM * OAR_LEVER_RATIO;
     }
 
