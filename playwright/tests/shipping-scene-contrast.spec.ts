@@ -47,7 +47,7 @@ async function waitForDeviceConnected(page: Page, label: string) {
   );
 }
 
-type Tier = 'basic' | 'medium' | 'extra-high';
+type Tier = 'basic' | 'low' | 'medium' | 'high' | 'extra-high';
 type Preset = 'dawn' | 'midday' | 'golden' | 'overcast' | 'dusk';
 
 async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
@@ -238,9 +238,17 @@ async function rowAndClassifyShipping(page: Page, tier: Tier, preset: Preset) {
   }, GROUND_APART);
 }
 
-// The full 5×3 matrix the retune needs to see. Log lines are prefixed
-// `[shipping-contrast]` so a grep pulls the whole grid out of one CI run.
-const TIERS: readonly Tier[] = ['basic', 'medium', 'extra-high'] as const;
+// #455 D7: push CI runs the three overlapping tiers (`basic`/`medium`/
+// `extra-high`), one per Windows shard; endurance CI picks up the extra
+// two (`low`/`high`) when VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS=1 is
+// set in its workflow step. All five run as 5×5=25 preset combinations
+// across the two jobs. Log lines are prefixed `[shipping-contrast]` so a
+// grep pulls the whole grid out of a single CI run.
+const ENDURANCE_ONLY_EXTRAS =
+  process.env.VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS === '1';
+const TIERS: readonly Tier[] = ENDURANCE_ONLY_EXTRAS
+  ? (['low', 'high'] as const)
+  : (['basic', 'medium', 'extra-high'] as const);
 const PRESETS: readonly Preset[] = ['dawn', 'midday', 'golden', 'overcast', 'dusk'] as const;
 
 for (const tier of TIERS) {

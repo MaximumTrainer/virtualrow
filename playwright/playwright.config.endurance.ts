@@ -3,7 +3,10 @@ import ci from './playwright.config.ci';
 import { ENDURANCE_SPEC } from './viewports';
 
 /**
- * The long-running route traverses (#272), on their own.
+ * The long-running route traverses (#272), on their own, plus the
+ * five-tier shipping-scene-contrast extras picked up here per #455 D7
+ * (push CI runs 3 tiers, endurance covers the other 2 behind the
+ * VIRTUALROW_SHIPPING_CONTRAST_ONLY_EXTRAS env var).
  *
  * These row a route from one end to the other, which answers a different
  * question from the rest of the suite: not "does this build work" but "does it
@@ -17,7 +20,12 @@ export default defineConfig({
   ...ci,
   // One project, and no responsive matrix: a traverse says nothing extra at a
   // second viewport, and would cost another two minutes to say it.
-  projects: [{ name: 'endurance', testMatch: ENDURANCE_SPEC }],
+  projects: [
+    {
+      name: 'endurance',
+      testMatch: [ENDURANCE_SPEC, '**/shipping-scene-contrast.spec.ts'],
+    },
+  ],
   // A traverse is minutes long by design, and a retry costs that again.
   retries: 1,
 });
