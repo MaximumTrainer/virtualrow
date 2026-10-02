@@ -38,7 +38,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Project convention: a scheduled job needing missing secrets must skip
+      # with a warning, not fail. Keeps main green on scheduled runs when the
+      # secrets have been rotated out or were never populated at the repo
+      # level. The script itself still hard-errors on missing env vars when
+      # run locally — that is the operator asking for a live check.
+      - name: Check secrets availability
+        id: check-secrets
+        env:
+          HAS_API_KEY: ${{ secrets.INTERVALS_ICU_TEST_API_KEY != '' }}
+          HAS_ATHLETE_ID: ${{ secrets.INTERVALS_ICU_TEST_ATHLETE_ID != '' }}
+        run: |
+          if [ "$HAS_API_KEY" = "true" ] && [ "$HAS_ATHLETE_ID" = "true" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::INTERVALS_ICU_TEST_API_KEY and/or INTERVALS_ICU_TEST_ATHLETE_ID is not set on this repository; skipping the live FIT upload contract check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run the live FIT upload contract check
+        if: steps.check-secrets.outputs.skip == 'false'
         env:
           INTERVALS_ICU_CONTRACT_CHECK: '1'
           INTERVALS_ICU_TEST_API_KEY: ${{ secrets.INTERVALS_ICU_TEST_API_KEY }}
