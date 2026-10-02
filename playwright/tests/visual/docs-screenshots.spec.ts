@@ -160,6 +160,18 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript((freeze) => {
     window.__ROWER3D_FREEZE = freeze;
   }, FREEZE);
+  // #468 D7+D8: capture every published shot on the richest tier (`extra-high`)
+  // and the most differentiated lighting preset (`dusk`). The hero and the
+  // tiles below the hero both come off the same frame family that way, so the
+  // page is a consistent gallery of what the scene renders at its ceiling.
+  await page.addInitScript(() => {
+    window.__VIRTUALROW_PERFORMANCE_MODE = 'extra-high';
+    try {
+      localStorage.setItem('virtualrow:conditions', 'dusk');
+    } catch {
+      /* no storage in the ephemeral context; the probe's default is harmless */
+    }
+  });
   await page.addInitScript({ content: fs.readFileSync(mockBluetoothPath, 'utf8') });
   await page.goto('./');
   await waitForRowScreen(page);
