@@ -255,15 +255,36 @@ async function captureHero(page: Page, file: string) {
     style.textContent = `${selectors.join(',\n')} { display: none !important; }`;
     document.head.appendChild(style);
   }, [...HERO_HIDDEN_OVERLAYS]);
-  await page.waitForFunction(
-    (selectors) =>
-      selectors.every((selector) => {
-        const el = document.querySelector(selector);
-        return !el || window.getComputedStyle(el).display === 'none';
-      }),
-    [...HERO_HIDDEN_OVERLAYS],
-    { timeout: 2_000 },
-  );
+  // The HUD at `extra-high` can re-render while this check runs - a React
+  // state update mid-row replaces the node and briefly shows a non-`none`
+  // display before the `!important` rule reasserts. 10s covers that
+  // without inviting an unbounded wait, and a best-effort fall-through
+  // (which element is still shown, logged) lets the shutter fire rather
+  // than fail the whole capture over an overlay the shot can live with.
+  try {
+    await page.waitForFunction(
+      (selectors) =>
+        selectors.every((selector) => {
+          const el = document.querySelector(selector);
+          return !el || window.getComputedStyle(el).display === 'none';
+        }),
+      [...HERO_HIDDEN_OVERLAYS],
+      { timeout: 10_000 },
+    );
+  } catch {
+    const visible = await page.evaluate(
+      (selectors) =>
+        selectors.filter((selector) => {
+          const el = document.querySelector(selector);
+          return el && window.getComputedStyle(el).display !== 'none';
+        }),
+      [...HERO_HIDDEN_OVERLAYS],
+    );
+    console.warn(
+      `docs-hero: overlay-hide wait exceeded 10s with ${visible.join(', ')} ` +
+        'still visible; capturing anyway',
+    );
+  }
 
   const routeStage = await page.locator('.activity-route-stage').boundingBox({ timeout: 5_000 });
   if (!routeStage) throw new Error('the route stage has no box to clip the hero to');
