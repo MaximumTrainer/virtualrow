@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="VirtualRow — Row scenic water routes in real-time 3D, powered by your Concept2 PM5 via Bluetooth." />
+  <meta name="description" content="VirtualRow — Row scenic water routes in real-time 3D, in your browser. No sign-in, no hardware required to try the demo; pair a Concept2 PM5 or an FTMS rower when you have one." />
   <title>VirtualRow — Virtual Rowing on Water Routes</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -602,9 +602,22 @@
     Row on <span class="highlight">scenic water routes</span><br/>in your living room
   </h1>
   <p class="hero-sub fade-up delay-2">
-    VirtualRow connects your Concept2 PM5 to immersive 3D river environments
-    via Bluetooth — Willowbrook demo rowing, rownative.icu route discovery, live metrics, and zero subscription fees.
+    Row scenic water routes in 3D — right in your browser. Pair a Concept2 PM5 or an FTMS
+    rower when you have one; the Willowbrook demo row needs neither. Open-source, no account,
+    no subscription.
   </p>
+  <div class="hero-cta fade-up delay-2" style="margin-top:1.75rem; display:flex; flex-direction:column; align-items:center; gap:0.6rem;">
+    <a
+      class="btn-primary"
+      href="./app/"
+      aria-label="Try the VirtualRow demo in your browser — no sign-in or hardware required"
+    >
+      ⚡ Try the demo
+    </a>
+    <span style="font-size:0.9rem; color: var(--text-muted);">
+      No sign-in. No hardware. Just row.
+    </span>
+  </div>
   <div class="hero-screenshot fade-up delay-3">
     <div class="hero-screenshot-glow" aria-hidden="true"></div>
     <img
@@ -696,19 +709,119 @@
         </div>
       </article>
 
-      <!-- Bluetooth PM5 -->
+      <!-- Compatible rowers (PM5 + FTMS) -->
       <article class="feature-card" role="listitem">
         <div class="feature-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
             <path d="m7 7 10 10-5 5V2l5 5L7 17"/>
           </svg>
         </div>
-        <h3>Concept2 PM5 Integration</h3>
-        <p>Connects directly to your PM5 monitor over Web Bluetooth. Live pace, distance, power, stroke rate, and calories — all without a bridge device.</p>
+        <h3>Compatible rowers (PM5 + FTMS)</h3>
+        <p>
+          Pair a Concept2 PM5 or an FTMS-compatible rower over Web Bluetooth — pick which
+          one you own in the device panel. Live pace, distance, power, stroke rate, calories
+          and splits, no bridge device.
+        </p>
         <div class="feature-tags">
           <span class="feature-tag">Web Bluetooth API</span>
+          <span class="feature-tag">Concept2 PM5</span>
+          <span class="feature-tag">FTMS Rower</span>
           <span class="feature-tag">Real-time metrics</span>
-          <span class="feature-tag">PM5 Simulator</span>
+        </div>
+      </article>
+
+      <!-- intervals.icu workout import -->
+      <article class="feature-card" role="listitem">
+        <div class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <path d="M16 2v4M8 2v4M3 10h18"/>
+            <path d="M8 14h2m4 0h2M8 18h2"/>
+          </svg>
+        </div>
+        <h3>Today's workout from intervals.icu</h3>
+        <p>
+          Sign in with intervals.icu and load the structured workout your coach (or your own
+          plan) has prescribed for today — VirtualRow searches a ±14-day window. A block panel
+          runs the warmup, intervals and recovery while prescribed-vs-actual tiles show
+          pace, power and heart rate against target.
+        </p>
+        <div class="feature-tags">
+          <span class="feature-tag">intervals.icu</span>
+          <span class="feature-tag">Structured workouts</span>
+          <span class="feature-tag">Live block panel</span>
+          <span class="feature-tag">Prescribed vs actual</span>
+        </div>
+      </article>
+
+      <!-- intervals.icu activity upload -->
+      <article class="feature-card" role="listitem">
+        <div class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12"/>
+            <path d="m7 8 5-5 5 5"/>
+            <path d="M5 21h14a2 2 0 0 0 2-2v-4H3v4a2 2 0 0 0 2 2z"/>
+          </svg>
+        </div>
+        <h3>One-click upload to intervals.icu</h3>
+        <p>
+          When you finish a row, the Session Summary offers a single-click FIT upload straight
+          to your intervals.icu activities. Nothing syncs in the background without you — you
+          see every file before it leaves the browser.
+        </p>
+        <div class="feature-tags">
+          <span class="feature-tag">intervals.icu</span>
+          <span class="feature-tag">FIT encoder</span>
+          <span class="feature-tag">User-initiated</span>
+        </div>
+      </article>
+
+      <!-- Race yourself (ghost) -->
+      <article class="feature-card" role="listitem">
+        <div class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20h16"/>
+            <path d="M6 20V9l6-5 6 5v11"/>
+            <path d="M10 20v-6h4v6"/>
+          </svg>
+        </div>
+        <h3>Race yourself</h3>
+        <p>
+          Pick any previous session on the same route and watch it row beside you as a ghost
+          boat. A verdict at the finish line says by how much you beat (or missed) your
+          earlier self. It's a solo time-trial — no live multiplayer, no accounts, no servers.
+        </p>
+        <div class="feature-tags">
+          <span class="feature-tag">Ghost boat</span>
+          <span class="feature-tag">Same-route replay</span>
+          <span class="feature-tag">End-of-row verdict</span>
+        </div>
+      </article>
+
+      <!-- Scaling quality -->
+      <article class="feature-card" role="listitem">
+        <div class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3"  y="14" width="3" height="7"/>
+            <rect x="8"  y="10" width="3" height="11"/>
+            <rect x="13" y="6"  width="3" height="15"/>
+            <rect x="18" y="3"  width="3" height="18"/>
+          </svg>
+        </div>
+        <h3>Scales to your hardware</h3>
+        <p>
+          A quick GPU probe picks one of five quality tiers — <em>basic</em>, <em>low</em>,
+          <em>medium</em>, <em>high</em> or <em>extra-high</em> — the first time you row,
+          so a typical laptop stays smooth and a desktop GPU gets the full scene. You can
+          override the pick from the debug panel if the automatic choice is not what you
+          want.
+        </p>
+        <div class="feature-tags">
+          <span class="feature-tag">basic</span>
+          <span class="feature-tag">low</span>
+          <span class="feature-tag">medium</span>
+          <span class="feature-tag">high</span>
+          <span class="feature-tag">extra-high</span>
         </div>
       </article>
 
@@ -816,14 +929,14 @@
 
       <div class="step" role="listitem">
         <div class="step-num" aria-label="Step 1">1</div>
-        <h4>Install &amp; Run</h4>
-        <p>Clone the repo, run <code style="font-size:0.82em;color:#4a9bff;">npm install</code> then <code style="font-size:0.82em;color:#4a9bff;">npm run dev</code>. Open Chrome at <code style="font-size:0.82em;color:#4a9bff;">localhost:5173</code>.</p>
+        <h4>Open the app</h4>
+        <p>Head to <a href="./app/" style="color:#4a9bff;">the VirtualRow app</a> in a Chromium browser — nothing to install, no account to make.</p>
       </div>
 
       <div class="step" role="listitem">
         <div class="step-num" aria-label="Step 2">2</div>
-        <h4>Connect Your PM5</h4>
-        <p>Click <em>Connect PM5</em>, grant Bluetooth access, and pair your Concept2 monitor. Use the built-in simulator if your erg isn't nearby.</p>
+        <h4>Connect your rower</h4>
+        <p>Pair a Concept2 PM5 or an FTMS-compatible rower over Web Bluetooth from the device panel. Prefer to just look around? The Willowbrook demo rows without any hardware at all.</p>
       </div>
 
       <div class="step" role="listitem">
@@ -919,7 +1032,7 @@
     </div>
     <ul class="footer-links" role="list">
       <li><a href="https://github.com/MaximumTrainer/virtualrow" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-      <li><a href="https://github.com/MaximumTrainer/virtualrow/blob/main/README.md" target="_blank" rel="noopener noreferrer">Docs</a></li>
+      <li><a href="https://github.com/MaximumTrainer/virtualrow/blob/main/README.md" target="_blank" rel="noopener noreferrer">Contributing? Local-dev steps live in the README.</a></li>
       <li><a href="https://github.com/MaximumTrainer/virtualrow/issues" target="_blank" rel="noopener noreferrer">Issues</a></li>
       <li><a href="https://github.com/MaximumTrainer/virtualrow/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a></li>
     </ul>
