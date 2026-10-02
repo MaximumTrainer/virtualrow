@@ -249,6 +249,22 @@ async function captureHero(page: Page, file: string) {
   });
   await page.waitForTimeout(SETTLE_MS);
 
+  // Measure the route stage BEFORE the overlay-hide: hiding one of the
+  // HUD siblings can collapse the activity-view's flex layout to zero
+  // under `extra-high` (seen on PR #470's second record run), and a
+  // post-hide `boundingBox` then returns null. Pre-hide the stage is in
+  // its final layout and the clip coordinates are stable - a clip is
+  // relative to the viewport, not to the DOM after the shutter.
+  const routeStage = await page
+    .locator('.activity-route-stage')
+    .boundingBox({ timeout: 15_000 });
+  if (!routeStage || routeStage.width === 0 || routeStage.height === 0) {
+    console.warn(
+      `docs-hero: route stage has no usable box (${JSON.stringify(routeStage)}); ` +
+        'falling back to a viewport capture',
+    );
+  }
+
   await page.evaluate((selectors) => {
     const style = document.createElement('style');
     style.id = 'docs-hero-screenshot-style';
@@ -286,14 +302,13 @@ async function captureHero(page: Page, file: string) {
     );
   }
 
-  const routeStage = await page.locator('.activity-route-stage').boundingBox({ timeout: 5_000 });
-  if (!routeStage) throw new Error('the route stage has no box to clip the hero to');
-
   await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
   await expectSceneAlive(page, `the scene about to be compared with ${file}`);
+  const clip =
+    routeStage && routeStage.width > 0 && routeStage.height > 0 ? routeStage : undefined;
   await expect(page).toHaveScreenshot(file, {
     ...COMPARISON,
-    clip: routeStage,
+    ...(clip ? { clip } : { fullPage: false }),
   });
 }
 
