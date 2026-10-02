@@ -29,7 +29,7 @@ const headerDimensions = (file: Buffer) => ({
 describe('decodePng', () => {
   it('decodes the shipped hero screenshot', () => {
     const file = fs.readFileSync(
-      path.join(process.cwd(), 'docs/screenshot-rower-3d.png'),
+      path.join(process.cwd(), 'docs/screenshot-rower-3d-golden.png'),
     );
 
     const image = decodePng(file);
@@ -48,7 +48,7 @@ describe('decodePng', () => {
 
   it('produces plausible pixel values', () => {
     const file = fs.readFileSync(
-      path.join(process.cwd(), 'docs/screenshot-rower-3d.png'),
+      path.join(process.cwd(), 'docs/screenshot-rower-3d-golden.png'),
     );
 
     const { pixels } = decodePng(file);

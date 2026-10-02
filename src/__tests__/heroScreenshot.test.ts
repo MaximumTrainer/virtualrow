@@ -20,11 +20,16 @@ import { isBlankImage, describeImageContent, type RgbImage } from '../utils/imag
  * blank hero was a valid 1214x377 PNG with 343 distinct colours, so every
  * cheaper check passes it.
  */
-const HERO = 'docs/screenshot-rower-3d.png';
+// The primary hero is the golden-hour variant on `extra-high` (#468). The
+// landing page's `#screenshots` grid also publishes the dawn and midday
+// variants, and all three are measured below for publishability.
+const HERO = 'docs/screenshot-rower-3d-golden.png';
 
 /** Every screenshot the site publishes, not just the hero. */
 const PUBLISHED = [
-  'docs/screenshot-rower-3d.png',
+  'docs/screenshot-rower-3d-dawn.png',
+  'docs/screenshot-rower-3d-midday.png',
+  'docs/screenshot-rower-3d-golden.png',
   'docs/screenshot-activity.png',
   'docs/screenshot-route-selection.png',
 ];
