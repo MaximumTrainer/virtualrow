@@ -165,6 +165,153 @@ test.beforeEach(async ({ page }) => {
   await waitForRowScreen(page);
 });
 
+/**
+ * The hero gallery variants (#468).
+ *
+ * Dan asked for the hero shot in three lightings rather than one: dawn,
+ * midday and golden hour, all on the richest tier so the scene is a picture
+ * of the ceiling. Each preset gets its own captured PNG under `docs/`; the
+ * landing page's `#screenshots` grid shows all three alongside the primary
+ * hero.
+ *
+ * These tests re-navigate after `beforeEach` so their init scripts (the
+ * tier and conditions pins) land before the app boots - `addInitScript`
+ * applies on the NEXT navigation, so a second `goto('./')` is what makes
+ * the pins take.
+ */
+const HERO_VARIANTS = [
+  { preset: 'dawn', file: 'screenshot-rower-3d-dawn.png' },
+  { preset: 'midday', file: 'screenshot-rower-3d-midday.png' },
+  { preset: 'golden', file: 'screenshot-rower-3d-golden.png' },
+] as const;
+
+async function pinSceneAndReload(
+  page: Page,
+  tier: 'basic' | 'low' | 'medium' | 'high' | 'extra-high',
+  conditions: 'dawn' | 'midday' | 'golden' | 'overcast' | 'dusk',
+) {
+  await page.addInitScript(
+    ([t, c]) => {
+      window.__VIRTUALROW_PERFORMANCE_MODE = t;
+      try {
+        localStorage.setItem('virtualrow:conditions', c);
+      } catch {
+        /* no storage in the ephemeral context; the probe's default is harmless */
+      }
+    },
+    [tier, conditions] as const,
+  );
+  await page.goto('./');
+  await waitForRowScreen(page);
+}
+
+async function captureHero(page: Page, file: string) {
+  await page.getByRole('button', { name: 'Connect PM5', exact: true }).click();
+  await waitForDeviceConnected(page, 'Concept2 PM5');
+  await page.evaluate(() => {
+    const containers = Array.from(document.querySelectorAll('.bluetooth-device-container'));
+    const hr = containers.find((c) =>
+      c.querySelector('.device-name')?.textContent?.includes('Heart Rate Monitor'),
+    );
+    (hr?.querySelector('button.btn-connect') as HTMLButtonElement)?.click();
+  });
+  await waitForDeviceConnected(page, 'Heart Rate Monitor');
+
+  await page.waitForFunction(
+    () => {
+      const btn = document.querySelector('.btn-start-workout') as HTMLButtonElement | null;
+      return !!(btn && !btn.disabled);
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.evaluate(() =>
+    (document.querySelector('.btn-start-workout') as HTMLButtonElement)?.click(),
+  );
+  await page.waitForFunction(() => !!window.__workoutService?.getCurrentSession?.(), undefined, {
+    timeout: 5_000,
+  });
+  await page.waitForSelector('.activity-view', { timeout: 10_000 });
+
+  const canvas = page.locator('.rower3d-canvas-container canvas').first();
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+
+  for (let i = 1; i <= 3; i += 1) {
+    await dispatchGeneralStatus(page, 500 * i, 60 * i);
+    await dispatchAdditionalStatus(page, 60 * i);
+    await dispatchHeartRate(page);
+    await page.waitForTimeout(600);
+  }
+
+  await expectSceneAlive(page, `the scene about to be compared with ${file}`);
+  await page.waitForFunction(() => window.__ROWER3D_ROUTE?.hasCurve === true, undefined, {
+    timeout: 30_000,
+  });
+  await page.waitForTimeout(SETTLE_MS);
+
+  // Measure the route stage BEFORE the overlay-hide: hiding one of the
+  // HUD siblings can collapse the activity-view's flex layout to zero
+  // under `extra-high` (seen on PR #470's second record run), and a
+  // post-hide `boundingBox` then returns null. Pre-hide the stage is in
+  // its final layout and the clip coordinates are stable - a clip is
+  // relative to the viewport, not to the DOM after the shutter.
+  const routeStage = await page
+    .locator('.activity-route-stage')
+    .boundingBox({ timeout: 15_000 });
+  if (!routeStage || routeStage.width === 0 || routeStage.height === 0) {
+    console.warn(
+      `docs-hero: route stage has no usable box (${JSON.stringify(routeStage)}); ` +
+        'falling back to a viewport capture',
+    );
+  }
+
+  await page.evaluate((selectors) => {
+    const style = document.createElement('style');
+    style.id = 'docs-hero-screenshot-style';
+    style.textContent = `${selectors.join(',\n')} { display: none !important; }`;
+    document.head.appendChild(style);
+  }, [...HERO_HIDDEN_OVERLAYS]);
+  // The HUD at `extra-high` can re-render while this check runs - a React
+  // state update mid-row replaces the node and briefly shows a non-`none`
+  // display before the `!important` rule reasserts. 10s covers that
+  // without inviting an unbounded wait, and a best-effort fall-through
+  // (which element is still shown, logged) lets the shutter fire rather
+  // than fail the whole capture over an overlay the shot can live with.
+  try {
+    await page.waitForFunction(
+      (selectors) =>
+        selectors.every((selector) => {
+          const el = document.querySelector(selector);
+          return !el || window.getComputedStyle(el).display === 'none';
+        }),
+      [...HERO_HIDDEN_OVERLAYS],
+      { timeout: 10_000 },
+    );
+  } catch {
+    const visible = await page.evaluate(
+      (selectors) =>
+        selectors.filter((selector) => {
+          const el = document.querySelector(selector);
+          return el && window.getComputedStyle(el).display !== 'none';
+        }),
+      [...HERO_HIDDEN_OVERLAYS],
+    );
+    console.warn(
+      `docs-hero: overlay-hide wait exceeded 10s with ${visible.join(', ')} ` +
+        'still visible; capturing anyway',
+    );
+  }
+
+  await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
+  await expectSceneAlive(page, `the scene about to be compared with ${file}`);
+  const clip =
+    routeStage && routeStage.width > 0 && routeStage.height > 0 ? routeStage : undefined;
+  await expect(page).toHaveScreenshot(file, {
+    ...COMPARISON,
+    ...(clip ? { clip } : { fullPage: false }),
+  });
+}
+
 test('the published route selection screen is what the app shows', async ({ page }) => {
   await expect(page.locator('.route-info-overlay h2')).toContainText(ROUTE_NAME);
 
@@ -176,7 +323,7 @@ test('the published route selection screen is what the app shows', async ({ page
   });
 });
 
-test('the published activity screen and hero are what the app renders', async ({ page }) => {
+test('the published activity screen is what the app renders', async ({ page }) => {
   test.slow();
 
   await expect(page.locator('.route-info-overlay h2')).toContainText(ROUTE_NAME);
@@ -239,55 +386,25 @@ test('the published activity screen and hero are what the app renders', async ({
   const progress = await page.evaluate(() => window.__ROWER3D_POS?.progress ?? -1);
   expect(progress, 'the scene did not honour __ROWER3D_FREEZE').toBeCloseTo(FREEZE.progress, 3);
 
-  // 1. The activity screen, viewport only, so the 3D canvas is centre-stage.
-  //    Soft, so a drift here still lets the hero report its own.
+  // The activity screen, viewport only, so the 3D canvas is centre-stage. The
+  // hero shots are three separate tests below - each on `extra-high` with its
+  // own lighting preset - so this one answers only "does the activity screen
+  // still look like itself" without widening to pin the tier here too (that
+  // would change what the activity PNG compares against on every run).
   await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
-  await expect.soft(page).toHaveScreenshot('screenshot-activity.png', {
+  await expect(page).toHaveScreenshot('screenshot-activity.png', {
     ...COMPARISON,
     fullPage: false,
   });
-
-  // 2. The hero - a composed shot, not a raw frame (#362 R4).
-  //
-  // The in-stage overlays are hidden rather than masked: a mask paints over
-  // the picture, and this picture is the one the site publishes. The stage
-  // itself is not resized - aggressive width/height overrides on it lose the
-  // WebGL context on headless SwiftShader and photograph the error boundary.
-  await page.evaluate((selectors) => {
-    const style = document.createElement('style');
-    style.id = 'docs-hero-screenshot-style';
-    style.textContent = `${selectors.join(',\n')} { display: none !important; }`;
-    document.head.appendChild(style);
-  }, [...HERO_HIDDEN_OVERLAYS]);
-  // Until the hidden state is actually applied, not for a fixed time.
-  await page.waitForFunction(
-    (selectors) =>
-      selectors.every((selector) => {
-        const el = document.querySelector(selector);
-        return !el || window.getComputedStyle(el).display === 'none';
-      }),
-    [...HERO_HIDDEN_OVERLAYS],
-    { timeout: 2_000 },
-  );
-
-  // Clipped to the route stage, so the scull fills the frame without the
-  // sidebar or the tiles. A page clip rather than an element shot, as the
-  // capture always was: the stage is a container, not the canvas.
-  // No box is a failure rather than a full-page fallback: an unclipped frame
-  // is a different picture from the one the site publishes.
-  const routeStage = await page.locator('.activity-route-stage').boundingBox({ timeout: 5_000 });
-  if (!routeStage) throw new Error('the route stage has no box to clip the hero to');
-
-  // A complete frame before the shutter. The renderer clears to a transparent
-  // buffer and a frame is slow here, so a capture on its own schedule usually
-  // lands between two frames - which is how an empty gradient once shipped as
-  // the hero (#261).
-  await page.evaluate(() => window.__ROWER3D_FORCE_RENDER?.());
-  // And the scene alive before it is compared with what the site publishes
-  // (#283, #290): a context-lost banner is not a picture of the river.
-  await expectSceneAlive(page, 'the scene about to be compared with the published hero');
-  await expect(page).toHaveScreenshot('screenshot-rower-3d.png', {
-    ...COMPARISON,
-    clip: routeStage,
-  });
 });
+
+// The three gallery variants (#468) - the hero scene at three lightings on
+// the richest tier. Each is a full re-navigation with its own pin, so a
+// capture on `dawn` cannot see state the `midday` one left in storage.
+for (const { preset, file } of HERO_VARIANTS) {
+  test(`the published hero at extra-high ${preset} is what the app renders`, async ({ page }) => {
+    test.slow();
+    await pinSceneAndReload(page, 'extra-high', preset);
+    await captureHero(page, file);
+  });
+}

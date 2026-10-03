@@ -202,7 +202,9 @@ jobs:
           # unzip it there and every file lands where it is committed.
           path: |
             playwright/tests/visual/__snapshots__
-            docs/screenshot-rower-3d.png
+            docs/screenshot-rower-3d-dawn.png
+            docs/screenshot-rower-3d-midday.png
+            docs/screenshot-rower-3d-golden.png
             docs/screenshot-activity.png
             docs/screenshot-route-selection.png
           if-no-files-found: warn
@@ -223,7 +225,9 @@ jobs:
         env:
           BASELINES: >-
             playwright/tests/visual/__snapshots__
-            docs/screenshot-rower-3d.png
+            docs/screenshot-rower-3d-dawn.png
+            docs/screenshot-rower-3d-midday.png
+            docs/screenshot-rower-3d-golden.png
             docs/screenshot-activity.png
             docs/screenshot-route-selection.png
         run: |
