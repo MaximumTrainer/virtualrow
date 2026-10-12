@@ -23,6 +23,8 @@ import { simulatorRowerTargetService } from '../services/simulatorRowerTargetSer
 import { ftmsRowerTargetService } from '../services/ftmsRowerTargetService';
 import { pm5RowerTargetService } from '../services/pm5RowerTargetService';
 import { audioService } from '../services/audioService';
+import { crashReporterService } from '../services/crashReporterService';
+import { crashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
 import type { RowerTargetPort } from '../ports';
 
 /**
@@ -53,6 +55,8 @@ export const defaultServices: Services = {
   intervalsIcuWorkoutService,
   rowerTargets: simulatorRowerTargetService,
   audioService,
+  crashReporterService,
+  crashReportsPreferenceStore,
 };
 
 export const ServicesContext = createContext<Services>(defaultServices);
