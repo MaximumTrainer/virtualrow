@@ -9,6 +9,7 @@ import { GLB_ROWER_NODES, dressScull } from './crewRig';
 import { applyMaterialPass } from './materialPass';
 import { createBoatNormalMap } from './helpers';
 import { CREW_URL, type Crew } from './crewModel';
+import { applyAppearance, type AppearanceColors } from './rowerAppearance';
 
 // ============================================================================
 // OAR RIG — HD rigger, oarlock, shaft, and blade for one side
@@ -330,7 +331,9 @@ const GltfScullBase: React.FC<{
   cadence: number;
   strokeCycleTRef?: React.MutableRefObject<number>;
   crew?: Crew;
-}> = ({ cadence, strokeCycleTRef, crew = 'male' }) => {
+  /** Per-athlete clothing / hair colours (#474). Omitted = baked GLB palette. */
+  appearance?: AppearanceColors;
+}> = ({ cadence, strokeCycleTRef, crew = 'male', appearance }) => {
   const { scene } = useGLTF(CREW_URL[crew]);
   // Clone so the boat is independent of the cached source scene (static meshes,
   // so a plain deep clone preserves the named nodes we animate).
@@ -349,6 +352,12 @@ const GltfScullBase: React.FC<{
     dressScull(clone);
     return clone;
   }, [scene]);
+  // #474: per-athlete clothing/hair colours live on top of `dressScull`. Reapply
+  // whenever the appearance changes (or on first mount with a non-default
+  // appearance) so swapping a slot takes effect without re-cloning the scene.
+  useEffect(() => {
+    if (appearance) applyAppearance(model, appearance);
+  }, [model, appearance]);
   const oarsRef = useRef<{ left: THREE.Object3D | null; right: THREE.Object3D | null }>({ left: null, right: null });
   /** Where the rig authored the oars, so the dip is measured from it not from zero. */
   const oarRestYRef = useRef(0);
@@ -441,7 +450,19 @@ const GltfScullBase: React.FC<{
   return <primitive object={model} />;
 };
 
-export const GltfScull = React.memo(GltfScullBase, (prev, next) => prev.cadence === next.cadence && prev.crew === next.crew);
+const sameAppearance = (a?: AppearanceColors, b?: AppearanceColors): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.top === b.top && a.shorts === b.shorts && a.shoes === b.shoes && a.hair === b.hair;
+};
+
+export const GltfScull = React.memo(
+  GltfScullBase,
+  (prev, next) =>
+    prev.cadence === next.cadence &&
+    prev.crew === next.crew &&
+    sameAppearance(prev.appearance, next.appearance),
+);
 
 // ============================================================================
 // BOAT KINEMATIC CONTROLLER
@@ -452,7 +473,8 @@ export const BoatKinematicController: React.FC<{
   cadence: number;
   strokeCycleTRef: React.MutableRefObject<number>;
   crew?: Crew;
-}> = ({ positionRef, rotationRef, cadence, strokeCycleTRef, crew = 'male' }) => {
+  appearance?: AppearanceColors;
+}> = ({ positionRef, rotationRef, cadence, strokeCycleTRef, crew = 'male', appearance }) => {
   const groupRef = useRef<THREE.Group>(null);
 
   // Straight onto the group.
@@ -478,7 +500,7 @@ export const BoatKinematicController: React.FC<{
         // Production HD scull; the procedural boat is the fallback while the GLB
         // loads (and if it fails to load).
         <Suspense fallback={<RowingScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} />}>
-          <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} crew={crew} />
+          <GltfScull cadence={cadence} strokeCycleTRef={strokeCycleTRef} crew={crew} appearance={appearance} />
         </Suspense>
       )}
     </group>

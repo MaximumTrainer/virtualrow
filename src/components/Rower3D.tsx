@@ -110,6 +110,7 @@ import { GhostBoat } from './rower3d/GhostBoat';
 import type { GhostSource } from './rower3d/ghost';
 import { preloadCrew } from './rower3d/crewPreload';
 import type { Crew } from './rower3d/crewModel';
+import type { AppearanceColors } from './rower3d/rowerAppearance';
 import { frozenClock, frozenProgress, frozenVelocity, readSceneFreeze } from './rower3d/sceneFreeze';
 import { fogFor, chunkViewDistanceFor } from './rower3d/fogPlan';
 import {
@@ -165,6 +166,8 @@ export interface Rower3DProps {
   sceneryEnabled?: boolean;
   /** Rower model to show, from the athlete's gender. Defaults to male. */
   crew?: Crew;
+  /** Per-athlete clothing / hair colours (#474). Omitted keeps the baked palette. */
+  appearance?: AppearanceColors;
   /**
    * The boat being chased (#338), or nothing when rowing alone. Its distance
    * is a pure function of elapsed time, so it is placed rather than simulated.
@@ -263,6 +266,7 @@ export const RowerScene: React.FC<
   intensityFactor,
   performanceMode: requestedPerformanceMode = 'medium',
   crew = 'male',
+  appearance,
   debugMode = false,
   showRiverGuides = true,
   sceneryEnabled,
@@ -993,7 +997,7 @@ export const RowerScene: React.FC<
             // with the procedural one covering the load (issue #232).
             <group ref={boatGroupRef} name={BOAT_GROUP_NAME}>
               <Suspense fallback={<RowingScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} />}>
-                <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} />
+                <GltfScull cadence={cadence || 30} strokeCycleTRef={strokeCycleTRef} crew={crew} appearance={appearance} />
               </Suspense>
             </group>
           }
@@ -1011,6 +1015,7 @@ export const RowerScene: React.FC<
             cadence={cadence || 30}
             strokeCycleTRef={strokeCycleTRef}
             crew={crew}
+            appearance={appearance}
           />
         </SceneErrorBoundary>
       )}

@@ -46,6 +46,9 @@ import { ConditionsPicker } from './components/ConditionsPicker';
 import { useConditions } from './hooks/useConditions';
 import { CrewPicker } from './components/CrewPicker';
 import { useCrewPreference } from './hooks/useCrewPreference';
+import { RowerAppearancePicker } from './components/RowerAppearancePicker';
+import { useRowerAppearance } from './hooks/useRowerAppearance';
+import { resolveAppearanceColors } from './components/rower3d/rowerAppearance';
 import { useRenderStats } from './hooks/useRenderStats';
 import { RENDER_BUDGET, overBudget } from './components/rower3d/renderBudget';
 import type { PerformanceMode } from './components/rower3d/constants';
@@ -221,6 +224,11 @@ function App() {
   // five-tier widening in #455 will slot its new tiers into.
   const devicePerformance = useDevicePerformance();
   const crew = useCrewPreference();
+  const rowerAppearance = useRowerAppearance();
+  const appearanceColors = useMemo(
+    () => resolveAppearanceColors(rowerAppearance.appearance),
+    [rowerAppearance.appearance],
+  );
 
   // Demo mode: a visitor with no hardware is rowing on simulated device data.
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -1402,6 +1410,13 @@ function App() {
                       </a>
                     </p>
                   )}
+                  {/* Clothing / hair colour picker (#474). intervals.icu does
+                      not carry clothing, so this is visible to everyone,
+                      including athletes whose gender comes from their profile. */}
+                  <RowerAppearancePicker
+                    appearance={rowerAppearance.appearance}
+                    onChange={rowerAppearance.setSlot}
+                  />
                 </div>
               </div>
             </div>
@@ -1616,6 +1631,7 @@ function App() {
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
                       crew={resolveCrew(user?.gender, effectiveCrewPreference(user?.gender, crew.preference))}
+                      appearance={appearanceColors}
                       ghost={ghostSource}
                       elapsedSecondsRef={elapsedSecondsRef}
                       audio={audioService}
