@@ -453,7 +453,15 @@ const GltfScullBase: React.FC<{
 const sameAppearance = (a?: AppearanceColors, b?: AppearanceColors): boolean => {
   if (a === b) return true;
   if (!a || !b) return false;
-  return a.top === b.top && a.shorts === b.shorts && a.shoes === b.shoes && a.hair === b.hair;
+  return (
+    a.top === b.top &&
+    a.shorts === b.shorts &&
+    a.shoes === b.shoes &&
+    a.hair === b.hair &&
+    a.hairstyle === b.hairstyle &&
+    a.hat === b.hat &&
+    a.hatColor === b.hatColor
+  );
 };
 
 export const GltfScull = React.memo(

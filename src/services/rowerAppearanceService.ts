@@ -7,12 +7,13 @@
 // adapter and callers that depend on the port stay unchanged.
 // ============================================================================
 
-import type { AppearanceSlot } from '../components/rower3d/rowerAppearance';
+import type { AppearanceSlot, HairstyleId, HatId } from '../components/rower3d/rowerAppearance';
 import {
   TOP_PALETTE,
   SHORTS_PALETTE,
   SHOES_PALETTE,
   HAIR_PALETTE,
+  HAT_PALETTE,
 } from '../components/rower3d/rowerAppearance';
 
 export const ROWER_APPEARANCE_STORAGE_KEY = 'virtualrow:appearance:v1';
@@ -22,11 +23,11 @@ export interface RowerAppearancePreference {
   shorts: string;
   shoes: string;
   hair: string;
-  /** Phase 2: hairstyle variant. Stored now so a future rollout migrates in place. */
-  hairstyle: 'short' | 'long' | 'buzz' | 'bun';
-  /** Phase 2: hat geometry. 'none' hides the hat subtree. */
-  hat: 'none' | 'cap' | 'visor' | 'beanie';
-  /** Phase 2: hat colour. Stored now for the same reason as hairstyle. */
+  /** Hairstyle variant (#474 Phase 2). */
+  hairstyle: HairstyleId;
+  /** Hat geometry (#474 Phase 2). 'none' hides the hat subtree. */
+  hat: HatId;
+  /** Hat colour (#474 Phase 2). 'match-top' tracks the top slot. */
   hatColor: string;
 }
 
@@ -48,8 +49,14 @@ const TOP_IDS = idSet(TOP_PALETTE);
 const SHORTS_IDS = idSet(SHORTS_PALETTE);
 const SHOES_IDS = idSet(SHOES_PALETTE);
 const HAIR_IDS = idSet(HAIR_PALETTE);
-const HAIRSTYLES = new Set(['short', 'long', 'buzz', 'bun']);
-const HATS = new Set(['none', 'cap', 'visor', 'beanie']);
+const HAT_COLOR_IDS = idSet(HAT_PALETTE);
+const HAIRSTYLES = new Set<HairstyleId>(['short', 'long', 'buzz', 'bun']);
+const HATS = new Set<HatId>(['none', 'cap', 'visor', 'beanie']);
+
+const isHairstyle = (value: unknown): value is HairstyleId =>
+  typeof value === 'string' && HAIRSTYLES.has(value as HairstyleId);
+const isHat = (value: unknown): value is HatId =>
+  typeof value === 'string' && HATS.has(value as HatId);
 
 /** Fall back to the default for any slot a stored value no longer matches. */
 export const sanitizeAppearance = (value: unknown): RowerAppearancePreference => {
@@ -59,13 +66,10 @@ export const sanitizeAppearance = (value: unknown): RowerAppearancePreference =>
     shorts: raw.shorts && SHORTS_IDS.has(raw.shorts) ? raw.shorts : DEFAULT_ROWER_APPEARANCE.shorts,
     shoes: raw.shoes && SHOES_IDS.has(raw.shoes) ? raw.shoes : DEFAULT_ROWER_APPEARANCE.shoes,
     hair: raw.hair && HAIR_IDS.has(raw.hair) ? raw.hair : DEFAULT_ROWER_APPEARANCE.hair,
-    hairstyle:
-      raw.hairstyle && HAIRSTYLES.has(raw.hairstyle)
-        ? raw.hairstyle
-        : DEFAULT_ROWER_APPEARANCE.hairstyle,
-    hat: raw.hat && HATS.has(raw.hat) ? raw.hat : DEFAULT_ROWER_APPEARANCE.hat,
+    hairstyle: isHairstyle(raw.hairstyle) ? raw.hairstyle : DEFAULT_ROWER_APPEARANCE.hairstyle,
+    hat: isHat(raw.hat) ? raw.hat : DEFAULT_ROWER_APPEARANCE.hat,
     hatColor:
-      raw.hatColor && TOP_IDS.has(raw.hatColor)
+      raw.hatColor && HAT_COLOR_IDS.has(raw.hatColor)
         ? raw.hatColor
         : DEFAULT_ROWER_APPEARANCE.hatColor,
   };
