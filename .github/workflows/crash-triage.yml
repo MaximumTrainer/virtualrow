@@ -1,0 +1,57 @@
+# Server-side crash-report triage (issue #473 Phase 4, AC14).
+#
+# Fires on `repository_dispatch(event_type=crash_report)` — the browser's
+# `crashReporterService.ts` POSTs that envelope through
+# `makeRepositoryDispatchTransport` after `redactCrashPayload` strips every
+# non-whitelist field (FR4/FR6). This workflow decides whether the payload
+# gets a new issue, a +1 comment on an open match, or a reopen on a stale
+# closed match — see `scripts/crash-triage.mjs` for the full decision table
+# and `scripts/__tests__/crash-triage.test.mjs` for the AC14 unit cover.
+#
+# `GITHUB_TOKEN` is scoped per-workflow below; no org secret is required so
+# forks keep working. The browser-side token (`VITE_CRASH_REPORT_TOKEN`) is
+# a different one — a fine-grained token with `repo:dispatch` on this repo
+# only — and never reaches this workflow.
+
+name: Crash triage
+
+on:
+  repository_dispatch:
+    types: [crash_report]
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  # One triage run at a time keeps the "find existing issue → comment or
+  # create" decision race-free. A flood of dispatches queues; nothing is
+  # dropped by the server before `triageCrashReport` sees it.
+  group: crash-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install @octokit/rest only
+        # The triage script is a one-shot dependency, so skip the project's
+        # own `npm ci` (which would pull Playwright browsers and the FIT
+        # SDK) and install just what `scripts/crash-triage.mjs` imports.
+        run: npm install --no-save --no-audit --no-fund @octokit/rest@^22
+
+      - name: Run triage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/crash-triage-cli.mjs
