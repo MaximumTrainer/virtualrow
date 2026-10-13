@@ -28,6 +28,7 @@ import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivi
 import type { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
 import type { SimulatorRowerTargetService } from '../services/simulatorRowerTargetService';
 import type { AudioService } from '../services/audioService';
+import type { RowerAppearanceService } from '../services/rowerAppearanceService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -195,6 +196,15 @@ export type AudioPort = Pick<
   | 'startWater'
   | 'stopWater'
 >;
+
+/**
+ * Port for the per-athlete rower appearance preference (issue #474).
+ *
+ * Backed by `localStorage` today under `virtualrow:appearance:v1`; the shape
+ * is storage-agnostic so a future Postgres backing (#37) swaps the adapter
+ * without touching the hook or picker.
+ */
+export type RowerAppearancePort = Pick<RowerAppearanceService, 'read' | 'write'>;
 
 /**
  * Aggregate of every port the app composition root needs. Consumed by the
