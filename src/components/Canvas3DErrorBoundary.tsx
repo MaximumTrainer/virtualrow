@@ -1,5 +1,7 @@
 import React, { Component, type ReactNode } from 'react';
 import { isWebGLAvailable } from '../utils/gpuUtils';
+import { crashReporterService } from '../services/crashReporterService';
+import { reportFromErrorBoundary } from '../utils/crashBoot';
 
 interface Props {
   children: ReactNode;
@@ -45,6 +47,13 @@ export class Canvas3DErrorBoundary extends Component<Props, State> {
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }
+
+    // #473 FR2: ship a crash report with the error summary and recovered log,
+    // deferred so the render path never has `reportCrash` on its call stack.
+    reportFromErrorBoundary(crashReporterService, error, errorInfo, {
+      boundary: 'Canvas3D',
+      buildSha: (import.meta.env?.VITE_BUILD_SHA as string | undefined) ?? 'dev',
+    });
 
     // Expose error flag for tests
     try {

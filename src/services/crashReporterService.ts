@@ -57,8 +57,39 @@ type Transport = (payload: CrashPayload) => Promise<void>;
  * from `import.meta.env.VITE_CRASH_REPORT_ENDPOINT` and swapped in via the
  * composition root so this service stays free of transport knowledge.
  */
+/** Where the Playwright e2e spec sees captured payloads (test-only hook). */
+export const CAPTURED_PAYLOADS_KEY = '__VIRTUALROW_CAPTURED_CRASHES__';
+
+/**
+ * True when a Playwright spec has seeded the capture array. Production never
+ * sets it, so this is a narrow test seam: it also lets a build without
+ * `VITE_CRASH_REPORT_ENDPOINT` reach the stub transport under the e2e.
+ */
+const hasCaptureSeam = (): boolean => {
+  try {
+    const w = globalThis as unknown as Record<string, unknown>;
+    return Array.isArray(w[CAPTURED_PAYLOADS_KEY]);
+  } catch {
+    return false;
+  }
+};
+
 export const stubConsoleTransport: Transport = async (payload) => {
   console.info('[crash-reporter] (stub) would dispatch', payload);
+  // Test hook: when a Playwright spec seeds this array, the stub transport
+  // appends every would-be dispatch for the spec to assert on. Production never
+  // sets it, so the branch is a no-op outside the test. The property is
+  // deliberately not typed on `window` — this is a narrow test seam, not an
+  // API, and the e2e reads it through `page.evaluate` with its own cast.
+  try {
+    const w = globalThis as unknown as Record<string, unknown>;
+    const captured = w[CAPTURED_PAYLOADS_KEY];
+    if (Array.isArray(captured)) {
+      captured.push(payload);
+    }
+  } catch {
+    // ignored
+  }
 };
 
 interface DedupMap {
@@ -190,7 +221,7 @@ export class CrashReporterService {
       if (!this.preferences.isEnabled()) {
         return { submitted: false, reason: 'opted-out' };
       }
-      if (!this.hasEndpoint) {
+      if (!this.hasEndpoint && !hasCaptureSeam()) {
         return { submitted: false, reason: 'no-endpoint' };
       }
 
