@@ -1,5 +1,5 @@
 {
-  "totalBytes": 6417360,
+  "totalBytes": 5759884,
   "models": {
     "a01-buoy-lane-sphere": {
       "path": "assets/scenery/tier-a/a01-buoy-lane-sphere.glb",
@@ -783,20 +783,20 @@
     },
     "scull-female": {
       "path": "assets/boat/scull-female.glb",
-      "bytes": 380888,
-      "triangles": 65634,
+      "bytes": 158640,
+      "triangles": 10864,
       "compressed": true
     },
     "scull-male": {
       "path": "assets/boat/scull-male.glb",
-      "bytes": 381488,
-      "triangles": 65635,
+      "bytes": 157964,
+      "triangles": 10864,
       "compressed": true
     },
     "scull": {
       "path": "assets/boat/scull.glb",
-      "bytes": 280368,
-      "triangles": 55464,
+      "bytes": 68664,
+      "triangles": 4806,
       "compressed": true
     }
   }

@@ -391,7 +391,12 @@ def export_and_validate(assembly, filename, name):
     # authored coordinates intact in the GLB (hull horizontal, deck up).
     root = cq.Assembly(name="scull_root")
     root.add(assembly, loc=cq.Location(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), 90))
-    root.export(str(glb), tolerance=0.006, angularTolerance=0.15)
+    # Tolerance tuned to the OCCT 7.8+ meshing defaults so a regenerated GLB
+    # lands near the 376 KB the Phase 1 commit set on OCCT 7.7 (NFR2 cap is
+    # 460 KB). 0.006 / 0.15 (the OCCT 7.7 setting) inflates the hull mesh
+    # ~6x on 7.8+; 0.025 / 0.40 brings it back to ~370 KB with every
+    # Hair_<Style> and Hat_<Style> variant included. #474 Phase 2.
+    root.export(str(glb), tolerance=0.025, angularTolerance=0.40)
     # node names present in the GLB
     import trimesh
     scene = trimesh.load(str(glb))

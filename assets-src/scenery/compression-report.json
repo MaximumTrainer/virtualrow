@@ -2212,54 +2212,54 @@
     },
     "scull-female": {
       "path": "public/assets/boat/scull-female.glb",
-      "bytesBefore": 2006240,
-      "bytesAfter": 380888,
-      "trianglesBefore": 103046,
-      "trianglesAfter": 65634,
+      "bytesBefore": 370344,
+      "bytesAfter": 158640,
+      "trianglesBefore": 14128,
+      "trianglesAfter": 10864,
       "bounds": [
         -2.780000019073486,
-        -0.10997854173183436,
+        -0.10992415994405741,
         -4.0500001907348615,
         2.780000019073486,
-        1.0041148662567134,
+        1.1023499946117397,
         4.0500001907348615
       ],
       "simplified": true,
-      "boundsDrift": 0.00771
+      "boundsDrift": 0.00892
     },
     "scull-male": {
       "path": "public/assets/boat/scull-male.glb",
-      "bytesBefore": 2006536,
-      "bytesAfter": 381488,
-      "trianglesBefore": 103068,
-      "trianglesAfter": 65635,
+      "bytesBefore": 370300,
+      "bytesAfter": 157964,
+      "trianglesBefore": 14126,
+      "trianglesAfter": 10864,
       "bounds": [
         -2.780000019073486,
-        -0.10997854173183436,
+        -0.10992415994405741,
         -4.0500001907348615,
         2.780000019073486,
-        1.0533149242401119,
+        1.1515499946117396,
         4.0500001907348615
       ],
       "simplified": true,
-      "boundsDrift": 0.00771
+      "boundsDrift": 0.00892
     },
     "scull": {
       "path": "public/assets/boat/scull.glb",
-      "bytesBefore": 1716416,
-      "bytesAfter": 280368,
-      "trianglesBefore": 90888,
-      "trianglesAfter": 55464,
+      "bytesBefore": 182928,
+      "bytesAfter": 68664,
+      "trianglesBefore": 7216,
+      "trianglesAfter": 4806,
       "bounds": [
         -2.780000019073486,
-        -0.10997854173183436,
+        -0.10992415994405741,
         -4.0500001907348615,
         2.780000019073486,
         0.2400000035762786,
         4.0500001907348615
       ],
       "simplified": true,
-      "boundsDrift": 0.00771
+      "boundsDrift": 0.00892
     }
   }
 }
