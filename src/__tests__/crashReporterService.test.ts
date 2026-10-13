@@ -125,6 +125,10 @@ describe('crashReporterService (#473)', () => {
     const svc = new CrashReporterService({
       transport,
       preferences: new CrashReportsPreferenceStore(),
+      // Phase 3 adds a two-step retry schedule by default; this test is
+      // only checking NFR2 (does not throw), so disable retries to keep
+      // it quick. The dedicated schedule test is in crashReporterRetry.test.ts.
+      retryDelaysMs: [],
     });
 
     const result = await svc.reportCrash(basePayload());

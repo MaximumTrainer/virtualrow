@@ -20,6 +20,7 @@ import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { SettingsPanel } from './components/SettingsPanel';
+import { CrashReportedBanner } from './components/CrashReportedBanner';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { debugPreferencesStore } from './services/debugPreferencesStore';
@@ -1134,6 +1135,8 @@ function App() {
         crashReportsPreferenceStore={crashReportsPreferenceStore}
         intervalsIcuAthleteId={user?.id ?? null}
       />
+
+      <CrashReportedBanner onOpenSettings={() => setSettingsOpen(true)} />
 
       {completedSession && (
         <SessionSummary

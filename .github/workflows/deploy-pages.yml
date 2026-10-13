@@ -50,6 +50,16 @@ jobs:
         env:
           NODE_ENV: production
           VITE_INTERVALS_CLIENT_ID: ${{ secrets.INTERVALS_OAUTH_CLIENT_ID }}
+          # #473 FR4/FR5: bake the deploy's commit SHA into the client so a
+          # crash report says which build crashed. `github.sha` is the full
+          # 40-char SHA; the service truncates in `redactCrashPayload`.
+          VITE_BUILD_SHA: ${{ github.sha }}
+          # #473 Phase 3 (D1 = a): the real `repository_dispatch` endpoint
+          # and token. When either is unset the stub transport stays in
+          # place and the service short-circuits on `no-endpoint` (FR5), so
+          # a build without these two secrets ships green and silent.
+          VITE_CRASH_REPORT_ENDPOINT: ${{ secrets.CRASH_REPORT_ENDPOINT }}
+          VITE_CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
 
       - name: Copy app build into docs/app/
         run: |
