@@ -15,6 +15,7 @@ import { describeCrashEvidence } from './crashEvidence';
 import { readTelemetry, formatTelemetry } from './sceneTelemetryLog';
 import type { CrashPayload } from '../types/crashPayload';
 import type { PerformanceMode } from '../components/rower3d/constants';
+import { crashBannerStore, type CrashBannerStore } from '../services/crashBannerStore';
 
 interface BootCrashOptions {
   /** The scheduler to defer the report onto. Tests pass a synchronous shim. */
@@ -25,6 +26,8 @@ interface BootCrashOptions {
   performanceMode?: PerformanceMode;
   /** The signed-in athlete's intervals.icu id when known (D2 = b). */
   intervalsIcuAthleteId?: string | null;
+  /** FR9: the store that remembers "a report was sent" for the banner. */
+  bannerStore?: CrashBannerStore;
 }
 
 const defaultSchedule = (callback: () => void): void => {
@@ -107,22 +110,35 @@ export const checkBootCrash = (
     const verdict = describeCrashEvidence({ crashEventFired: false, events });
     if (!verdict.crashed) return;
 
+    const bannerStore = options.bannerStore ?? crashBannerStore;
     schedule(() => {
-      try {
-        void reporter.reportCrash({
-          buildSha: options.buildSha,
-          occurredAt: nowIso(),
-          verdict: { crashed: true, reason: verdict.reason },
-          userAgent: safeUserAgent(),
-          viewport: safeViewport(),
-          performanceMode: options.performanceMode,
-          errorSummary: firstErrorSummary(events),
-          telemetryText: formatTelemetry(events),
-          intervalsIcuAthleteId: options.intervalsIcuAthleteId ?? null,
-        });
-      } catch {
-        // NFR2: never throw into the boot path.
-      }
+      void (async () => {
+        try {
+          const result = await reporter.reportCrash({
+            buildSha: options.buildSha,
+            occurredAt: nowIso(),
+            verdict: { crashed: true, reason: verdict.reason },
+            userAgent: safeUserAgent(),
+            viewport: safeViewport(),
+            performanceMode: options.performanceMode,
+            errorSummary: firstErrorSummary(events),
+            telemetryText: formatTelemetry(events),
+            intervalsIcuAthleteId: options.intervalsIcuAthleteId ?? null,
+          });
+          // FR9: raise the banner only on a successful submission. A dropped
+          // submission (opted-out, duplicate, daily cap reached, transport
+          // failed) must not disclose a non-event.
+          if (result?.submitted) {
+            try {
+              bannerStore.raise(result.signature ?? null);
+            } catch {
+              // ignored — banner is nice-to-have, not required
+            }
+          }
+        } catch {
+          // NFR2: never throw into the boot path.
+        }
+      })();
     });
   } catch {
     // ignored

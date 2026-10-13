@@ -17,6 +17,7 @@ import {
   type CrashReportsPreferenceStore,
 } from './crashReportsPreferenceStore';
 import { CRASH_PAYLOAD_SCHEMA_VERSION, type CrashPayload } from '../types/crashPayload';
+import { makeRepositoryDispatchTransport } from './crashReportTransport';
 
 /** localStorage key for the per-signature last-sent timestamps (FR7). */
 export const CRASH_DEDUP_KEY = 'virtualrow:crash-dedup';
@@ -59,6 +60,13 @@ type Transport = (payload: CrashPayload) => Promise<void>;
  */
 /** Where the Playwright e2e spec sees captured payloads (test-only hook). */
 export const CAPTURED_PAYLOADS_KEY = '__VIRTUALROW_CAPTURED_CRASHES__';
+
+/**
+ * FR10 retry schedule. Two retries at 2s and 6s after the first attempt;
+ * after the third failure the payload is dropped on the floor (a crash
+ * report is point-in-time, so persisting it would re-send stale state).
+ */
+export const RETRY_DELAYS_MS: readonly number[] = [2_000, 6_000];
 
 /**
  * True when a Playwright spec has seeded the capture array. Production never
@@ -177,13 +185,31 @@ export interface CrashReporterOptions {
   nowFn?: () => number;
   /** `VITE_CRASH_REPORT_ENDPOINT`; empty / undefined disables the real transport (FR5). */
   endpoint?: string | null;
+  /**
+   * For tests — override the retry sleep. Production uses `setTimeout`;
+   * Vitest passes a mock so the retry test does not actually sleep 8s.
+   */
+  sleepFn?: (ms: number) => Promise<void>;
+  /** For tests — override the retry schedule (empty disables retries). */
+  retryDelaysMs?: readonly number[];
 }
+
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    try {
+      setTimeout(resolve, ms);
+    } catch {
+      resolve();
+    }
+  });
 
 export class CrashReporterService {
   private readonly transport: Transport;
   private readonly preferences: CrashReportsPreferenceStore;
   private readonly nowFn: () => number;
   private readonly hasEndpoint: boolean;
+  private readonly sleepFn: (ms: number) => Promise<void>;
+  private readonly retryDelaysMs: readonly number[];
   private lastSubmissionError: string | null = null;
 
   constructor(options: CrashReporterOptions = {}) {
@@ -194,6 +220,8 @@ export class CrashReporterService {
       options.endpoint === undefined
         ? true // in tests a custom transport counts as "endpoint"
         : Boolean(options.endpoint);
+    this.sleepFn = options.sleepFn ?? defaultSleep;
+    this.retryDelaysMs = options.retryDelaysMs ?? RETRY_DELAYS_MS;
   }
 
   /** The opaque per-profile UUID (FR4). Lazily created on first use. */
@@ -248,19 +276,29 @@ export class CrashReporterService {
         return { submitted: false, reason: 'daily-cap-reached', signature };
       }
 
-      try {
-        await this.transport(payload);
-        dedup[signature] = current;
-        writeDedupMap(dedup, current);
-        this.lastSubmissionError = null;
-        return { submitted: true, signature };
-      } catch (err) {
-        this.lastSubmissionError = err instanceof Error ? err.message : String(err);
-        // A failed send is still worth marking so a flood of errors on a cold
-        // network doesn't produce a storm. Server-side rate limiting (D1) is
-        // the real guard; this is the local one.
-        return { submitted: false, reason: 'duplicate-within-window', signature };
+      // FR10: try once, then retry on each delay in the schedule. The last
+      // error is recorded in `lastSubmissionError` for the debug panel; the
+      // payload is NOT persisted after the final failure, so a crash
+      // reported in a cold-network window is lost rather than being
+      // re-POSTed stale from a later tab.
+      let lastErr: unknown = null;
+      const attempts = 1 + this.retryDelaysMs.length;
+      for (let i = 0; i < attempts; i += 1) {
+        if (i > 0) {
+          await this.sleepFn(this.retryDelaysMs[i - 1]);
+        }
+        try {
+          await this.transport(payload);
+          dedup[signature] = current;
+          writeDedupMap(dedup, current);
+          this.lastSubmissionError = null;
+          return { submitted: true, signature };
+        } catch (err) {
+          lastErr = err;
+        }
       }
+      this.lastSubmissionError = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      return { submitted: false, signature };
     } catch (err) {
       // Any surprise — redactor throw, JSON throw, listener throw — is
       // swallowed. A crash reporter that itself crashes is worse than silence.
@@ -270,18 +308,29 @@ export class CrashReporterService {
   }
 }
 
+const bakedEndpoint = readBakedEnv('VITE_CRASH_REPORT_ENDPOINT');
+const bakedToken = readBakedEnv('VITE_CRASH_REPORT_TOKEN');
+
 export const crashReporterService = new CrashReporterService({
-  endpoint: readCrashReportEndpoint(),
+  endpoint: bakedEndpoint,
+  // When both endpoint and token are baked, swap the stub for the real
+  // `repository_dispatch` transport (FR5). Missing either half leaves the
+  // stub in place — the service also short-circuits on no-endpoint so no
+  // POST is attempted.
+  transport:
+    bakedEndpoint && bakedToken
+      ? makeRepositoryDispatchTransport(bakedEndpoint, bakedToken)
+      : stubConsoleTransport,
 });
 
 /**
- * Read `VITE_CRASH_REPORT_ENDPOINT` without blowing up when `import.meta.env`
- * is undefined (Vitest's jsdom with no define hook).
+ * Read a `VITE_*` env var without blowing up when `import.meta.env` is
+ * undefined (Vitest's jsdom with no define hook).
  */
-function readCrashReportEndpoint(): string | null {
+function readBakedEnv(key: string): string | null {
   try {
     const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-    const value = env?.VITE_CRASH_REPORT_ENDPOINT;
+    const value = env?.[key];
     return value && value.length > 0 ? value : null;
   } catch {
     return null;
