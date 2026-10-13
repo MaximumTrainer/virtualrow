@@ -28,6 +28,8 @@ import type { IntervalsIcuActivityService } from '../services/intervalsIcuActivi
 import type { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
 import type { SimulatorRowerTargetService } from '../services/simulatorRowerTargetService';
 import type { AudioService } from '../services/audioService';
+import type { CrashReporterService } from '../services/crashReporterService';
+import type { CrashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
 import type { RowerAppearanceService } from '../services/rowerAppearanceService';
 
 /** Port for the PM5 Bluetooth integration. */
@@ -198,6 +200,31 @@ export type AudioPort = Pick<
 >;
 
 /**
+ * Port for crash telemetry submission (issue #473).
+ *
+ * The service owns redaction, dedupe, rate limits and the (stubbed in
+ * Phase 1) transport. Call-sites — boot (FR1) and the two React error
+ * boundaries (FR2) — depend only on this port so a Phase 3 transport
+ * swap does not touch them.
+ */
+export type CrashReporterPort = Pick<
+  CrashReporterService,
+  'reportCrash' | 'getLastSubmissionError' | 'getSessionId'
+>;
+
+/**
+ * Port for the per-browser crash-reports opt-out setting (issue #473, FR8).
+ *
+ * Mirrors `DefaultRoutePreferencePort`: a Pick of the methods the SettingsPanel
+ * and reporter actually need, so Postgres (#37) can replace the adapter
+ * without touching call-sites.
+ */
+export type CrashReportsPreferencePort = Pick<
+  CrashReportsPreferenceStore,
+  'isEnabled' | 'setEnabled' | 'subscribe'
+>;
+
+/**
  * Port for the per-athlete rower appearance preference (issue #474).
  *
  * Backed by `localStorage` today under `virtualrow:appearance:v1`; the shape
@@ -224,4 +251,6 @@ export interface Services {
   intervalsIcuActivityService: ActivityUploadPort;
   rowerTargets: RowerTargetPort;
   audioService: AudioPort;
+  crashReporterService: CrashReporterPort;
+  crashReportsPreferenceStore: CrashReportsPreferencePort;
 }

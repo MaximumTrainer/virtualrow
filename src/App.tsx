@@ -19,6 +19,7 @@ import { RouteThumbnail } from './components/RouteThumbnail';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
+import { SettingsPanel } from './components/SettingsPanel';
 import { heartRateSimulator } from './services/heartRateSimulatorService';
 import { pm5Simulator } from './services/pm5SimulatorService';
 import { debugPreferencesStore } from './services/debugPreferencesStore';
@@ -127,6 +128,7 @@ function App() {
     audioService,
     authService,
     intervalsIcuWorkoutService,
+    crashReportsPreferenceStore,
   } = useServices();
   // In Playwright e2e tests, window.__PLAYWRIGHT_TESTING is set to true by mock-bluetooth.js.
   // Guard all unauthenticated-guest behaviours on this flag so tests can exercise the full UI.
@@ -176,6 +178,8 @@ function App() {
   const pm5RafScheduledRef = useRef(false);
   // Debug mode state
   const [debugMode, setDebugMode] = useState(false);
+  // Settings panel visibility (#473, D4=b).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Signed-in athletes don't see the demo-row CTA on the main flow (#453);
   // this toggle in the debug panel puts it back for testing and dogfooding,
   // persisted per browser so a reload doesn't fight a tester (FR3, FR4).
@@ -1124,6 +1128,13 @@ function App() {
         />
       )}
 
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        crashReportsPreferenceStore={crashReportsPreferenceStore}
+        intervalsIcuAthleteId={user?.id ?? null}
+      />
+
       {completedSession && (
         <SessionSummary
           session={completedSession}
@@ -1181,6 +1192,16 @@ function App() {
           )}
 
           <div className="header-auth">
+            {!isWorkoutActive && (
+              <button
+                type="button"
+                className="settings-gear-btn"
+                aria-label="Settings"
+                onClick={() => setSettingsOpen(true)}
+              >
+                ⚙︎
+              </button>
+            )}
             <AuthButton />
           </div>
         </div>
