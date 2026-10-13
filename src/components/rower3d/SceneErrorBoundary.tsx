@@ -17,6 +17,8 @@
 // ============================================================================
 
 import React from 'react';
+import { crashReporterService } from '../../services/crashReporterService';
+import { reportFromErrorBoundary } from '../../utils/crashBoot';
 
 interface OneLevelProps {
   children: React.ReactNode;
@@ -37,6 +39,13 @@ class OneLevelBoundary extends React.Component<OneLevelProps, { hasError: boolea
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.warn(`SceneErrorBoundary: ${this.props.rung} failed, degrading`, error, info);
+    // #473 FR2: ship a crash report describing which rung gave way. Deferred
+    // via queueMicrotask so a report that itself throws cannot escape past
+    // this boundary and unmount the subtree it was meant to protect.
+    reportFromErrorBoundary(crashReporterService, error, info, {
+      boundary: this.props.rung,
+      buildSha: (import.meta.env?.VITE_BUILD_SHA as string | undefined) ?? 'dev',
+    });
   }
 
   render() {

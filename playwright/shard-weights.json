@@ -4,6 +4,7 @@
     "default:activity-upload.spec.ts": 86,
     "default:auth.spec.ts": 20,
     "default:crash-detection.spec.ts": 31,
+    "default:crash-telemetry.spec.ts": 30,
     "default:crew-model-loading.spec.ts": 69,
     "default:default-route-performance.spec.ts": 320,
     "default:gl-context-budget.spec.ts": 75,
