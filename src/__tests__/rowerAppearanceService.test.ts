@@ -42,10 +42,18 @@ describe('rowerAppearanceService', () => {
       shorts: 'nope',
       hat: 'cap',
       hairstyle: 'bogus',
+      hatColor: 'match-top',
     });
     expect(result.top).toBe('red');
     expect(result.shorts).toBe(DEFAULT_ROWER_APPEARANCE.shorts);
     expect(result.hat).toBe('cap');
     expect(result.hairstyle).toBe(DEFAULT_ROWER_APPEARANCE.hairstyle);
+    // 'match-top' is a legitimate hat-colour id (D4), unlike top/shorts/hair.
+    expect(result.hatColor).toBe('match-top');
+  });
+
+  it('sanitizeAppearance rejects an unknown hatColor id', () => {
+    const result = sanitizeAppearance({ ...DEFAULT_ROWER_APPEARANCE, hatColor: 'puce' });
+    expect(result.hatColor).toBe(DEFAULT_ROWER_APPEARANCE.hatColor);
   });
 });

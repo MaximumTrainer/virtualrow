@@ -17,6 +17,55 @@ describe('RowerAppearancePicker', () => {
     expect(screen.getByRole('radiogroup', { name: 'Shorts' })).toBeDefined();
     expect(screen.getByRole('radiogroup', { name: 'Shoes' })).toBeDefined();
     expect(screen.getByRole('radiogroup', { name: 'Hair' })).toBeDefined();
+    expect(screen.getByRole('radiogroup', { name: 'Hairstyle' })).toBeDefined();
+    expect(screen.getByRole('radiogroup', { name: 'Hat' })).toBeDefined();
+  });
+
+  it('hides the hat colour row when the hat is none and shows it when a hat is picked', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <RowerAppearancePicker
+        appearance={DEFAULT_ROWER_APPEARANCE}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.queryByRole('radiogroup', { name: 'Hat colour' })).toBeNull();
+
+    rerender(
+      <RowerAppearancePicker
+        appearance={{ ...DEFAULT_ROWER_APPEARANCE, hat: 'cap' }}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Hat colour' })).toBeDefined();
+  });
+
+  it('calls onChange when a hairstyle option is picked', () => {
+    const onChange = vi.fn();
+    render(
+      <RowerAppearancePicker
+        appearance={DEFAULT_ROWER_APPEARANCE}
+        onChange={onChange}
+      />,
+    );
+    const hairstyleGroup = screen.getByRole('radiogroup', { name: 'Hairstyle' });
+    const longChip = hairstyleGroup.querySelector('[aria-label="Long"]')!;
+    fireEvent.click(longChip);
+    expect(onChange).toHaveBeenCalledWith('hairstyle', 'long');
+  });
+
+  it('calls onChange when a hat option is picked', () => {
+    const onChange = vi.fn();
+    render(
+      <RowerAppearancePicker
+        appearance={DEFAULT_ROWER_APPEARANCE}
+        onChange={onChange}
+      />,
+    );
+    const hatGroup = screen.getByRole('radiogroup', { name: 'Hat' });
+    const beanieChip = hatGroup.querySelector('[aria-label="Beanie"]')!;
+    fireEvent.click(beanieChip);
+    expect(onChange).toHaveBeenCalledWith('hat', 'beanie');
   });
 
   it('calls onChange with the slot id when a swatch is clicked', () => {

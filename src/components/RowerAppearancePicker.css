@@ -82,3 +82,38 @@
   border-color: #4aa3ff;
   box-shadow: 0 0 0 2px rgba(74, 163, 255, 0.3);
 }
+
+.rower-appearance-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rower-appearance-chip {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.rower-appearance-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+.rower-appearance-chip:focus-visible {
+  outline: 2px solid #4aa3ff;
+  outline-offset: 2px;
+}
+
+.rower-appearance-chip.is-selected {
+  border-color: #4aa3ff;
+  background: rgba(74, 163, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(74, 163, 255, 0.3);
+}
