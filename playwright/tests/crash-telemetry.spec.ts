@@ -1,14 +1,21 @@
-import { test, expect, type Page } from '../fixtures/crash-watch';
+import { test, expect, type Page } from '@playwright/test';
 import type { CrashPayload } from '../../src/types/crashPayload';
 
 /**
  * Crash telemetry e2e (issue #473, Phase 2, AC1 + AC2).
  *
+ * Imports `test` from `@playwright/test` directly (ESLint-ignored for this
+ * file alongside `crash-detection.spec.ts`): the spec deliberately seeds a
+ * sessionStorage telemetry log with the "run-start without page-hide" shape,
+ * which the `crash-watch` fixture reads as a crashed renderer and would use
+ * to fail the spec for doing its job.
+ *
  * Phase 2 ships the boot-time check (FR1) and the error-boundary wiring (FR2)
  * against the Phase 1 stub transport. The transport appends every captured
  * payload to `window.__VIRTUALROW_CAPTURED_CRASHES__` when a spec seeds that
  * array, which is this spec's test seam: nothing production sets it, so the
- * branch is a no-op outside Playwright.
+ * branch is a no-op outside Playwright. Seeding the array also lets a build
+ * without `VITE_CRASH_REPORT_ENDPOINT` reach the stub transport under the e2e.
  *
  * The real `repository_dispatch` transport (D1 = a) lands in Phase 3 and gets
  * its own spec against a mock URL.

@@ -56,7 +56,13 @@ export default defineConfig([
   // stays green either way, which is exactly the problem (#310).
   {
     files: ['playwright/tests/**/*.spec.ts'],
-    ignores: ['playwright/tests/crash-detection.spec.ts'],
+    ignores: [
+      'playwright/tests/crash-detection.spec.ts',
+      // #473 Phase 2: seeds a sessionStorage telemetry log with the "run-start
+      // without page-hide" shape, which is exactly what crash-watch flags as a
+      // crash — using the fixture would fail the spec for doing its job.
+      'playwright/tests/crash-telemetry.spec.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
