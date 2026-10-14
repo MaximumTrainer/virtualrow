@@ -59,9 +59,13 @@ export const makeRepositoryDispatchTransport = (
           Authorization: `Bearer ${token}`,
           'X-GitHub-Api-Version': '2022-11-28',
         },
+        // GitHub's `repository_dispatch` API caps `client_payload` at 10
+        // top-level keys; `CrashPayload` has 11, so the payload is nested
+        // under a single `payload` key. The Phase 4 `crash-triage` workflow
+        // (`scripts/crash-triage.mjs`) reads it from the same key.
         body: JSON.stringify({
           event_type: CRASH_DISPATCH_EVENT_TYPE,
-          client_payload: payload,
+          client_payload: { payload },
         }),
       });
     } catch (err) {

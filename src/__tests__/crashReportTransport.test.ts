@@ -40,10 +40,28 @@ describe('makeRepositoryDispatchTransport (#473 Phase 3, FR5)', () => {
     const [, init] = fetchMock.mock.calls[0]!;
     const body = JSON.parse(String(init?.body));
     expect(body.event_type).toBe(CRASH_DISPATCH_EVENT_TYPE);
-    expect(body.client_payload).toEqual(payload);
+    // Nested under one key so client_payload stays within GitHub's 10-key cap.
+    expect(body.client_payload).toEqual({ payload });
+    expect(Object.keys(body.client_payload).length).toBeLessThanOrEqual(10);
     const headers = init?.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer ghp_fake-token');
     expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('keeps client_payload within GitHub\'s 10-top-level-key cap', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    const transport = makeRepositoryDispatchTransport('https://x.test', 'tkn');
+    await transport(payload);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(String(init?.body));
+    // The real GitHub API returns 422 if client_payload has more than 10
+    // top-level keys. A regression that un-nests the payload would reintroduce
+    // the production 422; this test is the gate.
+    expect(Object.keys(body.client_payload).length).toBeLessThanOrEqual(10);
   });
 
   it('throws CrashTransportError on non-2xx so the reporter can retry', async () => {

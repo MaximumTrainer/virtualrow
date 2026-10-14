@@ -21,7 +21,11 @@ async function main() {
   }
   const [owner, repo] = repoFull.split('/');
   const event = JSON.parse(await readFile(eventPath, 'utf8'));
-  const payload = event?.client_payload;
+  // The browser-side transport wraps the CrashPayload in a `payload` key so
+  // the dispatch stays under GitHub's 10-key client_payload cap; a legacy
+  // call that posts the bare payload still works.
+  const envelope = event?.client_payload;
+  const payload = envelope?.payload ?? envelope;
   const octokit = new Octokit({ auth: token });
   const outcome = await triageCrashReport({
     payload,
