@@ -8,6 +8,7 @@ import type { CrashPayload } from '../types/crashPayload';
 
 const payload: CrashPayload = {
   schemaVersion: 1,
+  kind: 'crash',
   sessionId: 'sess-1',
   buildSha: 'cafef00d',
   occurredAt: '2026-10-13T20:00:00Z',
@@ -18,6 +19,7 @@ const payload: CrashPayload = {
   errorSummary: { message: 'boom', firstFrame: null },
   telemetryText: '',
   intervalsIcuAthleteId: null,
+  authFailure: null,
 };
 
 describe('makeRepositoryDispatchTransport (#473 Phase 3, FR5)', () => {

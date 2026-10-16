@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
 import { AuthService, PROXY_BASE, ICU_PROFILE_PATH } from '../services/authService';
+import { crashReporterService } from '../services/crashReporterService';
+import type { CrashPayload } from '../types/crashPayload';
 
 const AUTH_COOKIE_NAME = 'vr_auth_session';
 const AUTH_SESSION_KEY = 'vr_auth_session_key';
@@ -488,6 +490,141 @@ describe('AuthService', () => {
       const result = await service.handleCallback('bad-code', 'valid-state');
       expect(result).toBeNull();
       expect(service.getLastError()).toContain('could not exchange your intervals.icu authorization code');
+    });
+
+    // ─── OAuth failure crash capture (#486 FR1) ──────────────────────────────
+    describe('OAuth failure capture (#486 FR1)', () => {
+      let reportSpy: ReturnType<typeof vi.fn>;
+
+      beforeEach(() => {
+        reportSpy = vi
+          .spyOn(crashReporterService, 'reportCrash')
+          .mockResolvedValue({ submitted: true }) as unknown as ReturnType<typeof vi.fn>;
+      });
+
+      /** The CrashPayload fragment the latest reportCrash call was made with. */
+      const lastPayload = (): Partial<CrashPayload> => {
+        const last = reportSpy.mock.calls.at(-1);
+        if (!last) throw new Error('reportCrash was not called');
+        return last[0] as Partial<CrashPayload>;
+      };
+
+      it('reports oauth-token-exchange with the proxy status and body error code (AC1 — H2)', async () => {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn().mockResolvedValueOnce({
+            ok: false,
+            status: 401,
+            headers: { get: () => 'application/json' },
+            json: () => Promise.resolve({ error: 'invalid_client' }),
+          }),
+        );
+
+        await service.handleCallback('bad-code', 'valid-state');
+
+        expect(reportSpy).toHaveBeenCalledTimes(1);
+        const payload = lastPayload();
+        expect(payload.kind).toBe('oauth-token-exchange');
+        expect(payload.authFailure).toEqual({
+          status: 401,
+          errorCode: 'invalid_client',
+          errorDescription: null,
+          networkError: false,
+        });
+      });
+
+      it('reports oauth-token-exchange invalid_grant for a replayed code (AC2 — H3)', async () => {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn().mockResolvedValueOnce({
+            ok: false,
+            status: 401,
+            headers: { get: () => 'application/json' },
+            json: () => Promise.resolve({ error: 'invalid_grant', error_description: 'already used' }),
+          }),
+        );
+
+        await service.handleCallback('used-code', 'valid-state');
+
+        const payload = lastPayload();
+        expect(payload.authFailure?.errorCode).toBe('invalid_grant');
+        expect(payload.authFailure?.errorDescription).toBe('already used');
+      });
+
+      it('reports networkError when fetch throws (AC4)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new Error('CORS blocked')));
+
+        await service.handleCallback('any-code', 'valid-state');
+
+        const payload = lastPayload();
+        expect(payload.kind).toBe('oauth-token-exchange');
+        expect(payload.authFailure).toEqual({
+          status: null,
+          errorCode: null,
+          errorDescription: null,
+          networkError: true,
+        });
+      });
+
+      it('reports oauth-profile-fetch when the profile 401s after a successful exchange', async () => {
+        vi.stubGlobal(
+          'fetch',
+          vi
+            .fn()
+            .mockResolvedValueOnce({
+              ok: true,
+              json: () => Promise.resolve(mockTokenResponse),
+            })
+            .mockResolvedValueOnce({
+              ok: false,
+              status: 401,
+              headers: { get: () => 'application/json' },
+              json: () => Promise.resolve({ error: 'unauthorized' }),
+            }),
+        );
+
+        await service.handleCallback('auth-code', 'valid-state');
+
+        const payload = lastPayload();
+        expect(payload.kind).toBe('oauth-profile-fetch');
+        expect(payload.authFailure).toEqual({
+          status: 401,
+          errorCode: 'unauthorized',
+          errorDescription: null,
+          networkError: false,
+        });
+      });
+
+      it('does not include code / code_verifier / access_token in the serialised payload (NFR1 / AC6)', async () => {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn().mockResolvedValueOnce({
+            ok: false,
+            status: 500,
+            headers: { get: () => 'application/json' },
+            json: () => Promise.resolve({ error: 'server_error' }),
+          }),
+        );
+
+        await service.handleCallback('secret-code-abc', 'valid-state');
+
+        const serialised = JSON.stringify(reportSpy.mock.calls.at(-1));
+        for (const forbidden of ['secret-code-abc', 'valid-verifier', 'access_token', 'refresh_token']) {
+          expect(serialised).not.toContain(forbidden);
+        }
+      });
+
+      it('skips capture on CSRF state-mismatch — those are not server failures', async () => {
+        await service.handleCallback('code', 'wrong-state');
+        expect(reportSpy).not.toHaveBeenCalled();
+      });
+
+      it('does not throw when the reporter itself rejects (NFR2)', async () => {
+        reportSpy.mockRejectedValueOnce(new Error('reporter boom'));
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 500, headers: { get: () => 'text/html' } }));
+
+        await expect(service.handleCallback('code', 'valid-state')).resolves.toBeNull();
+      });
     });
 
     it('clears callback storage on state mismatch', async () => {

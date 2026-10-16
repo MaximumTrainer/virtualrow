@@ -30,8 +30,41 @@ export interface CrashErrorSummary {
   firstFrame: string | null;
 }
 
+/**
+ * What this payload is reporting. `crash` is the renderer/boundary path from
+ * #473; the OAuth kinds come from the Phase 1 of #486 and reuse the same
+ * transport so one triage pipeline handles both. A kind that isn't `crash`
+ * carries its structured detail in `authFailure` and leaves `errorSummary`
+ * as the deduplication signature source.
+ */
+export type CrashKind = 'crash' | 'oauth-token-exchange' | 'oauth-profile-fetch';
+
+/**
+ * Structured intervals.icu OAuth failure context (#486 FR1). Written at the
+ * four `AuthService` failure branches and read by the server-side triage.
+ * NFR1: no `code`, `state`, `code_verifier`, `access_token`, `refresh_token`
+ * or `Authorization` header value is ever placed in these fields — the
+ * redactor's `toAuthFailure` strips anything that doesn't fit this shape.
+ */
+export interface AuthFailureDetail {
+  /** HTTP status from the proxy, or `null` when `fetch` threw. */
+  status: number | null;
+  /** `body.error` for an OAuth error response (e.g. `invalid_client`), else `null`. */
+  errorCode: string | null;
+  /** `body.error_description` when present; redacted + truncated. */
+  errorDescription: string | null;
+  /** `true` when `fetch` threw (CORS block, offline); `false` for an HTTP response. */
+  networkError: boolean;
+}
+
 export interface CrashPayload {
   schemaVersion: typeof CRASH_PAYLOAD_SCHEMA_VERSION;
+  /**
+   * What kind of event this payload reports. Defaults to `'crash'` so every
+   * #473 call-site keeps its existing contract; `'oauth-*'` is set by the
+   * auth-failure capture in #486 Phase 1.
+   */
+  kind: CrashKind;
   /** Opaque per-browser-profile UUID (localStorage `virtualrow:crash-session-id`). */
   sessionId: string;
   /** Deploy's commit SHA from `VITE_BUILD_SHA`; `"dev"` for local builds. */
@@ -50,4 +83,10 @@ export interface CrashPayload {
    * signed in. Opaque numeric — no display name, no token.
    */
   intervalsIcuAthleteId: string | null;
+  /**
+   * Non-null only when `kind` is one of the `oauth-*` variants (#486). The
+   * four fields are the full read of what intervals.icu / the Worker told us
+   * at the failure site; nothing credential-shaped ever reaches here.
+   */
+  authFailure: AuthFailureDetail | null;
 }

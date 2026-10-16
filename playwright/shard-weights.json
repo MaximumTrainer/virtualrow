@@ -9,6 +9,7 @@
     "default:default-route-performance.spec.ts": 320,
     "default:gl-context-budget.spec.ts": 75,
     "default:intervals-login.spec.ts": 20,
+    "default:intervals-login-failure.spec.ts": 25,
     "default:kml-projection.spec.ts": 23,
     "default:load-todays-workout.spec.ts": 20,
     "default:login-integration.spec.ts": 8,

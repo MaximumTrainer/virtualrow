@@ -18,6 +18,8 @@
 
 import type { AuthUser, OAuthTokens } from '../types/index';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
+import type { AuthFailureDetail, CrashKind } from '../types/crashPayload';
+import { crashReporterService } from './crashReporterService';
 
 export const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
 const ICU_AUTHORIZE_URL = 'https://intervals.icu/oauth/authorize';
@@ -305,7 +307,14 @@ export class AuthService {
 
       if (!res.ok) {
         console.error('[AuthService] Token exchange failed:', res.status);
+        const { code: errorCode, description } = await readAuthErrorBody(res);
         this.lastError = 'Sign-in failed: VirtualRow could not exchange your intervals.icu authorization code. Please retry.';
+        void reportAuthFailure('oauth-token-exchange', {
+          status: res.status,
+          errorCode,
+          errorDescription: description,
+          networkError: false,
+        });
         return null;
       }
 
@@ -314,11 +323,23 @@ export class AuthService {
       const tokens = this.parseTokenResponse(raw, athleteId);
       if (!tokens) {
         this.lastError = 'Sign-in failed: intervals.icu returned an invalid token response. Please retry.';
+        void reportAuthFailure('oauth-token-exchange', {
+          status: res.status,
+          errorCode: 'invalid_token_response',
+          errorDescription: null,
+          networkError: false,
+        });
       }
       return tokens;
     } catch (err) {
       console.error('[AuthService] Token exchange error:', err);
       this.lastError = 'Sign-in failed: VirtualRow could not contact intervals.icu to finish login. Please retry.';
+      void reportAuthFailure('oauth-token-exchange', {
+        status: null,
+        errorCode: null,
+        errorDescription: null,
+        networkError: true,
+      });
       return null;
     }
   }
@@ -338,9 +359,16 @@ export class AuthService {
           const canFallback = this.shouldAttemptProfileFallback(index, res.status, profilePaths.length);
           if (canFallback) continue;
 
+          const { code: errorCode, description } = await readAuthErrorBody(res);
           this.lastError = res.status === 401
             ? 'Sign-in failed: Your intervals.icu session was not authorized. Please retry.'
             : 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+          void reportAuthFailure('oauth-profile-fetch', {
+            status: res.status,
+            errorCode,
+            errorDescription: description,
+            networkError: false,
+          }, athleteId);
           return null;
         }
 
@@ -372,10 +400,22 @@ export class AuthService {
       }
 
       this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+      void reportAuthFailure('oauth-profile-fetch', {
+        status: null,
+        errorCode: 'profile_missing_id',
+        errorDescription: null,
+        networkError: false,
+      }, athleteId);
       return null;
     } catch (err) {
       console.error('[AuthService] Profile fetch error:', err);
       this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+      void reportAuthFailure('oauth-profile-fetch', {
+        status: null,
+        errorCode: null,
+        errorDescription: null,
+        networkError: true,
+      }, athleteId);
       return null;
     }
   }
@@ -632,3 +672,83 @@ export class AuthService {
 }
 
 export const authService = new AuthService();
+
+/**
+ * Read the OAuth error body (RFC 6749 §5.2) without blowing up on an empty,
+ * non-JSON or already-consumed response.
+ *
+ * Returns at most `{code, description}` — `code` is only kept when it matches
+ * the redactor's `AUTH_ERROR_CODE_PATTERN` so a server echoing user input
+ * cannot slip identifiers into the crash payload. The redactor applies the
+ * same gate as a second line of defence (#486 NFR1).
+ */
+async function readAuthErrorBody(
+  res: Response,
+): Promise<{ code: string | null; description: string | null }> {
+  try {
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.toLowerCase().includes('json')) {
+      return { code: null, description: null };
+    }
+    const body = (await res.json()) as unknown;
+    if (!body || typeof body !== 'object') return { code: null, description: null };
+    const b = body as { error?: unknown; error_description?: unknown };
+    const code =
+      typeof b.error === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(b.error)
+        ? b.error
+        : null;
+    const description = typeof b.error_description === 'string' ? b.error_description : null;
+    return { code, description };
+  } catch {
+    return { code: null, description: null };
+  }
+}
+
+/**
+ * Dispatch a structured OAuth failure through the #473 crash transport
+ * (#486 FR1, D3 = a). The call is intentionally fire-and-forget — the
+ * reporter never throws (NFR2 of #473) and sign-in has already failed, so
+ * waiting on it would only delay the user-facing error message.
+ *
+ * The `errorSummary` is set so the dedup signature (`buildSignature`) is
+ * stable per `(kind, status, errorCode)` tuple without reaching into the
+ * reporter.
+ */
+function reportAuthFailure(
+  kind: Extract<CrashKind, 'oauth-token-exchange' | 'oauth-profile-fetch'>,
+  detail: AuthFailureDetail,
+  athleteId?: string,
+): Promise<unknown> {
+  try {
+    const statusLabel = detail.networkError
+      ? 'network-error'
+      : detail.status !== null
+        ? `status=${detail.status}`
+        : 'status=unknown';
+    const message = `${kind} ${statusLabel}`;
+    const firstFrame = detail.errorCode ? `error=${detail.errorCode}` : null;
+    return crashReporterService
+      .reportCrash({
+        kind,
+        verdict: { crashed: true, reason: kind },
+        errorSummary: { message, firstFrame },
+        authFailure: detail,
+        intervalsIcuAthleteId: athleteId && /^\d{1,20}$/.test(athleteId) ? athleteId : null,
+        occurredAt: new Date().toISOString(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        viewport:
+          typeof window !== 'undefined'
+            ? { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio ?? 1 }
+            : { w: 0, h: 0, dpr: 1 },
+      })
+      // Fire-and-forget: swallow a reporter rejection so a sign-in failure
+      // never surfaces a second unrelated error through the AuthProvider.
+      // The reporter itself keeps the error in `getLastSubmissionError()`.
+      .catch(() => undefined);
+  } catch {
+    // The reporter itself is a defensive singleton, but belt-and-braces so a
+    // boot-time import failure can never promote a sign-in failure into a
+    // throw across the AuthProvider.
+    return Promise.resolve();
+  }
+}
