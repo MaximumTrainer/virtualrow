@@ -1,0 +1,82 @@
+# Weekly health check for the intervals.icu OAuth CORS proxy (issue #486,
+# Phase 3, FR4 + AC7, D5 = a). The Cloudflare Worker at
+# https://mt-intervals-proxy.intervals-login.workers.dev reads its
+# ALLOWED_ORIGINS list on deploy; when a VirtualRow origin is missing from it,
+# the browser pre-flight on `/proxy/api/oauth/token` fails and sign-in dies
+# with the generic exchange error (H1). This job runs the same CORS pre-flight
+# a browser would, from each origin we deploy to, and surfaces a mismatch as
+# a workflow warning + summary — never a red build, per project convention
+# (main must stay green on scheduled runs).
+#
+# A maintainer runs the same checks locally with `node scripts/verify-oauth-proxy.mjs`;
+# that script hard-exits on a mismatch, since the operator asked for a verdict.
+
+name: intervals.icu Proxy Healthcheck (scheduled)
+
+on:
+  schedule:
+    # Weekly, Mondays 05:23 UTC — offset from other scheduled jobs so a Monday
+    # red (if we ever drop the skip-with-warning rule) doesn't pile on top of
+    # the nightly contract-upload run.
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  healthcheck:
+    # Forks don't need to run this — the proxy serves this repo's deploys, not
+    # a fork's. Matches the shape of contract-upload.yml.
+    if: github.repository == 'MaximumTrainer/virtualrow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # The verification script runs CORS pre-flights against the Worker. It
+      # exits non-zero on mismatch (so a maintainer invoking it locally gets a
+      # proper failure); in this job we trap that so the schedule stays green
+      # and surface the result as a warning + a line in the run summary.
+      - name: Run the OAuth proxy pre-flight check
+        id: check
+        continue-on-error: true
+        run: |
+          set +e
+          node scripts/verify-oauth-proxy.mjs | tee healthcheck.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Surface a warning + run summary when the pre-flight failed
+        if: steps.check.outputs.exit_code != '0'
+        run: |
+          echo "::warning::intervals-proxy-healthcheck: one or more VirtualRow origins were not echoed back by the Cloudflare Worker. Update ALLOWED_ORIGINS in MaximumTrainer_Redux/workers/intervals-cors-proxy/worker.js and redeploy."
+          {
+            echo "## intervals.icu proxy healthcheck — mismatch"
+            echo ""
+            echo "One or more origins were not echoed in Access-Control-Allow-Origin."
+            echo ""
+            echo '```'
+            cat healthcheck.log
+            echo '```'
+            echo ""
+            echo "Fix: update \`ALLOWED_ORIGINS\` in \`workers/intervals-cors-proxy/worker.js\` in MaximumTrainer_Redux and run \`npx wrangler deploy\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note success in the run summary
+        if: steps.check.outputs.exit_code == '0'
+        run: |
+          {
+            echo "## intervals.icu proxy healthcheck — OK"
+            echo ""
+            echo "Every configured VirtualRow origin was echoed back by the Cloudflare Worker."
+            echo ""
+            echo '```'
+            cat healthcheck.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
