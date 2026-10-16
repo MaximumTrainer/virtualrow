@@ -57,6 +57,7 @@ describe('crashRedactor', () => {
       // deliberately widened — the caller cannot sneak a field through
       const dirty = {
         schemaVersion: CRASH_PAYLOAD_SCHEMA_VERSION,
+        kind: 'crash',
         sessionId: 'sess-123',
         buildSha: 'abc1234',
         occurredAt: '2026-10-12T20:00:00Z',
@@ -67,6 +68,7 @@ describe('crashRedactor', () => {
         errorSummary: { message: 'boom', firstFrame: null },
         telemetryText: 'ok',
         intervalsIcuAthleteId: '12345',
+        authFailure: null,
         // smuggled fields
         email: 'leaked@example.com',
         access_token: 'secret-token-value-abcdefghij',
@@ -115,6 +117,131 @@ describe('crashRedactor', () => {
         intervalsIcuAthleteId: 'name-leaked',
       });
       expect(out.intervalsIcuAthleteId).toBeNull();
+    });
+
+    it('defaults kind to "crash" and authFailure to null when unset (#486 FR1)', () => {
+      const out = redactCrashPayload({});
+      expect(out.kind).toBe('crash');
+      expect(out.authFailure).toBeNull();
+    });
+
+    it('normalises an unknown kind to "crash"', () => {
+      const out = redactCrashPayload({
+        kind: 'something-else' as unknown as 'crash',
+      });
+      expect(out.kind).toBe('crash');
+    });
+
+    it('preserves a well-formed authFailure for oauth-token-exchange (#486 FR1 / AC1)', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {
+          status: 401,
+          errorCode: 'invalid_client',
+          errorDescription: 'client_id does not match',
+          networkError: false,
+        },
+      });
+      expect(out.kind).toBe('oauth-token-exchange');
+      expect(out.authFailure).toEqual({
+        status: 401,
+        errorCode: 'invalid_client',
+        errorDescription: 'client_id does not match',
+        networkError: false,
+      });
+    });
+
+    it('redacts token-shaped runs inside an authFailure errorDescription (NFR1)', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {
+          status: 400,
+          errorCode: 'invalid_grant',
+          errorDescription: 'reused code=abcdefghijklmnopqrstuvwxyz0123456789',
+          networkError: false,
+        },
+      });
+      expect(out.authFailure?.errorDescription).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
+      expect(out.authFailure?.errorDescription).toContain(REDACTED);
+    });
+
+    it('drops a non-pattern errorCode so a server echoing input cannot leak it', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {
+          status: 400,
+          errorCode: 'display name sandeater',
+          errorDescription: null,
+          networkError: false,
+        },
+      });
+      expect(out.authFailure?.errorCode).toBeNull();
+    });
+
+    it('clamps an out-of-range HTTP status in authFailure', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-profile-fetch',
+        authFailure: {
+          status: 999,
+          errorCode: null,
+          errorDescription: null,
+          networkError: false,
+        },
+      });
+      expect(out.authFailure?.status).toBeNull();
+    });
+
+    it('authFailure for a network error carries no HTTP status (#486 AC4)', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {
+          status: null,
+          errorCode: null,
+          errorDescription: null,
+          networkError: true,
+        },
+      });
+      expect(out.authFailure).toEqual({
+        status: null,
+        errorCode: null,
+        errorDescription: null,
+        networkError: true,
+      });
+    });
+
+    it('an empty authFailure object becomes null (equivalent to no detail)', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {} as unknown as {
+          status: null;
+          errorCode: null;
+          errorDescription: null;
+          networkError: false;
+        },
+      });
+      expect(out.authFailure).toBeNull();
+    });
+
+    it('contains no PKCE / token substrings when an authFailure is serialised (#486 AC6)', () => {
+      const out = redactCrashPayload({
+        kind: 'oauth-token-exchange',
+        authFailure: {
+          status: 400,
+          // These three are the OAuth error codes we actually expect — they
+          // must survive. The redactor is tested above for arbitrary token
+          // runs inside errorDescription.
+          errorCode: 'invalid_grant',
+          errorDescription: 'the authorisation server rejected the request',
+          networkError: false,
+        },
+        telemetryText: 'ignored telemetry — this is the auth-failure path',
+      });
+      const s = JSON.stringify(out);
+      // The capture site never puts these into the payload; this test pins
+      // the invariant so a later edit can't regress it.
+      for (const forbidden of ['code=', 'code_verifier', 'access_token', 'refresh_token', 'Bearer ']) {
+        expect(s).not.toContain(forbidden);
+      }
     });
 
     it('truncates oversized telemetry', () => {

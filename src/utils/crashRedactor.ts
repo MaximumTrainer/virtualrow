@@ -13,6 +13,8 @@
  */
 import {
   CRASH_PAYLOAD_SCHEMA_VERSION,
+  type AuthFailureDetail,
+  type CrashKind,
   type CrashPayload,
   type CrashErrorSummary,
   type CrashVerdictPayload,
@@ -42,6 +44,19 @@ const PERFORMANCE_MODES: readonly PerformanceMode[] = [
   'high',
   'extra-high',
 ];
+
+const CRASH_KINDS: readonly CrashKind[] = [
+  'crash',
+  'oauth-token-exchange',
+  'oauth-profile-fetch',
+];
+
+/**
+ * Allowed shape of an OAuth `error` body code. Narrow enough that a stray
+ * display name or secret cannot land in this field, broad enough to accept
+ * `invalid_client`, `invalid_grant`, `unauthorized_client`, etc.
+ */
+const AUTH_ERROR_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 
 export const REDACTED = '[REDACTED]';
 
@@ -97,6 +112,35 @@ const toErrorSummary = (value: unknown): CrashErrorSummary | null => {
   };
 };
 
+const toCrashKind = (value: unknown): CrashKind =>
+  typeof value === 'string' && (CRASH_KINDS as readonly string[]).includes(value)
+    ? (value as CrashKind)
+    : 'crash';
+
+const toAuthFailure = (value: unknown): AuthFailureDetail | null => {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<AuthFailureDetail>;
+  const anyFieldPresent =
+    'status' in v || 'errorCode' in v || 'errorDescription' in v || 'networkError' in v;
+  // Treat `authFailure: {}` as "no detail" — callers that genuinely want an
+  // all-null failure must pass at least one key explicitly.
+  if (!anyFieldPresent) return null;
+  const status =
+    typeof v.status === 'number' && Number.isFinite(v.status) && v.status >= 100 && v.status <= 599
+      ? Math.trunc(v.status)
+      : null;
+  const errorCode =
+    typeof v.errorCode === 'string' && AUTH_ERROR_CODE_PATTERN.test(v.errorCode)
+      ? v.errorCode
+      : null;
+  const errorDescription =
+    typeof v.errorDescription === 'string'
+      ? truncateField(redactText(v.errorDescription), 500)
+      : null;
+  const networkError = typeof v.networkError === 'boolean' ? v.networkError : false;
+  return { status, errorCode, errorDescription, networkError };
+};
+
 const toAthleteId = (value: unknown): string | null => {
   if (typeof value !== 'string' || value.length === 0) return null;
   // Numeric ids only, so a stray display name never slips through under this key.
@@ -115,6 +159,7 @@ export const redactCrashPayload = (input: Partial<CrashPayload>): CrashPayload =
   const telemetryText = toSafeString(input.telemetryText, 16 * 1024);
   return {
     schemaVersion: CRASH_PAYLOAD_SCHEMA_VERSION,
+    kind: toCrashKind(input.kind),
     sessionId: toSafeString(input.sessionId, 200),
     buildSha: toSafeString(input.buildSha, 100) || 'dev',
     occurredAt: toSafeString(input.occurredAt, 50),
@@ -129,5 +174,6 @@ export const redactCrashPayload = (input: Partial<CrashPayload>): CrashPayload =
     errorSummary: toErrorSummary(input.errorSummary),
     telemetryText: redactText(telemetryText),
     intervalsIcuAthleteId: toAthleteId(input.intervalsIcuAthleteId),
+    authFailure: toAuthFailure(input.authFailure),
   };
 };
