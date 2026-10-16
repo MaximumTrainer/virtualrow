@@ -10,7 +10,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
 function TestConsumer() {
-  const { user, isAuthenticated, isLoading, authError } = useAuth();
+  const { user, isAuthenticated, isLoading, authError, authErrorClass } = useAuth();
   return (
     <div>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
@@ -18,6 +18,7 @@ function TestConsumer() {
       <span data-testid="user-name">{user?.name ?? 'null'}</span>
       <span data-testid="user-id">{user?.id ?? 'null'}</span>
       <span data-testid="auth-error">{authError ?? 'null'}</span>
+      <span data-testid="auth-error-class">{authErrorClass ?? 'null'}</span>
     </div>
   );
 }
@@ -26,6 +27,7 @@ function makeServiceStub(overrides: Partial<{
   getUser: () => AuthUser | null;
   handleCallback: (code: string, state: string) => Promise<AuthUser | null>;
   getLastError: () => string | null;
+  getLastErrorClass: () => import('../services/authService').AuthErrorClass | null;
   startLogin: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -35,6 +37,7 @@ function makeServiceStub(overrides: Partial<{
     startLogin: vi.fn(() => Promise.resolve()),
     handleCallback: vi.fn(() => Promise.resolve(null)),
     getLastError: vi.fn(() => null),
+    getLastErrorClass: vi.fn(() => null),
     refreshAccessToken: vi.fn(() => Promise.resolve(false)),
     logout: vi.fn(),
     getAccessToken: vi.fn(() => null),
@@ -173,6 +176,30 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('auth-error').textContent)
       .toBe('network down');
+    // A thrown promise sets the generic retryable class so the UI still
+    // offers Retry (#486 Phase 2 FR3).
+    expect(screen.getByTestId('auth-error-class').textContent).toBe('unknown');
+  });
+
+  it('exposes the classified auth error from the service after a failed callback (#486 Phase 2)', async () => {
+    const service = makeServiceStub({
+      handleCallback: vi.fn(() => Promise.resolve(null)),
+      getLastError: vi.fn(() => 'Sign-in failed: expired code'),
+      getLastErrorClass: vi.fn(() => 'expired-code' as const),
+    });
+
+    window.history.replaceState({}, '', '/?code=replayed&state=valid');
+
+    await act(async () => {
+      render(
+        <AuthProvider service={service}>
+          <TestConsumer />
+        </AuthProvider>
+      );
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('auth-error-class').textContent).toBe('expired-code');
   });
 
   it('transitions to authenticated state when callback resolves a fallback-profile user', async () => {

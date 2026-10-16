@@ -1,13 +1,29 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../context/useAuth';
+import { RETRYABLE_AUTH_ERROR_CLASSES } from '../services/authService';
 import './AuthButton.css';
 
 export function AuthButton() {
-  const { user, isAuthenticated, isLoading, authError, login, logout, clearAuthError } = useAuth();
+  const { user, isAuthenticated, isLoading, authError, authErrorClass, login, logout, clearAuthError } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const visibleError = loginError ?? authError;
+  // `config` is the only class that is NOT recoverable from a retry; every
+  // other class (including the fallback `unknown` and the `null` from a
+  // locally-thrown login error) offers the button (#486 Phase 2 FR3, D4 = a).
+  const showRetryButton =
+    visibleError !== null &&
+    (authErrorClass === null || RETRYABLE_AUTH_ERROR_CLASSES.has(authErrorClass));
+
+  const startLogin = () => {
+    setLoginError(null);
+    clearAuthError();
+    login().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Login failed';
+      setLoginError(msg);
+    });
+  };
 
   const handleDropdownToggle = () => setDropdownOpen((o) => !o);
   const handleDropdownClose = () => setDropdownOpen(false);
@@ -27,14 +43,7 @@ export function AuthButton() {
         <button
           type="button"
           className="auth-button auth-button--signin"
-          onClick={() => {
-            setLoginError(null);
-            clearAuthError();
-            login().catch((err: unknown) => {
-              const msg = err instanceof Error ? err.message : 'Login failed';
-              setLoginError(msg);
-            });
-          }}
+          onClick={startLogin}
           aria-label="Sign in with intervals.icu"
         >
           <span className="auth-icu-icon" aria-hidden="true">🔑</span>
@@ -45,10 +54,24 @@ export function AuthButton() {
           <span className="auth-button-text auth-button-text--short">Sign in</span>
         </button>
         {visibleError && (
-          <div className="auth-login-error" role="alert" title={visibleError}>
+          <div
+            className="auth-login-error"
+            role="alert"
+            title={visibleError}
+            data-auth-error-class={authErrorClass ?? 'unknown'}
+          >
             ⚠️ {visibleError.includes('VITE_INTERVALS_CLIENT_ID')
               ? 'OAuth client ID not configured — check DEVELOPMENT.md'
               : visibleError}
+            {showRetryButton && (
+              <button
+                type="button"
+                className="auth-retry-button"
+                onClick={startLogin}
+              >
+                Retry sign in
+              </button>
+            )}
           </div>
         )}
       </div>

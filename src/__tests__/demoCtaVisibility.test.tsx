@@ -25,6 +25,7 @@ function signedIn(): AuthContextValue {
     isAuthenticated: true,
     isLoading: false,
     authError: null,
+    authErrorClass: null,
     login: vi.fn(),
     logout: vi.fn(),
     clearAuthError: vi.fn(),

@@ -118,6 +118,7 @@ export type AuthPort = Pick<
   | 'getUser'
   | 'getAccessToken'
   | 'getLastError'
+  | 'getLastErrorClass'
   | 'refreshAccessToken'
   | 'scheduleRefresh'
   | 'isAuthenticated'

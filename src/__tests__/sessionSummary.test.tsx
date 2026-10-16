@@ -54,6 +54,7 @@ const AUTHENTICATED: AuthContextValue = {
   isAuthenticated: true,
   isLoading: false,
   authError: null,
+  authErrorClass: null,
   login: async () => {},
   logout: () => {},
   clearAuthError: () => {},

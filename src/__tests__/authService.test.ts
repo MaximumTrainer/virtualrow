@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
-import { AuthService, PROXY_BASE, ICU_PROFILE_PATH } from '../services/authService';
+import {
+  AuthService,
+  PROXY_BASE,
+  ICU_PROFILE_PATH,
+  classifyExchangeFailure,
+  messageForClass,
+  RETRYABLE_AUTH_ERROR_CLASSES,
+} from '../services/authService';
 import { crashReporterService } from '../services/crashReporterService';
 import type { CrashPayload } from '../types/crashPayload';
 
@@ -94,6 +101,62 @@ describe('generateState', () => {
 
   it('returns different values on each call', () => {
     expect(generateState()).not.toBe(generateState());
+  });
+});
+
+// ─── Classifier + messages (#486 Phase 2 FR2) ────────────────────────────────
+
+describe('classifyExchangeFailure (#486 Phase 2 FR2)', () => {
+  it('maps invalid_client to config regardless of status', () => {
+    expect(classifyExchangeFailure(400, 'invalid_client')).toBe('config');
+    expect(classifyExchangeFailure(401, 'invalid_client')).toBe('config');
+  });
+
+  it('maps invalid_grant to expired-code (AC2 — H3)', () => {
+    expect(classifyExchangeFailure(401, 'invalid_grant')).toBe('expired-code');
+    expect(classifyExchangeFailure(400, 'invalid_grant')).toBe('expired-code');
+  });
+
+  it('maps 5xx and 408/429 to transient (AC3)', () => {
+    expect(classifyExchangeFailure(500, null)).toBe('transient');
+    expect(classifyExchangeFailure(502, 'anything')).toBe('transient'); // 5xx wins over an unknown code
+    expect(classifyExchangeFailure(503, null)).toBe('transient');
+    expect(classifyExchangeFailure(408, null)).toBe('transient');
+    expect(classifyExchangeFailure(429, null)).toBe('transient');
+  });
+
+  it('maps a 400/401 with no OAuth code to unknown', () => {
+    expect(classifyExchangeFailure(400, null)).toBe('unknown');
+    expect(classifyExchangeFailure(401, null)).toBe('unknown');
+    expect(classifyExchangeFailure(403, null)).toBe('unknown');
+  });
+
+  it('wins invalid_grant over 5xx when both appear (upstream wrapped in 500)', () => {
+    // Realistic shape: proxy forwards a 500 with the body preserving the OAuth
+    // code. The OAuth semantics still decide the UX.
+    expect(classifyExchangeFailure(500, 'invalid_grant')).toBe('expired-code');
+  });
+});
+
+describe('messageForClass (#486 Phase 2 FR2)', () => {
+  it('config is NOT retryable so the copy does not promise a retry', () => {
+    expect(RETRYABLE_AUTH_ERROR_CLASSES.has('config')).toBe(false);
+    expect(messageForClass('config')).toMatch(/isn't registered/i);
+    expect(messageForClass('config')).not.toMatch(/\bretry\b/i);
+  });
+
+  it('every other class is retryable', () => {
+    for (const klass of ['transient', 'expired-code', 'network', 'unknown'] as const) {
+      expect(RETRYABLE_AUTH_ERROR_CLASSES.has(klass)).toBe(true);
+    }
+  });
+
+  it('expired-code copy tells the user to sign in again (AC2)', () => {
+    expect(messageForClass('expired-code')).toMatch(/sign.?in.*again|sign in again/i);
+  });
+
+  it('unknown falls back to the exact wording Phase 1 displayed, so Dan can still identify this bug', () => {
+    expect(messageForClass('unknown')).toContain('could not exchange your intervals.icu authorization code');
   });
 });
 
@@ -617,6 +680,57 @@ describe('AuthService', () => {
       it('skips capture on CSRF state-mismatch — those are not server failures', async () => {
         await service.handleCallback('code', 'wrong-state');
         expect(reportSpy).not.toHaveBeenCalled();
+      });
+
+      it('sets lastErrorClass to config for invalid_client (AC1 — H2)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: () => Promise.resolve({ error: 'invalid_client' }),
+        }));
+        await service.handleCallback('bad-code', 'valid-state');
+        expect(service.getLastErrorClass()).toBe('config');
+      });
+
+      it('sets lastErrorClass to expired-code for invalid_grant (AC2)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: () => Promise.resolve({ error: 'invalid_grant' }),
+        }));
+        await service.handleCallback('used-code', 'valid-state');
+        expect(service.getLastErrorClass()).toBe('expired-code');
+      });
+
+      it('sets lastErrorClass to transient for 5xx (AC3)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          headers: { get: () => 'text/plain' },
+        }));
+        await service.handleCallback('any-code', 'valid-state');
+        expect(service.getLastErrorClass()).toBe('transient');
+      });
+
+      it('sets lastErrorClass to network for a fetch throw (AC4)', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new Error('CORS')));
+        await service.handleCallback('any-code', 'valid-state');
+        expect(service.getLastErrorClass()).toBe('network');
+      });
+
+      it('sets lastErrorClass to csrf on state mismatch (AC5)', async () => {
+        await service.handleCallback('code', 'wrong-state');
+        expect(service.getLastErrorClass()).toBe('csrf');
+      });
+
+      it('clears lastErrorClass on logout', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new Error('CORS')));
+        await service.handleCallback('any-code', 'valid-state');
+        expect(service.getLastErrorClass()).not.toBeNull();
+        service.logout();
+        expect(service.getLastErrorClass()).toBeNull();
       });
 
       it('does not throw when the reporter itself rejects (NFR2)', async () => {

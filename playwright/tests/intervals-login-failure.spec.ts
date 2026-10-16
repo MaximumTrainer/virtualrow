@@ -2,13 +2,15 @@ import { test, expect, type Page, type Route } from '../fixtures/crash-watch';
 import type { CrashPayload } from '../../src/types/crashPayload';
 
 /**
- * intervals-login-failure.spec.ts — Phase 1 of issue #486.
+ * intervals-login-failure.spec.ts — Phase 1 + Phase 2 of issue #486.
  *
- * Reproduces every failure branch of `AuthService.handleCallback` by mocking
- * the CORS proxy's token endpoint and asserts the structured `authFailure`
- * capture the production code emits via the #473 crash transport (D3 = a,
- * `kind: 'oauth-token-exchange'`). This spec is Phase 1 — classified UX
- * messaging and the Retry button (Phase 2) are not asserted here.
+ * Phase 1 reproduces every failure branch of `AuthService.handleCallback` by
+ * mocking the CORS proxy's token endpoint and asserts the structured
+ * `authFailure` capture the production code emits via the #473 crash
+ * transport (D3 = a, `kind: 'oauth-token-exchange'`).
+ *
+ * Phase 2 asserts the UX half of ACs 1–5: classified alert copy and the
+ * Retry button's presence per class (D2 = a, D4 = a).
  *
  * The spec is self-contained: no real intervals.icu client ID, no real
  * network access. It drives the callback by seeding sessionStorage with a
@@ -186,5 +188,77 @@ test.describe('#486 Phase 1 — intervals.icu login failure capture', () => {
     await page.waitForLoadState('networkidle');
     const captured = await readCaptured(page);
     expect(captured).toHaveLength(0);
+  });
+
+  // ─── Phase 2: classified UX + Retry button (#486 Phase 2, D2 = a, D4 = a) ──
+
+  test('UX AC1 — invalid_client renders the "isn\'t registered" copy and no Retry button', async ({ page }) => {
+    await stubTokenEndpoint(page, async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'invalid_client' }),
+      });
+    });
+
+    await navigateToCallback(page);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(/isn't registered/i, { timeout: 5_000 });
+    await expect(alert).toHaveAttribute('data-auth-error-class', 'config');
+    await expect(page.getByRole('button', { name: /retry sign in/i })).toHaveCount(0);
+  });
+
+  test('UX AC2 — invalid_grant renders the expired-link copy with a Retry button', async ({ page }) => {
+    await stubTokenEndpoint(page, async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'invalid_grant' }),
+      });
+    });
+
+    await navigateToCallback(page);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(/sign.?in.*again/i, { timeout: 5_000 });
+    await expect(alert).toHaveAttribute('data-auth-error-class', 'expired-code');
+    await expect(page.getByRole('button', { name: /retry sign in/i })).toBeVisible();
+  });
+
+  test('UX AC3 — transient 5xx renders the retry copy and the Retry button', async ({ page }) => {
+    await stubTokenEndpoint(page, async (route) => {
+      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'down' });
+    });
+
+    await navigateToCallback(page);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(/temporarily unavailable/i, { timeout: 5_000 });
+    await expect(alert).toHaveAttribute('data-auth-error-class', 'transient');
+    await expect(page.getByRole('button', { name: /retry sign in/i })).toBeVisible();
+  });
+
+  test('UX AC4 — network error renders "could not contact" copy and the Retry button', async ({ page }) => {
+    await stubTokenEndpoint(page, async (route) => {
+      await route.abort('failed');
+    });
+
+    await navigateToCallback(page);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(/could not contact intervals\.icu/i, { timeout: 5_000 });
+    await expect(alert).toHaveAttribute('data-auth-error-class', 'network');
+    await expect(page.getByRole('button', { name: /retry sign in/i })).toBeVisible();
+  });
+
+  test('UX AC5 — CSRF state-mismatch renders the "login session expired" copy and no Retry button', async ({ page }) => {
+    // No token endpoint stub needed — the request never leaves the browser.
+    await page.goto('./?code=any&state=tampered-state');
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(/login session expired/i, { timeout: 5_000 });
+    await expect(alert).toHaveAttribute('data-auth-error-class', 'csrf');
+    await expect(page.getByRole('button', { name: /retry sign in/i })).toHaveCount(0);
   });
 });
