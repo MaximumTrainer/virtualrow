@@ -21,6 +21,36 @@ import { generateCodeVerifier, generateCodeChallenge, generateState } from '../u
 import type { AuthFailureDetail, CrashKind } from '../types/crashPayload';
 import { crashReporterService } from './crashReporterService';
 
+/**
+ * Classified authentication-error reason the UI reads to pick its copy +
+ * whether a Retry button is shown (#486 Phase 2 FR2, D2 = a).
+ *
+ *  - `config`      — intervals.icu rejected the client (invalid_client).
+ *                    Not recoverable from a retry; the UI omits the button.
+ *  - `transient`   — proxy / upstream 5xx. Retry is appropriate.
+ *  - `expired-code`— the authorisation code was reused or has expired
+ *                    (invalid_grant). Retry re-starts the OAuth flow.
+ *  - `network`     — `fetch` threw (CORS block, offline). Retry fits.
+ *  - `csrf`        — state / verifier was lost from sessionStorage (not a
+ *                    server failure; existing user-facing wording is kept).
+ *  - `unknown`     — nothing above matched. Retry is offered.
+ */
+export type AuthErrorClass =
+  | 'config'
+  | 'transient'
+  | 'expired-code'
+  | 'network'
+  | 'csrf'
+  | 'unknown';
+
+/** Error classes the UI should offer Retry for (#486 Phase 2 FR3). */
+export const RETRYABLE_AUTH_ERROR_CLASSES: ReadonlySet<AuthErrorClass> = new Set<AuthErrorClass>([
+  'transient',
+  'expired-code',
+  'network',
+  'unknown',
+]);
+
 export const PROXY_BASE = 'https://mt-intervals-proxy.intervals-login.workers.dev/proxy';
 const ICU_AUTHORIZE_URL = 'https://intervals.icu/oauth/authorize';
 const ICU_TOKEN_PATH = '/api/oauth/token';
@@ -107,6 +137,8 @@ export class AuthService {
   private currentUser: AuthUser | null = null;
   /** Latest callback/login error intended for UI display. */
   private lastError: string | null = null;
+  /** Latest classified error reason (#486 Phase 2 FR2, D2 = a). */
+  private lastErrorClass: AuthErrorClass | null = null;
   /** Handle returned by setTimeout for the silent-refresh timer. */
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -123,6 +155,7 @@ export class AuthService {
    */
   async startLogin(): Promise<void> {
     this.lastError = null;
+    this.lastErrorClass = null;
     const clientId = getClientId();
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
@@ -166,6 +199,7 @@ export class AuthService {
    */
   async handleCallback(code: string, state: string): Promise<AuthUser | null> {
     this.lastError = null;
+    this.lastErrorClass = null;
     if (this.callbackPromise) return this.callbackPromise;
 
     this.callbackPromise = this._doHandleCallback(code, state);
@@ -181,6 +215,7 @@ export class AuthService {
     if (!storedState || storedState !== state) {
       console.error('[AuthService] State mismatch — possible CSRF attack');
       this.lastError = 'Sign-in failed: Your login session expired or became invalid. Please retry.';
+      this.lastErrorClass = 'csrf';
       this.clearCallbackStorage();
       return null;
     }
@@ -189,6 +224,7 @@ export class AuthService {
     if (!verifier) {
       console.error('[AuthService] Missing PKCE code verifier');
       this.lastError = 'Sign-in failed: VirtualRow could not verify your login request. Please retry.';
+      this.lastErrorClass = 'csrf';
       this.clearCallbackStorage();
       return null;
     }
@@ -258,6 +294,7 @@ export class AuthService {
     this.accessToken = null;
     this.currentUser = null;
     this.lastError = null;
+    this.lastErrorClass = null;
     sessionStorage.removeItem(SK_REFRESH_TOKEN);
     sessionStorage.removeItem(SK_USER);
     sessionStorage.removeItem(SK_SESSION_KEY);
@@ -277,6 +314,15 @@ export class AuthService {
   /** Returns the latest user-facing auth error captured by the service. */
   getLastError(): string | null {
     return this.lastError;
+  }
+
+  /**
+   * Classified reason the latest auth attempt failed, or `null` when nothing
+   * went wrong. The UI uses it to pick the right copy and decide whether to
+   * offer a Retry button (#486 Phase 2 FR2 / FR3).
+   */
+  getLastErrorClass(): AuthErrorClass | null {
+    return this.lastErrorClass;
   }
 
   /** True when the user is authenticated and an access token is available. */
@@ -308,7 +354,9 @@ export class AuthService {
       if (!res.ok) {
         console.error('[AuthService] Token exchange failed:', res.status);
         const { code: errorCode, description } = await readAuthErrorBody(res);
-        this.lastError = 'Sign-in failed: VirtualRow could not exchange your intervals.icu authorization code. Please retry.';
+        const klass = classifyExchangeFailure(res.status, errorCode);
+        this.lastError = messageForClass(klass);
+        this.lastErrorClass = klass;
         void reportAuthFailure('oauth-token-exchange', {
           status: res.status,
           errorCode,
@@ -323,6 +371,7 @@ export class AuthService {
       const tokens = this.parseTokenResponse(raw, athleteId);
       if (!tokens) {
         this.lastError = 'Sign-in failed: intervals.icu returned an invalid token response. Please retry.';
+        this.lastErrorClass = 'transient';
         void reportAuthFailure('oauth-token-exchange', {
           status: res.status,
           errorCode: 'invalid_token_response',
@@ -334,6 +383,7 @@ export class AuthService {
     } catch (err) {
       console.error('[AuthService] Token exchange error:', err);
       this.lastError = 'Sign-in failed: VirtualRow could not contact intervals.icu to finish login. Please retry.';
+      this.lastErrorClass = 'network';
       void reportAuthFailure('oauth-token-exchange', {
         status: null,
         errorCode: null,
@@ -363,6 +413,7 @@ export class AuthService {
           this.lastError = res.status === 401
             ? 'Sign-in failed: Your intervals.icu session was not authorized. Please retry.'
             : 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+          this.lastErrorClass = res.status >= 500 ? 'transient' : res.status === 401 ? 'expired-code' : 'unknown';
           void reportAuthFailure('oauth-profile-fetch', {
             status: res.status,
             errorCode,
@@ -400,6 +451,7 @@ export class AuthService {
       }
 
       this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+      this.lastErrorClass = 'unknown';
       void reportAuthFailure('oauth-profile-fetch', {
         status: null,
         errorCode: 'profile_missing_id',
@@ -410,6 +462,7 @@ export class AuthService {
     } catch (err) {
       console.error('[AuthService] Profile fetch error:', err);
       this.lastError = 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.';
+      this.lastErrorClass = 'network';
       void reportAuthFailure('oauth-profile-fetch', {
         status: null,
         errorCode: null,
@@ -672,6 +725,53 @@ export class AuthService {
 }
 
 export const authService = new AuthService();
+
+/**
+ * Classify an OAuth token-exchange failure (#486 Phase 2 FR2, D2 = a).
+ *
+ * The classifier is a pure function so tests pin every mapping without
+ * reaching into AuthService internals.
+ *
+ *  - 400/401 `invalid_client` → `config` (no retry; VirtualRow isn't
+ *    registered or its client secret rotated upstream).
+ *  - 400/401 `invalid_grant`  → `expired-code` (replayed / expired code,
+ *    retry re-starts OAuth).
+ *  - 500–599 OR 408 OR 429    → `transient` (retry fits).
+ *  - Any other 400/401 with no OAuth code → `unknown` (retry fits).
+ */
+export function classifyExchangeFailure(
+  status: number,
+  errorCode: string | null,
+): AuthErrorClass {
+  if (errorCode === 'invalid_client') return 'config';
+  if (errorCode === 'invalid_grant') return 'expired-code';
+  if (status >= 500 || status === 408 || status === 429) return 'transient';
+  return 'unknown';
+}
+
+/**
+ * The user-visible copy for each classified failure (#486 Phase 2 FR2).
+ * Kept with the classifier so adding a class in one place doesn't break the
+ * UI. `AuthButton` passes `lastError` as `fallback` for backward compat with
+ * tests pinning the old wording when they drive the service directly.
+ */
+export function messageForClass(klass: AuthErrorClass): string {
+  switch (klass) {
+    case 'config':
+      return "Sign-in failed: VirtualRow isn't registered with intervals.icu — please report this.";
+    case 'expired-code':
+      return 'Sign-in failed: Your sign-in link expired — please sign in again.';
+    case 'transient':
+      return 'Sign-in failed: intervals.icu is temporarily unavailable. Please retry in a moment.';
+    case 'network':
+      return 'Sign-in failed: VirtualRow could not contact intervals.icu to finish login. Please retry.';
+    case 'csrf':
+      return 'Sign-in failed: Your login session expired or became invalid. Please retry.';
+    case 'unknown':
+    default:
+      return 'Sign-in failed: VirtualRow could not exchange your intervals.icu authorization code. Please retry.';
+  }
+}
 
 /**
  * Read the OAuth error body (RFC 6749 §5.2) without blowing up on an empty,

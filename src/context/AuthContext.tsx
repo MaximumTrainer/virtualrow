@@ -22,6 +22,7 @@ import {
 } from 'react';
 import type { AuthUser } from '../types/index';
 import { authService } from '../services/authService';
+import type { AuthErrorClass } from '../services/authService';
 import type { AuthPort } from '../ports';
 import { AuthContext } from './useAuth';
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
   const [user, setUser] = useState<AuthUser | null>(() => service.getUser());
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorClass, setAuthErrorClass] = useState<AuthErrorClass | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const clearCallbackParams = useCallback(() => {
@@ -60,12 +62,14 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
 
     setIsLoading(true);
     setAuthError(null);
+    setAuthErrorClass(null);
     service.handleCallback(code, state).then((authUser) => {
       if (!authUser) {
         setAuthError(
           service.getLastError()
           ?? 'Sign-in failed: VirtualRow could not load your intervals.icu profile. Please retry.'
         );
+        setAuthErrorClass(service.getLastErrorClass() ?? null);
       }
 
       setUser(authUser);
@@ -78,6 +82,9 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
       setAuthError(err instanceof Error
         ? err.message
         : 'Sign-in failed: VirtualRow could not finalize your login. Please retry.');
+      // A thrown promise is an unexpected engine error, not an OAuth response:
+      // fall back to the generic retryable class so the UI still offers Retry.
+      setAuthErrorClass('unknown');
 
       clearCallbackParams();
     });
@@ -86,6 +93,7 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
 
   const login = useCallback(async () => {
     setAuthError(null);
+    setAuthErrorClass(null);
     await service.startLogin();
   }, [service]);
 
@@ -93,8 +101,14 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
     service.logout();
     setUser(null);
     setAuthError(null);
+    setAuthErrorClass(null);
     setPendingAction(null);
   }, [service]);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+    setAuthErrorClass(null);
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -103,9 +117,10 @@ export function AuthProvider({ children, service = authService }: AuthProviderPr
         isAuthenticated: user !== null,
         isLoading,
         authError,
+        authErrorClass,
         login,
         logout,
-        clearAuthError: () => setAuthError(null),
+        clearAuthError,
         pendingAction,
         setPendingAction,
       }}

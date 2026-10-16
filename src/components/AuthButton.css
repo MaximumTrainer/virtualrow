@@ -77,6 +77,29 @@
   white-space: normal;
   word-break: normal;
   overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  align-items: flex-start;
+}
+
+.auth-retry-button {
+  margin-top: var(--space-2xs);
+  min-height: 32px;
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-divider);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+@media (hover: hover) {
+  .auth-retry-button:hover {
+    background: var(--color-bg-tertiary, var(--color-bg-secondary));
+  }
 }
 
 .auth-spinner {

@@ -7,6 +7,7 @@
  */
 import { createContext, useContext } from 'react';
 import type { AuthUser } from '../types/index';
+import type { AuthErrorClass } from '../services/authService';
 
 export interface AuthContextValue {
   user: AuthUser | null;
@@ -15,6 +16,13 @@ export interface AuthContextValue {
   isLoading: boolean;
   /** Latest authentication error visible to the UI. */
   authError: string | null;
+  /**
+   * Classified reason the latest sign-in failed (#486 Phase 2, D2 = a).
+   * `null` when there is no error or the service doesn't know how to class
+   * the failure. The UI uses it to pick copy and decide whether to render
+   * the Retry button.
+   */
+  authErrorClass: AuthErrorClass | null;
   /** Start the OAuth login flow (redirects the browser). */
   login: () => Promise<void>;
   /** Sign out: clears tokens and resets auth state. */
@@ -34,6 +42,7 @@ export const AuthContext = createContext<AuthContextValue>({
   isAuthenticated: false,
   isLoading: false,
   authError: null,
+  authErrorClass: null,
   login: async () => {},
   logout: () => {},
   clearAuthError: () => {},
