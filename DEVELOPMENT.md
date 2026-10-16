@@ -337,6 +337,37 @@ OAuth token requests must pass `client_id` both in the form-encoded POST body an
 
 Then redeploy: `cd workers/intervals-cors-proxy && npx wrangler deploy`.
 
+### intervals.icu sign-in troubleshooting
+
+When sign-in fails with "VirtualRow could not exchange your intervals.icu authorization code", the alert's class (set by #486 Phase 2, exposed as `data-auth-error-class` on the `role="alert"` element) narrows which hypothesis fired. Each row below pairs a hypothesis with the signal that distinguishes it.
+
+| Class | Hypothesis | Signal |
+|---|---|---|
+| `network` | **H1** — Worker `ALLOWED_ORIGINS` doesn't include the current deploy origin. The browser refuses the pre-flight before intervals.icu sees the POST. | `fetch` throws; the crash transport captures `{ kind: 'oauth-token-exchange', networkError: true }`. Confirm by running `node scripts/verify-oauth-proxy.mjs` — a missing origin reports FAIL with `acao=(none)` or a different origin. Fix: add the deploy origin to `ALLOWED_ORIGINS` in `MaximumTrainer_Redux/workers/intervals-cors-proxy/worker.js` and `npx wrangler deploy`. |
+| `config` | **H2** — Client secret rotated on intervals.icu but not updated in the Worker. | Worker proxies through; intervals.icu returns `401 invalid_client`. Crash transport logs `status: 401, errorCode: 'invalid_client'`. Fix: update the client secret in the Worker's `wrangler.toml` / secrets and redeploy. |
+| `expired-code` | **H3** — Replayed or expired `code` (refresh in the callback tab, prefetch, user back-navigation). | `400 invalid_grant`. Crash transport logs `status: 400, errorCode: 'invalid_grant'`. User-visible fix: the alert itself exposes a Retry button that re-runs `startLogin()`. |
+| — | **H4** — Scope mismatch between the authorize string and what intervals.icu grants this client. | Authorize succeeds, token exchange rejects. The scope list lives in `src/services/authService.ts` (`startLogin`); compare it against the OAuth application's registered scopes at [intervals.icu/settings/api](https://intervals.icu/settings/api). Not currently reproduced in the live app. |
+| — | **H5** — `redirect_uri` mismatch between authorize and token calls (trailing slash, deploy base-path drift). | Same `invalid_grant` symptom as H3 but reproduces every time, not intermittently. Check `getRedirectUri()` in `authService.ts` against the URI registered on intervals.icu. A build that bakes the wrong `import.meta.env.BASE_URL` is the usual culprit. |
+| `transient` | **H6** — Worker rate limit or upstream 5xx. | `status >= 500` or `408` / `429`. Crash transport logs the status with `errorCode: null`. The alert's Retry button is enough. |
+
+**Where to read Worker logs.** `cd workers/intervals-cors-proxy && npx wrangler tail` in `MaximumTrainer_Redux` streams live request logs; a 401 from intervals.icu shows up as a 401 forwarded response. The scheduled healthcheck (below) catches H1 before a user does.
+
+**Running the healthcheck locally.** The weekly job in `.github/workflows/intervals-proxy-healthcheck.yml` is the same CORS pre-flight a browser sends. To run it against the default deploy origins:
+
+```bash
+node scripts/verify-oauth-proxy.mjs
+```
+
+Override the origins (comma-separated) or point at a staging worker:
+
+```bash
+ORIGINS="https://preview.example.com" node scripts/verify-oauth-proxy.mjs
+VIRTUALROW_INTERVALS_PROXY_URL=https://staging.example/proxy/api/oauth/token \
+  node scripts/verify-oauth-proxy.mjs
+```
+
+A FAIL means the Worker refused the pre-flight for that origin; the fix is always a `wrangler deploy` after editing `ALLOWED_ORIGINS`.
+
 ### E2E Auth Tests
 
 Auth E2E tests require GitHub Actions secrets (not local `.env.local`):
