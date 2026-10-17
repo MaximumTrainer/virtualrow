@@ -13,13 +13,23 @@
  * course.
  */
 import type { ActivitySample, Coordinate, PM5Data } from '../types/index';
-import { cumulativeLengths, interpolateAlong } from '../utils/polylineGeometry';
+import { cumulativeLengths, interpolateAlong, isClosedLoop } from '../utils/polylineGeometry';
+
+/**
+ * Metres below which first-coord ≈ last-coord counts as a closed loop
+ * (issue #466, D1(b)). 10 m is lenient enough for a GPX export's rounded
+ * closing vertex to still match, strict enough to leave an obvious
+ * out-and-back open.
+ */
+export const LOOP_CLOSURE_EPSILON_METRES = 10;
 
 export class ActivitySampler {
   private samples: ActivitySample[] = [];
   private lastSampledSecond = -1;
   private route: Coordinate[] = [];
   private routeCumulative: number[] = [];
+  private routeIsLoop = false;
+  private routeTotalMetres = 0;
 
   /** Begin a new series. A route of fewer than two points yields samples with no position. */
   start(routeCoordinates: Coordinate[] = []): void {
@@ -27,6 +37,8 @@ export class ActivitySampler {
     this.lastSampledSecond = -1;
     this.route = routeCoordinates.length >= 2 ? routeCoordinates : [];
     this.routeCumulative = this.route.length >= 2 ? cumulativeLengths(this.route) : [];
+    this.routeTotalMetres = this.routeCumulative[this.routeCumulative.length - 1] ?? 0;
+    this.routeIsLoop = isClosedLoop(this.route, LOOP_CLOSURE_EPSILON_METRES);
   }
 
   /**
@@ -55,6 +67,12 @@ export class ActivitySampler {
 
   private positionAt(distance: number): Coordinate | Record<string, never> {
     if (this.route.length === 0) return {};
-    return interpolateAlong(this.route, distance, this.routeCumulative);
+    // On a closed loop, a row that exceeds the loop length wraps back to the
+    // start rather than piling every late sample on the last vertex (issue
+    // #466, FR4). Open routes clamp to the final coordinate via interpolateAlong.
+    const effective = this.routeIsLoop && this.routeTotalMetres > 0
+      ? ((distance % this.routeTotalMetres) + this.routeTotalMetres) % this.routeTotalMetres
+      : distance;
+    return interpolateAlong(this.route, effective, this.routeCumulative);
   }
 }
