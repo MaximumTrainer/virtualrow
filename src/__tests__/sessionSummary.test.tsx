@@ -5,6 +5,7 @@ vi.mock('react-chartjs-2', () => ({
   Line: () => <canvas data-testid="row-chart" />,
 }));
 
+import * as exporters from '../utils/exporters';
 import { SessionSummary } from '../components/SessionSummary';
 import { ServicesProvider } from '../context/ServicesContext';
 import { AuthContext, type AuthContextValue } from '../context/useAuth';
@@ -260,6 +261,60 @@ describe('SessionSummary (issue #221, R4)', () => {
 
     await user.click(screen.getByRole('button', { name: /save to intervals\.icu/i }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('i9090'));
+  });
+
+  it('shows the gate-chain GPS chip only for gate-chain routes (issue #466, AC6)', () => {
+    const PATTERN = /schematic line between start and finish/i;
+
+    const { unmount } = render(
+      <AuthContext.Provider value={AUTHENTICATED}>
+        <ServicesProvider services={{ intervalsIcuActivityService: { uploadActivity: uploadMock() } }}>
+          <SessionSummary session={makeSession()} onDone={vi.fn()} routeGeometrySource="gate-chain" />
+        </ServicesProvider>
+      </AuthContext.Provider>,
+    );
+    expect(screen.getByText(PATTERN)).toBeInTheDocument();
+    unmount();
+
+    for (const source of ['track', 'polygon-path', 'osm-derived', undefined] as const) {
+      const { unmount: close } = render(
+        <AuthContext.Provider value={AUTHENTICATED}>
+          <ServicesProvider services={{ intervalsIcuActivityService: { uploadActivity: uploadMock() } }}>
+            <SessionSummary
+              session={makeSession()}
+              onDone={vi.fn()}
+              routeGeometrySource={source}
+            />
+          </ServicesProvider>
+        </AuthContext.Provider>,
+      );
+      expect(screen.queryByText(PATTERN)).not.toBeInTheDocument();
+      close();
+    }
+  });
+
+  it('uploads the same bytes it offers for download (issue #466, AC7)', async () => {
+    const user = userEvent.setup();
+    // Spy on triggerBlobDownload so we capture the exact BlobPart handed to it,
+    // bypassing jsdom's missing Blob.arrayBuffer. Both buttons funnel through
+    // the component-local encode() helper, so byte-identical output here is the
+    // only guarantee the FIT the athlete downloads matches what intervals.icu
+    // received.
+    const trigger = vi.spyOn(exporters, 'triggerBlobDownload').mockImplementation(() => {});
+
+    const { uploadActivity } = renderSummary();
+
+    await user.click(screen.getByRole('button', { name: /save to intervals\.icu/i }));
+    await waitFor(() => expect(uploadActivity).toHaveBeenCalledTimes(1));
+    const uploadedBytes = uploadActivity.mock.calls[0][1] as Uint8Array;
+
+    await user.click(screen.getByRole('button', { name: /download \.fit/i }));
+    await waitFor(() => expect(trigger).toHaveBeenCalledTimes(1));
+    const downloadedBytes = trigger.mock.calls[0][0] as Uint8Array;
+
+    expect(downloadedBytes).toBeInstanceOf(Uint8Array);
+    expect(downloadedBytes.byteLength).toBe(uploadedBytes.byteLength);
+    expect(Array.from(downloadedBytes)).toEqual(Array.from(uploadedBytes));
   });
 });
 

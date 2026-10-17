@@ -1146,6 +1146,7 @@ function App() {
           isDemo={completedSessionWasDemo}
           personalBest={completedSessionBest}
           ghost={completedGhost}
+          routeGeometrySource={selectedRoute?.geometrySource}
         />
       )}
 
