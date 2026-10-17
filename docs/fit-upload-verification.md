@@ -84,6 +84,39 @@ Open the URL the summary card links to. On the activity page, verify:
   polyline matching the route. For a demo row without geometry, no map
   should render.
 
+## GPS polyline check (issue #466, AC8)
+
+The FIT encoder writes `positionLat` / `positionLong` as sint32 semicircles
+on every record (`src/services/fitEncoderService.ts` — `buildRecords`,
+`toSemicircles`), fed by `activitySampler.ts` interpolating lat/lng along
+the route polyline via `interpolateAlong` in `src/utils/polylineGeometry.ts`.
+On the intervals.icu activity page, that chain renders as a map polyline.
+This is the last leg the automated tests cannot run — a visual check that
+the polyline matches the real-water route, not a straight line through
+land.
+
+Run this with a route whose geometry has clear bends (Willowbrook River
+is the default and works well — it curves):
+
+1. Open the activity page from step 6 above.
+2. Scroll to the **Map** panel. For a route-backed row, a polyline MUST
+   render — not an empty map, not a single pin, not a straight line
+   between distant points. The polyline shape SHOULD visually match the
+   source route (same bends, same bank, same length).
+3. Click any point on the polyline. The point-info popup SHOULD show a
+   lat/lng that lands on the source route to roughly a metre.
+4. **Gate-chain routes only** (`geometrySource: 'gate-chain'` —
+   `src/types/index.ts`): the polyline is a straight line between the
+   start and finish gates by design. SessionSummary surfaces a notice
+   that the GPS trace is schematic — expected, not a regression.
+5. **Demo rows** (`▶ Try a demo row`): the demo passes a route, so a
+   polyline SHOULD render. A demo row that lands with an empty map is a
+   regression.
+
+If the polyline is missing, straight across land for a non-gate-chain
+route, or diverges visibly from the source route, do not merge — the
+sampler or the encoder has regressed. See **Rollback signal** below.
+
 ## Evidence to attach to a PR
 
 Every PR that touches the paths listed under **When to run this** should
@@ -92,7 +125,9 @@ attach, in the PR description:
 1. The activity URL from step 6 above.
 2. A screenshot of the intervals.icu activity page showing the title,
    description, external id, distance, total time, splits and streams.
-3. The `external_id` string, copy-pasted (so a search on the account can
+3. A screenshot of the **Map** panel showing the GPS polyline (issue
+   #466, AC11) — the shape must match the source route.
+4. The `external_id` string, copy-pasted (so a search on the account can
    find it if it ever needs re-verifying).
 
 ## Rollback signal
