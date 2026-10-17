@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { Decoder, Stream } from '@garmin/fitsdk';
 import { encodeSession, FIT_EPOCH_OFFSET_SECONDS } from '../services/fitEncoderService';
 import { FIXTURE_START as START, makeSample, makeSession } from './__helpers__/fitFixture';
+import { cumulativeLengths, interpolateAlong } from '../utils/polylineGeometry';
+import type { ActivitySample, Coordinate } from '../types/index';
 
 /**
  * The encoder's primary gate (issue #221, AC2.2): every assertion here goes
@@ -162,5 +164,51 @@ describe('fitEncoderService (issue #221, R2)', () => {
     const samples = Array.from({ length: 3 }, (_, t) => makeSample(t, { lat: undefined, lng: undefined }));
     const decoded = decode(encodeSession(makeSession({ samples })));
     expect(decoded.records.every((record) => record.positionLat === undefined)).toBe(true);
+  });
+
+  it('round-trips every record position through interpolateAlong on a non-trivial route (issue #466, AC1)', () => {
+    // A 12-vertex synthetic polyline bending ~1 km east then north then east,
+    // laid out so cumulative length is comfortably over 5 km.
+    const route: Coordinate[] = [
+      { lat: 51.5000, lng: -0.9000 },
+      { lat: 51.5000, lng: -0.8850 },
+      { lat: 51.5050, lng: -0.8750 },
+      { lat: 51.5100, lng: -0.8650 },
+      { lat: 51.5150, lng: -0.8500 },
+      { lat: 51.5200, lng: -0.8400 },
+      { lat: 51.5250, lng: -0.8250 },
+      { lat: 51.5300, lng: -0.8150 },
+      { lat: 51.5300, lng: -0.8000 },
+      { lat: 51.5250, lng: -0.7900 },
+      { lat: 51.5200, lng: -0.7800 },
+      { lat: 51.5150, lng: -0.7700 },
+    ];
+    const cumulative = cumulativeLengths(route);
+    const total = cumulative[cumulative.length - 1];
+    expect(total).toBeGreaterThan(5000);
+
+    const sampleCount = 60;
+    const samples: ActivitySample[] = Array.from({ length: sampleCount }, (_, t) => {
+      const distance = (t * total) / (sampleCount - 1);
+      const { lat, lng } = interpolateAlong(route, distance, cumulative);
+      return makeSample(t, { distance, lat, lng });
+    });
+    const toSemicircles = (degrees: number) => Math.round((degrees * 2 ** 31) / 180);
+
+    const decoded = decode(encodeSession(makeSession({
+      samples,
+      distance: total,
+      duration: sampleCount,
+      endTime: new Date(START.getTime() + sampleCount * 1000),
+    })));
+
+    expect(decoded.records).toHaveLength(sampleCount);
+    expect(decoded.records.every((record) => record.positionLat !== undefined && record.positionLong !== undefined)).toBe(true);
+    for (let i = 0; i < decoded.records.length; i++) {
+      const sample = samples[i];
+      const expected = interpolateAlong(route, sample.distance, cumulative);
+      expect(Math.abs(decoded.records[i].positionLat! - toSemicircles(expected.lat))).toBeLessThanOrEqual(1);
+      expect(Math.abs(decoded.records[i].positionLong! - toSemicircles(expected.lng))).toBeLessThanOrEqual(1);
+    }
   });
 });
