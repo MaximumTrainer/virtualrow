@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import type { ActivitySample, GeometrySource, WorkoutSession } from '../types/index';
 import type { ActivityUploadResult } from '../services/intervalsIcuActivityService';
 import { useAuth } from '../context/useAuth';
 import { useServices } from '../context/useServices';
@@ -38,6 +38,14 @@ interface SessionSummaryProps {
    * distance, and what it was. Left out, no race is reported.
    */
   ghost?: { seconds: number | null; label: string } | null;
+  /**
+   * How the rowed route's polyline came to be (#466, D2(a)). When the source
+   * is `gate-chain`, the GPS trace saved to the FIT file is a straight line
+   * between the start and finish gates — surface a persistent chip saying so
+   * so a reviewer looking at the upload's map on intervals.icu isn't
+   * surprised. Omitted or anything else, no chip renders.
+   */
+  routeGeometrySource?: GeometrySource;
 }
 
 /** Where the save has got to. */
@@ -74,6 +82,7 @@ export function SessionSummary({
   isDemo,
   personalBest,
   ghost,
+  routeGeometrySource,
 }: SessionSummaryProps) {
   const { isAuthenticated } = useAuth();
   const { intervalsIcuActivityService, authService } = useServices();
@@ -120,6 +129,15 @@ export function SessionSummary({
           {isDemo && <span className="session-summary-badge">Demo Row</span>}
           <h2 id="session-summary-title">Workout complete</h2>
           <p className="session-summary-route">{session.routeName}</p>
+          {routeGeometrySource === 'gate-chain' && (
+            <p
+              className="session-summary-gate-chain-chip"
+              role="note"
+              aria-label="GPS trace note"
+            >
+              GPS trace is a schematic line between start and finish — this route only knows its gates.
+            </p>
+          )}
         </div>
 
         <div className="session-summary-stats">

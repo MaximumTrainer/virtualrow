@@ -79,6 +79,22 @@
   color: var(--text-secondary);
 }
 
+/* #466 D2(a): a persistent chip on a gate-chain route whose GPS trace is a
+   straight line between gates. Styled like a quiet note, not an alert. */
+.session-summary-gate-chain-chip {
+  margin: var(--space-xs) 0 0;
+  padding: var(--space-2xs) var(--space-md);
+  border: 1px solid var(--color-status-provisional-text);
+  border-radius: var(--radius-control);
+  background: var(--color-status-provisional-bg);
+  color: var(--color-status-provisional-text);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  align-self: center;
+  max-width: 36ch;
+  text-align: center;
+}
+
 .session-summary-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
