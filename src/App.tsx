@@ -17,6 +17,7 @@ import { ftmsBluetoothService } from './services/ftmsBluetoothService';
 const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
 import { RouteOverviewMap } from './components/RouteOverviewMap';
+import { RouteDetailOverlay } from './components/RouteDetailOverlay';
 import { isRouteOverviewV2Enabled } from './utils/routeOverviewFlag';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { SessionSummary } from './components/SessionSummary';
@@ -256,6 +257,8 @@ function App() {
 
   // The athlete's default route, if they have set one (issue #219, R6).
   const [defaultRouteId, setDefaultRouteId] = useState<string | null>(null);
+  // #505 Phase 2 (D8-c): the modal that opens when a map pin is clicked.
+  const [routeDetailOpen, setRouteDetailOpen] = useState<WaterRoute | null>(null);
 
   /**
    * Decide which route the app opens on, and which one the star is lit for.
@@ -700,6 +703,18 @@ function App() {
     }
     return filtered.filter(r => r.distance >= distanceMin && r.distance <= distanceMax);
   }, [routes, difficultyFilter, distanceMin, distanceMax]);
+
+  // #505 Phase 2 (D7-c): the overview map shows every pin and dims the ones
+  // filtered out, so the user can see what's hidden without clearing the
+  // filter. The list below is still reduced to `filteredRoutes`.
+  const dimmedRouteIds = useMemo(() => {
+    const kept = new Set(filteredRoutes.map((r) => r.id));
+    const dimmed = new Set<string>();
+    for (const r of routes) {
+      if (!kept.has(r.id)) dimmed.add(r.id);
+    }
+    return dimmed;
+  }, [routes, filteredRoutes]);
 
   const handlePM5Data = useCallback((data: PM5Data) => {
     // Always update the service synchronously — no React render triggered here.
@@ -1478,14 +1493,27 @@ function App() {
                   >
                     <div className="route-overview-section__map">
                       <RouteOverviewMap
-                        routes={filteredRoutes}
+                        routes={routes}
                         defaultRouteId={defaultRouteId}
                         selectedRouteId={selectedRoute?.id ?? null}
-                        onSelect={handleRouteSelect}
+                        dimmedRouteIds={dimmedRouteIds}
+                        onSelect={(route) => setRouteDetailOpen(route)}
                       />
                     </div>
                   </section>
                 )}
+
+                <RouteDetailOverlay
+                  route={isRouteOverviewV2Enabled() ? routeDetailOpen : null}
+                  onClose={() => setRouteDetailOpen(null)}
+                  onStartRow={() => {
+                    if (routeDetailOpen) {
+                      handleRouteSelect(routeDetailOpen);
+                      setRouteDetailOpen(null);
+                    }
+                  }}
+                />
+
 
                 <section className="route-search-section">
                   <h3>Add a rownative course</h3>
