@@ -49,6 +49,30 @@ describe('shoreDetection — sampling the route (D22)', () => {
   });
 });
 
+describe('shoreDetection — denser samples near islands and narrows (D22 c)', () => {
+  const spacingAround = (detection: ReturnType<typeof detectRoute>, from: number, to: number) =>
+    detection.samples
+      .map((sample) => Math.round(sample.distanceMeters))
+      .filter((distance) => distance >= from && distance <= to);
+
+  it('samples every 10 m within reach of an island, and every 50 m elsewhere', () => {
+    const island = way(6, [[10, 400], [30, 400], [30, 600], [10, 600]], { place: 'islet' });
+    const detection = detectRoute(routeUpChannel, buildWaterMask([channel, island]));
+    expect(spacingAround(detection, 450, 500)).toEqual([450, 460, 470, 480, 490, 500]);
+    expect(spacingAround(detection, 0, 100)).toEqual([0, 50, 100]);
+  });
+
+  it('samples every 10 m through a narrows', () => {
+    // The channel pinches to 20 m wide between 700 m and 800 m.
+    const pinched = way(7, [
+      [-15, -100], [45, -100], [45, 700], [10, 700], [10, 800], [45, 800], [45, 1100], [-15, 1100],
+    ], { natural: 'water', water: 'river' });
+    const detection = detectRoute(routeUpChannel, buildWaterMask([pinched]));
+    expect(spacingAround(detection, 700, 750)).toEqual([700, 710, 720, 730, 740, 750]);
+    expect(spacingAround(detection, 200, 300)).toEqual([200, 250, 300]);
+  });
+});
+
 describe('shoreDetection — shore distance each side, off-centre (FR16, G3)', () => {
   const detection = detectRoute(routeUpChannel, buildWaterMask([channel]));
 

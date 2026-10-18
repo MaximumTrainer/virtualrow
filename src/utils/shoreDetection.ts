@@ -35,7 +35,7 @@ export const localProjection = (origin: Coordinate) => {
 };
 
 export interface DetectionOptions {
-  /** D22 (a): one sample per enrichment segment. */
+  /** D22 (c): one sample per enrichment segment, denser near islands and narrows. */
   spacingMeters?: number;
   /** D20: how far a ray looks for a shore. The caller passes the view distance. */
   maxRayMeters?: number;
@@ -45,9 +45,18 @@ export interface DetectionOptions {
 
 const DEFAULTS: Required<DetectionOptions> = {
   spacingMeters: 50,
-  maxRayMeters: 500,
+  // D20 (a): the view distance, chunkViewDistanceFor() — fog far 550 m plus a tenth.
+  // utils can't import the scene, so callers with the live config pass their own.
+  maxRayMeters: 605,
   landToleranceMeters: 15,
 };
+
+/** D22 (c): step through islands and narrows at this spacing. */
+const DETAIL_SPACING_METERS = 10;
+/** A sample this close to an island's edge is "near" it. */
+const NEAR_ISLAND_METERS = 100;
+/** Shore to shore narrower than this is a narrows: about four times the oar span. */
+const NARROWS_WIDTH_METERS = 40;
 
 export interface DetectedSample {
   distanceMeters: number;
@@ -185,7 +194,7 @@ export const detectRoute = (
       }))
       .sort((a, b) => a.distance - b.distance)[0];
 
-  const samples = sampleDistances(routeLength(points), spacingMeters).map((distanceMeters): DetectedSample => {
+  const sampleAt = (distanceMeters: number): DetectedSample => {
     const { position, heading } = pointAlong(points, distanceMeters);
     const coordinate = toCoordinate(position);
     const base = { distanceMeters, coordinate, leftShoreMeters: null, rightShoreMeters: null };
@@ -207,17 +216,45 @@ export const detectRoute = (
       leftShoreMeters: castRay(position, { x: -heading.y, y: heading.x }),
       rightShoreMeters: castRay(position, { x: heading.y, y: -heading.x }),
     };
+  };
+
+  const islandSegments = islandsOf(mask).map((island) => ({
+    island,
+    segments: ringSegments(island.outline.map(toMetres)),
+  }));
+  const distanceToIsland = (point: Metres, segments: Segment[]) =>
+    Math.min(...segments.map((segment) => distanceToSegment(point, segment)));
+  const nearIsland = (sample: DetectedSample) => {
+    const point = toMetres(sample.coordinate);
+    return islandSegments.some(({ segments }) => distanceToIsland(point, segments) <= NEAR_ISLAND_METERS);
+  };
+  const inNarrows = (sample: DetectedSample) =>
+    sample.leftShoreMeters !== null &&
+    sample.rightShoreMeters !== null &&
+    sample.leftShoreMeters + sample.rightShoreMeters < NARROWS_WIDTH_METERS;
+  const needsDetail = (sample: DetectedSample) => nearIsland(sample) || inNarrows(sample);
+
+  // D22 (c): a first pass at the segment spacing, then 10 m steps through any
+  // stretch that starts or ends beside an island or in a narrows, where a
+  // 50 m step could pass a whole island or pinch without seeing it.
+  const coarse = sampleDistances(routeLength(points), spacingMeters).map(sampleAt);
+  const samples = coarse.flatMap((sample, index) => {
+    const next = coarse[index + 1];
+    if (!next || !(needsDetail(sample) || needsDetail(next))) return [sample];
+    const extra: DetectedSample[] = [];
+    for (let distance = sample.distanceMeters + DETAIL_SPACING_METERS; distance < next.distanceMeters - 0.5; distance += DETAIL_SPACING_METERS) {
+      extra.push(sampleAt(distance));
+    }
+    return [sample, ...extra];
   });
 
-  const samplePoints = samples.map((sample) => toMetres(sample.coordinate));
-  const withinReach = (island: DetectedIsland) =>
-    ringSegments(island.outline.map(toMetres)).some((segment) =>
-      samplePoints.some((point) => distanceToSegment(point, segment) <= maxRayMeters),
-    );
+  const samplePoints = coarse.map((sample) => toMetres(sample.coordinate));
+  const withinReach = ({ segments }: { segments: Segment[] }) =>
+    samplePoints.some((point) => distanceToIsland(point, segments) <= maxRayMeters);
 
   return {
     samples,
-    islands: islandsOf(mask).filter(withinReach),
+    islands: islandSegments.filter(withinReach).map(({ island }) => island),
     summary: {
       water: samples.filter((sample) => sample.kind === 'water').length,
       land: samples.filter((sample) => sample.kind === 'land').length,
