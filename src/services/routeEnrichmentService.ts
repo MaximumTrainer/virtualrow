@@ -12,11 +12,19 @@ export const ROUTE_SEGMENT_LENGTH_METERS = 50;
 export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
+import { buildWaterMask } from '../utils/osmWaterMask';
+import { detectRoute } from '../utils/shoreDetection';
+import { classifyDetectedRoute, type RouteWaterClass } from '../utils/waterClassification';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 
 export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
-const ROUTE_ENRICHMENT_CACHE_PREFIX = 'virtualrow:route-enrichment:';
+const ROUTE_ENRICHMENT_CACHE_ROOT = 'virtualrow:route-enrichment:';
+/**
+ * v2: the water type comes from OSM detection (#493). Entries under the bare
+ * root were classified the old way and are pruned on start-up (D9 b).
+ */
+const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v2:`;
 
 export type SceneryProfile =
   | 'forest'
@@ -33,6 +41,8 @@ export type WaterBodyType =
   | 'stream'
   | 'lake'
   | 'reservoir'
+  /** Sea, bays, straits, and lakes too wide to see across (#493 D12 c, D13). */
+  | 'open_water'
   | 'unknown';
 
 export interface RouteSegmentEnrichment {
@@ -60,8 +70,20 @@ export interface RouteEnrichmentData {
   waterWidthMeters: number;
   waterColor: string;
   waveIntensity: number;
+  /**
+   * What OSM detection found along the route (#493 FR22): each water type's share
+   * of the on-water samples, and the sample counts. Absent on fallback data.
+   */
+  waterDetection?: WaterDetectionSummary;
   fetchedAt: number;
   source: 'network' | 'cache' | 'fallback';
+}
+
+export interface WaterDetectionSummary {
+  shares: RouteWaterClass['shares'];
+  water: number;
+  land: number;
+  unknown: number;
 }
 
 interface CachedRouteEnrichment {
@@ -276,6 +298,8 @@ export const getDefaultWaterWidthMeters = (waterBodyType: WaterBodyType) => {
     case 'lake':
     case 'reservoir':
       return 45;
+    case 'open_water':
+      return 120;
     default:
       return 30;
   }
@@ -298,6 +322,8 @@ const getWaterAppearance = (waterBodyType: WaterBodyType) => {
       return { waterColor: '#3f7ea8', waveIntensity: 0.88 };
     case 'river':
       return { waterColor: '#2f6f93', waveIntensity: 1.1 };
+    case 'open_water':
+      return { waterColor: '#2c6a8f', waveIntensity: 1.35 };
     default:
       return { waterColor: '#3a7aa2', waveIntensity: 1 };
   }
@@ -870,6 +896,22 @@ export class RouteEnrichmentService {
   constructor(fetchImpl: typeof fetch = fetch, storage: Storage | null = defaultStorage()) {
     this.fetchImpl = fetchImpl;
     this.storage = storage;
+    this.pruneOldCacheVersions();
+  }
+
+  /** Drops entries cached under an earlier key version (#493 D9 b). */
+  private pruneOldCacheVersions() {
+    try {
+      if (!this.storage) return;
+      for (let index = this.storage.length - 1; index >= 0; index -= 1) {
+        const key = this.storage.key(index);
+        if (key?.startsWith(ROUTE_ENRICHMENT_CACHE_ROOT) && !key.startsWith(ROUTE_ENRICHMENT_CACHE_PREFIX)) {
+          this.storage.removeItem(key);
+        }
+      }
+    } catch {
+      // Storage that refuses to be listed keeps its old entries; they are never read.
+    }
   }
 
   readCached(routeId: string) {
@@ -979,13 +1021,23 @@ export class RouteEnrichmentService {
         ]);
         const nearElements = elementsNearRoute(route.coordinates, elements);
         const segmentProfiles = createSegmentProfilesFromFeatures(route, nearElements);
+        // D3 b then a: what the route is detected on first, then the old
+        // nearest-feature tags, then the route's own tags and name.
+        const mask = buildWaterMask(elements, {
+          coastlineBounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS),
+        });
+        const detection = detectRoute(route.coordinates, mask);
+        const detected = classifyDetectedRoute(detection.samples, mask, elements);
         const waterFeatures = nearElements.filter(
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
         );
         const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
-        const waterBodyType = nearestWaterFeature
-          ? inferWaterBodyType(nearestWaterFeature.tags)
-          : getFallback().waterBodyType;
+        const waterBodyType =
+          detected.waterBodyType !== 'unknown'
+            ? detected.waterBodyType
+            : nearestWaterFeature
+              ? inferWaterBodyType(nearestWaterFeature.tags)
+              : getFallback().waterBodyType;
         const resolvedWaterBodyType =
           waterBodyType === 'unknown' ? getFallback().waterBodyType : waterBodyType;
         const waterWidthMeters =
@@ -999,6 +1051,7 @@ export class RouteEnrichmentService {
           waterBodyType: resolvedWaterBodyType,
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),
+          waterDetection: { shares: detected.shares, ...detection.summary },
           fetchedAt: Date.now(),
           source: 'network',
         };

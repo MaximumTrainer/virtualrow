@@ -666,6 +666,112 @@ describe('RouteEnrichmentService', () => {
   });
 });
 
+/** A closed way around the whole fixture route, ~150 m clear of it on every side. */
+const areaAround = (tags: Record<string, string>, id = 900): OverpassElement => {
+  const ring = [
+    { lat: 51.498, lon: -0.113 },
+    { lat: 51.498, lon: -0.106 },
+    { lat: 51.5035, lon: -0.106 },
+    { lat: 51.5035, lon: -0.113 },
+    { lat: 51.498, lon: -0.113 },
+  ];
+  return {
+    type: 'way',
+    id,
+    tags,
+    bounds: { minlat: 51.498, minlon: -0.113, maxlat: 51.5035, maxlon: -0.106 },
+    geometry: ring,
+  };
+};
+
+describe('RouteEnrichmentService reads the water type from OSM detection (#493 D3 b then a)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => localStorage.clear());
+
+  it('calls a route on a mapped lake a lake, whatever its tags and name say', async () => {
+    const stub = createFetchStub({ elements: [areaAround({ natural: 'water', water: 'lake' })] });
+    const service = new RouteEnrichmentService(stub.fetch, localStorage);
+
+    const enrichment = await service.enrichRoute(routeFixture); // tagged 'canal', named "Test Canal"
+
+    expect(enrichment.waterBodyType).toBe('lake');
+    expect(enrichment.waterDetection).toEqual({
+      shares: { lake: 1 },
+      water: expect.any(Number),
+      land: 0,
+      unknown: 0,
+    });
+    expect(enrichment.waterDetection?.water).toBeGreaterThan(0);
+  });
+
+  it('reads a bare natural=water from the waterway line through it', async () => {
+    const canalLine: OverpassElement = {
+      type: 'way',
+      id: 901,
+      tags: { waterway: 'canal' },
+      bounds: FIXTURE_BOUNDS,
+      geometry: routeFixture.coordinates.map(({ lat, lng }) => ({ lat, lon: lng })),
+    };
+    const stub = createFetchStub({ elements: [areaAround({ natural: 'water' }), canalLine] });
+    const service = new RouteEnrichmentService(stub.fetch, localStorage);
+
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
+
+    expect(enrichment.waterBodyType).toBe('canal');
+  });
+
+  it('gives open water its own width and look (D12 c)', async () => {
+    const stub = createFetchStub({ elements: [areaAround({ natural: 'bay' })] });
+    const service = new RouteEnrichmentService(stub.fetch, localStorage);
+
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(enrichment.waterBodyType).toBe('open_water');
+    expect(enrichment.waterColor).toBe('#2c6a8f');
+  });
+
+  it('falls back to the feature tags, then the route, when no water area is mapped', async () => {
+    const stub = createFetchStub(); // bbox-only features, no geometry to detect against
+    const service = new RouteEnrichmentService(stub.fetch, localStorage);
+
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
+
+    expect(enrichment.waterBodyType).toBe('canal');
+    expect(enrichment.waterDetection?.shares).toEqual({});
+  });
+});
+
+describe('route enrichment cache version (#493 D9 b)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => localStorage.clear());
+
+  it('keys entries under a versioned prefix, so pre-detection water types are refetched', () => {
+    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v2:route-1');
+  });
+
+  it('prunes entries written under the old prefix and leaves everything else', () => {
+    localStorage.setItem('virtualrow:route-enrichment:route-1', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v2:route-2', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:unrelated', 'keep me');
+
+    new RouteEnrichmentService(createFetchStub().fetch, localStorage);
+
+    expect(localStorage.getItem('virtualrow:route-enrichment:route-1')).toBeNull();
+    expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).not.toBeNull();
+    expect(localStorage.getItem('virtualrow:unrelated')).toBe('keep me');
+  });
+
+  it('survives storage that throws while pruning', () => {
+    const broken = {
+      get length(): number {
+        throw new Error('denied');
+      },
+    } as unknown as Storage;
+
+    expect(() => new RouteEnrichmentService(createFetchStub().fetch, broken)).not.toThrow();
+  });
+});
+
 /**
  * Issue #413 — rownative gives us the name and nothing about the water, so
  * without this fallback every rownative import falls through to `unknown` and
