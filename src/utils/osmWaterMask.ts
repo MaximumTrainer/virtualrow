@@ -119,8 +119,41 @@ const toCoordinates = (geometry: { lat: number; lon: number }[] = []): Coordinat
     .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lon))
     .map((point) => ({ lat: point.lat, lng: point.lon }));
 
-/** The polygons an element describes: a closed way, or a multipolygon's rings. */
+/**
+ * D17 (c): an island mapped only as a point has no shape, so it is drawn as a
+ * disc. Sizes are typical rather than measured: an islet is a rock or a tuft
+ * of reeds, an island a wooded eyot.
+ */
+export const ISLET_NODE_RADIUS_METERS = 10;
+export const ISLAND_NODE_RADIUS_METERS = 50;
+
+const METRES_PER_DEGREE = 111_320;
+const DISC_VERTICES = 16;
+
+const discAround = (centre: Coordinate, radiusMeters: number): Coordinate[] => {
+  const latRadius = radiusMeters / METRES_PER_DEGREE;
+  const lngRadius = latRadius / Math.cos((centre.lat * Math.PI) / 180);
+  const ring = Array.from({ length: DISC_VERTICES }, (_, index) => {
+    const angle = (index / DISC_VERTICES) * Math.PI * 2;
+    return { lat: centre.lat + latRadius * Math.sin(angle), lng: centre.lng + lngRadius * Math.cos(angle) };
+  });
+  return [...ring, ring[0]];
+};
+
+const NODE_RADIUS: Record<string, number> = {
+  islet: ISLET_NODE_RADIUS_METERS,
+  island: ISLAND_NODE_RADIUS_METERS,
+};
+
+/** The polygons an element describes: a closed way, a multipolygon's rings, or an island node's disc. */
 export const polygonsFromElement = (element: OverpassElement): Polygon[] => {
+  if (element.type === 'node') {
+    const radius = NODE_RADIUS[element.tags?.place ?? ''];
+    return radius && Number.isFinite(element.lat) && Number.isFinite(element.lon)
+      ? [{ outer: discAround({ lat: element.lat!, lng: element.lon! }, radius), inner: [] }]
+      : [];
+  }
+
   if (element.type === 'way') {
     const ring = toCoordinates(element.geometry);
     return isClosed(ring) ? [{ outer: ring, inner: [] }] : [];
@@ -159,10 +192,196 @@ const featuresWhere = (elements: OverpassElement[], keep: (tags: Record<string, 
     // Sorted so a result never depends on the order Overpass returned things in (G4).
     .sort(byId);
 
-export const buildWaterMask = (elements: OverpassElement[]): WaterMask => ({
-  water: featuresWhere(elements, isWaterArea),
-  land: featuresWhere(elements, isLandInWaterArea),
+// ----------------------------------------------------------------------------
+// The sea (D16 c, FR19). OSM has no sea polygon: it draws `natural=coastline`
+// ways with the land on their left. Inside the query box, the sea is the area
+// to the right of the coastline, closed off along the box edge.
+// ----------------------------------------------------------------------------
+
+export interface MaskBounds {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
+/** Join coastline ways head to tail. Never reversed: the direction says which side is land. */
+const joinDirected = (segments: Coordinate[][]): Coordinate[][] => {
+  const chains = segments.filter((segment) => segment.length >= 2).map((segment) => [...segment]);
+  let joined = true;
+  while (joined) {
+    joined = false;
+    for (const chain of chains) {
+      if (isClosed(chain)) continue;
+      const next = chains.find((other) => other !== chain && sameVertex(other[0], chain[chain.length - 1]));
+      if (next) {
+        chain.push(...next.slice(1));
+        chains.splice(chains.indexOf(next), 1);
+        joined = true;
+        break;
+      }
+    }
+  }
+  return chains;
+};
+
+/** Twice the signed area in lng/lat: positive when the ring runs anticlockwise. */
+const signedArea = (ring: Coordinate[]) =>
+  ring.slice(1).reduce((sum, b, index) => sum + ring[index].lng * b.lat - b.lng * ring[index].lat, 0);
+
+const inside = (point: Coordinate, box: MaskBounds) =>
+  point.lat > box.minLat && point.lat < box.maxLat && point.lng > box.minLng && point.lng < box.maxLng;
+
+/** Liang–Barsky: the part of segment a→b inside the box, as fractions along it. */
+const clipSegment = (a: Coordinate, b: Coordinate, box: MaskBounds): [number, number] | null => {
+  const dx = b.lng - a.lng;
+  const dy = b.lat - a.lat;
+  let t0 = 0;
+  let t1 = 1;
+  const edges: Array<[number, number]> = [
+    [-dx, a.lng - box.minLng],
+    [dx, box.maxLng - a.lng],
+    [-dy, a.lat - box.minLat],
+    [dy, box.maxLat - a.lat],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return null;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) t0 = Math.max(t0, r);
+    else t1 = Math.min(t1, r);
+    if (t0 > t1) return null;
+  }
+  return [t0, t1];
+};
+
+const lerp = (a: Coordinate, b: Coordinate, t: number): Coordinate => ({
+  lat: a.lat + (b.lat - a.lat) * t,
+  lng: a.lng + (b.lng - a.lng) * t,
 });
+
+/** Pieces of a chain inside the box, each entering and leaving through the edge; `null` if one ends inside. */
+const piecesInside = (chain: Coordinate[], box: MaskBounds): Coordinate[][] | null => {
+  if (inside(chain[0], box) || inside(chain[chain.length - 1], box)) return null;
+  const pieces: Coordinate[][] = [];
+  let current: Coordinate[] | null = null;
+  for (let index = 1; index < chain.length; index++) {
+    const a = chain[index - 1];
+    const b = chain[index];
+    const clip = clipSegment(a, b, box);
+    if (!clip) continue;
+    const [t0, t1] = clip;
+    if (!current) current = [lerp(a, b, t0)];
+    current.push(lerp(a, b, t1));
+    if (t1 < 1) {
+      pieces.push(current);
+      current = null;
+    }
+  }
+  return pieces;
+};
+
+/** Position on the box edge, clockwise from the north-west corner, in [0, 4). */
+const perimeterPosition = (point: Coordinate, box: MaskBounds): number => {
+  const width = box.maxLng - box.minLng;
+  const height = box.maxLat - box.minLat;
+  const distances = [
+    Math.abs(point.lat - box.maxLat),
+    Math.abs(point.lng - box.maxLng),
+    Math.abs(point.lat - box.minLat),
+    Math.abs(point.lng - box.minLng),
+  ];
+  const edge = distances.indexOf(Math.min(...distances));
+  const along = [
+    (point.lng - box.minLng) / width,
+    (box.maxLat - point.lat) / height,
+    (box.maxLng - point.lng) / width,
+    (point.lat - box.minLat) / height,
+  ][edge];
+  return (edge + Math.min(Math.max(along, 0), 0.999999)) % 4;
+};
+
+const cornersOf = (box: MaskBounds): Coordinate[] => [
+  { lat: box.maxLat, lng: box.minLng },
+  { lat: box.maxLat, lng: box.maxLng },
+  { lat: box.minLat, lng: box.maxLng },
+  { lat: box.minLat, lng: box.minLng },
+];
+
+const clockwiseGap = (from: number, to: number) => (to - from + 4) % 4 || 4;
+
+/**
+ * Close the coastline pieces into sea polygons. Walking a piece keeps the sea
+ * on the right, so at its exit the sea continues clockwise along the box edge
+ * to the next piece's entry, and so on round to the start.
+ */
+const seaRings = (pieces: Coordinate[][], box: MaskBounds): Coordinate[][] => {
+  const corners = cornersOf(box);
+  const unused = pieces.map((points) => ({
+    points,
+    entry: perimeterPosition(points[0], box),
+    exit: perimeterPosition(points[points.length - 1], box),
+  }));
+  const rings: Coordinate[][] = [];
+
+  while (unused.length > 0) {
+    const start = unused.shift()!;
+    const ring = [...start.points];
+    let exit = start.exit;
+    for (;;) {
+      const candidates = [start, ...unused];
+      const next = candidates.reduce((best, piece) =>
+        clockwiseGap(exit, piece.entry) < clockwiseGap(exit, best.entry) ? piece : best,
+      );
+      const gap = clockwiseGap(exit, next.entry);
+      for (let corner = Math.floor(exit) + 1; corner <= exit + gap; corner++) {
+        if (corner < exit + gap) ring.push(corners[corner % 4]);
+      }
+      if (next === start) break;
+      ring.push(...next.points);
+      exit = next.exit;
+      unused.splice(unused.indexOf(next), 1);
+    }
+    ring.push(ring[0]);
+    rings.push(ring);
+  }
+  return rings;
+};
+
+const coastlineFeatures = (elements: OverpassElement[], box: MaskBounds | undefined): WaterMask => {
+  const coastWays = elements.filter((element) => element.type === 'way' && element.tags?.natural === 'coastline');
+  if (!box || coastWays.length === 0) return { water: [], land: [] };
+
+  const chains = joinDirected(coastWays.map((element) => toCoordinates(element.geometry)));
+  const islands = chains.filter((chain) => isClosed(chain) && signedArea(chain) > 0);
+  const open = chains.filter((chain) => !isClosed(chain));
+  const pieces = open.map((chain) => piecesInside(chain, box));
+  if (pieces.some((piece) => piece === null)) return { water: [], land: [] };
+
+  const flat = pieces.flat() as Coordinate[][];
+  const boxCorners = cornersOf(box);
+  const sea = flat.length > 0 ? seaRings(flat, box) : islands.length > 0 ? [[...boxCorners, boxCorners[0]]] : [];
+  const tags = { natural: 'coastline' };
+  return {
+    water: sea.map((outer, index) => ({ id: `coastline/sea${index}`, name: 'Sea', tags, polygons: [{ outer, inner: [] }] })),
+    land: islands.map((outer, index) => ({ id: `coastline/island${index}`, tags, polygons: [{ outer, inner: [] }] })),
+  };
+};
+
+export interface WaterMaskOptions {
+  /** The query box, needed to close the sea along its edge. No bounds, no sea. */
+  coastlineBounds?: MaskBounds;
+}
+
+export const buildWaterMask = (elements: OverpassElement[], options: WaterMaskOptions = {}): WaterMask => {
+  const coast = coastlineFeatures(elements, options.coastlineBounds);
+  return {
+    water: [...featuresWhere(elements, isWaterArea), ...coast.water].sort(byId),
+    land: [...featuresWhere(elements, isLandInWaterArea), ...coast.land].sort(byId),
+  };
+};
 
 const contains = (feature: MaskFeature, point: Coordinate) =>
   feature.polygons.some((polygon) => pointInPolygon(point, polygon));

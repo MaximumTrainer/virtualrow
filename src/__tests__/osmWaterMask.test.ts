@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { OverpassElement } from '../services/routeEnrichmentService';
 import {
+  ISLAND_NODE_RADIUS_METERS,
+  ISLET_NODE_RADIUS_METERS,
   buildWaterMask,
   classifyPoint,
   isLandInWaterArea,
@@ -155,6 +157,80 @@ describe('osmWaterMask — polygons from Overpass elements', () => {
     const big = polygons.find((p) => p.outer.length === 5 && p.outer[0].lat === 0);
     expect(big?.inner).toEqual([square(1, 1, 1)]);
     expect(polygons.find((p) => p.outer[0].lat === 10)?.inner).toEqual([]);
+  });
+});
+
+describe('osmWaterMask — islets mapped only as a point (D17 c)', () => {
+  it('draws an islet node as a small disc, and an island node as a larger one', () => {
+    const islet: OverpassElement = { type: 'node', id: 20, lat: 52, lon: 0, tags: { place: 'islet' } };
+    const island: OverpassElement = { type: 'node', id: 21, lat: 52, lon: 0, tags: { place: 'island' } };
+    const [isletDisc] = polygonsFromElement(islet);
+    const [islandDisc] = polygonsFromElement(island);
+
+    // ~10 m and ~50 m radius in latitude degrees.
+    const radiusOf = (ring: Coordinate[]) => Math.max(...ring.map((point) => point.lat - 52)) * 111_320;
+    expect(radiusOf(isletDisc.outer)).toBeCloseTo(ISLET_NODE_RADIUS_METERS, 0);
+    expect(radiusOf(islandDisc.outer)).toBeCloseTo(ISLAND_NODE_RADIUS_METERS, 0);
+    expect(isletDisc.outer[0]).toEqual(isletDisc.outer[isletDisc.outer.length - 1]);
+  });
+
+  it('counts a point inside the disc as land', () => {
+    const mask = buildWaterMask([
+      closedWay(22, square(51.99, -0.01, 0.02), { natural: 'water' }),
+      { type: 'node', id: 23, lat: 52, lon: 0, tags: { place: 'islet', name: 'Rock' } },
+    ]);
+    const result = classifyPoint(mask, { lat: 52.00003, lng: 0 });
+    expect(result.kind === 'land' && result.island?.name).toBe('Rock');
+  });
+
+  it('ignores any other node', () => {
+    expect(polygonsFromElement({ type: 'node', id: 24, lat: 52, lon: 0, tags: { natural: 'tree' } })).toEqual([]);
+  });
+});
+
+describe('osmWaterMask — the sea from the coastline (D16 c, FR19)', () => {
+  const bounds = { minLat: 0, minLng: 0, maxLat: 10, maxLng: 10 };
+  const coast = (id: number, points: Array<[number, number]>): OverpassElement => ({
+    type: 'way',
+    id,
+    tags: { natural: 'coastline' },
+    geometry: points.map(([lat, lng]) => ({ lat, lon: lng })),
+  });
+
+  it('puts the sea on the right of the coastline as it runs', () => {
+    // Running north along lng 5: land on the left (west), sea on the right (east).
+    const mask = buildWaterMask([coast(30, [[-1, 5], [11, 5]])], { coastlineBounds: bounds });
+    expect(classifyPoint(mask, { lat: 5, lng: 8 }).kind).toBe('water');
+    expect(classifyPoint(mask, { lat: 5, lng: 2 }).kind).toBe('land');
+  });
+
+  it('joins coastline split across several ways, either way round', () => {
+    // A bay: coast runs east along lat 3, then north along lng 7. Sea is south-east.
+    const mask = buildWaterMask([
+      coast(31, [[3, -1], [3, 7]]),
+      coast(32, [[3, 7], [11, 7]]),
+    ], { coastlineBounds: bounds });
+    expect(classifyPoint(mask, { lat: 1, lng: 9 }).kind).toBe('water');
+    expect(classifyPoint(mask, { lat: 6, lng: 3 }).kind).toBe('land');
+  });
+
+  it('treats a closed anticlockwise coastline ring as an island in the sea', () => {
+    const mask = buildWaterMask([
+      coast(33, [[-1, 5], [11, 5]]),
+      // Anticlockwise (land on the left): an island at sea.
+      coast(34, [[4, 7], [4, 8], [5, 8], [5, 7], [4, 7]]),
+    ], { coastlineBounds: bounds });
+    expect(classifyPoint(mask, { lat: 4.5, lng: 7.5 }).kind).toBe('land');
+    expect(classifyPoint(mask, { lat: 4.5, lng: 9 }).kind).toBe('water');
+  });
+
+  it('builds no sea when the coastline stops inside the area (incomplete data, FR10)', () => {
+    const mask = buildWaterMask([coast(35, [[-1, 5], [5, 5]])], { coastlineBounds: bounds });
+    expect(mask.water).toEqual([]);
+  });
+
+  it('builds no sea without bounds to close it against', () => {
+    expect(buildWaterMask([coast(36, [[-1, 5], [11, 5]])]).water).toEqual([]);
   });
 });
 
