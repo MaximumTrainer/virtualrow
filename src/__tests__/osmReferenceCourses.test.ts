@@ -49,6 +49,30 @@ describe('#493 OSM reference courses (FR21)', () => {
     },
   );
 
+  // NFR8's on-water share, per course, as first recorded (pending Dan's call on the
+  // rough routes). Where a share is below 1 the route line itself leaves the mapped
+  // water: course 1 is two gates joined straight down a bending lake, 237 cuts the
+  // Montlake Cut's corners, 257 crosses the tip of Fighting Island, 277's 16 points
+  // miss the canal's bends, and 175's sea track passes the harbour mouth's rocks.
+  const ON_WATER_FLOOR: Record<number, number> = {
+    1: 0.69,
+    61: 1,
+    153: 1,
+    175: 0.94,
+    179: 1,
+    237: 0.86,
+    257: 0.88,
+    277: 0.74,
+  };
+
+  it.each(Object.entries(ON_WATER_FLOOR).map(([id, floor]) => [Number(id), floor] as const))(
+    'course %i keeps at least %f of its samples on water (NFR8)',
+    (id, floor) => {
+      const { summary } = detect(byId(id));
+      expect(summary.water / (summary.water + summary.land + summary.unknown)).toBeGreaterThanOrEqual(floor);
+    },
+  );
+
   it.each([61, 153])('course %i on the Charles is on water at every sample', (id) => {
     const { summary } = detect(byId(id));
     expect(summary.land).toBe(0);
