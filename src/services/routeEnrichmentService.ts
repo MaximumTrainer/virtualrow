@@ -402,6 +402,9 @@ export const getDefaultBankWidth = (
  */
 export const SHORE_QUERY_MARGIN_METERS = 650;
 
+/** Island relations with more members than this are landmasses, left to the coastline (#493). */
+export const ISLAND_RELATION_MAX_MEMBERS = 500;
+
 const bboxString = (bounds: BoundingBox) =>
   `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
 
@@ -431,7 +434,9 @@ export const buildOverpassQuery = (coordinates: Coordinate[]) => {
   // Reservoirs, islands and piers for the water/land mask (#493).
   way["landuse"~"^(reservoir|basin)$"](${wide});
   way["place"~"^(island|islet)$"](${wide});
-  relation["place"~"^(island|islet)$"](${wide});
+  // Capped by size: on a coast the landmass itself (Great Britain: 5,727 members) is a
+  // place=island relation, and the coastline already says where its land is.
+  relation["place"~"^(island|islet)$"](${wide})(if:count_members() < ${ISLAND_RELATION_MAX_MEMBERS});
   // Islets mapped only as a point, drawn as a disc (D17 c).
   node["place"~"^(island|islet)$"](${wide});
   way["man_made"~"^(pier|breakwater|groyne)$"](${wide});

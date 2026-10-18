@@ -1,13 +1,15 @@
 // Records the OSM reference fixtures for #493 (FR21).
 //
-//   npx vite-node scripts/record-osm-fixtures.ts [courseId ...]
+//   npx vite-node scripts/record-osm-fixtures.ts [--force] [courseId ...]
+//
+// Courses already recorded are skipped unless --force is given.
 //
 // For each rownative course fixture: resolve its route the way an import does,
 // send the exact Overpass query enrichment sends, and keep the elements the
 // water/land mask and classification read. Writes
 // src/__tests__/fixtures/osm/<id>.json. Needs network access to overpass-api.de.
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { classifyPolygons, resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
 import { OVERPASS_API_URL, SHORE_QUERY_MARGIN_METERS, buildBoundingBox, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
@@ -62,11 +64,17 @@ const fetchElements = async (query: string): Promise<OverpassElement[]> => {
   throw new Error('Overpass failed three times');
 };
 
-const ids = process.argv.slice(2).map(Number).filter(Number.isFinite);
+const args = process.argv.slice(2);
+const force = args.includes('--force');
+const ids = args.map(Number).filter(Number.isFinite);
 mkdirSync(OUT, { recursive: true });
 
 const failed: number[] = [];
 for (const id of ids.length > 0 ? ids : COURSES) {
+  if (!force && existsSync(join(OUT, `${id}.json`))) {
+    console.log(`${id}: already recorded`);
+    continue;
+  }
   try {
     const route = await routeFor(id);
     const query = buildOverpassQuery(route.coordinates);

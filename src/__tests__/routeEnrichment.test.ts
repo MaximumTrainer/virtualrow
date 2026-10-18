@@ -7,6 +7,7 @@ import {
   MAX_TERRAIN_RELIEF_SCENE_UNITS,
   RouteEnrichmentService,
   SHORE_QUERY_MARGIN_METERS,
+  ISLAND_RELATION_MAX_MEMBERS,
   TERRAIN_RELIEF_SCALE,
   buildBoundingBox,
   buildOverpassQuery,
@@ -294,12 +295,15 @@ describe('route enrichment helpers', () => {
       'relation["waterway"]',
       'way["landuse"~"^(reservoir|basin)$"]',
       'way["place"~"^(island|islet)$"]',
-      'relation["place"~"^(island|islet)$"]',
       'node["place"~"^(island|islet)$"]',
       'way["man_made"~"^(pier|breakwater|groyne)$"]',
     ]) {
       expect(query).toContain(`${selector}(${bboxOf(wide)})`);
     }
+    // Island relations are capped by size: on a coast, Great Britain itself (5,727 members,
+    // ~900k vertices) is a place=island relation, and its coastline already says where land is.
+    expect(ISLAND_RELATION_MAX_MEMBERS).toBeLessThan(5727);
+    expect(query).toContain(`relation["place"~"^(island|islet)$"](${bboxOf(wide)})(if:count_members() < ${ISLAND_RELATION_MAX_MEMBERS});`);
     // Buildings stay on the near box: a wide margin there is a city's worth of data.
     expect(query).toContain(`way["building"](${bboxOf(near)})`);
   });
