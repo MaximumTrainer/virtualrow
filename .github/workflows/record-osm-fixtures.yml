@@ -1,0 +1,40 @@
+# One-off: records the #493 FR18 land-use fixtures from a runner that can reach
+# Overpass (cloud agent sessions can't), and commits them back to the PR branch.
+# Remove before merging.
+name: Record OSM land fixtures (#493)
+
+on:
+  push:
+    branches: [claude/493-phase-2d]
+    paths:
+      - .github/workflows/record-osm-fixtures.yml
+      - scripts/record-osm-fixtures.ts
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-osm-fixtures
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx vite-node scripts/record-osm-fixtures.ts --land
+      - name: Commit the fixtures back to the branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/__tests__/fixtures/osm/land/
+          if git diff --cached --quiet; then echo "No fixture changes"; exit 0; fi
+          ls -l src/__tests__/fixtures/osm/land/
+          git commit -m "#493 Phase 2 — record land use beside the OSM reference courses"
+          git push origin HEAD:${GITHUB_REF_NAME}

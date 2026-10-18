@@ -1,8 +1,12 @@
 // Records the OSM reference fixtures for #493 (FR21).
 //
-//   npx vite-node scripts/record-osm-fixtures.ts [--force] [courseId ...]
+//   npx vite-node scripts/record-osm-fixtures.ts [--force] [--land] [courseId ...]
 //
 // Courses already recorded are skipped unless --force is given.
+//
+// --land records the land-use areas the per-bank scenery reads (FR18) for the
+// courses already recorded, from the same query on the same stored route, into
+// src/__tests__/fixtures/osm/land/<id>.json. The water fixtures stay as they are.
 //
 // For each rownative course fixture: resolve its route the way an import does,
 // send the exact Overpass query enrichment sends, and keep the elements the
@@ -11,10 +15,12 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Coordinate } from '../src/types/index';
 import { JSDOM } from 'jsdom';
 import { classifyPolygons, resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
 import { OVERPASS_API_URL, SHORE_QUERY_MARGIN_METERS, buildBoundingBox, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
 import { isLandInWaterArea, isWaterArea } from '../src/utils/osmWaterMask';
+import { mapOsmTagsToSceneryProfile } from '../src/utils/sceneryFromTags';
 import { parseTrackFile } from '../src/utils/trackParsers';
 
 // The track parsers read GPX with the browser's DOMParser.
@@ -70,11 +76,33 @@ const fetchElements = async (query: string): Promise<OverpassElement[]> => {
 
 const args = process.argv.slice(2);
 const force = args.includes('--force');
+const land = args.includes('--land');
 const ids = args.map(Number).filter(Number.isFinite);
 mkdirSync(OUT, { recursive: true });
 
+const recordLand = async (id: number) => {
+  const target = join(OUT, 'land', `${id}.json`);
+  if (!force && existsSync(target)) return console.log(`${id}: land already recorded`);
+  const { route } = JSON.parse(readFileSync(join(OUT, `${id}.json`), 'utf8')) as { route: Coordinate[] };
+  const all = await fetchElements(buildOverpassQuery(route));
+  const elements = all.filter((element) => mapOsmTagsToSceneryProfile(element.tags) !== 'fallback');
+  writeFileSync(target, `${JSON.stringify({ courseId: id, recordedAt: new Date().toISOString(), totalElements: all.length, elements })}\n`);
+  console.log(`${id} land: kept ${elements.length} of ${all.length} elements`);
+};
+
 const failed: number[] = [];
+if (land) mkdirSync(join(OUT, 'land'), { recursive: true });
 for (const id of ids.length > 0 ? ids : COURSES) {
+  if (land) {
+    try {
+      await recordLand(id);
+    } catch (error) {
+      failed.push(id);
+      console.error(`${id} land failed:`, error instanceof Error ? error.message : error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    continue;
+  }
   if (!force && existsSync(join(OUT, `${id}.json`))) {
     console.log(`${id}: already recorded`);
     continue;
