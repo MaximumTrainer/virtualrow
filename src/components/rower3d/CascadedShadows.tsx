@@ -66,7 +66,9 @@ export const CascadedShadows: React.FC<CascadedShadowsProps> = (props) => {
     const csm = createCascadedShadows(camera, scene, stableProps);
     csmRef.current = csm;
     const seen = seenRef.current;
-    // Catch materials present at mount; `useFrame` catches the rest.
+    // One update before wiring so the per-cascade shadow cameras are
+    // positioned when the first compile reads from them.
+    csm.update();
     wireShadowReceivers(csm, scene, seen);
     return () => {
       unwireShadowReceivers(seen);
@@ -79,8 +81,8 @@ export const CascadedShadows: React.FC<CascadedShadowsProps> = (props) => {
   useFrame(() => {
     const csm = csmRef.current;
     if (!csm) return;
-    wireShadowReceivers(csm, scene, seenRef.current);
     csm.update();
+    wireShadowReceivers(csm, scene, seenRef.current);
   });
 
   return null;

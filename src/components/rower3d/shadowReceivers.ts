@@ -57,9 +57,16 @@ export const wireShadowReceivers = (
       // chunks, so order is a formality; running the material's first keeps
       // CSM's uniforms (`CSM_cascades`, `cameraNear`, `shadowFar`) tracked by
       // CSM's internal `shaders` map on the final shader object.
-      material.onBeforeCompile = (shader, renderer) => {
-        originalOnBeforeCompile?.(shader, renderer);
-        csmOnBeforeCompile?.(shader, renderer);
+      //
+      // `.call(this, …)` preserves `this` on the chained callback: three
+      // invokes `onBeforeCompile` with the material as `this`, and some
+      // materials read `this.<field>` from inside — drei's
+      // `MeshReflectorMaterial`, for instance, reads `this._hasBlur` to
+      // wire its uniforms. A plain `originalOnBeforeCompile(shader, …)`
+      // drops that binding and throws on undefined.
+      material.onBeforeCompile = function (shader, renderer) {
+        originalOnBeforeCompile?.call(this, shader, renderer);
+        csmOnBeforeCompile?.call(this, shader, renderer);
       };
       material.needsUpdate = true;
       registered += 1;

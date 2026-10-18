@@ -145,6 +145,48 @@ describe('wireShadowReceivers', () => {
     csm.dispose();
   });
 
+  it('preserves `this` on the chained callback — endurance regression', () => {
+    // drei's `MeshReflectorMaterial.onBeforeCompile` reads `this._hasBlur`
+    // from the material. A plain `fn(shader, renderer)` call drops `this`,
+    // so the chain has to use `.call(this, …)`. #495 Phase 2 endurance CI
+    // caught this: shipping-scene-contrast threw on the water material's
+    // reflector.
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
+    const csm = createCascadedShadows(camera, scene, defaults);
+
+    const material = new THREE.MeshStandardMaterial() as THREE.MeshStandardMaterial & {
+      _probe: boolean;
+    };
+    material._probe = true;
+    let probedThis: unknown = undefined;
+    material.onBeforeCompile = function (this: unknown) {
+      probedThis = (this as { _probe?: boolean })?._probe;
+    };
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    const seen = new Map();
+    wireShadowReceivers(csm, scene, seen);
+
+    const shader = {
+      vertexShader: '',
+      fragmentShader: '#include <lights_fragment_begin>',
+      uniforms: {} as Record<string, unknown>,
+      defines: {} as Record<string, unknown>,
+    };
+    material.onBeforeCompile?.call(
+      material,
+      shader as unknown as THREE.WebGLProgramParametersWithUniforms,
+      {} as THREE.WebGLRenderer,
+    );
+    expect(probedThis).toBe(true);
+
+    csm.remove();
+    csm.dispose();
+  });
+
   it('preserves the material\'s existing onBeforeCompile — both callbacks run', () => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
