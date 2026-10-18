@@ -94,6 +94,13 @@ export interface OverpassElement {
   };
   geometry?: OverpassGeometryPoint[];
   tags?: Record<string, string>;
+  /** Relation members, each with its own geometry under `out geom` (#493). */
+  members?: Array<{
+    type: string;
+    ref: number;
+    role: string;
+    geometry?: OverpassGeometryPoint[];
+  }>;
 }
 
 interface OverpassResponse {
@@ -387,27 +394,52 @@ export const getDefaultBankWidth = (
   }
 };
 
+/**
+ * How far out water and islands are fetched (#493 FR20). Shore detection casts
+ * rays as far as the rower can see (the fog's far plane, ~550 m, plus the cull
+ * margin), so the water has to be mapped at least that far from the route or
+ * every ray stops at the edge of the data and reads as open water.
+ */
+export const SHORE_QUERY_MARGIN_METERS = 650;
+
+/** Island relations with more members than this are landmasses, left to the coastline (#493). */
+export const ISLAND_RELATION_MAX_MEMBERS = 500;
+
+const bboxString = (bounds: BoundingBox) =>
+  `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
+
 export const buildOverpassQuery = (coordinates: Coordinate[]) => {
-  const bounds = buildBoundingBox(coordinates);
-  const bbox = `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
+  const bbox = bboxString(buildBoundingBox(coordinates));
+  // Only water and land-in-water get the wide box; land use and buildings stay
+  // near the route, where a wide margin would be a city's worth of data.
+  const wide = bboxString(buildBoundingBox(coordinates, SHORE_QUERY_MARGIN_METERS));
 
   return `
 [out:json][timeout:25];
 (
   way["landuse"](${bbox});
-  way["natural"](${bbox});
-  way["waterway"](${bbox});
+  way["natural"](${wide});
+  way["waterway"](${wide});
   way["building"](${bbox});
   // Bridges over the route, for Tier C placement (#232).
   way["bridge"](${bbox});
   way["leisure"](${bbox});
   relation["landuse"](${bbox});
-  relation["natural"](${bbox});
-  relation["waterway"](${bbox});
+  relation["natural"](${wide});
+  relation["waterway"](${wide});
   relation["building"](${bbox});
   relation["leisure"](${bbox});
   node["natural"](${bbox});
   node["waterway"](${bbox});
+  // Reservoirs, islands and piers for the water/land mask (#493).
+  way["landuse"~"^(reservoir|basin)$"](${wide});
+  way["place"~"^(island|islet)$"](${wide});
+  // Capped by size: on a coast the landmass itself (Great Britain: 5,727 members) is a
+  // place=island relation, and the coastline already says where its land is.
+  relation["place"~"^(island|islet)$"](${wide})(if:count_members() < ${ISLAND_RELATION_MAX_MEMBERS});
+  // Islets mapped only as a point, drawn as a disc (D17 c).
+  node["place"~"^(island|islet)$"](${wide});
+  way["man_made"~"^(pier|breakwater|groyne)$"](${wide});
 );
 out geom;
 `;
@@ -440,6 +472,22 @@ const getElementBounds = (element: OverpassElement): BoundingBox | null => {
   }
 
   return null;
+};
+
+const boundsOverlap = (a: BoundingBox, b: BoundingBox) =>
+  a.minLat <= b.maxLat && a.maxLat >= b.minLat && a.minLng <= b.maxLng && a.maxLng >= b.minLng;
+
+/**
+ * The elements inside the original 200 m query box. Water and islands are now
+ * fetched further out for shore detection (#493); the bbox-based segment
+ * profiles and crossings keep seeing only what they saw before.
+ */
+export const elementsNearRoute = (coordinates: Coordinate[], elements: OverpassElement[]) => {
+  const near = buildBoundingBox(coordinates);
+  return elements.filter((element) => {
+    const bounds = getElementBounds(element);
+    return bounds !== null && boundsOverlap(bounds, near);
+  });
 };
 
 const pointInBounds = (coordinate: Coordinate, bounds: BoundingBox) =>
@@ -929,8 +977,9 @@ export class RouteEnrichmentService {
           this.fetchElevations(route.coordinates),
           this.fetchOverpassElements(route.coordinates),
         ]);
-        const segmentProfiles = createSegmentProfilesFromFeatures(route, elements);
-        const waterFeatures = elements.filter(
+        const nearElements = elementsNearRoute(route.coordinates, elements);
+        const segmentProfiles = createSegmentProfilesFromFeatures(route, nearElements);
+        const waterFeatures = nearElements.filter(
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
         );
         const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
@@ -946,7 +995,7 @@ export class RouteEnrichmentService {
           routeId: route.id,
           elevations,
           segmentProfiles,
-          crossings: findCrossings(route.coordinates, elements),
+          crossings: findCrossings(route.coordinates, nearElements),
           waterBodyType: resolvedWaterBodyType,
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),
