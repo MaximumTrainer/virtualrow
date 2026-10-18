@@ -106,15 +106,19 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
   );
   // One chunk per species when the curve isn't ready or no chunking was asked;
   // otherwise split along route progress so three's own frustum test can
-  // skip whole chunks whose bounding sphere is off-camera (#497).
+  // skip whole chunks whose bounding sphere is off-camera (#497). Passing a
+  // chunk length ≥ the route length collapses to one chunk per species, which
+  // is the pre-#497 shape — kept as a reachable fallback for short routes.
   const routeLengthMetres = useMemo(() => (curve ? curve.getLength() : 0), [curve]);
-  const effectiveChunkMetres = useMemo(
-    () => (chunkMetres && chunkMetres > 0 ? chunkMetres : Math.max(1, routeLengthMetres) || 1),
-    [chunkMetres, routeLengthMetres],
-  );
   const chunks = useMemo(
-    () => batchFoliageChunked(trees, species.length, routeLengthMetres, effectiveChunkMetres),
-    [trees, species.length, routeLengthMetres, effectiveChunkMetres],
+    () =>
+      batchFoliageChunked(
+        trees,
+        species.length,
+        routeLengthMetres,
+        chunkMetres ?? Math.max(1, routeLengthMetres),
+      ),
+    [trees, species.length, routeLengthMetres, chunkMetres],
   );
 
   // One texture per shape, however many species share it.
@@ -150,17 +154,18 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
   useLayoutEffect(() => {
     chunks.forEach((chunk, i) => {
       const mesh = meshRefs.current[i];
-      if (!mesh) return;
-      fillAll(mesh, chunk);
       // Fixed bounding sphere per chunk; the per-frame `cullTo` packs the
       // visible instances to the front of the buffer but never adds any that
       // weren't in this chunk, so the sphere is right until the trees move
       // (which they don't). Three's own frustum test now skips the whole
       // chunk when the camera isn't looking at it (#497).
-      mesh.boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(chunk.boundingSphere.x, chunk.boundingSphere.y, chunk.boundingSphere.z),
-        chunk.boundingSphere.radius,
-      );
+      if (mesh) {
+        fillAll(mesh, chunk);
+        mesh.boundingSphere = new THREE.Sphere(
+          new THREE.Vector3(chunk.boundingSphere.x, chunk.boundingSphere.y, chunk.boundingSphere.z),
+          chunk.boundingSphere.radius,
+        );
+      }
     });
   }, [chunks]);
 
