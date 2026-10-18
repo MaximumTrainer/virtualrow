@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -9,9 +9,11 @@ import {
   drawsGroundCover,
   drawsPostStack,
   drawsScenery,
+  drawsShaderGrass,
   drawsShadows,
   drawsSunMesh,
   drawsWaterReflection,
+  isShaderGrassEnabled,
   maxDpr,
   type CanvasSurface,
 } from '../components/rower3d/canvasSurface';
@@ -214,5 +216,52 @@ describe('named predicates for the Rower3D gates', () => {
       expect(drawsSunMesh(tier), tier).toBe(false);
     }
     expect(drawsSunMesh('extra-high')).toBe(true);
+  });
+});
+
+/**
+ * #496 — the bank's grass tufts become a density field the fragment shader
+ * samples (D3-b: off at basic + low, on at medium+). Phase 1 ships the
+ * predicates behind `__VIRTUALROW_SHADER_GRASS` defaulting off, so visual
+ * baselines don't move; Phase 2 flips the sense and removes the single-tuft
+ * `InstancedMesh` branch in `vegetationComponents.tsx`.
+ */
+describe('density-field grass tier gate', () => {
+  afterEach(() => {
+    delete window.__VIRTUALROW_SHADER_GRASS;
+  });
+
+  it('is off at basic and low (today\'s instanced-tuft behaviour)', () => {
+    expect(drawsShaderGrass('basic')).toBe(false);
+    expect(drawsShaderGrass('low')).toBe(false);
+  });
+
+  it('is on at medium / high / extra-high (D3-b)', () => {
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(drawsShaderGrass(tier), tier).toBe(true);
+    }
+  });
+
+  it('Phase 1 defaults the flag off: medium+ needs an explicit opt-in', () => {
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(isShaderGrassEnabled(tier), `undefined flag on ${tier}`).toBe(false);
+    }
+    window.__VIRTUALROW_SHADER_GRASS = true;
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(isShaderGrassEnabled(tier), `true flag on ${tier}`).toBe(true);
+    }
+  });
+
+  it('the flag never turns shader grass on at basic or low', () => {
+    window.__VIRTUALROW_SHADER_GRASS = true;
+    expect(isShaderGrassEnabled('basic')).toBe(false);
+    expect(isShaderGrassEnabled('low')).toBe(false);
+  });
+
+  it('setting the flag to `false` explicitly disables shader grass (kill switch)', () => {
+    window.__VIRTUALROW_SHADER_GRASS = false;
+    for (const tier of QUALITY_TIERS) {
+      expect(isShaderGrassEnabled(tier), tier).toBe(false);
+    }
   });
 });
