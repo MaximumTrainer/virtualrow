@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
-import { OVERPASS_API_URL, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
+import { OVERPASS_API_URL, SHORE_QUERY_MARGIN_METERS, buildBoundingBox, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
 import { isLandInWaterArea, isWaterArea } from '../src/utils/osmWaterMask';
 import { parseTrackFile } from '../src/utils/trackParsers';
 
@@ -60,7 +60,7 @@ for (const id of ids.length > 0 ? ids : COURSES) {
   const elements = all.filter(keep);
   writeFileSync(
     join(OUT, `${id}.json`),
-    `${JSON.stringify({ courseId: id, name: route.name, routeSource: route.source, recordedAt: new Date().toISOString(), route: route.coordinates, totalElements: all.length, elements })}\n`,
+    `${JSON.stringify({ courseId: id, name: route.name, routeSource: route.source, recordedAt: new Date().toISOString(), route: route.coordinates, bounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS), totalElements: all.length, elements })}\n`,
   );
   console.log(`${id} ${route.name}: kept ${elements.length} of ${all.length} elements`);
   // Overpass usage policy: be gentle between requests.

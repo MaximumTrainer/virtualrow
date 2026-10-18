@@ -295,6 +295,7 @@ describe('route enrichment helpers', () => {
       'way["landuse"~"^(reservoir|basin)$"]',
       'way["place"~"^(island|islet)$"]',
       'relation["place"~"^(island|islet)$"]',
+      'node["place"~"^(island|islet)$"]',
       'way["man_made"~"^(pier|breakwater|groyne)$"]',
     ]) {
       expect(query).toContain(`${selector}(${bboxOf(wide)})`);

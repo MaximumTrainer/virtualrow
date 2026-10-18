@@ -432,6 +432,8 @@ export const buildOverpassQuery = (coordinates: Coordinate[]) => {
   way["landuse"~"^(reservoir|basin)$"](${wide});
   way["place"~"^(island|islet)$"](${wide});
   relation["place"~"^(island|islet)$"](${wide});
+  // Islets mapped only as a point, drawn as a disc (D17 c).
+  node["place"~"^(island|islet)$"](${wide});
   way["man_made"~"^(pier|breakwater|groyne)$"](${wide});
 );
 out geom;
