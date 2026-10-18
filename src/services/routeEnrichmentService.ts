@@ -12,9 +12,9 @@ export const ROUTE_SEGMENT_LENGTH_METERS = 50;
 export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
-import { buildWaterMask } from '../utils/osmWaterMask';
-import { detectRoute, SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
-import { classifyDetectedRoute, type RouteWaterClass } from '../utils/waterClassification';
+import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
+import type { RouteWaterClass } from '../utils/waterClassification';
+import { createWorkerDetectionRunner, type RouteDetectionRunner } from './routeDetectionRunner';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 
@@ -972,11 +972,18 @@ const createSegmentProfilesFromFeatures = (
 export class RouteEnrichmentService {
   private readonly fetchImpl: typeof fetch;
   private readonly storage: Storage | null;
+  private readonly detect: RouteDetectionRunner;
   private readonly inflight = new Map<string, Promise<RouteEnrichmentData>>();
 
-  constructor(fetchImpl: typeof fetch = fetch, storage: Storage | null = defaultStorage()) {
+  constructor(
+    fetchImpl: typeof fetch = fetch,
+    storage: Storage | null = defaultStorage(),
+    // #493 D23 b: a worker where the browser has one, inline otherwise.
+    detect: RouteDetectionRunner = createWorkerDetectionRunner(),
+  ) {
     this.fetchImpl = fetchImpl;
     this.storage = storage;
+    this.detect = detect;
     this.pruneOldCacheVersions();
   }
 
@@ -1103,11 +1110,12 @@ export class RouteEnrichmentService {
         const nearElements = elementsNearRoute(route.coordinates, elements);
         // D3 b then a: what the route is detected on first, then the old
         // nearest-feature tags, then the route's own tags and name.
-        const mask = buildWaterMask(elements, {
+        const detection = await this.detect({
+          coordinates: route.coordinates,
+          elements,
           coastlineBounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS),
         });
-        const detection = detectRoute(route.coordinates, mask);
-        const detected = classifyDetectedRoute(detection.samples, mask, elements);
+        const { detected } = detection;
         const segmentProfiles = applyMeasuredShores(
           createSegmentProfilesFromFeatures(route, nearElements),
           detection.samples,
