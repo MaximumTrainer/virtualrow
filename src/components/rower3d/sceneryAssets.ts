@@ -7,7 +7,7 @@
 //
 //   SceneryProfile  — forest | residential | commercial | farmland | beach |
 //                     wetland | fallback   (per 50 m segment)
-//   WaterBodyType   — river | canal | stream | lake | reservoir | unknown
+//   WaterBodyType   — river | canal | stream | lake | reservoir | open_water | unknown
 //                     (per route)
 //
 // This module encodes the issue's "selection matrix" so the scene can pick the
@@ -124,6 +124,13 @@ export const WATER_BODY_MODELS: Record<WaterBodyType, WaterModelSet> = {
     bankEdge: ['f05-bank-sheet-piling', 'f09-bank-concrete-step'],
     inWater: [],
     surface: ['f28-floating-weed-mat', 'f30-foam-line', 'f44-navigation-marker'],
+  },
+  // Sea and lakes too wide to see across (#493 D12 c): rocky and sandy shores,
+  // marks and moorings, none of the weed and lily pads of still inland water.
+  open_water: {
+    bankEdge: ['f06-bank-sand-shelf', 'f07-bank-boulder-shore', 'f13-cliff-face', 'f17-mudflat-tidal'],
+    inWater: [],
+    surface: ['f30-foam-line', 'f32-moored-cruiser', 'f44-navigation-marker'],
   },
   unknown: {
     bankEdge: ['f01-bank-earth-cut', 'f02-bank-shingle-shelf'],
