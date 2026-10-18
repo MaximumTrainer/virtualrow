@@ -966,6 +966,7 @@ export const RowerScene: React.FC<
           viewDistance={chunkViewDistanceFor()}
           enrichment={enrichment}
           track={sceneryTrack}
+          foliageChunkMetres={canvasSurfaceFor(performanceMode).foliageChunkMetres}
         />
       ) : (
         renderFlatLandscape()

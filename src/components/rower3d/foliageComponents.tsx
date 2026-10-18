@@ -14,7 +14,7 @@ import { createFoliageTexture, foliageShapeFor, type FoliageShape } from './foli
 import { makeFoliageBillboardMaterial } from './foliageMaterial';
 import {
   FOLIAGE_SHAPE_SIZE,
-  batchFoliage,
+  batchFoliageChunked,
   compactVisible,
   createFoliageGeometry,
   foliageStanding,
@@ -44,6 +44,12 @@ export interface BankFoliageProps {
   track?: SceneryTrack | null;
   /** Houses on the bank, which the trees keep out of. */
   avoid?: readonly { x: number; z: number }[];
+  /**
+   * Metres of route per (species) chunk; comes from the quality tier's
+   * `foliageChunkMetres` (#497). Omitted falls back to a single chunk per
+   * species, i.e. the pre-#497 behaviour.
+   */
+  chunkMetres?: number;
 }
 
 /** What a species is drawn with: its own geometry, and a material over its shape's texture. */
@@ -90,6 +96,7 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
   enrichment,
   track = null,
   avoid,
+  chunkMetres,
 }) => {
   const species = SCENE_CONFIG.trees.species;
 
@@ -97,7 +104,22 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
     () => layoutFoliage({ curve, enrichment, track, species, avoid }),
     [curve, enrichment, track, species, avoid],
   );
-  const batches = useMemo(() => batchFoliage(trees, species.length), [trees, species.length]);
+  // One chunk per species when the curve isn't ready or no chunking was asked;
+  // otherwise split along route progress so three's own frustum test can
+  // skip whole chunks whose bounding sphere is off-camera (#497). Passing a
+  // chunk length ≥ the route length collapses to one chunk per species, which
+  // is the pre-#497 shape — kept as a reachable fallback for short routes.
+  const routeLengthMetres = useMemo(() => (curve ? curve.getLength() : 0), [curve]);
+  const chunks = useMemo(
+    () =>
+      batchFoliageChunked(
+        trees,
+        species.length,
+        routeLengthMetres,
+        chunkMetres ?? Math.max(1, routeLengthMetres),
+      ),
+    [trees, species.length, routeLengthMetres, chunkMetres],
+  );
 
   // One texture per shape, however many species share it.
   const textures = useMemo(() => {
@@ -130,21 +152,32 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
 
   const meshRefs = useRef<Array<THREE.InstancedMesh | null>>([]);
   useLayoutEffect(() => {
-    batches.forEach((batch, i) => {
+    chunks.forEach((chunk, i) => {
       const mesh = meshRefs.current[i];
-      if (mesh) fillAll(mesh, batch);
+      // Fixed bounding sphere per chunk; the per-frame `cullTo` packs the
+      // visible instances to the front of the buffer but never adds any that
+      // weren't in this chunk, so the sphere is right until the trees move
+      // (which they don't). Three's own frustum test now skips the whole
+      // chunk when the camera isn't looking at it (#497).
+      if (mesh) {
+        fillAll(mesh, chunk);
+        mesh.boundingSphere = new THREE.Sphere(
+          new THREE.Vector3(chunk.boundingSphere.x, chunk.boundingSphere.y, chunk.boundingSphere.z),
+          chunk.boundingSphere.radius,
+        );
+      }
     });
-  }, [batches]);
+  }, [chunks]);
 
   useEffect(() => {
     if (!curve) return;
     publishSceneryClearance('foliage', landClearance(foliageStanding(trees), curve, enrichment));
     publishFoliage({
       trees: trees.length,
-      meshes: batches.filter((b) => b.count > 0).length,
+      meshes: chunks.filter((c) => c.count > 0).length,
       drawn: trees.length,
     });
-  }, [curve, enrichment, trees, batches]);
+  }, [curve, enrichment, trees, chunks]);
 
   const cullFrameRef = useRef(0);
   useAnimationFrame((time) => {
@@ -156,9 +189,9 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
     if (cullFrameRef.current % FOLIAGE_CULL_FRAME_INTERVAL !== 0) return;
 
     let drawn = 0;
-    batches.forEach((batch, i) => {
+    chunks.forEach((chunk, i) => {
       const mesh = meshRefs.current[i];
-      if (mesh) drawn += cullTo(mesh, batch, boat, viewDistance);
+      if (mesh) drawn += cullTo(mesh, chunk, boat, viewDistance);
     });
     if (window.__ROWER3D_FOLIAGE && window.__ROWER3D_FOLIAGE.drawn !== drawn) {
       publishFoliage({ ...window.__ROWER3D_FOLIAGE, drawn });
@@ -167,18 +200,20 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
 
   return (
     <group name={BANK_FOLIAGE_NAME}>
-      {parts.map((part, i) =>
-        batches[i].count === 0 ? null : (
+      {chunks.map((chunk, i) => {
+        const part = parts[chunk.species];
+        return (
           <instancedMesh
-            key={`${part.name}-${batches[i].count}`}
+            key={`${part.name}:${chunk.chunkIndex}-${chunk.count}`}
             ref={(mesh: THREE.InstancedMesh | null) => {
               meshRefs.current[i] = mesh;
             }}
-            args={[part.geometry, part.material, batches[i].count]}
-            name={part.name}
-            // The instances move about the buffer as the cull packs it, so a
-            // bounding sphere computed once would be wrong by the next cull.
-            frustumCulled={false}
+            args={[part.geometry, part.material, chunk.count]}
+            name={`${part.name}:${chunk.chunkIndex}`}
+            // Each chunk's bounding sphere encloses only its own trees, set in
+            // the layout effect above; three's own test skips the whole
+            // chunk when it's off-camera (#497).
+            frustumCulled={true}
             /*
              * No `castShadow` (#352).
              *
@@ -197,8 +232,8 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
              * second time doubled what the forest costs.
              */
           />
-        ),
-      )}
+        );
+      })}
     </group>
   );
 };

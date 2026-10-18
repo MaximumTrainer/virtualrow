@@ -32,6 +32,14 @@ export interface CanvasSurface {
   softShadows: boolean;
   /** Shadow map edge in texels; 0 when the tier draws no shadows. */
   shadowMapSize: number;
+  /**
+   * Metres of route per bank-foliage chunk (#497). One `InstancedMesh` per
+   * (species, chunk) pair, each with its own bounding sphere, so three's own
+   * frustum test can skip whole chunks instead of the CPU scanning every tree
+   * on the route. Smaller numbers = tighter spheres and more draw calls, so
+   * weaker tiers get bigger chunks.
+   */
+  foliageChunkMetres: number;
   /** R3F device-pixel-ratio setting: a fixed ratio, or a [min, max] range. */
   dpr: number | [number, number];
   powerPreference: PowerPreference;
@@ -53,6 +61,10 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     shadows: false,
     softShadows: false,
     shadowMapSize: 0,
+    // #497 D1-b: 200/400/800 for basic/medium+high/extra-high. Basic draws
+    // nothing we'd save by chunking foliage, but keep the knob consistent so
+    // the config shape doesn't need a `null` case.
+    foliageChunkMetres: 200,
     dpr: 1,
     powerPreference: 'low-power',
   },
@@ -64,6 +76,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     shadows: true,
     softShadows: true,
     shadowMapSize: 512,
+    foliageChunkMetres: 400,
     dpr: 1,
     powerPreference: 'low-power',
   },
@@ -73,6 +86,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     shadows: true,
     softShadows: true,
     shadowMapSize: 1024,
+    foliageChunkMetres: 400,
     dpr: [1, 1.5],
     powerPreference: 'default',
   },
@@ -83,6 +97,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     shadows: true,
     softShadows: true,
     shadowMapSize: 1536,
+    foliageChunkMetres: 400,
     dpr: [1, 2],
     powerPreference: 'high-performance',
   },
@@ -93,6 +108,10 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     shadows: true,
     softShadows: true,
     shadowMapSize: 2048,
+    // #497 D1-b: 800 m chunks at `extra-high` keep per-chunk tree counts up
+    // where the shadow pass benefits from fewer draw calls, and the longer
+    // view distance here means fewer chunks are off-camera anyway.
+    foliageChunkMetres: 800,
     dpr: [1, 2],
     powerPreference: 'high-performance',
   },
