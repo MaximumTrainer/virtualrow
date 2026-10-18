@@ -102,6 +102,18 @@ export function projectPointOntoPolyline(point: Coordinate, line: Coordinate[]):
   return best as PolylineProjection;
 }
 
+/**
+ * True when the polyline's first and last vertices are within `epsilonMeters`
+ * of each other — i.e. the line is a closed loop (issue #466, D1(b)).
+ *
+ * A single-vertex or empty line is not a loop; the caller passes those paths
+ * through the open-route branch.
+ */
+export function isClosedLoop(line: Coordinate[], epsilonMeters: number): boolean {
+  if (line.length < 2) return false;
+  return distanceBetweenMeters(line[0], line[line.length - 1]) <= epsilonMeters;
+}
+
 /** The point `alongMeters` into `line`, clamped to its two ends. */
 export function interpolateAlong(
   line: Coordinate[],
