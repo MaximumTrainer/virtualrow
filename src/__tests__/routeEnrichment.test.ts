@@ -1,3 +1,4 @@
+import { runDetectionInline } from '../services/routeDetectionRunner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WaterRoute } from '../types/index';
 import {
@@ -435,6 +436,32 @@ describe('RouteEnrichmentService', () => {
     expect(second.source).toBe('cache');
   });
 
+  it('hands detection to its runner with the route and the Overpass response (#493 D23 b)', async () => {
+    const stub = createFetchStub();
+    const detect = vi.fn(runDetectionInline);
+    const service = new RouteEnrichmentService(stub.fetch, localStorage, detect);
+
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(detect).toHaveBeenCalledTimes(1);
+    expect(detect.mock.calls[0][0].coordinates).toEqual(routeFixture.coordinates);
+    expect(detect.mock.calls[0][0].coastlineBounds).toBeDefined();
+    expect(enrichment.waterDetection).toEqual({
+      shares: (await detect.mock.results[0].value).detected.shares,
+      ...(await detect.mock.results[0].value).summary,
+    });
+  });
+
+  it('falls back quietly when detection itself fails', async () => {
+    const stub = createFetchStub();
+    const detect = vi.fn().mockRejectedValue(new Error('worker and inline both failed'));
+    const service = new RouteEnrichmentService(stub.fetch, localStorage, detect);
+
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(enrichment.source).toBe('fallback');
+  });
+
   it('issues one elevation request per 100-point batch and stitches the results', async () => {
     const longRoute: WaterRoute = {
       ...routeFixture,
@@ -759,18 +786,21 @@ describe('route enrichment cache version (#493 D9 b)', () => {
   afterEach(() => localStorage.clear());
 
   it('keys entries under a versioned prefix, so pre-detection water types are refetched', () => {
-    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v2:route-1');
+    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v3:route-1');
   });
 
   it('prunes entries written under the old prefix and leaves everything else', () => {
     localStorage.setItem('virtualrow:route-enrichment:route-1', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v2:route-2', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v3:route-3', '{"savedAt":0}');
     localStorage.setItem('virtualrow:unrelated', 'keep me');
 
     new RouteEnrichmentService(createFetchStub().fetch, localStorage);
 
     expect(localStorage.getItem('virtualrow:route-enrichment:route-1')).toBeNull();
-    expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).not.toBeNull();
+    // v2 entries predate the per-side shores and land (#493 FR16, FR18).
+    expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).toBeNull();
+    expect(localStorage.getItem('virtualrow:route-enrichment:v3:route-3')).not.toBeNull();
     expect(localStorage.getItem('virtualrow:unrelated')).toBe('keep me');
   });
 

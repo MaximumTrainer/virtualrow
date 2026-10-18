@@ -16,11 +16,13 @@ import { LANDSCAPE_OFFSET } from './constants';
 import { seededRandom } from './helpers';
 import { getSegmentSceneryProfile } from './segmentScenery';
 import type { SceneryTrack } from './sceneryTrack';
-import { nearestBankOffset, waterHalfWidthAt } from './sceneryClearance';
+import { nearestBankOffset, waterHalfWidthAt, type BankSide } from './sceneryClearance';
 import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
+  SCENERY_PROFILE_CONFIG,
   type RouteEnrichmentData,
+  type RouteSegmentEnrichment,
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 
@@ -44,9 +46,18 @@ export interface LandscapeLayout {
   rightElements: LandscapeElement[];
 }
 
+/** A segment's densities, or the ones its bank's own land has (#493 FR18). */
+const densitiesOf = (segment: RouteSegmentEnrichment, side: BankSide) => {
+  const own = side === 'left' ? segment.leftSceneryProfile : segment.rightSceneryProfile;
+  return own ? SCENERY_PROFILE_CONFIG[own] : segment;
+};
+
+type SegmentStyle = ReturnType<typeof getSegmentStyle>;
+
 const getSegmentStyle = (
   enrichment: RouteEnrichmentData | null | undefined,
   progress: number,
+  side: BankSide,
 ) => {
   const segmentProfiles = enrichment?.segmentProfiles;
   if (!segmentProfiles || segmentProfiles.length === 0) {
@@ -64,8 +75,8 @@ const getSegmentStyle = (
   const lowerIndex = Math.floor(scaledIndex);
   const upperIndex = Math.min(lastIndex, lowerIndex + 1);
   const blend = scaledIndex - lowerIndex;
-  const lower = segmentProfiles[lowerIndex];
-  const upper = segmentProfiles[upperIndex];
+  const lower = densitiesOf(segmentProfiles[lowerIndex], side);
+  const upper = densitiesOf(segmentProfiles[upperIndex], side);
 
   return {
     treeDensity: lower.treeDensity + (upper.treeDensity - lower.treeDensity) * blend,
@@ -115,57 +126,58 @@ export const layoutLandscape = ({
     const tangent = curve.getTangentAt(t).normalize();
     const up = new THREE.Vector3(0, 1, 0);
     const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
-    const segmentStyle = getSegmentStyle(enrichment, t);
-    const sceneryProfile = getSegmentSceneryProfile(enrichment, t, track);
-    // Each bank measured from its own waterline (#493 D19 c).
-    const minOffsetOn = (side: 'left' | 'right') =>
-      Math.max(LANDSCAPE_OFFSET, nearestBankOffset(waterHalfWidthAt(enrichment, t, side)));
+    // Each bank its own land (#493 FR18) and measured from its own waterline (D19 c).
+    const bank = (side: BankSide) => ({
+      style: getSegmentStyle(enrichment, t, side),
+      sceneryProfile: getSegmentSceneryProfile(enrichment, t, track, side),
+      minOffset: Math.max(LANDSCAPE_OFFSET, nearestBankOffset(waterHalfWidthAt(enrichment, t, side))),
+    });
+    const left = bank('left');
+    const right = bank('right');
 
     const leftOffset =
-      minOffsetOn('left') +
-      seededRandom(elemIdx * 7 + 1) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
+      left.minOffset + seededRandom(elemIdx * 7 + 1) * (16 + (1 - left.style.vegetationDensity) * 34);
     const rightOffset =
-      minOffsetOn('right') +
-      seededRandom(elemIdx * 7 + 2) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
+      right.minOffset + seededRandom(elemIdx * 7 + 2) * (16 + (1 - right.style.vegetationDensity) * 34);
 
-    const rollSlot = (seedOffset: number): SlotRoll => {
+    const rollSlot = (style: SegmentStyle, seedOffset: number): SlotRoll => {
       const rand = seededRandom(elemIdx * 7 + seedOffset);
-      const buildingThreshold = Math.min(0.8, segmentStyle.buildingDensity * 0.85);
+      const buildingThreshold = Math.min(0.8, style.buildingDensity * 0.85);
       const treeThreshold = Math.min(
         0.98,
-        buildingThreshold + Math.max(0.18, segmentStyle.treeDensity * 0.75),
+        buildingThreshold + Math.max(0.18, style.treeDensity * 0.75),
       );
       if (rand < buildingThreshold) return 'building';
       if (rand < treeThreshold) return 'tree';
       return 'mountain';
     };
 
-    const placementChance =
-      0.1 + segmentStyle.treeDensity * 0.55 + segmentStyle.vegetationDensity * 0.2;
-    const leftRoll = rollSlot(3);
-    if (seededRandom(elemIdx * 7 + 4) < placementChance && leftRoll !== 'tree') {
+    const placementChance = (style: SegmentStyle) =>
+      0.1 + style.treeDensity * 0.55 + style.vegetationDensity * 0.2;
+    const leftRoll = rollSlot(left.style, 3);
+    if (seededRandom(elemIdx * 7 + 4) < placementChance(left.style) && leftRoll !== 'tree') {
       const leftPos = new THREE.Vector3().copy(point).addScaledVector(perp, -leftOffset);
       leftPos.y = getTerrainReliefForProgress(terrain, t);
       leftElements.push({
         position: leftPos,
         type: leftRoll,
-        scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * segmentStyle.objectScale,
+        scale: (0.8 + seededRandom(elemIdx * 7 + 5) * 0.8) * left.style.objectScale,
         rotation: Math.atan2(tangent.x, tangent.z) + Math.PI / 2,
-        sceneryProfile,
+        sceneryProfile: left.sceneryProfile,
         progress: t,
       });
     }
 
-    const rightRoll = rollSlot(7);
-    if (seededRandom(elemIdx * 7 + 6) < placementChance && rightRoll !== 'tree') {
+    const rightRoll = rollSlot(right.style, 7);
+    if (seededRandom(elemIdx * 7 + 6) < placementChance(right.style) && rightRoll !== 'tree') {
       const rightPos = new THREE.Vector3().copy(point).addScaledVector(perp, rightOffset);
       rightPos.y = getTerrainReliefForProgress(terrain, t);
       rightElements.push({
         position: rightPos,
         type: rightRoll,
-        scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * segmentStyle.objectScale,
+        scale: (0.8 + seededRandom(elemIdx * 7 + 8) * 0.8) * right.style.objectScale,
         rotation: Math.atan2(tangent.x, tangent.z) - Math.PI / 2,
-        sceneryProfile,
+        sceneryProfile: right.sceneryProfile,
         progress: t,
       });
     }

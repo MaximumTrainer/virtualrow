@@ -12,19 +12,21 @@ export const ROUTE_SEGMENT_LENGTH_METERS = 50;
 export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
-import { buildWaterMask } from '../utils/osmWaterMask';
-import { detectRoute, SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
-import { classifyDetectedRoute, type RouteWaterClass } from '../utils/waterClassification';
+import { mapOsmTagsToSceneryProfile } from '../utils/sceneryFromTags';
+import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
+import type { RouteWaterClass } from '../utils/waterClassification';
+import { createWorkerDetectionRunner, type RouteDetectionRunner } from './routeDetectionRunner';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 
 export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
 const ROUTE_ENRICHMENT_CACHE_ROOT = 'virtualrow:route-enrichment:';
 /**
- * v2: the water type comes from OSM detection (#493). Entries under the bare
- * root were classified the old way and are pruned on start-up (D9 b).
+ * v2: the water type comes from OSM detection (#493). v3: each segment also
+ * carries the measured shore on each side (FR16) and each bank's land (FR18).
+ * Entries under the bare root or an older version are pruned on start-up (D9 b).
  */
-const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v2:`;
+const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v3:`;
 
 export type SceneryProfile =
   | 'forest'
@@ -66,6 +68,13 @@ export interface RouteSegmentEnrichment {
    */
   leftShoreMeters?: number | null;
   rightShoreMeters?: number | null;
+  /**
+   * The land beyond each bank's shore (#493 FR18), where detection found a
+   * mapped area there. Absent on a side with none, which then shows
+   * `sceneryProfile` like both banks used to.
+   */
+  leftSceneryProfile?: SceneryProfile;
+  rightSceneryProfile?: SceneryProfile;
 }
 
 export interface RouteEnrichmentData {
@@ -256,30 +265,6 @@ export const splitCoordinatesIntoElevationBatches = (
     batches.push(coordinates.slice(index, index + batchSize));
   }
   return batches;
-};
-
-export const mapOsmTagsToSceneryProfile = (
-  tags: Record<string, string> = {},
-): SceneryProfile => {
-  if (tags.landuse === 'forest' || tags.natural === 'wood') return 'forest';
-  if (tags.landuse === 'residential') return 'residential';
-  if (
-    tags.landuse === 'commercial' ||
-    tags.landuse === 'industrial' ||
-    tags.building
-  ) {
-    return 'commercial';
-  }
-  if (
-    tags.landuse === 'farmland' ||
-    tags.landuse === 'grass' ||
-    tags.landuse === 'meadow'
-  ) {
-    return 'farmland';
-  }
-  if (tags.natural === 'beach' || tags.natural === 'sand') return 'beach';
-  if (tags.natural === 'wetland') return 'wetland';
-  return 'fallback';
 };
 
 export const inferWaterBodyType = (
@@ -803,8 +788,19 @@ const measuredSide = (water: DetectedSample[], side: 'leftShoreMeters' | 'rightS
   return seen.length * 2 < water.length ? null : median(seen);
 };
 
+/** A side's land from the on-water samples: the profile most of them found, ties to the first by name. */
+const commonestLand = (water: DetectedSample[], side: 'leftLand' | 'rightLand'): SceneryProfile | undefined => {
+  const counts = new Map<SceneryProfile, number>();
+  for (const sample of water) {
+    const land = sample[side];
+    if (land) counts.set(land, (counts.get(land) ?? 0) + 1);
+  }
+  return [...counts].sort(([a, countA], [b, countB]) => countB - countA || (a < b ? -1 : 1))[0]?.[0];
+};
+
 /**
- * Puts the measured shore distances on each segment (#493 FR16). The width
+ * Puts the measured shore distances on each segment (#493 FR16), and the
+ * land beyond each shore (FR18). The width
  * becomes the shore-to-shore distance wherever both sides found one; the
  * guessed width stays where a side is open or nothing was on water (D24).
  */
@@ -823,10 +819,14 @@ export const applyMeasuredShores = (
     if (water.length === 0) return profile;
     const leftShoreMeters = measuredSide(water, 'leftShoreMeters');
     const rightShoreMeters = measuredSide(water, 'rightShoreMeters');
+    const leftSceneryProfile = commonestLand(water, 'leftLand');
+    const rightSceneryProfile = commonestLand(water, 'rightLand');
     return {
       ...profile,
       leftShoreMeters,
       rightShoreMeters,
+      ...(leftSceneryProfile && { leftSceneryProfile }),
+      ...(rightSceneryProfile && { rightSceneryProfile }),
       waterWidthMeters:
         leftShoreMeters !== null && rightShoreMeters !== null
           ? leftShoreMeters + rightShoreMeters
@@ -969,14 +969,23 @@ const createSegmentProfilesFromFeatures = (
   return segmentProfiles;
 };
 
+export { mapOsmTagsToSceneryProfile };
+
 export class RouteEnrichmentService {
   private readonly fetchImpl: typeof fetch;
   private readonly storage: Storage | null;
+  private readonly detect: RouteDetectionRunner;
   private readonly inflight = new Map<string, Promise<RouteEnrichmentData>>();
 
-  constructor(fetchImpl: typeof fetch = fetch, storage: Storage | null = defaultStorage()) {
+  constructor(
+    fetchImpl: typeof fetch = fetch,
+    storage: Storage | null = defaultStorage(),
+    // #493 D23 b: a worker where the browser has one, inline otherwise.
+    detect: RouteDetectionRunner = createWorkerDetectionRunner(),
+  ) {
     this.fetchImpl = fetchImpl;
     this.storage = storage;
+    this.detect = detect;
     this.pruneOldCacheVersions();
   }
 
@@ -1103,11 +1112,12 @@ export class RouteEnrichmentService {
         const nearElements = elementsNearRoute(route.coordinates, elements);
         // D3 b then a: what the route is detected on first, then the old
         // nearest-feature tags, then the route's own tags and name.
-        const mask = buildWaterMask(elements, {
+        const detection = await this.detect({
+          coordinates: route.coordinates,
+          elements,
           coastlineBounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS),
         });
-        const detection = detectRoute(route.coordinates, mask);
-        const detected = classifyDetectedRoute(detection.samples, mask, elements);
+        const { detected } = detection;
         const segmentProfiles = applyMeasuredShores(
           createSegmentProfilesFromFeatures(route, nearElements),
           detection.samples,

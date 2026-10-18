@@ -6,6 +6,7 @@ import type {
   RouteEnrichmentData,
   SceneryProfile,
 } from '../../services/routeEnrichmentService';
+import type { BankSide } from './sceneryClearance';
 import { trackProfileAt, type SceneryTrack } from './sceneryTrack';
 
 /**
@@ -14,11 +15,15 @@ import { trackProfileAt, type SceneryTrack } from './sceneryTrack';
  * An authored track wins over enrichment: a route that states its own
  * progression is describing itself better than a land-use query over its
  * coordinates can (issue #232).
+ *
+ * With a `side`, that bank's own land where detection found it (#493 FR18),
+ * else the profile both banks share.
  */
 export const getSegmentSceneryProfile = (
   enrichment: RouteEnrichmentData | null | undefined,
   progress: number,
   track?: SceneryTrack | null,
+  side?: BankSide,
 ): SceneryProfile => {
   if (track) return trackProfileAt(track, progress);
   const segmentProfiles = enrichment?.segmentProfiles;
@@ -26,7 +31,9 @@ export const getSegmentSceneryProfile = (
   const safeProgress = Number.isFinite(progress) ? progress : 0;
   const clampedProgress = Math.max(0, Math.min(1, safeProgress));
   const nearestIndex = Math.round(clampedProgress * (segmentProfiles.length - 1));
-  return segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)].sceneryProfile;
+  const segment = segmentProfiles[Math.min(nearestIndex, segmentProfiles.length - 1)];
+  const own = side === 'left' ? segment.leftSceneryProfile : side === 'right' ? segment.rightSceneryProfile : undefined;
+  return own ?? segment.sceneryProfile;
 };
 
 /** Baseline building height in scene units; profile heightRange multiplies this value. */
