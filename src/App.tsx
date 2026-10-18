@@ -16,6 +16,8 @@ import { ftmsBluetoothService } from './services/ftmsBluetoothService';
 // loads when the user actually starts a workout (currentView === 'workout').
 const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
+import { RouteOverviewMap } from './components/RouteOverviewMap';
+import { isRouteOverviewV2Enabled } from './utils/routeOverviewFlag';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
@@ -1463,6 +1465,27 @@ function App() {
                     ← Back to Row
                   </button>
                 </div>
+
+                {/* #505 Phase 1: a MapLibre overview above the drawer when
+                    `__VIRTUALROW_ROUTE_MAP_V2` is on. The current list and
+                    importers remain below it. Phase 2 adds the modal detail
+                    overlay (D8), clustering (D4) and tile-backdrop cards
+                    (D3), and Phase 3 flips the flag on by default. */}
+                {isRouteOverviewV2Enabled() && (
+                  <section
+                    className="route-search-section route-overview-section"
+                    data-testid="route-overview-section"
+                  >
+                    <div className="route-overview-section__map">
+                      <RouteOverviewMap
+                        routes={filteredRoutes}
+                        defaultRouteId={defaultRouteId}
+                        selectedRouteId={selectedRoute?.id ?? null}
+                        onSelect={handleRouteSelect}
+                      />
+                    </div>
+                  </section>
+                )}
 
                 <section className="route-search-section">
                   <h3>Add a rownative course</h3>
