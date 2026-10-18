@@ -11,32 +11,41 @@
 // three's `CSM` creates its own `DirectionalLight`s under the hood (one per
 // cascade) and manages their shadow cameras from the main view camera.
 //
-// Phase 1 of #495 ships this wrapper with the runtime flag `__VIRTUALROW_CSM`
-// defaulting off: the wrapper mounts only when a spec or dev console sets the
-// flag to `true`. Phase 2 flips the default and calls `csm.setupMaterial()`
-// on the real shadow-receiving materials (bank, water, boat, ...) so the
-// cascades pick per-fragment instead of all cascades summing on every
-// receiver.
+// Phase 2 (this file now): flipped the default of `__VIRTUALROW_CSM` on in
+// `isCsmEnabled`, and this component walks the scene every frame for
+// `receiveShadow` meshes and calls `csm.setupMaterial` on each material
+// exactly once (`shadowReceivers.ts`). For a material that already has its
+// own `onBeforeCompile` (bankMaterial's triplanar chain, for one), the
+// existing callback is preserved and run alongside CSM's injection.
 // ============================================================================
 
 import { useEffect, useMemo, useRef } from 'react';
+import type * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { CSM } from 'three/examples/jsm/csm/CSM.js';
 import { createCascadedShadows, type CascadedShadowsConfig } from './cascadedShadowsCore';
+import {
+  wireShadowReceivers,
+  unwireShadowReceivers,
+  type SetupRecord,
+} from './shadowReceivers';
 
 export type CascadedShadowsProps = CascadedShadowsConfig;
 
 /**
  * Mounts a CSM instance for the duration this component is in the tree.
  *
- * `useFrame` updates CSM each frame against the main render camera; the
- * cleanup effect disposes the lights and the injected shader chunks when
- * the component unmounts, so a tier change doesn't leak directional lights.
+ * `useFrame` updates CSM each frame against the main render camera and
+ * rescans the scene for new shadow-receiving materials (R3F mounts can land
+ * after the component's own effect runs); the cleanup effect disposes the
+ * lights, reverts the materials, and clears the injected shader chunks so
+ * a tier change doesn't leak directional lights or stale CSM defines.
  */
 export const CascadedShadows: React.FC<CascadedShadowsProps> = (props) => {
   const camera = useThree((state) => state.camera);
   const scene = useThree((state) => state.scene);
   const csmRef = useRef<CSM | null>(null);
+  const seenRef = useRef<Map<THREE.Material, SetupRecord>>(new Map());
 
   const stableProps = useMemo(
     () => props,
@@ -56,7 +65,11 @@ export const CascadedShadows: React.FC<CascadedShadowsProps> = (props) => {
   useEffect(() => {
     const csm = createCascadedShadows(camera, scene, stableProps);
     csmRef.current = csm;
+    const seen = seenRef.current;
+    // Catch materials present at mount; `useFrame` catches the rest.
+    wireShadowReceivers(csm, scene, seen);
     return () => {
+      unwireShadowReceivers(seen);
       csm.remove();
       csm.dispose();
       csmRef.current = null;
@@ -64,7 +77,10 @@ export const CascadedShadows: React.FC<CascadedShadowsProps> = (props) => {
   }, [camera, scene, stableProps]);
 
   useFrame(() => {
-    csmRef.current?.update();
+    const csm = csmRef.current;
+    if (!csm) return;
+    wireShadowReceivers(csm, scene, seenRef.current);
+    csm.update();
   });
 
   return null;

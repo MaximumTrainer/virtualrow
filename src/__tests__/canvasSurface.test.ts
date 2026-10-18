@@ -269,8 +269,9 @@ describe('density-field grass tier gate', () => {
 
 /**
  * #495 — the sun's shadow runs through Cascaded Shadow Maps on tiers that
- * ask for ≥ 2 cascades. Phase 1 ships gated behind `__VIRTUALROW_CSM`
- * defaulting off, so visual baselines don't move; Phase 2 flips the sense.
+ * ask for ≥ 2 cascades. Phase 2 flips `__VIRTUALROW_CSM` default-on: an
+ * undefined flag reads as on, and only an explicit `false` keeps the
+ * single-shadow-map path (the D2-a kill switch).
  */
 describe('CSM tier config', () => {
   afterEach(() => {
@@ -297,13 +298,9 @@ describe('CSM tier config', () => {
     expect(isCsmEnabled('low')).toBe(false);
   });
 
-  it('Phase 1 defaults the flag off: medium+ needs an explicit opt-in', () => {
+  it('Phase 2 defaults the flag on: medium+ runs CSM without an explicit opt-in', () => {
     for (const tier of ['medium', 'high', 'extra-high'] as const) {
-      expect(isCsmEnabled(tier), `undefined flag on ${tier}`).toBe(false);
-    }
-    window.__VIRTUALROW_CSM = true;
-    for (const tier of ['medium', 'high', 'extra-high'] as const) {
-      expect(isCsmEnabled(tier), `true flag on ${tier}`).toBe(true);
+      expect(isCsmEnabled(tier), `undefined flag on ${tier}`).toBe(true);
     }
   });
 
@@ -311,6 +308,15 @@ describe('CSM tier config', () => {
     window.__VIRTUALROW_CSM = false;
     for (const tier of QUALITY_TIERS) {
       expect(isCsmEnabled(tier), tier).toBe(false);
+    }
+  });
+
+  it('explicit `true` still turns CSM on where cascadeCount ≥ 2', () => {
+    window.__VIRTUALROW_CSM = true;
+    expect(isCsmEnabled('basic')).toBe(false);
+    expect(isCsmEnabled('low')).toBe(false);
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(isCsmEnabled(tier), tier).toBe(true);
     }
   });
 });
