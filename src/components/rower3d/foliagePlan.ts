@@ -219,6 +219,107 @@ export const batchFoliage = (trees: readonly FoliageTree[], speciesCount: number
 };
 
 /**
+ * One chunk's worth of trees of one species — a (species, chunkIndex) pair,
+ * ready to hand to its own `InstancedMesh` whose fixed bounding sphere lets
+ * three's own frustum test skip the whole mesh when it's off-camera (#497).
+ */
+export interface FoliageChunk extends FoliageBatch {
+  species: number;
+  chunkIndex: number;
+  /**
+   * Centre and radius enclosing every tree position in this chunk, with the
+   * tallest crown's half-height added to the radius so no crown clips at the
+   * frustum edge. In world units; y uses the chunk's mean ground height.
+   */
+  boundingSphere: { x: number; y: number; z: number; radius: number };
+}
+
+/**
+ * Half-height a tree reaches above its base, as a multiplier of `height`.
+ * The billboard geometry extends from y=0 to y=1 in local space, so a tree
+ * of height `h` reaches `h` metres up from its base; the bounding sphere's
+ * centre is placed at ground, so the sphere needs to reach up by one tree.
+ */
+const CROWN_RADIUS_FACTOR = 1.0;
+
+/**
+ * Group `trees` by (species, chunk) and compute each chunk's bounding sphere.
+ *
+ * Chunk index comes from `routeLengthMetres * progress / chunkMetres`, so one
+ * long InstancedMesh per species becomes several regional ones. The CPU-side
+ * `cullTo` keeps running inside each chunk (#497 D3-a — belt and braces),
+ * but three can now short-circuit any chunk the camera isn't looking at
+ * because `boundingSphere` fits that chunk alone.
+ */
+export const batchFoliageChunked = (
+  trees: readonly FoliageTree[],
+  speciesCount: number,
+  routeLengthMetres: number,
+  chunkMetres: number,
+): FoliageChunk[] => {
+  // The one-chunk degenerate case keeps the old behaviour on short routes.
+  const chunkCount = Math.max(1, Math.ceil(routeLengthMetres / chunkMetres));
+  const matrix = new THREE.Matrix4();
+  const rotation = new THREE.Quaternion();
+  const position = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+
+  // Bucket trees once by (species, chunk) with their original FoliageTree.
+  const buckets: FoliageTree[][] = Array.from(
+    { length: speciesCount * chunkCount },
+    () => [],
+  );
+  const indexFor = (species: number, chunkIndex: number) => species * chunkCount + chunkIndex;
+  for (const tree of trees) {
+    const chunkIndex = Math.min(chunkCount - 1, Math.floor(tree.progress * chunkCount));
+    buckets[indexFor(tree.species, chunkIndex)].push(tree);
+  }
+
+  const chunks: FoliageChunk[] = [];
+  for (let s = 0; s < speciesCount; s += 1) {
+    for (let c = 0; c < chunkCount; c += 1) {
+      const own = buckets[indexFor(s, c)];
+      if (own.length === 0) continue;
+      const matrices = new Float32Array(own.length * 16);
+      const centres = new Float32Array(own.length * 2);
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      let sumY = 0, maxHeight = 0;
+      own.forEach((tree, i) => {
+        position.fromArray(tree.position);
+        rotation.setFromAxisAngle(UP, tree.yaw);
+        scale.setScalar(tree.height);
+        matrix.compose(position, rotation, scale).toArray(matrices, i * 16);
+        const [x, y, z] = tree.position;
+        centres[i * 2] = x;
+        centres[i * 2 + 1] = z;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+        sumY += y;
+        if (tree.height > maxHeight) maxHeight = tree.height;
+      });
+      const cx = (minX + maxX) / 2;
+      const cz = (minZ + maxZ) / 2;
+      const cy = sumY / own.length;
+      // Horizontal radius enclosing every trunk, plus the tallest crown's
+      // reach so no triangle clips at the sphere edge.
+      const half = Math.max(maxX - cx, maxZ - cz);
+      const radius = Math.hypot(half, maxHeight * CROWN_RADIUS_FACTOR) + maxHeight * CROWN_RADIUS_FACTOR;
+      chunks.push({
+        species: s,
+        chunkIndex: c,
+        matrices,
+        centres,
+        count: own.length,
+        boundingSphere: { x: cx, y: cy, z: cz, radius },
+      });
+    }
+  }
+  return chunks;
+};
+
+/**
  * Copy the matrices of the trees within `range` of the boat to the front of
  * `target`, in order, and return how many there are.
  *

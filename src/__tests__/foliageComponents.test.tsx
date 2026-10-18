@@ -89,7 +89,8 @@ describe('BankFoliage', () => {
 
     for (const mesh of scene.foliage()) {
       const material = mesh.material as THREE.MeshLambertMaterial;
-      const type = mesh.name.slice(BANK_FOLIAGE_NAME.length + 1);
+      // Name is `BankFoliage:<species>:<chunkIndex>` since #497.
+      const type = mesh.name.split(':')[1];
       const entry = SCENE_CONFIG.trees.species.find((s) => s.type === type)!;
       expect(`#${material.color.getHexString()}`).toBe(entry.color);
       expect(material.map).toBeTruthy();
@@ -164,6 +165,78 @@ describe('BankFoliage', () => {
     const scene = await mount(<BankFoliage curve={null} viewDistance={600} />);
     expect(scene.foliage()).toEqual([]);
     await scene.renderer.unmount();
+  });
+
+  /**
+   * #497 — chunked foliage with its own bounding spheres.
+   *
+   * The old mesh covered the whole route, so three could never skip it.
+   * Chunked by progress, each `InstancedMesh` carries a sphere that encloses
+   * just its own trees and three's own frustum test can short-circuit a
+   * chunk when the camera is looking the other way.
+   */
+  describe('#497 chunked foliage', () => {
+    it('names each mesh as BankFoliage:<species>:<chunkIndex>', async () => {
+      const scene = await mount(
+        <BankFoliage curve={straightRoute(4_000)} viewDistance={600} chunkMetres={400} />,
+      );
+      for (const mesh of scene.foliage()) {
+        expect(mesh.name).toMatch(/^BankFoliage:[a-z0-9-]+:\d+$/);
+      }
+      await scene.renderer.unmount();
+    });
+
+    it('splits a long route into more meshes than there are species', async () => {
+      const scene = await mount(
+        <BankFoliage curve={straightRoute(8_000)} viewDistance={600} chunkMetres={400} />,
+      );
+      const meshes = scene.foliage();
+      // 8 km route / 400 m chunks = 20 chunks of route; each one that holds
+      // any trees becomes a mesh, so chunking means strictly more meshes than
+      // the species count (five tree species in SCENE_CONFIG).
+      expect(meshes.length).toBeGreaterThan(SCENE_CONFIG.trees.species.length);
+      await scene.renderer.unmount();
+    });
+
+    it('sets a bounding sphere on each chunk that encloses only its own instances', async () => {
+      const scene = await mount(
+        <BankFoliage curve={straightRoute(8_000)} viewDistance={600} chunkMetres={400} />,
+      );
+      const meshes = scene.foliage();
+      expect(meshes.length).toBeGreaterThan(0);
+
+      for (const mesh of meshes) {
+        expect(mesh.frustumCulled).toBe(true);
+        expect(mesh.boundingSphere).toBeTruthy();
+        const sphere = mesh.boundingSphere as THREE.Sphere;
+        // Every instance's world-space origin sits inside the sphere.
+        const matrix = new THREE.Matrix4();
+        const origin = new THREE.Vector3();
+        for (let i = 0; i < mesh.count; i += 1) {
+          mesh.getMatrixAt(i, matrix);
+          origin.setFromMatrixPosition(matrix);
+          expect(sphere.containsPoint(origin), `${mesh.name} instance ${i}`).toBe(true);
+        }
+      }
+      await scene.renderer.unmount();
+    });
+
+    it('keeps the total planted count the same with or without chunking', async () => {
+      const unchunked = await mount(
+        <BankFoliage curve={straightRoute(8_000)} viewDistance={600} />,
+      );
+      const chunked = await mount(
+        <BankFoliage curve={straightRoute(8_000)} viewDistance={600} chunkMetres={400} />,
+      );
+      const totalUnchunked = unchunked
+        .foliage()
+        .reduce((sum, m) => sum + m.instanceMatrix.count, 0);
+      const totalChunked = chunked.foliage().reduce((sum, m) => sum + m.instanceMatrix.count, 0);
+      // Same seed, same layout — chunking is a redistribution, not a reroll.
+      expect(totalChunked).toBe(totalUnchunked);
+      await unchunked.renderer.unmount();
+      await chunked.renderer.unmount();
+    });
   });
 });
 

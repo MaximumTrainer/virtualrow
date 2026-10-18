@@ -6,6 +6,7 @@ import {
   FOLIAGE_SHAPE_SIZE,
   FOLIAGE_SLOT_METRES,
   batchFoliage,
+  batchFoliageChunked,
   compactVisible,
   createFoliageGeometry,
   foliageStanding,
@@ -318,5 +319,100 @@ describe('isFoliageEnabled', () => {
     expect(isFoliageEnabled()).toBe(true);
     window.__VIRTUALROW_FOLIAGE = false;
     expect(isFoliageEnabled()).toBe(false);
+  });
+});
+
+/**
+ * #497 — one `InstancedMesh` per (species, chunk), each with a bounding
+ * sphere that encloses its own trees. Three's own frustum test can skip a
+ * chunk when the camera is looking the other way, and the per-frame CPU
+ * cull packs instances within a chunk the same way as before.
+ */
+describe('batchFoliageChunked', () => {
+  const speciesCount = 2;
+  const treesSpread = (): FoliageTree[] => {
+    // Ten trees, species 0 and 1, spread along progress 0..1.
+    const trees: FoliageTree[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      const progress = i / 9;
+      trees.push({
+        position: [progress * 1_000, 0, (i % 2 === 0 ? -1 : 1) * 50],
+        progress,
+        species: i % speciesCount,
+        height: 12,
+        yaw: 0,
+      });
+    }
+    return trees;
+  };
+
+  it('one chunk per species when the chunk is as long as the route', () => {
+    const trees = treesSpread();
+    const chunks = batchFoliageChunked(trees, speciesCount, 1_000, 1_000);
+    expect(chunks).toHaveLength(speciesCount);
+    chunks.forEach((chunk, i) => {
+      expect(chunk.species).toBe(i);
+      expect(chunk.chunkIndex).toBe(0);
+    });
+  });
+
+  it('splits a long route into chunks, dropping empty (species, chunk) pairs', () => {
+    const trees = treesSpread();
+    const chunks = batchFoliageChunked(trees, speciesCount, 1_000, 200);
+    expect(chunks.length).toBeGreaterThan(speciesCount);
+    for (const chunk of chunks) {
+      expect(chunk.count).toBeGreaterThan(0);
+      // Every matrix slot is filled.
+      expect(chunk.matrices.length).toBe(chunk.count * 16);
+      expect(chunk.centres.length).toBe(chunk.count * 2);
+    }
+    // Total trees across chunks matches input.
+    const total = chunks.reduce((s, c) => s + c.count, 0);
+    expect(total).toBe(trees.length);
+  });
+
+  it('each chunk only holds trees from one (species, chunkIndex) pair', () => {
+    const trees = treesSpread();
+    const chunkCount = 5; // 1000 m / 200 m
+    const chunks = batchFoliageChunked(trees, speciesCount, 1_000, 200);
+    for (const chunk of chunks) {
+      // Every tree in this chunk originally has the right species and the
+      // right progress band.
+      const own = trees.filter(
+        (t) =>
+          t.species === chunk.species &&
+          Math.min(chunkCount - 1, Math.floor(t.progress * chunkCount)) === chunk.chunkIndex,
+      );
+      expect(chunk.count).toBe(own.length);
+    }
+  });
+
+  it('each chunk bounding sphere encloses every one of its tree positions', () => {
+    const trees = treesSpread();
+    const chunks = batchFoliageChunked(trees, speciesCount, 1_000, 200);
+    for (const chunk of chunks) {
+      for (let i = 0; i < chunk.count; i += 1) {
+        const x = chunk.centres[i * 2];
+        const z = chunk.centres[i * 2 + 1];
+        const dx = x - chunk.boundingSphere.x;
+        const dz = z - chunk.boundingSphere.z;
+        const distance = Math.hypot(dx, dz);
+        expect(distance).toBeLessThanOrEqual(chunk.boundingSphere.radius + 1e-6);
+      }
+    }
+  });
+
+  it('is a redistribution: the total matches the unchunked batch', () => {
+    const trees = treesSpread();
+    const chunks = batchFoliageChunked(trees, speciesCount, 1_000, 200);
+    const unchunked = batchFoliage(trees, speciesCount);
+    const totalChunked = chunks.reduce((s, c) => s + c.count, 0);
+    const totalUnchunked = unchunked.reduce((s, b) => s + b.count, 0);
+    expect(totalChunked).toBe(totalUnchunked);
+    expect(totalUnchunked).toBe(trees.length);
+  });
+
+  it('is empty for an empty tree list', () => {
+    expect(batchFoliageChunked([], speciesCount, 1_000, 200)).toEqual([]);
   });
 });

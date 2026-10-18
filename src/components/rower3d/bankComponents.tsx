@@ -260,6 +260,8 @@ interface CurvedLandscapeProps {
   enrichment?: RouteEnrichmentData | null;
   /** Authored dressing, preferred over enrichment when the route has one (#232). */
   track?: SceneryTrack | null;
+  /** Metres per bank-foliage chunk (#497); passes straight through to `BankFoliage`. */
+  foliageChunkMetres?: number;
 }
 
 /** The name on each house and mountain group, so a test can find them. */
@@ -273,6 +275,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
   viewDistance,
   enrichment,
   track = null,
+  foliageChunkMetres,
 }) => {
   const elementsGroupRef = useRef<THREE.Group>(null);
   const landscapeElements = useMemo(
@@ -438,6 +441,7 @@ export const CurvedLandscapeElements: React.FC<CurvedLandscapeProps> = ({
           enrichment={enrichment}
           track={track}
           avoid={houses}
+          chunkMetres={foliageChunkMetres}
         />
       )}
     </>
