@@ -13,6 +13,7 @@ import {
   drawsShadows,
   drawsSunMesh,
   drawsWaterReflection,
+  isCsmEnabled,
   isShaderGrassEnabled,
   maxDpr,
   type CanvasSurface,
@@ -262,6 +263,54 @@ describe('density-field grass tier gate', () => {
     window.__VIRTUALROW_SHADER_GRASS = false;
     for (const tier of QUALITY_TIERS) {
       expect(isShaderGrassEnabled(tier), tier).toBe(false);
+    }
+  });
+});
+
+/**
+ * #495 — the sun's shadow runs through Cascaded Shadow Maps on tiers that
+ * ask for ≥ 2 cascades. Phase 1 ships gated behind `__VIRTUALROW_CSM`
+ * defaulting off, so visual baselines don't move; Phase 2 flips the sense.
+ */
+describe('CSM tier config', () => {
+  afterEach(() => {
+    delete window.__VIRTUALROW_CSM;
+  });
+
+  it('zero cascades on `basic` (no shadows at all)', () => {
+    expect(canvasSurfaceFor('basic').cascadeCount).toBe(0);
+  });
+
+  it('one cascade on `low` — today\'s single shadow-map behaviour', () => {
+    expect(canvasSurfaceFor('low').cascadeCount).toBe(1);
+  });
+
+  it('2 / 3 / 4 cascades on medium / high / extra-high (D1-a)', () => {
+    expect(canvasSurfaceFor('medium').cascadeCount).toBe(2);
+    expect(canvasSurfaceFor('high').cascadeCount).toBe(3);
+    expect(canvasSurfaceFor('extra-high').cascadeCount).toBe(4);
+  });
+
+  it('CSM is only enabled on cascadeCount ≥ 2 — basic and low never run it', () => {
+    window.__VIRTUALROW_CSM = true;
+    expect(isCsmEnabled('basic')).toBe(false);
+    expect(isCsmEnabled('low')).toBe(false);
+  });
+
+  it('Phase 1 defaults the flag off: medium+ needs an explicit opt-in', () => {
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(isCsmEnabled(tier), `undefined flag on ${tier}`).toBe(false);
+    }
+    window.__VIRTUALROW_CSM = true;
+    for (const tier of ['medium', 'high', 'extra-high'] as const) {
+      expect(isCsmEnabled(tier), `true flag on ${tier}`).toBe(true);
+    }
+  });
+
+  it('setting the flag to `false` explicitly disables CSM (D2-a kill switch)', () => {
+    window.__VIRTUALROW_CSM = false;
+    for (const tier of QUALITY_TIERS) {
+      expect(isCsmEnabled(tier), tier).toBe(false);
     }
   });
 });

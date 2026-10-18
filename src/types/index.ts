@@ -513,6 +513,13 @@ declare global {
      */
     __VIRTUALROW_SHADER_GRASS?: boolean;
     /**
+     * Enables Cascaded Shadow Maps on tiers whose `cascadeCount >= 2` (#495).
+     * Phase 1 of #495 defaults to `undefined`, which reads as the single-map
+     * fallback: a spec or dev console sets `true` to opt in. Phase 2 flips
+     * the sense of the undefined case.
+     */
+    __VIRTUALROW_CSM?: boolean;
+    /**
      * The billboard foliage (#333): how many trees the route was planted with,
      * how many meshes draw them, and how many trees the last cull kept.
      */
