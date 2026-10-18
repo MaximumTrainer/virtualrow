@@ -1,4 +1,4 @@
-import { navigableWaterWidthMeters } from '../components/rower3d/navigableWidth';
+import { MIN_NAVIGABLE_WIDTH_METERS } from '../components/rower3d/navigableWidth';
 import type { Coordinate, WaterRoute } from '../types/index';
 import {
   calculateBearing,
@@ -13,7 +13,7 @@ export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
 import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
 import { buildWaterMask } from '../utils/osmWaterMask';
-import { detectRoute } from '../utils/shoreDetection';
+import { detectRoute, SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
 import { classifyDetectedRoute, type RouteWaterClass } from '../utils/waterClassification';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
@@ -58,6 +58,14 @@ export interface RouteSegmentEnrichment {
   dragMultiplier: number;
   bearing: number;
   bearingDelta: number;
+  /**
+   * Metres from the route to the mapped shore (or an island) on each side,
+   * from OSM detection (#493 FR16). `null` is open water: no shore within
+   * `SHORE_RAY_LIMIT_METERS`. Absent where nothing was measured, which keeps
+   * the water centred on the route at `waterWidthMeters`.
+   */
+  leftShoreMeters?: number | null;
+  rightShoreMeters?: number | null;
 }
 
 export interface RouteEnrichmentData {
@@ -783,31 +791,104 @@ export const getTerrainReliefForProgress = (
   return relief[lowerIndex] + (relief[upperIndex] - relief[lowerIndex]) * blend;
 };
 
-export const getWaterWidthSceneUnitsForProgress = (
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+/** A side's shore from the on-water samples: their median, or open when most see none. */
+const measuredSide = (water: DetectedSample[], side: 'leftShoreMeters' | 'rightShoreMeters') => {
+  const seen = water.map((sample) => sample[side]).filter((value): value is number => value !== null);
+  return seen.length * 2 < water.length ? null : median(seen);
+};
+
+/**
+ * Puts the measured shore distances on each segment (#493 FR16). The width
+ * becomes the shore-to-shore distance wherever both sides found one; the
+ * guessed width stays where a side is open or nothing was on water (D24).
+ */
+export const applyMeasuredShores = (
+  segmentProfiles: RouteSegmentEnrichment[],
+  samples: DetectedSample[],
+): RouteSegmentEnrichment[] =>
+  segmentProfiles.map((profile, index) => {
+    const last = index === segmentProfiles.length - 1;
+    const water = samples.filter(
+      ({ kind, distanceMeters }) =>
+        kind === 'water' &&
+        distanceMeters >= profile.startMeters &&
+        (distanceMeters < profile.endMeters || (last && distanceMeters <= profile.endMeters)),
+    );
+    if (water.length === 0) return profile;
+    const leftShoreMeters = measuredSide(water, 'leftShoreMeters');
+    const rightShoreMeters = measuredSide(water, 'rightShoreMeters');
+    return {
+      ...profile,
+      leftShoreMeters,
+      rightShoreMeters,
+      waterWidthMeters:
+        leftShoreMeters !== null && rightShoreMeters !== null
+          ? leftShoreMeters + rightShoreMeters
+          : profile.waterWidthMeters,
+    };
+  });
+
+/** Where the water ends either side of the route, in scene units from the centreline. */
+export interface WaterEdges {
+  left: number;
+  right: number;
+}
+
+const sideMeters = (profile: RouteSegmentEnrichment, side: 'leftShoreMeters' | 'rightShoreMeters') => {
+  const measured = profile[side];
+  if (measured === undefined) return profile.waterWidthMeters / 2;
+  return measured === null ? SHORE_RAY_LIMIT_METERS : measured;
+};
+
+/**
+ * The water's edge on each side at `progress` (#493 D19 c): at the measured
+ * shore where there is one, out to the ray limit where a side is open, and
+ * half the width either side where nothing was measured. Each side is floored
+ * at half the navigable width, so the blades stay over water however close to
+ * one bank the route runs (#271).
+ */
+export const getWaterEdgesSceneUnitsForProgress = (
   segmentProfiles: RouteSegmentEnrichment[] | undefined,
   fallbackWidthMeters: number,
   progress: number,
-) => {
+): WaterEdges => {
+  const floor = MIN_NAVIGABLE_WIDTH_METERS / 2;
+  const clamp = (meters: number) =>
+    (Number.isFinite(meters) ? Math.max(meters, floor) : floor) * SCENE_SCALE;
   if (!segmentProfiles || segmentProfiles.length === 0) {
-    return navigableWaterWidthMeters(fallbackWidthMeters) * SCENE_SCALE;
+    const half = fallbackWidthMeters / 2;
+    return { left: clamp(half), right: clamp(half) };
   }
 
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const lastIndex = segmentProfiles.length - 1;
   const scaledIndex = clampedProgress * lastIndex;
-  const lowerIndex = Math.floor(scaledIndex);
-  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
-  const blend = scaledIndex - lowerIndex;
-  const widthMeters =
-    segmentProfiles[lowerIndex].waterWidthMeters +
-    (segmentProfiles[upperIndex].waterWidthMeters -
-      segmentProfiles[lowerIndex].waterWidthMeters) *
-      blend;
+  const lower = segmentProfiles[Math.floor(scaledIndex)];
+  const upper = segmentProfiles[Math.min(lastIndex, Math.floor(scaledIndex) + 1)];
+  const blend = scaledIndex - Math.floor(scaledIndex);
+  const at = (side: 'leftShoreMeters' | 'rightShoreMeters') =>
+    sideMeters(lower, side) + (sideMeters(upper, side) - sideMeters(lower, side)) * blend;
+  return { left: clamp(at('leftShoreMeters')), right: clamp(at('rightShoreMeters')) };
+};
 
-  // Floored so the blades stay over water. The water channel and both banks
-  // read their width from here, so they widen together and the waterline stays
-  // where the bank meets it (#271).
-  return navigableWaterWidthMeters(widthMeters) * SCENE_SCALE;
+/**
+ * Shore to shore at `progress`, in scene units: the two edges added up, so
+ * anything that only needs the width agrees with what is drawn either side.
+ * Floored so the blades stay over water (#271).
+ */
+export const getWaterWidthSceneUnitsForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  fallbackWidthMeters: number,
+  progress: number,
+) => {
+  const { left, right } = getWaterEdgesSceneUnitsForProgress(segmentProfiles, fallbackWidthMeters, progress);
+  return left + right;
 };
 
 const createSegmentProfilesFromFeatures = (
@@ -1020,7 +1101,6 @@ export class RouteEnrichmentService {
           this.fetchOverpassElements(route.coordinates),
         ]);
         const nearElements = elementsNearRoute(route.coordinates, elements);
-        const segmentProfiles = createSegmentProfilesFromFeatures(route, nearElements);
         // D3 b then a: what the route is detected on first, then the old
         // nearest-feature tags, then the route's own tags and name.
         const mask = buildWaterMask(elements, {
@@ -1028,6 +1108,10 @@ export class RouteEnrichmentService {
         });
         const detection = detectRoute(route.coordinates, mask);
         const detected = classifyDetectedRoute(detection.samples, mask, elements);
+        const segmentProfiles = applyMeasuredShores(
+          createSegmentProfilesFromFeatures(route, nearElements),
+          detection.samples,
+        );
         const waterFeatures = nearElements.filter(
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
         );

@@ -117,13 +117,15 @@ export const layoutLandscape = ({
     const perp = new THREE.Vector3().crossVectors(tangent, up).normalize();
     const segmentStyle = getSegmentStyle(enrichment, t);
     const sceneryProfile = getSegmentSceneryProfile(enrichment, t, track);
-    const minOffset = Math.max(LANDSCAPE_OFFSET, nearestBankOffset(waterHalfWidthAt(enrichment, t)));
+    // Each bank measured from its own waterline (#493 D19 c).
+    const minOffsetOn = (side: 'left' | 'right') =>
+      Math.max(LANDSCAPE_OFFSET, nearestBankOffset(waterHalfWidthAt(enrichment, t, side)));
 
     const leftOffset =
-      minOffset +
+      minOffsetOn('left') +
       seededRandom(elemIdx * 7 + 1) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
     const rightOffset =
-      minOffset +
+      minOffsetOn('right') +
       seededRandom(elemIdx * 7 + 2) * (16 + (1 - segmentStyle.vegetationDensity) * 34);
 
     const rollSlot = (seedOffset: number): SlotRoll => {

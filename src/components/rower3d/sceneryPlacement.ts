@@ -17,7 +17,7 @@ import {
   type SceneryProfile,
 } from '../../services/routeEnrichmentService';
 import type { ResolvedScenery, SceneryModelId } from './sceneryAssets';
-import { nearestBankOffset, waterHalfWidthAt } from './sceneryClearance';
+import { nearestBankOffset, sideOfOffset, waterHalfWidthAt } from './sceneryClearance';
 
 /**
  * mm -> metres. A 22 000 mm tree is 22 units tall (#321).
@@ -244,7 +244,7 @@ export const computePlacements = (input: PlacementInput): Placement[] => {
     if (!id) return;
     // Measured from the water this point actually has, not the narrow channel
     // the bands were authored against (#379).
-    const [oMin, oMax] = bandsClearOf(waterHalfWidthAt(enrichment, t))[cat];
+    const [oMin, oMax] = bandsClearOf(waterHalfWidthAt(enrichment, t, sideOfOffset(sign)))[cat];
     const offset = sign * (oMin + seededRandom(seed + 1) * (oMax - oMin));
     const x = px + perpX * offset;
     const z = pz + perpZ * offset;

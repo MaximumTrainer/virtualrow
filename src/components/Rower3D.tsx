@@ -16,7 +16,7 @@ import {
   buildTerrainProfile,
   getDragMultiplierForProgress,
   getTerrainReliefForProgress,
-  getWaterWidthSceneUnitsForProgress,
+  getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
 import { chunkIndexFor, shouldRebuildScenery } from './rower3d/visibilityCull';
@@ -679,15 +679,18 @@ export const RowerScene: React.FC<
         // Read here from the same function the water is built from, at the
         // boat's own progress, so an E2E watches the running game rather than
         // re-deriving it (#271).
-        const channelWidthSceneUnits = getWaterWidthSceneUnitsForProgress(
+        // The nearer bank is the one the blades can reach: the route may run
+        // off-centre (#493 D19 c).
+        const edges = getWaterEdgesSceneUnitsForProgress(
           enrichment?.segmentProfiles,
           enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
           boatProgressRef.current,
         );
+        const nearerHalfWidth = Math.min(edges.left, edges.right);
         window.__ROWER3D_CLEARANCE = {
-          halfWidthM: channelWidthSceneUnits / 2,
+          halfWidthM: nearerHalfWidth,
           oarReachM: OAR_REACH_METERS,
-          clearanceM: bladeClearanceMeters(channelWidthSceneUnits),
+          clearanceM: bladeClearanceMeters(nearerHalfWidth * 2),
           progress: boatProgressRef.current,
         };
         // Draw this exact frame on demand.

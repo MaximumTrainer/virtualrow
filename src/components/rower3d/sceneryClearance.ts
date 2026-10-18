@@ -12,8 +12,9 @@
 import * as THREE from 'three';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH, isTelemetryPublished } from './constants';
 import {
-  getWaterWidthSceneUnitsForProgress,
+  getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
+  type WaterEdges,
 } from '../../services/routeEnrichmentService';
 
 /**
@@ -26,22 +27,37 @@ import {
  */
 export const SCENERY_WATER_MARGIN_METRES = 2;
 
+/** Which side of the route, facing along it. Left is `-perp`, right `+perp`. */
+export type BankSide = 'left' | 'right';
+
 /**
- * Half the water's width at `progress`, in scene units.
+ * Where the water ends either side at `progress`, in scene units from the
+ * centreline.
  *
  * The same function and the same fallback the water channel is built from, so
  * a route with no enrichment gets the default 20 m channel here as it does
- * there, and the navigable floor applies to both.
+ * there, and the navigable floor applies to both. The sides differ where OSM
+ * measured the route off-centre (#493 D19 c).
  */
-export const waterHalfWidthAt = (
+export const waterEdgesAt = (
   enrichment: RouteEnrichmentData | null | undefined,
   progress: number,
-): number =>
-  getWaterWidthSceneUnitsForProgress(
+): WaterEdges =>
+  getWaterEdgesSceneUnitsForProgress(
     enrichment?.segmentProfiles,
     enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
     progress,
-  ) / 2;
+  );
+
+/** How far the water reaches on `side` at `progress`, in scene units. */
+export const waterHalfWidthAt = (
+  enrichment: RouteEnrichmentData | null | undefined,
+  progress: number,
+  side: BankSide,
+): number => waterEdgesAt(enrichment, progress)[side];
+
+/** The side a signed offset along `+perp` is on. */
+export const sideOfOffset = (offset: number): BankSide => (offset < 0 ? 'left' : 'right');
 
 /** The nearest to the centreline anything on the bank may stand. */
 export const nearestBankOffset = (halfWidth: number): number =>
@@ -82,8 +98,8 @@ export const landClearance = (
       const t = Math.max(0, Math.min(1, progress));
       const centre = curve.getPointAt(t);
       const perp = new THREE.Vector3().crossVectors(curve.getTangentAt(t).normalize(), UP).normalize();
-      const across = Math.abs((position[0] - centre.x) * perp.x + (position[2] - centre.z) * perp.z);
-      const clearance = across - waterHalfWidthAt(enrichment, progress);
+      const signed = (position[0] - centre.x) * perp.x + (position[2] - centre.z) * perp.z;
+      const clearance = Math.abs(signed) - waterHalfWidthAt(enrichment, progress, sideOfOffset(signed));
       const count = nearest.count + 1;
       return Number.isNaN(nearest.nearestM) || clearance < nearest.nearestM
         ? { nearestM: clearance, count, progress }

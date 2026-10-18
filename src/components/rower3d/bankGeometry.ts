@@ -10,7 +10,7 @@ import {
 import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
-  getWaterWidthSceneUnitsForProgress,
+  getWaterEdgesSceneUnitsForProgress,
 } from '../../services/routeEnrichmentService';
 
 // ============================================================================
@@ -123,12 +123,14 @@ export const createBankGeometry = (
     const q = new THREE.Vector3();
     sampleStripFrame(curve, t, p, q);
 
-    const waterWidth = getWaterWidthSceneUnitsForProgress(
+    const edges = getWaterEdgesSceneUnitsForProgress(
       enrichment?.segmentProfiles,
       enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
       t,
     );
-    const waterHalfWidth = waterWidth / 2;
+    const waterWidth = edges.left + edges.right;
+    // This bank's own waterline (#493 D19 c).
+    const waterHalfWidth = edges[side];
     const wanted = waterHalfWidth + Math.max(RIVERBANK_WIDTH * 0.25, waterWidth * 2.25);
 
     // Where the offset curve would fold. Infinite on a straight and on the
@@ -255,12 +257,11 @@ export const createShorelineGeometry = (
   schedule.forEach((t, i) => {
     sampleStripFrame(curve, t, point, perp);
 
-    const waterHalfWidth =
-      getWaterWidthSceneUnitsForProgress(
-        enrichment?.segmentProfiles,
-        enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
-        t,
-      ) / 2;
+    const waterHalfWidth = getWaterEdgesSceneUnitsForProgress(
+      enrichment?.segmentProfiles,
+      enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
+      t,
+    )[side];
 
     for (const [offset, u] of [
       [waterHalfWidth - SHORELINE_INNER_METRES, 0],

@@ -43,11 +43,17 @@ export interface DetectionOptions {
   landToleranceMeters?: number;
 }
 
+/**
+ * D20 (a): how far a ray looks for a shore by default: the view distance,
+ * chunkViewDistanceFor() — fog far 550 m plus a tenth. utils can't import the
+ * scene, so callers with the live config pass their own. A side with no shore
+ * this close is open water.
+ */
+export const SHORE_RAY_LIMIT_METERS = 605;
+
 const DEFAULTS: Required<DetectionOptions> = {
   spacingMeters: 50,
-  // D20 (a): the view distance, chunkViewDistanceFor() — fog far 550 m plus a tenth.
-  // utils can't import the scene, so callers with the live config pass their own.
-  maxRayMeters: 605,
+  maxRayMeters: SHORE_RAY_LIMIT_METERS,
   landToleranceMeters: 15,
 };
 
