@@ -11,10 +11,14 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { JSDOM } from 'jsdom';
 import { classifyPolygons, resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
 import { OVERPASS_API_URL, SHORE_QUERY_MARGIN_METERS, buildBoundingBox, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
 import { isLandInWaterArea, isWaterArea } from '../src/utils/osmWaterMask';
 import { parseTrackFile } from '../src/utils/trackParsers';
+
+// The track parsers read GPX with the browser's DOMParser.
+globalThis.DOMParser ??= new JSDOM().window.DOMParser;
 
 const ROWNATIVE = join(process.cwd(), 'src/__tests__/fixtures/rownative');
 const OUT = join(process.cwd(), 'src/__tests__/fixtures/osm');
