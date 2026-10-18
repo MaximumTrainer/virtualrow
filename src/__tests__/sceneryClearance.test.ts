@@ -61,7 +61,7 @@ describe('the scenery margin (#379 R2)', () => {
 
 describe('waterHalfWidthAt — the width the water is built from', () => {
   it('reads a 55 m river as a 27.5 m half-width', () => {
-    expect(waterHalfWidthAt(withWidths([55, 55, 55]), 0.5)).toBeCloseTo(27.5, 9);
+    expect(waterHalfWidthAt(withWidths([55, 55, 55]), 0.5, 'left')).toBeCloseTo(27.5, 9);
   });
 
   it('agrees with the water channel at every progress, including between segments', () => {
@@ -69,7 +69,7 @@ describe('waterHalfWidthAt — the width the water is built from', () => {
 
     for (let i = 0; i <= 20; i += 1) {
       const t = i / 20;
-      expect(waterHalfWidthAt(enrichment, t)).toBeCloseTo(
+      expect(waterHalfWidthAt(enrichment, t, 'right')).toBeCloseTo(
         getWaterWidthSceneUnitsForProgress(enrichment.segmentProfiles, 30, t) / 2,
         9,
       );
@@ -78,12 +78,12 @@ describe('waterHalfWidthAt — the width the water is built from', () => {
 
   it('gives a route with no enrichment the default channel the water draws', () => {
     for (const none of [null, undefined]) {
-      expect(waterHalfWidthAt(none, 0.3)).toBeCloseTo(WATER_CHANNEL_WIDTH / SCENE_SCALE / 2, 9);
+      expect(waterHalfWidthAt(none, 0.3, 'left')).toBeCloseTo(WATER_CHANNEL_WIDTH / SCENE_SCALE / 2, 9);
     }
   });
 
   it('applies the navigable floor, as the water does', () => {
-    expect(waterHalfWidthAt(withWidths([2, 2]), 0.5)).toBeCloseTo(
+    expect(waterHalfWidthAt(withWidths([2, 2]), 0.5, 'right')).toBeCloseTo(
       MIN_NAVIGABLE_WIDTH_METERS / 2,
       9,
     );

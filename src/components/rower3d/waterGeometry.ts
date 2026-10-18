@@ -7,7 +7,7 @@ import {
   type StripGeometryOptions,
 } from './routeStripGeometry';
 import {
-  getWaterWidthSceneUnitsForProgress,
+  getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../../services/routeEnrichmentService';
 
@@ -45,14 +45,14 @@ export const createWaterChannelGeometry = (
     const t = schedule[i];
     sampleStripFrame(curve, t, point, perp);
 
-    const halfWidth =
-      getWaterWidthSceneUnitsForProgress(
-        enrichment?.segmentProfiles,
-        defaultWaterWidthMeters(enrichment),
-        t,
-      ) / 2;
+    // Each side to its own shore: the route need not run down the middle (#493 D19 c).
+    const { left, right } = getWaterEdgesSceneUnitsForProgress(
+      enrichment?.segmentProfiles,
+      defaultWaterWidthMeters(enrichment),
+      t,
+    );
 
-    for (const offset of [-halfWidth, halfWidth]) {
+    for (const offset of [-left, right]) {
       edge.copy(point).addScaledVector(perp, offset);
       positions.push(edge.x, WATER_SURFACE_Y, edge.z);
       normals.push(0, 1, 0);

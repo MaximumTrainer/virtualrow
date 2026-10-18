@@ -704,6 +704,19 @@ describe('RouteEnrichmentService reads the water type from OSM detection (#493 D
     expect(enrichment.waterDetection?.water).toBeGreaterThan(0);
   });
 
+  it('puts the measured distance to each shore on the segments (FR16)', async () => {
+    const stub = createFetchStub({ elements: [areaAround({ natural: 'water', water: 'lake' })] });
+    const service = new RouteEnrichmentService(stub.fetch, localStorage);
+
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    const [first] = enrichment.segmentProfiles;
+    expect(first.leftShoreMeters).toBeGreaterThan(50);
+    expect(first.rightShoreMeters).toBeGreaterThan(50);
+    expect(first.waterWidthMeters).toBeCloseTo(first.leftShoreMeters! + first.rightShoreMeters!, 6);
+    expect(enrichment.waterWidthMeters).toBe(first.waterWidthMeters);
+  });
+
   it('reads a bare natural=water from the waterway line through it', async () => {
     const canalLine: OverpassElement = {
       type: 'way',

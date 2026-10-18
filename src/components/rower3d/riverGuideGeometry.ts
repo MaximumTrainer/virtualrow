@@ -17,7 +17,7 @@ import { sampleStripFrame, stripProgressSchedule } from './routeStripGeometry';
 import { WHOLE_ROUTE } from './geometryChunks';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import {
-  getWaterWidthSceneUnitsForProgress,
+  getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../../services/routeEnrichmentService';
 
@@ -40,7 +40,7 @@ export interface RiverGuides {
  * Points along the channel's centreline and its two water edges.
  *
  * The edges are computed the same way `createWaterChannelGeometry` computes
- * them — the same frame, the same half width — so a guide that disagrees with
+ * them — the same frame, the same edges — so a guide that disagrees with
  * the water means the water is wrong, not the guide.
  */
 export const buildRiverGuides = (
@@ -60,21 +60,20 @@ export const buildRiverGuides = (
   for (const t of schedule) {
     sampleStripFrame(curve, t, point, perp);
 
-    // Same frame and same half width the water channel uses, so a guide that
+    // Same frame and same edges the water channel uses, so a guide that
     // disagrees with the water means the water is wrong, not the guide.
-    const halfWidth =
-      getWaterWidthSceneUnitsForProgress(
-        enrichment?.segmentProfiles,
-        enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
-        t,
-      ) / 2;
+    const edges = getWaterEdgesSceneUnitsForProgress(
+      enrichment?.segmentProfiles,
+      enrichment?.waterWidthMeters ?? WATER_CHANNEL_WIDTH / SCENE_SCALE,
+      t,
+    );
 
     centre.push(new THREE.Vector3(point.x, GUIDE_Y, point.z));
     left.push(
-      new THREE.Vector3(point.x - perp.x * halfWidth, GUIDE_Y, point.z - perp.z * halfWidth),
+      new THREE.Vector3(point.x - perp.x * edges.left, GUIDE_Y, point.z - perp.z * edges.left),
     );
     right.push(
-      new THREE.Vector3(point.x + perp.x * halfWidth, GUIDE_Y, point.z + perp.z * halfWidth),
+      new THREE.Vector3(point.x + perp.x * edges.right, GUIDE_Y, point.z + perp.z * edges.right),
     );
   }
 

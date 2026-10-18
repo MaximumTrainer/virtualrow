@@ -204,7 +204,7 @@ export const computeStructurePlacements = (
     const spans = KIND_SPANS_WATER[kind];
     const floats = KIND_FLOATS[kind];
     const onWater = spans || floats;
-    const halfWidth = waterHalfWidthAt(enrichment, t);
+    const halfWidth = waterHalfWidthAt(enrichment, t, side);
     // A buoy stays inside the water however narrow it is; anything on a bank
     // is pushed out past the water however wide it is (#379).
     const distance = spans

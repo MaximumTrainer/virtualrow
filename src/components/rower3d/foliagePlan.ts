@@ -23,7 +23,7 @@ import type { SceneryTrack } from './sceneryTrack';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { foliageShapeFor, type FoliageShape } from './foliageTexture';
 import type { TreeSpeciesEntry } from './themeConfig';
-import { nearestBankOffset, waterHalfWidthAt, type Standing } from './sceneryClearance';
+import { nearestBankOffset, sideOfOffset, waterHalfWidthAt, type Standing } from './sceneryClearance';
 import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
@@ -161,7 +161,7 @@ export const layoutFoliage = ({
       const point = curve.getPointAt(t);
       const perp = new THREE.Vector3().crossVectors(curve.getTangentAt(t).normalize(), UP).normalize();
       const offset =
-        nearestBankOffset(waterHalfWidthAt(enrichment, t)) +
+        nearestBankOffset(waterHalfWidthAt(enrichment, t, sideOfOffset(side))) +
         FOLIAGE_BAND_DEPTH_METRES * Math.pow(draw(3), FRONT_BIAS);
       const x = point.x + perp.x * side * offset;
       const z = point.z + perp.z * side * offset;

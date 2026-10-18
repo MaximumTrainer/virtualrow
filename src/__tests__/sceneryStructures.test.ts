@@ -359,7 +359,7 @@ describe('structures stand clear of the water (#379)', () => {
 
   it('reads the default channel for a route with no enrichment, as the water does', () => {
     expect(across('furniture', null).distance).toBeCloseTo(
-      waterHalfWidthAt(null, 0.5) + SCENERY_WATER_MARGIN_METRES,
+      waterHalfWidthAt(null, 0.5, 'right') + SCENERY_WATER_MARGIN_METRES,
       9,
     );
   });
@@ -403,7 +403,7 @@ describe('the course marked on the water (#336)', () => {
       // A scull's blades reach about 2.9 m either side of the hull.
       expect(Math.abs(p.position[0])).toBeGreaterThan(3);
       // And inside the default channel's water, not on its bank.
-      expect(Math.abs(p.position[0])).toBeLessThan(waterHalfWidthAt(null, 0.5));
+      expect(Math.abs(p.position[0])).toBeLessThan(waterHalfWidthAt(null, 0.5, 'right'));
     }
   });
 

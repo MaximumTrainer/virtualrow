@@ -421,8 +421,10 @@ declare global {
      *
      * `clearanceM` is the metres of water beyond the blade tip: positive means
      * the boat and its oars fit, negative means they are over the bank. Read
-     * from the same width function the water channel and both banks are built
-     * from, so a disagreement means the scene is wrong rather than the reading.
+     * from the same edges the water channel and both banks are built from, so
+     * a disagreement means the scene is wrong rather than the reading.
+     * `halfWidthM` is the nearer of the two edges: the route can run off-centre
+     * (#493 D19 c).
      */
     __ROWER3D_CLEARANCE?: {
       halfWidthM: number;
