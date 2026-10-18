@@ -6,11 +6,14 @@ import {
   ROUTE_ENRICHMENT_CACHE_TTL_MS,
   MAX_TERRAIN_RELIEF_SCENE_UNITS,
   RouteEnrichmentService,
+  SHORE_QUERY_MARGIN_METERS,
   TERRAIN_RELIEF_SCALE,
+  buildBoundingBox,
   buildOverpassQuery,
   buildTerrainProfile,
   calculateBearingDeltaForSegments,
   createFallbackRouteEnrichment,
+  elementsNearRoute,
   getRouteEnrichmentCacheKey,
   loadCachedRouteEnrichment,
   mapOsmTagsToSceneryProfile,
@@ -275,6 +278,47 @@ describe('route enrichment helpers', () => {
     const query = buildOverpassQuery(routeFixture.coordinates);
 
     expect(query).toContain('way["bridge"]');
+  });
+
+  it('asks for islands, piers and water far enough out for shore detection to reach (#493 FR20)', () => {
+    const query = buildOverpassQuery(routeFixture.coordinates);
+    const near = buildBoundingBox(routeFixture.coordinates);
+    const wide = buildBoundingBox(routeFixture.coordinates, SHORE_QUERY_MARGIN_METERS);
+    const bboxOf = (box: typeof near) => `${box.minLat},${box.minLng},${box.maxLat},${box.maxLng}`;
+
+    expect(SHORE_QUERY_MARGIN_METERS).toBeGreaterThanOrEqual(600);
+    for (const selector of [
+      'way["natural"]',
+      'relation["natural"]',
+      'way["waterway"]',
+      'relation["waterway"]',
+      'way["landuse"~"^(reservoir|basin)$"]',
+      'way["place"~"^(island|islet)$"]',
+      'relation["place"~"^(island|islet)$"]',
+      'way["man_made"~"^(pier|breakwater|groyne)$"]',
+    ]) {
+      expect(query).toContain(`${selector}(${bboxOf(wide)})`);
+    }
+    // Buildings stay on the near box: a wide margin there is a city's worth of data.
+    expect(query).toContain(`way["building"](${bboxOf(near)})`);
+  });
+
+  it('keeps the wide-box extras away from the existing segment profiles (#493 Phase 1)', () => {
+    // A wood fetched only because of the wider water margin, 500 m off the route.
+    const farWood: OverpassElement = {
+      type: 'way',
+      id: 7,
+      tags: { natural: 'wood' },
+      bounds: { minlat: 51.506, minlon: -0.11, maxlat: 51.507, maxlon: -0.109 },
+    };
+    const nearWater: OverpassElement = {
+      type: 'way',
+      id: 8,
+      tags: { waterway: 'canal' },
+      bounds: { minlat: 51.4995, minlon: -0.1105, maxlat: 51.5015, maxlon: -0.108 },
+    };
+
+    expect(elementsNearRoute(routeFixture.coordinates, [farWood, nearWater])).toEqual([nearWater]);
   });
 });
 
