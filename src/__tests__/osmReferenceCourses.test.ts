@@ -1,0 +1,72 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import type { Coordinate } from '../types/index';
+import type { OverpassElement } from '../services/routeEnrichmentService';
+import { buildWaterMask, type MaskBounds } from '../utils/osmWaterMask';
+import { detectRoute } from '../utils/shoreDetection';
+
+/**
+ * #493 FR21 / AC22: detection run on real courses. Each fixture is the Overpass
+ * response enrichment's own query returned for a rownative course, recorded by
+ * scripts/record-osm-fixtures.ts (see the file's `recordedAt`).
+ */
+interface OsmFixture {
+  courseId: number;
+  name: string;
+  routeSource: string;
+  recordedAt: string;
+  route: Coordinate[];
+  bounds: MaskBounds;
+  elements: OverpassElement[];
+}
+
+const DIR = join(process.cwd(), 'src/__tests__/fixtures/osm');
+const fixtures: OsmFixture[] = readdirSync(DIR)
+  .filter((file) => file.endsWith('.json'))
+  .map((file) => JSON.parse(readFileSync(join(DIR, file), 'utf8')) as OsmFixture);
+
+const detect = (fixture: OsmFixture) =>
+  detectRoute(fixture.route, buildWaterMask(fixture.elements, { coastlineBounds: fixture.bounds }));
+
+const byId = (id: number) => {
+  const fixture = fixtures.find((candidate) => candidate.courseId === id);
+  if (!fixture) throw new Error(`no OSM fixture for course ${id}`);
+  return fixture;
+};
+
+describe('#493 OSM reference courses (FR21)', () => {
+  it('has the recorded courses', () => {
+    expect(fixtures.map((fixture) => fixture.courseId).sort((a, b) => a - b)).toEqual(
+      expect.arrayContaining([1, 61, 153, 237, 257, 277]),
+    );
+  });
+
+  it.each(fixtures.map((fixture) => [fixture.courseId, fixture] as const))(
+    'course %i has water mapped along its whole length',
+    (_id, fixture) => {
+      expect(detect(fixture).summary.unknown).toBe(0);
+    },
+  );
+
+  it.each([61, 153])('course %i on the Charles is on water at every sample', (id) => {
+    const { summary } = detect(byId(id));
+    expect(summary.land).toBe(0);
+    expect(summary.water).toBeGreaterThan(0);
+  });
+
+  it('builds the mask and walks every course within NFR9 (200 ms)', () => {
+    const slowest = Math.max(
+      ...fixtures.map((fixture) => {
+        // Best of three, so one GC pause on a shared runner doesn't fail the build.
+        const times = [0, 1, 2].map(() => {
+          const start = performance.now();
+          detect(fixture);
+          return performance.now() - start;
+        });
+        return Math.min(...times);
+      }),
+    );
+    expect(slowest).toBeLessThan(200);
+  });
+});

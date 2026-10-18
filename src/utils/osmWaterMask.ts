@@ -383,8 +383,29 @@ export const buildWaterMask = (elements: OverpassElement[], options: WaterMaskOp
   };
 };
 
+// Outer-ring extents, so a point far from a feature skips its vertices (NFR9).
+const extents = new WeakMap<Polygon, MaskBounds>();
+const extentOf = (polygon: Polygon): MaskBounds => {
+  let extent = extents.get(polygon);
+  if (!extent) {
+    extent = { minLat: Infinity, minLng: Infinity, maxLat: -Infinity, maxLng: -Infinity };
+    for (const { lat, lng } of polygon.outer) {
+      extent.minLat = Math.min(extent.minLat, lat);
+      extent.maxLat = Math.max(extent.maxLat, lat);
+      extent.minLng = Math.min(extent.minLng, lng);
+      extent.maxLng = Math.max(extent.maxLng, lng);
+    }
+    extents.set(polygon, extent);
+  }
+  return extent;
+};
+const mayContain = (polygon: Polygon, { lat, lng }: Coordinate) => {
+  const extent = extentOf(polygon);
+  return lat >= extent.minLat && lat <= extent.maxLat && lng >= extent.minLng && lng <= extent.maxLng;
+};
+
 const contains = (feature: MaskFeature, point: Coordinate) =>
-  feature.polygons.some((polygon) => pointInPolygon(point, polygon));
+  feature.polygons.some((polygon) => mayContain(polygon, point) && pointInPolygon(point, polygon));
 
 /**
  * Water, land or unknown at a point. Mapped land inside water wins over the

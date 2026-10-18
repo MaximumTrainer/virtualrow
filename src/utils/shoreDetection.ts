@@ -114,6 +114,83 @@ const distanceToSegment = (point: Metres, { a, b }: Segment): number => {
   return Math.hypot(point.x - (a.x + t * edge.x), point.y - (a.y + t * edge.y));
 };
 
+/**
+ * Shoreline segments bucketed into square cells, so a ray or a "what's near
+ * here" question looks at the few cells it passes instead of every vertex of
+ * a 20,000-point lake (NFR9).
+ */
+const GRID_CELL_METERS = 50;
+
+class SegmentGrid<T> {
+  private readonly cells = new Map<string, number[]>();
+  private readonly entries: Array<{ segment: Segment; owner: T }>;
+
+  constructor(entries: Array<{ segment: Segment; owner: T }>) {
+    this.entries = entries;
+    entries.forEach(({ segment: { a, b } }, index) => {
+      const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)].map((v) => Math.floor(v / GRID_CELL_METERS));
+      const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)].map((v) => Math.floor(v / GRID_CELL_METERS));
+      for (let i = x0; i <= x1; i++) {
+        for (let j = y0; j <= y1; j++) {
+          const key = `${i},${j}`;
+          const bucket = this.cells.get(key);
+          if (bucket) bucket.push(index);
+          else this.cells.set(key, [index]);
+        }
+      }
+    });
+  }
+
+  private bucket(i: number, j: number) {
+    return this.cells.get(`${i},${j}`) ?? [];
+  }
+
+  /** Every entry with a segment in a cell within `radius` of the point. */
+  near(point: Metres, radius: number): Array<{ segment: Segment; owner: T }> {
+    const seen = new Set<number>();
+    const [x0, x1] = [point.x - radius, point.x + radius].map((v) => Math.floor(v / GRID_CELL_METERS));
+    const [y0, y1] = [point.y - radius, point.y + radius].map((v) => Math.floor(v / GRID_CELL_METERS));
+    for (let i = x0; i <= x1; i++) for (let j = y0; j <= y1; j++) for (const index of this.bucket(i, j)) seen.add(index);
+    return [...seen].map((index) => this.entries[index]);
+  }
+
+  /** Nearest crossing along a unit ray within `limit`, walking cells in order (Amanatides–Woo). */
+  cast(origin: Metres, direction: Metres, limit: number): number | null {
+    let i = Math.floor(origin.x / GRID_CELL_METERS);
+    let j = Math.floor(origin.y / GRID_CELL_METERS);
+    const stepI = direction.x > 0 ? 1 : -1;
+    const stepJ = direction.y > 0 ? 1 : -1;
+    const boundary = (cell: number, step: number) => (cell + (step > 0 ? 1 : 0)) * GRID_CELL_METERS;
+    let nextX = direction.x === 0 ? Infinity : (boundary(i, stepI) - origin.x) / direction.x;
+    let nextY = direction.y === 0 ? Infinity : (boundary(j, stepJ) - origin.y) / direction.y;
+    const deltaX = direction.x === 0 ? Infinity : GRID_CELL_METERS / Math.abs(direction.x);
+    const deltaY = direction.y === 0 ? Infinity : GRID_CELL_METERS / Math.abs(direction.y);
+    let best: number | null = null;
+    const tested = new Set<number>();
+    let cellStart = 0;
+    while (cellStart <= limit) {
+      for (const index of this.bucket(i, j)) {
+        if (tested.has(index)) continue;
+        tested.add(index);
+        const hit = rayHit(origin, direction, this.entries[index].segment);
+        if (hit !== null && hit <= limit && (best === null || hit < best)) best = hit;
+      }
+      const cellEnd = Math.min(nextX, nextY);
+      // A hit inside the cells walked so far can't be beaten by a later cell.
+      if (best !== null && best <= cellEnd) return best;
+      cellStart = cellEnd;
+      if (nextX < nextY) {
+        i += stepI;
+        nextX += deltaX;
+      } else {
+        j += stepJ;
+        nextY += deltaY;
+      }
+    }
+    return best;
+  }
+}
+
 const routeLength = (points: Metres[]) =>
   points.slice(1).reduce((total, point, index) => total + Math.hypot(point.x - points[index].x, point.y - points[index].y), 0);
 
@@ -166,32 +243,30 @@ export const detectRoute = (
   const points = route.map(toMetres);
 
   // Every shoreline a ray can stop at: water outlines, their holes, and islands.
-  const shoreSegments = [
-    ...mask.water.flatMap((feature) =>
-      feature.polygons.flatMap((polygon) => [polygon.outer, ...polygon.inner]),
+  const shores = new SegmentGrid<null>(
+    [
+      ...mask.water.flatMap((feature) =>
+        feature.polygons.flatMap((polygon) => [polygon.outer, ...polygon.inner]),
+      ),
+      ...mask.land.flatMap((feature) => feature.polygons.map((polygon) => polygon.outer)),
+    ].flatMap((ring) => ringSegments(ring.map(toMetres)).map((segment) => ({ segment, owner: null }))),
+  );
+  const waters = new SegmentGrid<MaskFeature>(
+    mask.water.flatMap((feature) =>
+      feature.polygons
+        .flatMap((polygon) => [polygon.outer, ...polygon.inner])
+        .flatMap((ring) => ringSegments(ring.map(toMetres)).map((segment) => ({ segment, owner: feature }))),
     ),
-    ...mask.land.flatMap((feature) => feature.polygons.map((polygon) => polygon.outer)),
-  ].flatMap((ring) => ringSegments(ring.map(toMetres)));
+  );
 
-  const waterSegments = (feature: MaskFeature) =>
-    feature.polygons
-      .flatMap((polygon) => [polygon.outer, ...polygon.inner])
-      .flatMap((ring) => ringSegments(ring.map(toMetres)));
+  const castRay = (origin: Metres, direction: Metres): number | null =>
+    shores.cast(origin, direction, maxRayMeters);
 
-  const castRay = (origin: Metres, direction: Metres): number | null => {
-    const nearest = shoreSegments.reduce<number | null>((best, segment) => {
-      const hit = rayHit(origin, direction, segment);
-      return hit !== null && hit <= maxRayMeters && (best === null || hit < best) ? hit : best;
-    }, null);
-    return nearest;
-  };
-
+  /** The nearest water within the drift tolerance, if any. */
   const nearestWater = (position: Metres) =>
-    mask.water
-      .map((feature) => ({
-        feature,
-        distance: Math.min(...waterSegments(feature).map((segment) => distanceToSegment(position, segment))),
-      }))
+    waters
+      .near(position, landToleranceMeters)
+      .map(({ segment, owner }) => ({ feature: owner, distance: distanceToSegment(position, segment) }))
       .sort((a, b) => a.distance - b.distance)[0];
 
   const sampleAt = (distanceMeters: number): DetectedSample => {
@@ -218,16 +293,19 @@ export const detectRoute = (
     };
   };
 
-  const islandSegments = islandsOf(mask).map((island) => ({
-    island,
-    segments: ringSegments(island.outline.map(toMetres)),
-  }));
-  const distanceToIsland = (point: Metres, segments: Segment[]) =>
-    Math.min(...segments.map((segment) => distanceToSegment(point, segment)));
-  const nearIsland = (sample: DetectedSample) => {
-    const point = toMetres(sample.coordinate);
-    return islandSegments.some(({ segments }) => distanceToIsland(point, segments) <= NEAR_ISLAND_METERS);
-  };
+  const islandList = islandsOf(mask);
+  const islandGrid = new SegmentGrid<number>(
+    islandList.flatMap((island, index) =>
+      ringSegments(island.outline.map(toMetres)).map((segment) => ({ segment, owner: index })),
+    ),
+  );
+  const islandsWithin = (point: Metres, radius: number) =>
+    islandGrid
+      .near(point, radius)
+      .filter(({ segment }) => distanceToSegment(point, segment) <= radius)
+      .map(({ owner }) => owner);
+  const nearIsland = (sample: DetectedSample) =>
+    islandsWithin(toMetres(sample.coordinate), NEAR_ISLAND_METERS).length > 0;
   const inNarrows = (sample: DetectedSample) =>
     sample.leftShoreMeters !== null &&
     sample.rightShoreMeters !== null &&
@@ -248,13 +326,25 @@ export const detectRoute = (
     return [sample, ...extra];
   });
 
+  // Islands within view of the route: a cheap box test first, the exact distance only for those that pass.
   const samplePoints = coarse.map((sample) => toMetres(sample.coordinate));
-  const withinReach = ({ segments }: { segments: Segment[] }) =>
-    samplePoints.some((point) => distanceToIsland(point, segments) <= maxRayMeters);
+  const inReach = new Set(
+    islandList.flatMap((island, index) => {
+      const outline = island.outline.map(toMetres);
+      const xs = outline.map((p) => p.x);
+      const ys = outline.map((p) => p.y);
+      const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+      const candidates = samplePoints.filter(
+        (p) => p.x >= minX - maxRayMeters && p.x <= maxX + maxRayMeters && p.y >= minY - maxRayMeters && p.y <= maxY + maxRayMeters,
+      );
+      const segments = ringSegments(outline);
+      return candidates.some((p) => segments.some((segment) => distanceToSegment(p, segment) <= maxRayMeters)) ? [index] : [];
+    }),
+  );
 
   return {
     samples,
-    islands: islandSegments.filter(withinReach).map(({ island }) => island),
+    islands: islandList.filter((_island, index) => inReach.has(index)),
     summary: {
       water: samples.filter((sample) => sample.kind === 'water').length,
       land: samples.filter((sample) => sample.kind === 'land').length,
