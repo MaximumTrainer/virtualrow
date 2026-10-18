@@ -69,8 +69,10 @@ import {
   drawsShadows,
   drawsSunMesh,
   drawsWaterReflection,
+  isCsmEnabled,
   maxDpr,
 } from './rower3d/canvasSurface';
+import { CascadedShadows } from './rower3d/CascadedShadows';
 import {
   probeRenderCapabilities,
   selectBrowserGlOptions,
@@ -891,7 +893,10 @@ export const RowerScene: React.FC<
         target={sunTarget}
         intensity={lights.sun.intensity}
         color={lights.sun.color}
-        castShadow={drawsShadows(performanceMode)}
+        // When CSM runs it manages its own cascade directional lights (#495);
+        // this `directionalLight` keeps lighting the scene the same way but
+        // stops casting its own shadow so the cascades aren't doubled up.
+        castShadow={drawsShadows(performanceMode) && !isCsmEnabled(performanceMode)}
         shadow-mapSize-width={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
         shadow-mapSize-height={canvasSurfaceFor(performanceMode).shadowMapSize || 1024}
         shadow-camera-near={1}
@@ -911,6 +916,21 @@ export const RowerScene: React.FC<
       {/* The target has to be in the scene graph for three to read its world
           matrix; the frame loop above moves it onto the boat. */}
       <primitive object={sunTarget} />
+
+      {/* Cascaded Shadow Maps for the sun (#495). Only mounts when the tier
+          asks for ≥ 2 cascades AND `window.__VIRTUALROW_CSM === true`; Phase
+          1 flips to Phase 2's default once the shadow-receiving materials
+          have been passed through `csm.setupMaterial`. */}
+      {isCsmEnabled(performanceMode) && (
+        <CascadedShadows
+          cascades={canvasSurfaceFor(performanceMode).cascadeCount}
+          shadowMapSize={canvasSurfaceFor(performanceMode).shadowMapSize}
+          lightDirection={new THREE.Vector3(-sunLightPos[0], -sunLightPos[1], -sunLightPos[2]).normalize()}
+          lightColor={lights.sun.color}
+          lightIntensity={lights.sun.intensity}
+          maxFar={400}
+        />
+      )}
       
       {!dropForCost() && drawsSunMesh(performanceMode) && (
         <mesh ref={setSunMesh} position={sunLightPos} frustumCulled={false}>

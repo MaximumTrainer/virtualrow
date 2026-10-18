@@ -40,6 +40,14 @@ export interface CanvasSurface {
    * weaker tiers get bigger chunks.
    */
   foliageChunkMetres: number;
+  /**
+   * Number of CSM cascades the tier uses for the sun's shadow (#495). `0`
+   * means no shadows at all; `1` means today's single-shadow-map behaviour;
+   * `≥ 2` enables three's `CSM` and splits the shadow volume into cascades
+   * that keep per-cascade texels tight. The map size `shadowMapSize` is per
+   * cascade (#495 D3-a — split, don't grow).
+   */
+  cascadeCount: number;
   /** R3F device-pixel-ratio setting: a fixed ratio, or a [min, max] range. */
   dpr: number | [number, number];
   powerPreference: PowerPreference;
@@ -65,6 +73,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     // nothing we'd save by chunking foliage, but keep the knob consistent so
     // the config shape doesn't need a `null` case.
     foliageChunkMetres: 200,
+    cascadeCount: 0,
     dpr: 1,
     powerPreference: 'low-power',
   },
@@ -77,6 +86,9 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     softShadows: true,
     shadowMapSize: 512,
     foliageChunkMetres: 400,
+    // #495 D1-a — `low` keeps today's single-shadow-map behaviour; CSM only
+    // kicks in from `medium` up.
+    cascadeCount: 1,
     dpr: 1,
     powerPreference: 'low-power',
   },
@@ -87,6 +99,9 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     softShadows: true,
     shadowMapSize: 1024,
     foliageChunkMetres: 400,
+    // #495 D1-a — 2 cascades on medium; D3-a — 1024 is per cascade, so the
+    // total shadow-map budget is 2 × 1024 = 2 × today's single map.
+    cascadeCount: 2,
     dpr: [1, 1.5],
     powerPreference: 'default',
   },
@@ -98,6 +113,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     softShadows: true,
     shadowMapSize: 1536,
     foliageChunkMetres: 400,
+    cascadeCount: 3,
     dpr: [1, 2],
     powerPreference: 'high-performance',
   },
@@ -112,6 +128,7 @@ const SURFACE_BY_TIER: Record<PerformanceMode, CanvasSurface> = {
     // where the shadow pass benefits from fewer draw calls, and the longer
     // view distance here means fewer chunks are off-camera anyway.
     foliageChunkMetres: 800,
+    cascadeCount: 4,
     dpr: [1, 2],
     powerPreference: 'high-performance',
   },
@@ -178,3 +195,22 @@ export const drawsShaderGrass = (mode: PerformanceMode): boolean =>
  */
 export const isShaderGrassEnabled = (mode: PerformanceMode): boolean =>
   drawsShaderGrass(mode) && window.__VIRTUALROW_SHADER_GRASS === true;
+
+/**
+ * Whether this tier runs Cascaded Shadow Maps (#495).
+ *
+ * CSM only earns its code at `cascadeCount ≥ 2`: fewer cascades than that
+ * and three's own single-map path already covers the case. The runtime flag
+ * `window.__VIRTUALROW_CSM = false` reverts to the single-map path even on
+ * tiers that would otherwise run CSM (#495 D2-a) — a kill switch for the
+ * visual-baseline re-record flow and for debugging in Playwright.
+ *
+ * Phase 1 of #495 ships the plumbing with the flag defaulting **off** so
+ * visual baselines don't move; Phase 2 flips the default and wires
+ * `csm.setupMaterial` into the shadow-receiving materials.
+ */
+export const isCsmEnabled = (mode: PerformanceMode): boolean => {
+  if (canvasSurfaceFor(mode).cascadeCount < 2) return false;
+  // Default off this phase. Phase 2 flips the sense of the undefined case.
+  return window.__VIRTUALROW_CSM === true;
+};
