@@ -1065,6 +1065,25 @@ body {
   margin: 0 0 var(--space-sm);
 }
 
+/* #505 Phase 1 — the MapLibre overview above the drawer. Height is
+   deliberately short on mobile (D11) and taller when room allows. */
+.route-overview-section {
+  padding: 0;
+  overflow: hidden;
+}
+
+.route-overview-section__map {
+  position: relative;
+  width: 100%;
+  height: 240px;
+}
+
+@media (min-width: 900px) {
+  .route-overview-section__map {
+    height: 360px;
+  }
+}
+
 .route-search-hint {
   margin: 0 0 var(--space-sm);
   font-size: 0.8rem;
