@@ -9,7 +9,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
+import { classifyPolygons, resolveCourseGeometry, type RownativeCourseGeometryInput } from '../src/services/rownativeGeometry';
 import { OVERPASS_API_URL, SHORE_QUERY_MARGIN_METERS, buildBoundingBox, buildOverpassQuery, type OverpassElement } from '../src/services/routeEnrichmentService';
 import { isLandInWaterArea, isWaterArea } from '../src/utils/osmWaterMask';
 import { parseTrackFile } from '../src/utils/trackParsers';
@@ -23,12 +23,24 @@ const keep = (element: OverpassElement) => {
   return isWaterArea(tags) || isLandInWaterArea(tags) || tags.waterway !== undefined || tags.natural === 'coastline';
 };
 
+// 175 starts and finishes on one gate, so it needs a track. Stonehaven harbour opens
+// east onto the North Sea: the same 2.5 km out-and-back due east the geometry test
+// attaches makes it the open-sea / coastline reference.
+const stonehavenTrack = (course: RownativeCourseGeometryInput) => {
+  const [start, finish] = classifyPolygons(course).gates.map((gate) => gate.center);
+  const out = Array.from({ length: 26 }, (_, i) => ({
+    lat: start.lat,
+    lng: start.lng + (i * 2500) / 26 / (111_320 * Math.cos((start.lat * Math.PI) / 180)),
+  }));
+  return [...out, ...out.slice(0, -1).reverse().map((p) => ({ ...p })), finish];
+};
+
 const routeFor = async (id: number) => {
   const course = JSON.parse(readFileSync(join(ROWNATIVE, `${id}.json`), 'utf8')) as RownativeCourseGeometryInput & { name?: string };
   // 179's gates sit mid-estuary; the shipped Clyde track is its supported route (#194 R-8).
   const attachedTrack = id === 179
     ? parseTrackFile('179.gpx', readFileSync(join(ROWNATIVE, '179.gpx'), 'utf8')).coordinates
-    : undefined;
+    : id === 175 ? stonehavenTrack(course) : undefined;
   const resolved = await resolveCourseGeometry(course, { attachedTrack });
   return { name: course.name ?? `course ${id}`, source: resolved.source, coordinates: resolved.coordinates };
 };
@@ -53,16 +65,27 @@ const fetchElements = async (query: string): Promise<OverpassElement[]> => {
 const ids = process.argv.slice(2).map(Number).filter(Number.isFinite);
 mkdirSync(OUT, { recursive: true });
 
+const failed: number[] = [];
 for (const id of ids.length > 0 ? ids : COURSES) {
-  const route = await routeFor(id);
-  const query = buildOverpassQuery(route.coordinates);
-  const all = await fetchElements(query);
-  const elements = all.filter(keep);
-  writeFileSync(
-    join(OUT, `${id}.json`),
-    `${JSON.stringify({ courseId: id, name: route.name, routeSource: route.source, recordedAt: new Date().toISOString(), route: route.coordinates, bounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS), totalElements: all.length, elements })}\n`,
-  );
-  console.log(`${id} ${route.name}: kept ${elements.length} of ${all.length} elements`);
+  try {
+    const route = await routeFor(id);
+    const query = buildOverpassQuery(route.coordinates);
+    const all = await fetchElements(query);
+    const elements = all.filter(keep);
+    writeFileSync(
+      join(OUT, `${id}.json`),
+      `${JSON.stringify({ courseId: id, name: route.name, routeSource: route.source, recordedAt: new Date().toISOString(), route: route.coordinates, bounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS), totalElements: all.length, elements })}\n`,
+    );
+    console.log(`${id} ${route.name}: kept ${elements.length} of ${all.length} elements`);
+  } catch (error) {
+    // Keep going: one bad course shouldn't cost the others their recording.
+    failed.push(id);
+    console.error(`${id} failed:`, error instanceof Error ? error.message : error);
+  }
   // Overpass usage policy: be gentle between requests.
   await new Promise((resolve) => setTimeout(resolve, 5_000));
+}
+if (failed.length > 0) {
+  console.error(`Not recorded: ${failed.join(', ')}`);
+  process.exitCode = 1;
 }
