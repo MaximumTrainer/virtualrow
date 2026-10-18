@@ -49,8 +49,8 @@ describe('#493 OSM reference courses (FR21)', () => {
     },
   );
 
-  // NFR8's on-water share, per course, as first recorded (pending Dan's call on the
-  // rough routes). Where a share is below 1 the route line itself leaves the mapped
+  // NFR8's on-water share, per course, as first recorded (Dan, 10-18: pin each course
+  // rather than one 98% floor). Where a share is below 1 the route line itself leaves the mapped
   // water: course 1 is two gates joined straight down a bending lake, 237 cuts the
   // Montlake Cut's corners, 257 crosses the tip of Fighting Island, 277's 16 points
   // miss the canal's bends, and 175's sea track passes the harbour mouth's rocks.
