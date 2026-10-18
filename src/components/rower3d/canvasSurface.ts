@@ -135,3 +135,27 @@ export const drawsCaustics = (mode: PerformanceMode): boolean =>
  */
 export const drawsSunMesh = (mode: PerformanceMode): boolean =>
   mode === 'extra-high';
+
+/**
+ * Density-field grass on the bank slopes (#496, D3-b). Off at `basic` and
+ * `low` — these tiers draw no shadows (basic) or the smallest shadow map
+ * (low), so a fragment-shader density sample on every bank pixel is a cost
+ * they cannot afford — and on at `medium` and above.
+ *
+ * The predicate alone turns no shader on: `isShaderGrassEnabled` combines it
+ * with the runtime flag `__VIRTUALROW_SHADER_GRASS`, which Phase 1 defaults
+ * off so visual baselines don't move while the plumbing lands. Phase 2 flips
+ * the default and removes the single-tuft `InstancedMesh` branch in
+ * `vegetationComponents.tsx`.
+ */
+export const drawsShaderGrass = (mode: PerformanceMode): boolean =>
+  mode === 'medium' || mode === 'high' || mode === 'extra-high';
+
+/**
+ * Whether the density-field grass is actually mounted on `mode`. The predicate
+ * must be true AND `window.__VIRTUALROW_SHADER_GRASS === true`; an undefined
+ * flag counts as off, so the shader path stays dormant until a spec or dev
+ * console opts in (Phase 1 kill switch, matches #495's `__VIRTUALROW_CSM`).
+ */
+export const isShaderGrassEnabled = (mode: PerformanceMode): boolean =>
+  drawsShaderGrass(mode) && window.__VIRTUALROW_SHADER_GRASS === true;

@@ -15,6 +15,8 @@
 // ============================================================================
 import * as THREE from 'three';
 import { seededRandom } from './helpers';
+import { SCENERY_PROFILES } from './sceneryConfig';
+import type { SceneryProfile } from '../../services/routeEnrichmentService';
 
 export type FoliageShape = 'broadleaf' | 'conifer' | 'willow';
 
@@ -222,5 +224,116 @@ export const createFoliageTexture = (shape: FoliageShape, size = 256): THREE.Can
   ctx.putImageData(image, 0, 0);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+};
+
+// ============================================================================
+// BIOME GRASS DENSITY TILE (#496 Phase 1)
+//
+// Biketerra's bank cover is a density field the fragment shader samples, not
+// an InstancedMesh of grass tufts. #496 lands the data layer: one baked
+// 256x256 density tile per OSM scenery profile, whose mean is the biome's
+// `groundCover.density`. Phase 2 wires it into `bankMaterial.ts` behind
+// `__VIRTUALROW_SHADER_GRASS` and removes the GRASS_MAX branch from
+// `vegetationComponents.tsx`.
+//
+// Pure and seeded — a given biome's tile is bit-identical from one call to
+// the next, so `test:visual` baselines don't drift as the scene reloads.
+// ============================================================================
+
+/** The grass density a biome plants, 0..1, as the baked tile's mean. */
+export const biomeDensityStrengthFor = (profile: SceneryProfile): number =>
+  SCENERY_PROFILES[profile].groundCover.density;
+
+/**
+ * Two low-frequency fBm octaves on a seed per biome, giving a soft density
+ * field whose mean sits near 0.5 and whose contrast reads as patches of
+ * lusher and sparser cover rather than a flat grey.
+ */
+const DENSITY_SEEDS: Record<SceneryProfile, number> = {
+  forest: 101,
+  residential: 211,
+  commercial: 317,
+  farmland: 433,
+  beach: 541,
+  wetland: 647,
+  fallback: 751,
+};
+
+/** A smoothed [0, 1] noise sample at `(x, y)` from the seeded `biomeNoise`. */
+const biomeNoise = (seed: number, x: number, y: number): number => {
+  // Two cosine octaves at perpendicular frequencies make a continuous field
+  // without a 2-D permutation table; the hash in `seededRandom` gives each
+  // biome a distinct phase so no two biomes paint the same patches.
+  const phase = seededRandom(seed) * Math.PI * 2;
+  const a = 0.5 + 0.5 * Math.cos(x * 0.75 + phase) * Math.cos(y * 0.75 + phase);
+  const b = 0.5 + 0.5 * Math.cos(x * 2.1 + phase * 1.3) * Math.cos(y * 2.1 - phase * 0.7);
+  return 0.6 * a + 0.4 * b;
+};
+
+/**
+ * The RGBA pixels of a biome's grass density tile, `size` square, top row
+ * first. Density is written to R (and copied to G and B for canvas-tool
+ * sanity when inspecting the tile); alpha is 255 everywhere because
+ * `THREE.CanvasTexture` needs an opaque upload.
+ *
+ * The tile is contrast-remapped so its mean matches the biome's
+ * `groundCover.density` within ±0.15 — tested in `biomeDensityTile.test.ts`.
+ */
+export const paintBiomeDensityTile = (
+  profile: SceneryProfile,
+  size: number,
+): Uint8ClampedArray => {
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  const seed = DENSITY_SEEDS[profile];
+  const target = SCENERY_PROFILES[profile].groundCover.density;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      // Normalised position in [0, 1] so the noise period doesn't depend on
+      // `size`: a 64-tile and a 256-tile show the same patches.
+      const u = x / size;
+      const v = y / size;
+      const n = biomeNoise(seed, u * 4, v * 4);
+      // Bias the field so its mean lands on the biome's density: n is centred
+      // on 0.5, so (target - 0.5) shifts the whole tile toward the target
+      // and the contrast around it is left to the noise.
+      const d = Math.max(0, Math.min(1, n + (target - 0.5)));
+      const value = Math.round(d * 255);
+      const i = (y * size + x) * 4;
+      pixels[i] = value;
+      pixels[i + 1] = value;
+      pixels[i + 2] = value;
+      pixels[i + 3] = 255;
+    }
+  }
+  return pixels;
+};
+
+/** The baked density tile for `profile`, as raw RGBA pixels. */
+export const createBiomeDensityTile = (
+  profile: SceneryProfile,
+  size = 256,
+): Uint8ClampedArray => paintBiomeDensityTile(profile, size);
+
+/**
+ * The density tile wrapped in a `THREE.CanvasTexture`, in linear colour space
+ * because the shader will multiply it against a biome palette rather than
+ * display it as a colour.
+ */
+export const createBiomeDensityTexture = (
+  profile: SceneryProfile,
+  size = 256,
+): THREE.CanvasTexture => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const image = ctx.createImageData(size, size);
+  image.data.set(paintBiomeDensityTile(profile, size));
+  ctx.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   return texture;
 };

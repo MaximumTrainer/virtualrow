@@ -507,6 +507,12 @@ declare global {
     /** `false` leaves the billboard foliage out, so a spec can measure its cost (#333). */
     __VIRTUALROW_FOLIAGE?: boolean;
     /**
+     * `true` turns on the density-field grass pass on `medium+` tiers (#496).
+     * Phase 1 defaults undefined (off) so visual baselines don't move; Phase 2
+     * flips the sense and removes the single-tuft `InstancedMesh` branch.
+     */
+    __VIRTUALROW_SHADER_GRASS?: boolean;
+    /**
      * The billboard foliage (#333): how many trees the route was planted with,
      * how many meshes draw them, and how many trees the last cull kept.
      */
