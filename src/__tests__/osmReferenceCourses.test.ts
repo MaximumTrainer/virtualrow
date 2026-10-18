@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Coordinate } from '../types/index';
 import type { OverpassElement } from '../services/routeEnrichmentService';
-import { buildWaterMask, type MaskBounds } from '../utils/osmWaterMask';
+import { buildWaterMask, pointInPolygon, type MaskBounds } from '../utils/osmWaterMask';
 import { detectRoute } from '../utils/shoreDetection';
 
 /**
@@ -38,7 +38,7 @@ const byId = (id: number) => {
 describe('#493 OSM reference courses (FR21)', () => {
   it('has the recorded courses', () => {
     expect(fixtures.map((fixture) => fixture.courseId).sort((a, b) => a - b)).toEqual(
-      expect.arrayContaining([1, 61, 153, 237, 257, 277]),
+      [1, 61, 153, 175, 179, 237, 257, 277],
     );
   });
 
@@ -53,6 +53,30 @@ describe('#493 OSM reference courses (FR21)', () => {
     const { summary } = detect(byId(id));
     expect(summary.land).toBe(0);
     expect(summary.water).toBeGreaterThan(0);
+  });
+
+  it('course 179 down the Clyde is on water at every sample, river then firth (FR19)', () => {
+    const { samples, summary } = detect(byId(179));
+    expect(summary.land).toBe(0);
+    const features = new Set(samples.map((sample) => sample.featureId));
+    // The tidal river is mapped as a water area; the firth beyond has only the coastline.
+    expect(features).toEqual(new Set(['relation/2266953', 'coastline/sea0']));
+  });
+
+  it('course 175 off Stonehaven finds the sea from the coastline alone (FR19, AC20)', () => {
+    const { samples } = detect(byId(175));
+    const water = samples.filter((sample) => sample.kind === 'water');
+    expect(water.length).toBeGreaterThan(0);
+    expect(new Set(water.map((sample) => sample.featureId))).toEqual(new Set(['coastline/sea0']));
+    // The out-and-back passes the harbour mouth's mapped rocks; nothing else counts as land.
+    const fixture = byId(175);
+    const mask = buildWaterMask(fixture.elements, { coastlineBounds: fixture.bounds });
+    for (const sample of samples.filter((candidate) => candidate.kind === 'land')) {
+      const island = mask.land.find((feature) =>
+        feature.polygons.some((polygon) => pointInPolygon(sample.coordinate, polygon)),
+      );
+      expect(island?.tags.natural).toBe('bare_rock');
+    }
   });
 
   // NFR9 asks for 200 ms; alone, the slowest course (257) takes ~90 ms. Inside the

@@ -121,18 +121,33 @@ const distanceToSegment = (point: Metres, { a, b }: Segment): number => {
  */
 const GRID_CELL_METERS = 50;
 
+interface Region {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+// Cells as one number: a course is far smaller than a million cells across.
+const cellKey = (i: number, j: number) => i * 2_097_152 + j;
+
 class SegmentGrid<T> {
-  private readonly cells = new Map<string, number[]>();
+  private readonly cells = new Map<number, number[]>();
   private readonly entries: Array<{ segment: Segment; owner: T }>;
 
-  constructor(entries: Array<{ segment: Segment; owner: T }>) {
-    this.entries = entries;
-    entries.forEach(({ segment: { a, b } }, index) => {
+  /** Segments wholly outside `region` are dropped: nothing ever asks about them. */
+  constructor(entries: Array<{ segment: Segment; owner: T }>, region: Region) {
+    this.entries = entries.filter(
+      ({ segment: { a, b } }) =>
+        Math.max(a.x, b.x) >= region.minX && Math.min(a.x, b.x) <= region.maxX &&
+        Math.max(a.y, b.y) >= region.minY && Math.min(a.y, b.y) <= region.maxY,
+    );
+    this.entries.forEach(({ segment: { a, b } }, index) => {
       const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)].map((v) => Math.floor(v / GRID_CELL_METERS));
       const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)].map((v) => Math.floor(v / GRID_CELL_METERS));
       for (let i = x0; i <= x1; i++) {
         for (let j = y0; j <= y1; j++) {
-          const key = `${i},${j}`;
+          const key = cellKey(i, j);
           const bucket = this.cells.get(key);
           if (bucket) bucket.push(index);
           else this.cells.set(key, [index]);
@@ -142,7 +157,7 @@ class SegmentGrid<T> {
   }
 
   private bucket(i: number, j: number) {
-    return this.cells.get(`${i},${j}`) ?? [];
+    return this.cells.get(cellKey(i, j)) ?? [];
   }
 
   /** Every entry with a segment in a cell within `radius` of the point. */
@@ -242,6 +257,15 @@ export const detectRoute = (
   const { toMetres, toCoordinate } = localProjection(route[0]);
   const points = route.map(toMetres);
 
+  // Everything any question below can reach: the route plus a ray's length.
+  const reach = maxRayMeters + GRID_CELL_METERS;
+  const region: Region = {
+    minX: Math.min(...points.map((p) => p.x)) - reach,
+    maxX: Math.max(...points.map((p) => p.x)) + reach,
+    minY: Math.min(...points.map((p) => p.y)) - reach,
+    maxY: Math.max(...points.map((p) => p.y)) + reach,
+  };
+
   // Every shoreline a ray can stop at: water outlines, their holes, and islands.
   const shores = new SegmentGrid<null>(
     [
@@ -250,6 +274,7 @@ export const detectRoute = (
       ),
       ...mask.land.flatMap((feature) => feature.polygons.map((polygon) => polygon.outer)),
     ].flatMap((ring) => ringSegments(ring.map(toMetres)).map((segment) => ({ segment, owner: null }))),
+    region,
   );
   const waters = new SegmentGrid<MaskFeature>(
     mask.water.flatMap((feature) =>
@@ -257,6 +282,7 @@ export const detectRoute = (
         .flatMap((polygon) => [polygon.outer, ...polygon.inner])
         .flatMap((ring) => ringSegments(ring.map(toMetres)).map((segment) => ({ segment, owner: feature }))),
     ),
+    region,
   );
 
   const castRay = (origin: Metres, direction: Metres): number | null =>
@@ -298,6 +324,7 @@ export const detectRoute = (
     islandList.flatMap((island, index) =>
       ringSegments(island.outline.map(toMetres)).map((segment) => ({ segment, owner: index })),
     ),
+    region,
   );
   const islandsWithin = (point: Metres, radius: number) =>
     islandGrid
