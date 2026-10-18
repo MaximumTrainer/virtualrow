@@ -205,12 +205,15 @@ export const isShaderGrassEnabled = (mode: PerformanceMode): boolean =>
  * tiers that would otherwise run CSM (#495 D2-a) — a kill switch for the
  * visual-baseline re-record flow and for debugging in Playwright.
  *
- * Phase 1 of #495 ships the plumbing with the flag defaulting **off** so
- * visual baselines don't move; Phase 2 flips the default and wires
- * `csm.setupMaterial` into the shadow-receiving materials.
+ * Phase 2 of #495 (this file now) flips the default: `undefined` reads as
+ * on, and only an explicit `false` keeps the single-map path. The wrapper
+ * in `CascadedShadows.tsx` walks the scene and calls `csm.setupMaterial` on
+ * every shadow-receiving material (preserving each material's own
+ * `onBeforeCompile` by chaining the two callbacks), so the bank, water and
+ * other receivers all pick a cascade per fragment instead of summing them.
  */
 export const isCsmEnabled = (mode: PerformanceMode): boolean => {
   if (canvasSurfaceFor(mode).cascadeCount < 2) return false;
-  // Default off this phase. Phase 2 flips the sense of the undefined case.
-  return window.__VIRTUALROW_CSM === true;
+  // Phase 2 default: `undefined` reads as on; only explicit `false` reverts.
+  return window.__VIRTUALROW_CSM !== false;
 };

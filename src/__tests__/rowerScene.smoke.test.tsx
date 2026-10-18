@@ -63,8 +63,16 @@ describe('RowerScene', () => {
   let uninstallCanvasMock: () => void;
   beforeAll(() => {
     uninstallCanvasMock = installCanvasMock();
+    // These smoke tests count a single sun — the scene-graph identity. CSM
+    // (#495 Phase 2) mounts its own `DirectionalLight` per cascade alongside
+    // that sun, so turn it off here with the public kill switch and let
+    // `CascadedShadows.test.tsx` own CSM's assertions.
+    window.__VIRTUALROW_CSM = false;
   });
-  afterAll(() => uninstallCanvasMock());
+  afterAll(() => {
+    uninstallCanvasMock();
+    delete window.__VIRTUALROW_CSM;
+  });
 
   // Every tier, because they do not build the same graph: `low` drops the
   // effect stack and the shadow-casting sun, and a tier that throws on mount is
