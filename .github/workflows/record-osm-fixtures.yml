@@ -29,7 +29,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vite-node scripts/record-osm-fixtures.ts --land
+      # Overpass 502s now and then; keep whatever courses did record, and a
+      # re-run fetches only the missing ones.
       - name: Commit the fixtures back to the branch
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
