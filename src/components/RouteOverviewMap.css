@@ -53,6 +53,26 @@
   filter: drop-shadow(0 0 4px rgba(255, 196, 0, 0.9));
 }
 
+.route-overview-map__cluster {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 180, 255, 0.85);
+  color: #0b1620;
+  border: 2px solid #fff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+.route-overview-map__cluster:hover {
+  filter: brightness(1.1);
+}
+
 .route-overview-map__attribution {
   position: absolute;
   right: 4px;

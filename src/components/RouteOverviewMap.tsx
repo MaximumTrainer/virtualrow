@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WaterRoute, Coordinate } from '../types/index';
 import { routeCentroid } from '../utils/routeCentroid';
+import { clusterRoutePins, type ClusteredEntry } from '../utils/routePinClusters';
 import './RouteOverviewMap.css';
+
+const FALLBACK_ZOOM = 2;
 
 interface RouteOverviewMapProps {
   routes: readonly WaterRoute[];
@@ -35,6 +38,9 @@ export function RouteOverviewMap({
   onSelect,
 }: RouteOverviewMapProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<{
+    flyTo: (opts: { center: [number, number]; zoom: number; animate?: boolean }) => void;
+  } | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [projection, setProjection] = useState<((c: Coordinate) => { x: number; y: number }) | null>(
     null,
@@ -49,6 +55,14 @@ export function RouteOverviewMap({
     }
     return out;
   }, [routes]);
+
+  // #505 Phase 2b (D4-b): cluster co-located pins at a fixed overview zoom.
+  // Live zoom tracking on MapLibre is Phase 2c; this phase makes co-located
+  // routes stop overlapping while the user is looking at the whole catalogue.
+  const entries = useMemo<ClusteredEntry[]>(
+    () => clusterRoutePins(routes, FALLBACK_ZOOM),
+    [routes],
+  );
 
   // Track rendered size so the fallback SVG and the pin layer agree on pixels.
   useEffect(() => {
@@ -87,6 +101,7 @@ export function RouteOverviewMap({
               bounds: [[number, number], [number, number]],
               opts?: Record<string, unknown>,
             ) => void;
+            flyTo: (opts: { center: [number, number]; zoom: number; animate?: boolean }) => void;
             on: (ev: string, cb: () => void) => void;
           };
         };
@@ -117,6 +132,7 @@ export function RouteOverviewMap({
           return;
         }
         mapInstance = map;
+        mapInstanceRef.current = map;
 
         const defaultPin = pins.find((p) => p.route.id === defaultRouteId);
         if (defaultPin) {
@@ -160,6 +176,7 @@ export function RouteOverviewMap({
       cancelled = true;
       mapInstance?.remove();
       mapInstance = null;
+      mapInstanceRef.current = null;
       setMapReady(false);
       setProjection(null);
     };
@@ -210,7 +227,36 @@ export function RouteOverviewMap({
         </svg>
       )}
       <div className="route-overview-map__pin-layer">
-        {pins.map(({ route, centroid }) => {
+        {entries.map((entry) => {
+          if (entry.kind === 'cluster') {
+            const pos = activeProjection
+              ? activeProjection({ lat: entry.lat, lng: entry.lng })
+              : null;
+            return (
+              <button
+                key={`cluster-${entry.id}`}
+                type="button"
+                className="route-overview-map__cluster"
+                data-testid="route-cluster"
+                data-cluster-count={entry.count}
+                style={{ left: pos ? `${pos.x}px` : '50%', top: pos ? `${pos.y}px` : '50%' }}
+                aria-label={`${entry.count} routes near this location — zoom in to see them`}
+                onClick={() => {
+                  const map = mapInstanceRef.current;
+                  if (map) {
+                    map.flyTo({
+                      center: [entry.lng, entry.lat],
+                      zoom: FALLBACK_ZOOM + 4,
+                      animate: false,
+                    });
+                  }
+                }}
+              >
+                {entry.count}
+              </button>
+            );
+          }
+          const { route, centroid } = { route: entry.route, centroid: { lat: entry.lat, lng: entry.lng } };
           const pos = activeProjection ? activeProjection(centroid) : null;
           const isDefault = route.id === defaultRouteId;
           const isSelected = route.id === selectedRouteId;
