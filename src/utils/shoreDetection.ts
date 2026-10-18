@@ -11,6 +11,7 @@
 // ============================================================================
 
 import type { Coordinate } from '../types/index';
+import type { SceneryProfile } from '../services/routeEnrichmentService';
 import { classifyPoint, type MaskFeature, type WaterMask } from './osmWaterMask';
 
 interface Metres {
@@ -41,7 +42,12 @@ export interface DetectionOptions {
   maxRayMeters?: number;
   /** D21 (b): GPS and mapping drift allowed before a sample counts as on land. */
   landToleranceMeters?: number;
+  /** FR18: the land at a point, read just beyond each shore. Not asked when absent. */
+  landAt?: ((point: Coordinate) => SceneryProfile | null) | null;
 }
+
+/** FR18: how far past a shore to read the land, clear of the bank's own edge mapping. */
+export const LAND_PROBE_METERS = 25;
 
 /**
  * D20 (a): how far a ray looks for a shore by default: the view distance,
@@ -55,6 +61,7 @@ const DEFAULTS: Required<DetectionOptions> = {
   spacingMeters: 50,
   maxRayMeters: SHORE_RAY_LIMIT_METERS,
   landToleranceMeters: 15,
+  landAt: null,
 };
 
 /** D22 (c): step through islands and narrows at this spacing. */
@@ -75,6 +82,12 @@ export interface DetectedSample {
   /** Distance to the shore or an island, or `null` for none within reach (or not measured). */
   leftShoreMeters: number | null;
   rightShoreMeters: number | null;
+  /**
+   * The land beyond each shore (FR18), when detection was asked for it: `null`
+   * where that side is open or no land area is mapped there.
+   */
+  leftLand?: SceneryProfile | null;
+  rightLand?: SceneryProfile | null;
 }
 
 export interface DetectedIsland {
@@ -259,7 +272,7 @@ export const detectRoute = (
   mask: WaterMask,
   options: DetectionOptions = {},
 ): RouteDetection => {
-  const { spacingMeters, maxRayMeters, landToleranceMeters } = { ...DEFAULTS, ...options };
+  const { spacingMeters, maxRayMeters, landToleranceMeters, landAt } = { ...DEFAULTS, ...options };
   const { toMetres, toCoordinate } = localProjection(route[0]);
   const points = route.map(toMetres);
 
@@ -316,12 +329,26 @@ export const detectRoute = (
         : { ...base, kind: 'land' };
     }
 
+    const left = { x: -heading.y, y: heading.x };
+    const right = { x: heading.y, y: -heading.x };
+    const leftShoreMeters = castRay(position, left);
+    const rightShoreMeters = castRay(position, right);
+    const beyond = (direction: Metres, shore: number | null) =>
+      shore === null || !landAt
+        ? null
+        : landAt(
+            toCoordinate({
+              x: position.x + direction.x * (shore + LAND_PROBE_METERS),
+              y: position.y + direction.y * (shore + LAND_PROBE_METERS),
+            }),
+          );
     return {
       ...base,
       kind: 'water',
       featureId: point.feature.id,
-      leftShoreMeters: castRay(position, { x: -heading.y, y: heading.x }),
-      rightShoreMeters: castRay(position, { x: heading.y, y: -heading.x }),
+      leftShoreMeters,
+      rightShoreMeters,
+      ...(landAt && { leftLand: beyond(left, leftShoreMeters), rightLand: beyond(right, rightShoreMeters) }),
     };
   };
 

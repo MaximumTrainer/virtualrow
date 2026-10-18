@@ -154,7 +154,8 @@ export const layoutFoliage = ({
 
       const metres = (slot + 0.5 + (draw(1) - 0.5) * 0.8) * FOLIAGE_SLOT_METRES;
       const t = Math.min(1, metres / length);
-      const profile = getSegmentSceneryProfile(enrichment, t, track);
+      // Each bank's own land where detection found it (#493 FR18).
+      const profile = getSegmentSceneryProfile(enrichment, t, track, sideOfOffset(side));
       const { density, scaleRange } = SCENERY_PROFILES[profile].trees;
       if (draw(2) >= plantingChance(density)) continue;
 

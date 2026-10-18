@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { Coordinate } from '../types/index';
 import type { OverpassElement } from '../services/routeEnrichmentService';
+import { buildLandAreas, landAt } from '../utils/bankLand';
 import { buildWaterMask, type MaskBounds } from '../utils/osmWaterMask';
 import { detectRoute } from '../utils/shoreDetection';
 import { classifyDetectedRoute } from '../utils/waterClassification';
@@ -70,7 +71,8 @@ class FakeWorker implements DetectionWorker {
 describe('#493 D23 b: route detection off the main thread', () => {
   it('gives the same answer as the steps run one after another', () => {
     const mask = buildWaterMask(fixture.elements, { coastlineBounds: fixture.bounds });
-    const detection = detectRoute(fixture.route, mask);
+    const land = buildLandAreas(fixture.elements);
+    const detection = detectRoute(fixture.route, mask, { landAt: (point) => landAt(land, point) });
 
     const result = runRouteDetection(input);
 

@@ -1,6 +1,7 @@
 /**
  * #493 detection as one call: the water mask, the samples along the route and
- * the route's water type, from the Overpass response. Pure, so the same code
+ * the route's water type, and the land beyond each bank (FR18), from the
+ * Overpass response. Pure, so the same code
  * runs in the detection worker (D23 b) and inline where a worker can't run.
  *
  * Input and result are plain data: they cross to the worker and back by
@@ -9,6 +10,7 @@
  */
 import type { Coordinate } from '../types/index';
 import type { OverpassElement } from '../services/routeEnrichmentService';
+import { buildLandAreas, landAt } from './bankLand';
 import { buildWaterMask, type MaskBounds } from './osmWaterMask';
 import { detectRoute, type DetectedSample, type RouteDetection } from './shoreDetection';
 import { classifyDetectedRoute, type RouteWaterClass } from './waterClassification';
@@ -27,7 +29,8 @@ export interface RouteDetectionResult {
 
 export const runRouteDetection = ({ coordinates, elements, coastlineBounds }: RouteDetectionInput): RouteDetectionResult => {
   const mask = buildWaterMask(elements, { coastlineBounds });
-  const { samples, summary } = detectRoute(coordinates, mask);
+  const land = buildLandAreas(elements);
+  const { samples, summary } = detectRoute(coordinates, mask, { landAt: (point) => landAt(land, point) });
   return { samples, summary, detected: classifyDetectedRoute(samples, mask, elements) };
 };
 

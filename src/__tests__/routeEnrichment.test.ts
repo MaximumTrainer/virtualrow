@@ -786,18 +786,21 @@ describe('route enrichment cache version (#493 D9 b)', () => {
   afterEach(() => localStorage.clear());
 
   it('keys entries under a versioned prefix, so pre-detection water types are refetched', () => {
-    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v2:route-1');
+    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v3:route-1');
   });
 
   it('prunes entries written under the old prefix and leaves everything else', () => {
     localStorage.setItem('virtualrow:route-enrichment:route-1', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v2:route-2', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v3:route-3', '{"savedAt":0}');
     localStorage.setItem('virtualrow:unrelated', 'keep me');
 
     new RouteEnrichmentService(createFetchStub().fetch, localStorage);
 
     expect(localStorage.getItem('virtualrow:route-enrichment:route-1')).toBeNull();
-    expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).not.toBeNull();
+    // v2 entries predate the per-side shores and land (#493 FR16, FR18).
+    expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).toBeNull();
+    expect(localStorage.getItem('virtualrow:route-enrichment:v3:route-3')).not.toBeNull();
     expect(localStorage.getItem('virtualrow:unrelated')).toBe('keep me');
   });
 
