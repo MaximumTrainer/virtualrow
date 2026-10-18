@@ -94,6 +94,13 @@ export interface OverpassElement {
   };
   geometry?: OverpassGeometryPoint[];
   tags?: Record<string, string>;
+  /** Relation members, each with its own geometry under `out geom` (#493). */
+  members?: Array<{
+    type: string;
+    ref: number;
+    role: string;
+    geometry?: OverpassGeometryPoint[];
+  }>;
 }
 
 interface OverpassResponse {
