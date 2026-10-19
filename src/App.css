@@ -1090,6 +1090,14 @@ body {
   min-height: 420px;
 }
 
+/* Keep the header above the fixed overlay drawer on narrow viewports so the
+   Hide list button stays clickable even while the drawer is sliding over the
+   screen (responsive.spec.ts asserts the toggle closes the drawer again). */
+.route-search-screen--map-primary .route-search-header {
+  position: relative;
+  z-index: 30;
+}
+
 .route-search-screen--map-primary .route-search-drawer {
   position: fixed;
   top: 0;
