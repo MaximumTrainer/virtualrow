@@ -416,6 +416,10 @@ describe('RouteEnrichmentService', () => {
 
   afterEach(() => {
     localStorage.clear();
+    // Here as well as before each test: the last test in this block can leave a
+    // throwing `Storage.setItem` behind, and under the shuffled CI run the next
+    // block to run may be one that needs the cache to work.
+    vi.restoreAllMocks();
   });
 
   it('fetches enrichment data, caches it, and reuses the cache on subsequent loads', async () => {
