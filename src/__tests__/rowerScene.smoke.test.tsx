@@ -3,7 +3,7 @@ import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
 import { clearTelemetry, readTelemetry } from '../utils/sceneTelemetryLog';
 import type * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
-import { SCENE_SCALE } from '../components/rower3d/constants';
+import { LAKE_VERTEX_CAP, SCENE_SCALE } from '../components/rower3d/constants';
 
 /**
  * Issue #343 — the scene, mounted in a unit test.
@@ -392,6 +392,31 @@ describe('RowerScene', () => {
       expect(names).toContain(LAKE_WATER_NAME);
       expect(names).toContain(LAKE_LAND_NAME);
       await scene.unmount();
+    });
+
+    it('slims a detailed lake to the tier cap before drawing it (FR9)', async () => {
+      const centre = demoRoute.coordinates[0];
+      const detailed = Array.from({ length: 3000 }, (_, index) => {
+        const angle = (index / 3000) * Math.PI * 2;
+        const r = (1500 + 60 * Math.sin(index * 7.3)) / 111_320;
+        return { lat: centre.lat + Math.sin(angle) * r, lng: centre.lng + Math.cos(angle) * r };
+      });
+      const big: RouteEnrichmentData = {
+        ...enrichment,
+        lakes: { polygons: [{ featureId: 'way/2', outer: [...detailed, detailed[0]], inner: [] }], elevationMeters: 0 },
+      };
+      const vertices = async (performanceMode: 'basic' | 'extra-high') => {
+        const scene = await renderScene({ performanceMode, enrichment: big, lakeOutlines: true });
+        const water = scene.objects().find((o) => o.name === LAKE_WATER_NAME) as THREE.Mesh;
+        const count = water.geometry.getAttribute('position').count;
+        await scene.unmount();
+        return count;
+      };
+      const basic = await vertices('basic');
+      expect(basic).toBeLessThanOrEqual(LAKE_VERTEX_CAP.basic);
+      const extraHigh = await vertices('extra-high');
+      expect(extraHigh).toBeLessThanOrEqual(LAKE_VERTEX_CAP['extra-high']);
+      expect(extraHigh).toBeGreaterThan(LAKE_VERTEX_CAP.basic);
     });
 
     it('keeps the ribbon alone while the flag is off', async () => {

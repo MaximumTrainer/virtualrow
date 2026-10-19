@@ -141,6 +141,17 @@ export function hasExplicitPerformanceMode(): boolean {
 // rather than 50. The numbers are unchanged - what was wrong was the unit.
 /** Metres of water across the channel, before a route's own width widens it. */
 export const WATER_CHANNEL_WIDTH = 20;
+/**
+ * Most vertices a lake's outlines may take to the GPU at each tier (#493 FR9,
+ * D7 b), islands included. Detection always uses the full outline.
+ */
+export const LAKE_VERTEX_CAP: Readonly<Record<PerformanceMode, number>> = {
+  basic: 256,
+  low: 512,
+  medium: 512,
+  high: 1024,
+  'extra-high': 2048,
+};
 /** Metres of bank either side of the water. */
 export const RIVERBANK_WIDTH = 60;
 /**
