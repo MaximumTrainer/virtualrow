@@ -5,6 +5,11 @@ import { latLngToMeters } from '../../utils/geoUtils';
 import { RIVERBANK_WIDTH, SCENE_SCALE } from './constants';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import { BANK_WATERLINE_Y } from './bankGeometry';
+import {
+  getWaterWidthSceneUnitsForProgress,
+  isOnLakeAtProgress,
+  type RouteEnrichmentData,
+} from '../../services/routeEnrichmentService';
 
 // ============================================================================
 // Pure lake geometry (#493 Phase 3: FR4, FR5, FR6, D4 c, D5 a, D6 a, D11 a).
@@ -54,6 +59,64 @@ const signedArea = (ring: THREE.Vector2[]) =>
 
 const perimeter = (ring: THREE.Vector2[]) =>
   ring.reduce((sum, point, index) => sum + point.distanceTo(ring[(index + 1) % ring.length]), 0);
+
+/**
+ * A round patch the lake leaves open for the ribbon (#493 FR8, D21 ii), in
+ * scene x/z: where the route is off the lake, its own water and banks are
+ * drawn, and the lake's land must not cover them.
+ */
+export interface LakeClearing {
+  x: number;
+  z: number;
+  radius: number;
+}
+
+const distanceToEdge = (p: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2) => {
+  const edge = b.clone().sub(a);
+  const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(edge) / (edge.lengthSq() || 1)));
+  return p.distanceTo(a.clone().addScaledVector(edge, t));
+};
+
+/** Whether `p` is inside the ring (even-odd). */
+const contains = (ring: THREE.Vector2[], p: THREE.Vector2) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [a, b] = [ring[i], ring[j]];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+};
+
+/** Whether a clearing reaches the area inside a closed ring. */
+const clears = (ring: THREE.Vector2[], clearings: LakeClearing[]) =>
+  clearings.some((clearing) => {
+    const centre = new THREE.Vector2(clearing.x, clearing.z);
+    return (
+      contains(ring, centre) ||
+      ring.some((point, index) => distanceToEdge(centre, point, ring[(index + 1) % ring.length]) < clearing.radius)
+    );
+  });
+
+/**
+ * The ring with every edge that passes near a clearing split into pieces no
+ * longer than that clearing's radius, so the bank can open just where the
+ * ribbon runs rather than along a whole long edge.
+ */
+const splitNear = (ring: THREE.Vector2[], clearings: LakeClearing[]) =>
+  ring.flatMap((point, index) => {
+    const next = ring[(index + 1) % ring.length];
+    const near = clearings.filter(
+      (clearing) => distanceToEdge(new THREE.Vector2(clearing.x, clearing.z), point, next) < clearing.radius * 2,
+    );
+    if (near.length === 0) return [point];
+    const step = Math.min(...near.map((clearing) => clearing.radius)) / 2;
+    const pieces = Math.max(1, Math.ceil(point.distanceTo(next) / step));
+    return Array.from({ length: pieces }, (_, k) => point.clone().lerp(next, k / pieces));
+  });
+
+/** Whether a clearing reaches the triangle abc. */
+const clearsTriangle = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, clearings: LakeClearing[]) =>
+  clearings.length > 0 && clears([a, b, c], clearings);
 
 /** Collects triangles, each wound to face the sky whatever order it came in. */
 class MeshBuilder {
@@ -110,12 +173,17 @@ export const createLakeWaterGeometry = (
   polygons: LakePolygon[],
   origin: Coordinate,
   y: number = WATER_SURFACE_Y,
+  clearings: LakeClearing[] = [],
 ): THREE.BufferGeometry => {
   const mesh = new MeshBuilder();
   for (const polygon of polygons) {
     const outer = projectRing(polygon.outer, origin);
     if (outer.length < 3) continue;
-    fill(mesh, outer, polygon.inner.map((hole) => projectRing(hole, origin)).filter((hole) => hole.length >= 3), y, WATER_UV_METERS);
+    // An island the ribbon crosses is dropped (FR8, D21 ii): water fills it.
+    const holes = polygon.inner
+      .map((hole) => projectRing(hole, origin))
+      .filter((hole) => hole.length >= 3 && !clears(hole, clearings));
+    fill(mesh, outer, holes, y, WATER_UV_METERS);
   }
   return mesh.build(false);
 };
@@ -144,7 +212,14 @@ const offsetRing = (ring: THREE.Vector2[], width: number, away: 'outside' | 'ins
 };
 
 /** A band from the waterline at `ring` up to `rise`, `width` away from the water. */
-const band = (mesh: MeshBuilder, ring: THREE.Vector2[], width: number, away: 'outside' | 'inside', rise: number) => {
+const band = (
+  mesh: MeshBuilder,
+  ring: THREE.Vector2[],
+  width: number,
+  away: 'outside' | 'inside',
+  rise: number,
+  clearings: LakeClearing[] = [],
+) => {
   const outer = offsetRing(ring, width, away);
   const base = mesh.positions.length / 3;
   let along = 0;
@@ -156,6 +231,8 @@ const band = (mesh: MeshBuilder, ring: THREE.Vector2[], width: number, away: 'ou
   for (let index = 0; index < ring.length; index++) {
     const next = (index + 1) % ring.length;
     const [a, b, c, d] = [base + index * 2, base + index * 2 + 1, base + next * 2, base + next * 2 + 1];
+    if (clearsTriangle(ring[index], outer[index], ring[next], clearings)) continue;
+    if (clearsTriangle(outer[index], outer[next], ring[next], clearings)) continue;
     mesh.triangle(a, b, c);
     mesh.triangle(b, d, c);
   }
@@ -171,19 +248,56 @@ const band = (mesh: MeshBuilder, ring: THREE.Vector2[], width: number, away: 'ou
 export const createLakeLandGeometry = (
   polygons: LakePolygon[],
   origin: Coordinate,
-  { width = RIVERBANK_WIDTH, rise = LAKE_SHORE_RISE_METERS }: { width?: number; rise?: number } = {},
+  {
+    width = RIVERBANK_WIDTH,
+    rise = LAKE_SHORE_RISE_METERS,
+    clearings = [],
+  }: { width?: number; rise?: number; clearings?: LakeClearing[] } = {},
 ): THREE.BufferGeometry => {
   const mesh = new MeshBuilder();
   for (const polygon of polygons) {
     const outer = projectRing(polygon.outer, origin);
-    if (outer.length >= 3) band(mesh, outer, width, 'outside', rise);
+    // The shore opens where the ribbon runs out of the lake (FR8, D21 ii).
+    if (outer.length >= 3) band(mesh, splitNear(outer, clearings), width, 'outside', rise, clearings);
     for (const hole of polygon.inner) {
       const island = projectRing(hole, origin);
-      if (island.length < 3) continue;
+      if (island.length < 3 || clears(island, clearings)) continue;
       const inradius = Math.abs(signedArea(island)) / perimeter(island);
       const top = band(mesh, island, Math.min(width, inradius * ISLAND_BANK_SHARE), 'inside', rise);
       fill(mesh, top, [], BANK_WATERLINE_Y + rise, 10);
     }
   }
   return mesh.build(true);
+};
+
+/** Clearings laid this far apart along the route, per segment. */
+const CLEARINGS_PER_SEGMENT = 4;
+
+/** Metres of extra room past the ribbon's water edge, so no shore lip shows on it. */
+const CLEARING_MARGIN_METERS = 2;
+
+/**
+ * Where the ribbon is drawn on a lake route (#493 FR8, D21 ii): one clearing
+ * every quarter segment wherever the route is off its lake, as wide as the
+ * ribbon's water there. Close enough together that the cleared corridor has
+ * no gaps; empty when the route never leaves the lake.
+ */
+export const ribbonClearings = (
+  curve: THREE.Curve<THREE.Vector3>,
+  enrichment: Pick<RouteEnrichmentData, 'segmentProfiles' | 'waterWidthMeters'>,
+): LakeClearing[] => {
+  const profiles = enrichment.segmentProfiles;
+  if (!profiles || profiles.length === 0) return [];
+  const count = profiles.length * CLEARINGS_PER_SEGMENT;
+  const clearings: LakeClearing[] = [];
+  for (let step = 0; step <= count; step++) {
+    const progress = step / count;
+    if (isOnLakeAtProgress(profiles, progress)) continue;
+    const point = curve.getPointAt(progress);
+    const radius =
+      getWaterWidthSceneUnitsForProgress(profiles, enrichment.waterWidthMeters, progress) / 2 +
+      CLEARING_MARGIN_METERS * SCENE_SCALE;
+    clearings.push({ x: point.x, z: point.z, radius });
+  }
+  return clearings;
 };
