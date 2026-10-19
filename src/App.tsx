@@ -263,8 +263,13 @@ function App() {
   // #505 Phase 2 (D8-c): the modal that opens when a map pin is clicked.
   const [routeDetailOpen, setRouteDetailOpen] = useState<WaterRoute | null>(null);
   // #505 Phase 2e (D6-c): when the route-map-v2 flag is on, the Routes screen
-  // is map-primary and the catalogue slides in from the side; default closed.
-  const [routesDrawerOpen, setRoutesDrawerOpen] = useState<boolean>(false);
+  // is map-primary and the catalogue slides in from the side. Default open on
+  // ≥900px (laptop and up), closed on narrower screens where the drawer would
+  // cover most of the map.
+  const [routesDrawerOpen, setRoutesDrawerOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(min-width: 900px)').matches;
+  });
 
   /**
    * Decide which route the app opens on, and which one the star is lit for.
