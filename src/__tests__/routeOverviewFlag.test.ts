@@ -6,23 +6,23 @@ describe('isRouteOverviewV2Enabled', () => {
     delete window.__VIRTUALROW_ROUTE_MAP_V2;
   });
 
-  it('is false when the flag is undefined (Phase 1 default)', () => {
-    expect(isRouteOverviewV2Enabled()).toBe(false);
+  it('is true when the flag is undefined (Phase 3 default)', () => {
+    expect(isRouteOverviewV2Enabled()).toBe(true);
   });
 
-  it('is false when the flag is explicitly false', () => {
-    window.__VIRTUALROW_ROUTE_MAP_V2 = false;
-    expect(isRouteOverviewV2Enabled()).toBe(false);
-  });
-
-  it('is true only when the flag is strictly true (opt-in)', () => {
-    // Mirrors the __VIRTUALROW_CSM / __VIRTUALROW_SHADER_GRASS pattern: any
-    // non-true value is off, so a stray string from the dev console cannot
-    // flip the flag.
-    (window as unknown as { __VIRTUALROW_ROUTE_MAP_V2?: unknown }).__VIRTUALROW_ROUTE_MAP_V2 = 'true';
-    expect(isRouteOverviewV2Enabled()).toBe(false);
-
+  it('is true when the flag is explicitly true', () => {
     window.__VIRTUALROW_ROUTE_MAP_V2 = true;
     expect(isRouteOverviewV2Enabled()).toBe(true);
+  });
+
+  it('is off only when the flag is strictly false (opt-out)', () => {
+    // Mirrors the __VIRTUALROW_CSM pattern: any value that is not strictly
+    // false reads as on, so a stray console value cannot turn the feature off.
+    (window as unknown as { __VIRTUALROW_ROUTE_MAP_V2?: unknown }).__VIRTUALROW_ROUTE_MAP_V2 =
+      'false';
+    expect(isRouteOverviewV2Enabled()).toBe(true);
+
+    window.__VIRTUALROW_ROUTE_MAP_V2 = false;
+    expect(isRouteOverviewV2Enabled()).toBe(false);
   });
 });
