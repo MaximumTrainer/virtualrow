@@ -1607,6 +1607,7 @@ function App() {
                             width={120}
                             height={60}
                             className="route-item-thumbnail"
+                            showBackdrop={isRouteOverviewV2Enabled()}
                           />
                         )}
                         {routeEnrichmentLoading[route.id] && (
