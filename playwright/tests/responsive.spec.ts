@@ -151,7 +151,25 @@ test.describe('responsive layout', () => {
     await page.goto('./');
     await openRoutesScreen(page);
 
+    // #505 Phase 3 — the Routes screen is map-primary by default. On laptop
+    // and wider the drawer is pinned open alongside the map, so list and
+    // header are visible together; on narrower viewports the drawer slides
+    // over the content, so the list and Back to Row are reachable in turn —
+    // open the drawer to tap the list, close it to tap Back to Row.
+    const drawerToggle = page.getByTestId('routes-drawer-toggle');
+    const hasDrawer = (await drawerToggle.count()) > 0;
+    if (hasDrawer && (await drawerToggle.getAttribute('aria-expanded')) === 'false') {
+      await drawerToggle.click();
+    }
     await expectHitTestable(page, '.route-item', 'first route in the list');
+
+    if (hasDrawer && (await drawerToggle.getAttribute('aria-expanded')) === 'true') {
+      // Below the laptop breakpoint (900px) the drawer is a fixed overlay that
+      // covers the header while open. Close it to expose Back to Row. On wider
+      // viewports the drawer stays inline, so leave it open and this is a no-op.
+      const vp = page.viewportSize();
+      if (vp && vp.width < 900) await drawerToggle.click();
+    }
     await expectHitTestable(page, '.btn-back-to-row', 'Back to Row');
   });
 
