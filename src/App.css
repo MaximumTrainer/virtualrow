@@ -1084,6 +1084,47 @@ body {
   }
 }
 
+/* #505 Phase 2e (D6-c): map-primary layout with a slide-in catalogue drawer. */
+.route-search-screen--map-primary .route-overview-section__map {
+  height: calc(100vh - 160px);
+  min-height: 420px;
+}
+
+.route-search-screen--map-primary .route-search-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 92vw);
+  background: var(--color-bg-primary, #0b1016);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+  overflow-y: auto;
+  padding: var(--space-md, 16px);
+  z-index: 20;
+  transform: translateX(100%);
+  transition: transform 220ms ease;
+}
+
+.route-search-screen--map-primary[data-drawer-open='true'] .route-search-drawer {
+  transform: translateX(0);
+}
+
+.btn-routes-drawer-toggle {
+  margin-left: auto;
+  margin-right: var(--space-sm, 8px);
+  padding: 6px 12px;
+  border-radius: var(--radius-control, 6px);
+  background: var(--color-bg-secondary, #1a1f26);
+  color: var(--text-primary, #e8e8e8);
+  border: 1px solid var(--color-border-card, #333);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btn-routes-drawer-toggle:hover {
+  background: var(--color-bg-tertiary, #22272e);
+}
+
 .route-search-hint {
   margin: 0 0 var(--space-sm);
   font-size: 0.8rem;

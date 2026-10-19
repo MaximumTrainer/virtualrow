@@ -262,6 +262,9 @@ function App() {
   const [defaultRouteId, setDefaultRouteId] = useState<string | null>(null);
   // #505 Phase 2 (D8-c): the modal that opens when a map pin is clicked.
   const [routeDetailOpen, setRouteDetailOpen] = useState<WaterRoute | null>(null);
+  // #505 Phase 2e (D6-c): when the route-map-v2 flag is on, the Routes screen
+  // is map-primary and the catalogue slides in from the side; default closed.
+  const [routesDrawerOpen, setRoutesDrawerOpen] = useState<boolean>(false);
 
   /**
    * Decide which route the app opens on, and which one the star is lit for.
@@ -1472,9 +1475,26 @@ function App() {
               then file import behind a disclosure (issue #219, R3). */}
           {currentView === 'route-search' && (
             <div className="view-container view-container--search">
-              <div className="route-search-screen">
+              <div
+                className={`route-search-screen${
+                  isRouteOverviewV2Enabled() ? ' route-search-screen--map-primary' : ''
+                }`}
+                data-drawer-open={isRouteOverviewV2Enabled() ? routesDrawerOpen : undefined}
+              >
                 <div className="route-search-header">
                   <h2>Routes</h2>
+                  {isRouteOverviewV2Enabled() && (
+                    <button
+                      type="button"
+                      className="btn-routes-drawer-toggle"
+                      data-testid="routes-drawer-toggle"
+                      aria-expanded={routesDrawerOpen}
+                      aria-controls="route-search-drawer"
+                      onClick={() => setRoutesDrawerOpen((o) => !o)}
+                    >
+                      {routesDrawerOpen ? 'Hide list' : 'Show list'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-back-to-row"
@@ -1518,6 +1538,7 @@ function App() {
                 />
 
 
+                <div className="route-search-drawer" id="route-search-drawer">
                 <section className="route-search-section">
                   <h3>Add a rownative course</h3>
                   {showAuthFeatures ? (
@@ -1667,6 +1688,7 @@ function App() {
                     )}
                   </section>
                 )}
+                </div>
               </div>
             </div>
           )}
