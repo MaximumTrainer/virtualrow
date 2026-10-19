@@ -335,3 +335,68 @@ jobs:
             test-results
           if-no-files-found: warn
 
+  # The #498 WebGPU compute-cull spike.
+  #
+  # One job on Linux + Windows Chromium, with `--enable-unsafe-webgpu` so the
+  # spike's device hook can resolve `navigator.gpu` when the runner has a
+  # WebGPU backend, and fall back cleanly on CI's SwiftShader when it does
+  # not. The spec covers AC1 (parity), AC3 (unsupported) and AC4
+  # (device-lost); AC2 is measurement that lands in telemetry wherever a
+  # device does come up.
+  webgpu-spike:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      CI: true
+      VITE_INTERVALS_CLIENT_ID: "playwright-e2e-client"
+      # `--enable-unsafe-webgpu` is set on this spec's `test.use` override, so
+      # the launch args live beside the spec rather than every job's config.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Cache node_modules
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npm run pretest:e2e
+
+      - name: Clean up simulator ports
+        run: node scripts/kill-ports.mjs 9001 9002 9003 9004 9005 9006 9007 9008
+
+      - name: Run the WebGPU spike spec
+        run: npx playwright test --config playwright/playwright.config.ci.ts webgpu-spike
+        timeout-minutes: 10
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-webgpu-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: warn
+
