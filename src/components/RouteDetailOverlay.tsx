@@ -94,6 +94,7 @@ export function RouteDetailOverlay({ route, onClose, onStartRow }: RouteDetailOv
             width={600}
             height={220}
             className="route-detail-overlay__outline"
+            showBackdrop
           />
         ) : (
           <div className="route-detail-overlay__outline" aria-hidden="true" />
