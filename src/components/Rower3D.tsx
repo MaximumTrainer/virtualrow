@@ -168,6 +168,11 @@ export interface Rower3DProps {
   showRiverGuides?: boolean;
   /** Whether the GLB scenery kit renders. Switched from the debug panel (#270). */
   sceneryEnabled?: boolean;
+  /**
+   * Draw lake routes from the lake outline (#493 Phase 3), switched from the
+   * debug panel. `window.__VIRTUALROW_LAKE_OUTLINES` turns it on as well.
+   */
+  lakeOutlines?: boolean;
   /** Rower model to show, from the athlete's gender. Defaults to male. */
   crew?: Crew;
   /** Per-athlete clothing / hair colours (#474). Omitted keeps the baked palette. */
@@ -274,6 +279,7 @@ export const RowerScene: React.FC<
   debugMode = false,
   showRiverGuides = true,
   sceneryEnabled,
+  lakeOutlines = false,
   ghost = null,
   elapsedSecondsRef,
   audio,
@@ -349,8 +355,11 @@ export const RowerScene: React.FC<
   }, [enrichment]);
 
   const lakeOrigin = useMemo(
-    () => (isLakeOutlineEnabled() && enrichment?.lakes?.polygons.length ? route.coordinates[0] ?? null : null),
-    [enrichment?.lakes, route.coordinates],
+    () =>
+      (lakeOutlines || isLakeOutlineEnabled()) && enrichment?.lakes?.polygons.length
+        ? route.coordinates[0] ?? null
+        : null,
+    [lakeOutlines, enrichment?.lakes, route.coordinates],
   );
 
   /**

@@ -101,6 +101,29 @@ describe('the river guides toggle', () => {
   });
 });
 
+/**
+ * #493: lake outlines ship behind a flag, off by default. The switch lets a
+ * tester turn them on from the debug window on main, and a reload keeps it.
+ */
+describe('the lake outlines toggle', () => {
+  it('starts off and remembers being switched on across a reload', async () => {
+    const user = userEvent.setup();
+    const first = render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /debug/i }));
+    const lakes = () => screen.getByRole('checkbox', { name: /lake outlines/i }) as HTMLInputElement;
+    expect(lakes().checked).toBe(false);
+
+    await user.click(lakes());
+    expect(lakes().checked).toBe(true);
+    first.unmount();
+
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: /debug/i }));
+    expect(lakes().checked).toBe(true);
+  });
+});
+
 describe('the scenery kit toggle', () => {
   it('offers a control for the GLB scenery kit inside the debug window', async () => {
     // It replaced ?glb=, which was the only way to switch the kit and required
