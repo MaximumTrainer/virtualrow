@@ -9,12 +9,15 @@ import { useAnimationFrame } from './animationFrame';
 import { SCENE_CONFIG } from './themeConfig';
 import { bankMaterial } from './bankMaterial';
 import { BankFoliage } from './foliageComponents';
-import { isFoliageEnabled } from './foliagePlan';
+import { grassDensityStrengthForSegment, isFoliageEnabled } from './foliagePlan';
 import {
   buildTerrainProfile,
   type RouteEnrichmentData,
 } from '../../services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
+import { createBiomeDensityTexture } from './foliageTexture';
+import { isShaderGrassEnabled } from './canvasSurface';
+import { getSegmentSceneryProfile } from './segmentScenery';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
 import { createShorelineTexture } from './shorelineTexture';
 import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } from './groundPlane';
@@ -182,6 +185,33 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   // its replacement is the triplanar `createDetailTexture` sample the shader
   // reads at 0.5 m in world space, which is what a rower sees when the boat
   // is close to the bank.
+  //
+  // #496 Phase 2: on tiers that run shader-grass, the material also carries a
+  // density-field grass contribution. The density tile is the baked biome
+  // texture for the first segment under the route, chosen the same way
+  // `GroundCover` picks its biome today, with the shader strength coming from
+  // the segment's own `groundCover.density`. On `basic` and `low` the Phase 1
+  // material is handed back as-is.
+  const shaderGrassOn = isShaderGrassEnabled(tier);
+  const grassBiome = useMemo(
+    () => (shaderGrassOn ? getSegmentSceneryProfile(enrichment, 0) : null),
+    [shaderGrassOn, enrichment],
+  );
+  const grassDensityTexture = useMemo(
+    () => (grassBiome ? createBiomeDensityTexture(grassBiome) : null),
+    [grassBiome],
+  );
+  useEffect(
+    () => () => {
+      grassDensityTexture?.dispose();
+    },
+    [grassDensityTexture],
+  );
+  const grassDensityStrength = useMemo(
+    () => (shaderGrassOn ? grassDensityStrengthForSegment(enrichment, 0) : 0),
+    [shaderGrassOn, enrichment],
+  );
+
   const material = useMemo(
     () =>
       bankMaterial(
@@ -191,8 +221,18 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
           metalness: bankConfig.metalness,
         },
         tier,
+        grassDensityTexture
+          ? { texture: grassDensityTexture, strength: grassDensityStrength }
+          : undefined,
       ),
-    [bankConfig.color, bankConfig.roughness, bankConfig.metalness, tier],
+    [
+      bankConfig.color,
+      bankConfig.roughness,
+      bankConfig.metalness,
+      tier,
+      grassDensityTexture,
+      grassDensityStrength,
+    ],
   );
 
   useEffect(() => () => material.dispose(), [material]);

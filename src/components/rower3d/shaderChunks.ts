@@ -151,12 +151,15 @@ export const foliageSwayChunks = () => ({
 });
 
 /** The bank's triplanar grass/earth chunks (#430, extended for normals in
- *  #437). No placeholders — the tile size (0.5 m) and macro period (64 m)
- *  live in the GLSL itself. */
+ *  #437, and for the #496 Phase 2 density-field grass contribution). No
+ *  placeholders — the tile size (0.5 m), macro period (64 m) and density
+ *  grid (32 m) all live in the GLSL itself. */
 export const bankTriplanarChunks = () => ({
   vertexDeclarations: bankTriplanar.vertexDeclarations,
   vertexAssign: bankTriplanar.vertexAssign,
   fragmentDeclarations: bankTriplanar.fragmentDeclarations,
   mapReplacement: bankTriplanar.mapReplacement,
   normalReplacement: bankTriplanar.normalReplacement,
+  grassDensityDeclarations: bankTriplanar.grassDensityDeclarations,
+  grassDensityModulation: bankTriplanar.grassDensityModulation,
 });
