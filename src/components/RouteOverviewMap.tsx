@@ -46,6 +46,13 @@ export function RouteOverviewMap({
     null,
   );
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  // #505 Phase 2c (D4-b): the live viewport, read from MapLibre's `moveend`
+  // event. In the SVG fallback this stays at the FALLBACK_ZOOM / world bbox,
+  // which is what Phase 2b used throughout.
+  const [viewport, setViewport] = useState<{
+    zoom: number;
+    bbox: [number, number, number, number];
+  }>({ zoom: FALLBACK_ZOOM, bbox: [-180, -85, 180, 85] });
 
   const pins = useMemo<PlacedPin[]>(() => {
     const out: PlacedPin[] = [];
@@ -56,12 +63,12 @@ export function RouteOverviewMap({
     return out;
   }, [routes]);
 
-  // #505 Phase 2b (D4-b): cluster co-located pins at a fixed overview zoom.
-  // Live zoom tracking on MapLibre is Phase 2c; this phase makes co-located
-  // routes stop overlapping while the user is looking at the whole catalogue.
+  // #505 Phase 2c (D4-b): cluster against the live viewport, so a user zooming
+  // in on a cluster watches it break apart as its members pass the cluster
+  // radius. In the SVG fallback the viewport stays at the overview defaults.
   const entries = useMemo<ClusteredEntry[]>(
-    () => clusterRoutePins(routes, FALLBACK_ZOOM),
-    [routes],
+    () => clusterRoutePins(routes, viewport.zoom, viewport.bbox),
+    [routes, viewport],
   );
 
   // Track rendered size so the fallback SVG and the pin layer agree on pixels.
@@ -103,6 +110,14 @@ export function RouteOverviewMap({
             ) => void;
             flyTo: (opts: { center: [number, number]; zoom: number; animate?: boolean }) => void;
             on: (ev: string, cb: () => void) => void;
+            off: (ev: string, cb: () => void) => void;
+            getZoom: () => number;
+            getBounds: () => {
+              getWest: () => number;
+              getSouth: () => number;
+              getEast: () => number;
+              getNorth: () => number;
+            };
           };
         };
 
@@ -167,6 +182,16 @@ export function RouteOverviewMap({
 
         setMapReady(true);
         setProjection(() => (c: Coordinate) => map.project([c.lng, c.lat]));
+
+        const readViewport = () => {
+          const b = map.getBounds();
+          setViewport({
+            zoom: map.getZoom(),
+            bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+          });
+        };
+        readViewport();
+        map.on('moveend', readViewport);
       } catch {
         setMapReady(false);
       }
@@ -246,7 +271,7 @@ export function RouteOverviewMap({
                   if (map) {
                     map.flyTo({
                       center: [entry.lng, entry.lat],
-                      zoom: FALLBACK_ZOOM + 4,
+                      zoom: Math.min(viewport.zoom + 2, 16),
                       animate: false,
                     });
                   }
