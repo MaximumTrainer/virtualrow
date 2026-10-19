@@ -5,7 +5,7 @@
 // that species on the route. The layout and the cull are pure and live in
 // `foliagePlan.ts`; this is the part that owns GPU objects and the frame loop.
 // ============================================================================
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useAnimationFrame } from './animationFrame';
 import { isTelemetryPublished } from './constants';
@@ -24,6 +24,13 @@ import {
 import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import type { SceneryTrack } from './sceneryTrack';
 import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import { isWebGPUCullEnabled } from '../../webgpu/featureFlag';
+
+// Lazy-imported so the WebGPU module (and `@webgpu/types` by extension) stays
+// out of the default bundle when the #498 spike flag is off (D6-c).
+const WebGPUFoliageCuller = lazy(() =>
+  import('../../webgpu/WebGPUFoliageCuller').then((m) => ({ default: m.WebGPUFoliageCuller })),
+);
 
 /** The group's name, and the prefix of each species mesh's: `BankFoliage:oak`. */
 export const BANK_FOLIAGE_NAME = 'BankFoliage';
@@ -179,12 +186,32 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
     });
   }, [curve, enrichment, trees, chunks]);
 
+  // #498: when the spike's flag is on and a WebGPU device is ready, a child
+  // component drives the mesh writes and sets `webgpuActiveRef` to true; the
+  // CPU `cullTo` below reads this ref and no-ops to keep the two paths from
+  // writing the same instance buffer in one frame.
+  const webgpuActiveRef = useRef(false);
+  const webgpuEnabled = isWebGPUCullEnabled();
+  const webgpuChunks = useMemo(
+    () =>
+      webgpuEnabled
+        ? chunks.map((chunk) => ({
+            centres: chunk.centres,
+            matrices: chunk.matrices,
+            count: chunk.count,
+            groundY: chunk.boundingSphere.y,
+          }))
+        : [],
+    [webgpuEnabled, chunks],
+  );
+
   const cullFrameRef = useRef(0);
   useAnimationFrame((time) => {
     advanceSway(swayTime, time);
 
     const boat = positionRef?.current;
     if (!boat) return;
+    if (webgpuActiveRef.current) return;
     cullFrameRef.current += 1;
     if (cullFrameRef.current % FOLIAGE_CULL_FRAME_INTERVAL !== 0) return;
 
@@ -200,6 +227,18 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
 
   return (
     <group name={BANK_FOLIAGE_NAME}>
+      {webgpuEnabled && positionRef && (
+        <Suspense fallback={null}>
+          <WebGPUFoliageCuller
+            chunks={webgpuChunks}
+            meshRefs={meshRefs}
+            positionRef={positionRef}
+            viewDistance={viewDistance}
+            cullFrameInterval={FOLIAGE_CULL_FRAME_INTERVAL}
+            activeRef={webgpuActiveRef}
+          />
+        </Suspense>
+      )}
       {chunks.map((chunk, i) => {
         const part = parts[chunk.species];
         return (
