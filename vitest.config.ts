@@ -9,7 +9,7 @@ export default defineConfig({
   // hands one to the JS parser and fails on the first line of GLSL that is not
   // also valid JavaScript. The direct run never hit it, so the pre-commit hook
   // was the first thing to notice.
-  assetsInclude: ['**/*.glsl'],
+  assetsInclude: ['**/*.glsl', '**/*.wgsl'],
   test: {
     // Setting `exclude` *replaces* vitest's defaults rather than extending
     // them, so the node_modules glob has to be recursive: a nested

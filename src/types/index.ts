@@ -522,6 +522,34 @@ declare global {
      */
     __VIRTUALROW_CSM?: boolean;
     /**
+     * Runtime override for the #498 WebGPU compute-cull spike. Build-time off
+     * (via `VITE_FEATURE_WEBGPU_CULL`) with this runtime switch to flip on
+     * from a spec or the dev console — the D6-c combination. The module is
+     * lazy-imported so nothing WebGPU-shaped ships in the default bundle.
+     */
+    __VIRTUALROW_WEBGPU_CULL?: boolean;
+    /**
+     * Telemetry the #498 spike publishes: adapter string, device-lost count,
+     * dispatch and mapped-read timings, and the fallback reason when the
+     * CPU `cullTo` path kicks in. The shape is inlined here (rather than
+     * imported from `src/webgpu/types.ts`) because this declaration lives in
+     * the Playwright tsconfig's `include`, which does not reach `src/webgpu/`
+     * — and should not, by AC5.
+     */
+    __VIRTUALROW_WEBGPU_HEALTH?: {
+      adapter?: string;
+      isSoftware?: boolean;
+      deviceLostCount: number;
+      dispatchMs?: number;
+      mappedReadMs?: number;
+      fallbackReason?:
+        | 'webgpu-unsupported'
+        | 'software-adapter'
+        | 'device-lost'
+        | 'adapter-request-failed'
+        | 'device-request-failed';
+    };
+    /**
      * `true` draws a lake route's water, shoreline and islands from the lake's
      * OSM outline (#493 Phase 3). Undefined (off) until the baselines are
      * recorded with it on.
