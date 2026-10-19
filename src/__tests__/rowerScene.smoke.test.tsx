@@ -386,6 +386,14 @@ describe('RowerScene', () => {
       await scene.unmount();
     });
 
+    it('draws the lake from the debug panel switch with the window flag unset', async () => {
+      const scene = await renderScene({ performanceMode: 'basic', enrichment, lakeOutlines: true });
+      const names = scene.objects().map((o) => o.name);
+      expect(names).toContain(LAKE_WATER_NAME);
+      expect(names).toContain(LAKE_LAND_NAME);
+      await scene.unmount();
+    });
+
     it('keeps the ribbon alone while the flag is off', async () => {
       const scene = await renderScene({ performanceMode: 'basic', enrichment });
       const names = scene.objects().map((o) => o.name);

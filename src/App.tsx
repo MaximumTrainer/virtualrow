@@ -198,6 +198,9 @@ function App() {
   // be a control, not a URL edit. Seeded from the same default the scene uses,
   // so opening the panel changes nothing by itself.
   const [sceneryEnabled, setSceneryEnabled] = useState(() => isGlbSceneryEnabled());
+  // Lake outlines ship off (#493 NFR7); this switch tries them on main and
+  // survives a reload, like the demo-row override above.
+  const [lakeOutlines, setLakeOutlines] = useState(() => debugPreferencesStore.getLakeOutlines());
   // Only polled while the panel is open (#232).
   const renderStats = useRenderStats(debugMode);
   // The telemetry log is read the same way: only while someone is looking.
@@ -1706,6 +1709,7 @@ function App() {
                       debugMode={debugMode}
                       showRiverGuides={showRiverGuides}
                       sceneryEnabled={sceneryEnabled}
+                      lakeOutlines={lakeOutlines}
                       crew={resolveCrew(user?.gender, effectiveCrewPreference(user?.gender, crew.preference))}
                       appearance={appearanceColors}
                       ghost={ghostSource}
@@ -1862,6 +1866,18 @@ function App() {
                 onChange={(e) => setSceneryEnabled(e.target.checked)}
               />
               <span>GLB scenery kit</span>
+            </label>
+            <label className="debug-toggle-row">
+              <input
+                type="checkbox"
+                checked={lakeOutlines}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setLakeOutlines(next);
+                  debugPreferencesStore.setLakeOutlines(next);
+                }}
+              />
+              <span>Lake outlines</span>
             </label>
           </div>
 
