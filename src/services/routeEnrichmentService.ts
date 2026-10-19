@@ -937,6 +937,25 @@ export const getWaterEdgesSceneUnitsForProgress = (
 };
 
 /**
+ * What OSM detection found for the route (#493 FR22), as one telemetry line, so
+ * a course that looks wrong can be reported without a debugger. `null` for
+ * fallback data, which had no detection.
+ */
+export const waterDetectionTelemetry = (
+  enrichment: RouteEnrichmentData | null | undefined,
+): Record<string, unknown> | null => {
+  if (!enrichment || enrichment.source === 'fallback') return null;
+  const polygons = enrichment.lakes?.polygons ?? [];
+  return {
+    waterBodyType: enrichment.waterBodyType,
+    source: enrichment.source,
+    ...enrichment.waterDetection,
+    lakes: polygons.length,
+    islands: polygons.reduce((sum, lake) => sum + lake.inner.length, 0),
+  };
+};
+
+/**
  * Whether the route is on its lake at `progress` (#493 Phase 3, D5 a): the
  * segment nearest that point is marked `onLake`.
  */

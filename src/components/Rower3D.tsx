@@ -17,6 +17,7 @@ import {
   getDragMultiplierForProgress,
   getTerrainReliefForProgress,
   getWaterEdgesSceneUnitsForProgress,
+  waterDetectionTelemetry,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
 import { chunkIndexFor, shouldRebuildScenery } from './rower3d/visibilityCull';
@@ -341,6 +342,12 @@ export const RowerScene: React.FC<
   // #493 Phase 3: a lake route draws its water from the lake's outline (behind
   // NFR7's flag), in the same frame as the route curve, whose origin is the
   // route's first point.
+  // What OSM detection found, once per route, in the log a rower can send (#493 FR22).
+  useEffect(() => {
+    const detail = waterDetectionTelemetry(enrichment);
+    if (detail) recordTelemetry('water-detection', detail);
+  }, [enrichment]);
+
   const lakeOrigin = useMemo(
     () => (isLakeOutlineEnabled() && enrichment?.lakes?.polygons.length ? route.coordinates[0] ?? null : null),
     [enrichment?.lakes, route.coordinates],
@@ -983,7 +990,7 @@ export const RowerScene: React.FC<
           with the debug toggle on: it answers whether the boat is actually off
           centre, which the washed-out water makes impossible to judge. */}
       {debugMode && showRiverGuides && routeCurve && (
-        <RiverGuides curve={routeCurve} enrichment={enrichment} />
+        <RiverGuides curve={routeCurve} enrichment={enrichment} origin={route.coordinates[0]} />
       )}
       
       {!routeCurve && (
