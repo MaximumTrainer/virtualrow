@@ -86,12 +86,16 @@ const lineTypeNear = (point: Coordinate, lines: OverpassElement[]): WaterBodyTyp
   return best?.type ?? null;
 };
 
+/** The type of the water a sample is on, by its area's tags or the waterway line through it. */
+const areaTypeAt = (sample: DetectedSample, feature: MaskFeature, lines: OverpassElement[]): WaterBodyType =>
+  waterTypeOfArea(feature) ?? lineTypeNear(sample.coordinate, lines) ?? 'lake';
+
 const sampleType = (
   sample: DetectedSample,
   feature: MaskFeature,
   lines: OverpassElement[],
 ): WaterBodyType => {
-  const type = waterTypeOfArea(feature) ?? lineTypeNear(sample.coordinate, lines) ?? 'lake';
+  const type = areaTypeAt(sample, feature, lines);
   const leftInView = sample.leftShoreMeters !== null;
   const rightInView = sample.rightShoreMeters !== null;
   // D13: a lake you can't see across rows like open water.
@@ -131,4 +135,24 @@ export const classifyDetectedRoute = (
     waterBodyType: ranked[0][0],
     shares: Object.fromEntries(ranked.map(([type, count]) => [type, count / total])),
   };
+};
+
+const LAKE_TYPES: ReadonlySet<WaterBodyType> = new Set(['lake', 'reservoir']);
+
+/**
+ * The lake and reservoir areas the route is on (#493 Phase 3, D2 a, D5 a): the
+ * water drawn by its outline. An area counts when most of the samples on it
+ * read it as a lake, before D13 turns mid-lake samples into open water, so a
+ * lake stays one lake however wide it gets. In id order, like the mask.
+ */
+export const lakeFeaturesOf = (samples: DetectedSample[], mask: WaterMask, elements: OverpassElement[]): MaskFeature[] => {
+  const lines = elements.filter((element) => element.type === 'way' && LINE_TYPES[element.tags?.waterway ?? '']);
+  const votes = new Map<string, number>();
+  for (const sample of samples) {
+    if (sample.kind !== 'water' || !sample.featureId) continue;
+    const feature = mask.water.find((candidate) => candidate.id === sample.featureId);
+    if (!feature) continue;
+    votes.set(feature.id, (votes.get(feature.id) ?? 0) + (LAKE_TYPES.has(areaTypeAt(sample, feature, lines)) ? 1 : -1));
+  }
+  return mask.water.filter((feature) => (votes.get(feature.id) ?? 0) > 0);
 };

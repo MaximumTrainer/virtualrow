@@ -17,6 +17,7 @@ import {
   createFallbackRouteEnrichment,
   elementsNearRoute,
   getRouteEnrichmentCacheKey,
+  lakeSurfaceFor,
   loadCachedRouteEnrichment,
   mapOsmTagsToSceneryProfile,
   getTerrainReliefForProgress,
@@ -786,13 +787,14 @@ describe('route enrichment cache version (#493 D9 b)', () => {
   afterEach(() => localStorage.clear());
 
   it('keys entries under a versioned prefix, so pre-detection water types are refetched', () => {
-    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v3:route-1');
+    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v4:route-1');
   });
 
   it('prunes entries written under the old prefix and leaves everything else', () => {
     localStorage.setItem('virtualrow:route-enrichment:route-1', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v2:route-2', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v3:route-3', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v4:route-4', '{"savedAt":0}');
     localStorage.setItem('virtualrow:unrelated', 'keep me');
 
     new RouteEnrichmentService(createFetchStub().fetch, localStorage);
@@ -800,7 +802,9 @@ describe('route enrichment cache version (#493 D9 b)', () => {
     expect(localStorage.getItem('virtualrow:route-enrichment:route-1')).toBeNull();
     // v2 entries predate the per-side shores and land (#493 FR16, FR18).
     expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).toBeNull();
-    expect(localStorage.getItem('virtualrow:route-enrichment:v3:route-3')).not.toBeNull();
+    // v3 entries predate the lake outlines (#493 Phase 3).
+    expect(localStorage.getItem('virtualrow:route-enrichment:v3:route-3')).toBeNull();
+    expect(localStorage.getItem('virtualrow:route-enrichment:v4:route-4')).not.toBeNull();
     expect(localStorage.getItem('virtualrow:unrelated')).toBe('keep me');
   });
 
@@ -854,3 +858,82 @@ describe('createFallbackRouteEnrichment reads the water type from the name (#413
   });
 });
 
+
+describe('#493 Phase 3 lake outline in enrichment (FR1, FR2, D2 a, D11 a)', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => localStorage.clear());
+
+  // A lake about 500 m across around the route, shores in view (else D13 makes
+  // it open water), with an island off to the east.
+  const lakeRing = [
+    { lat: 51.4985, lng: -0.113 },
+    { lat: 51.4985, lng: -0.105 },
+    { lat: 51.503, lng: -0.105 },
+    { lat: 51.503, lng: -0.113 },
+    { lat: 51.4985, lng: -0.113 },
+  ];
+  const islandRing = [
+    { lat: 51.5005, lng: -0.1075 },
+    { lat: 51.5005, lng: -0.107 },
+    { lat: 51.5008, lng: -0.107 },
+    { lat: 51.5008, lng: -0.1075 },
+    { lat: 51.5005, lng: -0.1075 },
+  ];
+  const toGeometry = (ring: Array<{ lat: number; lng: number }>) => ring.map(({ lat, lng }) => ({ lat, lon: lng }));
+  const lake: OverpassElement = {
+    type: 'relation',
+    id: 77,
+    tags: { type: 'multipolygon', natural: 'water', water: 'lake', name: 'Test Water' },
+    members: [
+      { type: 'way', ref: 1, role: 'outer', geometry: toGeometry(lakeRing) },
+      { type: 'way', ref: 2, role: 'inner', geometry: toGeometry(islandRing) },
+    ],
+  };
+
+  it('carries the lake, its island and its height, and keeps them through the cache', async () => {
+    const service = new RouteEnrichmentService(createFetchStub({ elements: [lake] }).fetch, localStorage, runDetectionInline);
+
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
+
+    expect(enrichment.waterBodyType).toBe('lake');
+    expect(enrichment.lakes?.polygons).toHaveLength(1);
+    expect(enrichment.lakes?.polygons[0]).toMatchObject({ featureId: 'relation/77', name: 'Test Water' });
+    expect(enrichment.lakes?.polygons[0].inner).toHaveLength(1);
+    expect(enrichment.lakes?.elevationMeters).toBe(6.5);
+    expect(enrichment.segmentProfiles.every((profile) => profile.onLake)).toBe(true);
+
+    const cached = await service.enrichRoute(routeWithoutWaterTags);
+    expect(cached.source).toBe('cache');
+    expect(cached.lakes).toEqual(enrichment.lakes);
+  });
+
+  it('carries no lake for a river route', async () => {
+    const river: OverpassElement = { ...lake, tags: { ...lake.tags, water: 'river' } };
+    const service = new RouteEnrichmentService(createFetchStub({ elements: [river] }).fetch, localStorage, runDetectionInline);
+
+    const enrichment = await service.enrichRoute(routeWithoutWaterTags);
+
+    expect(enrichment.waterBodyType).toBe('river');
+    expect(enrichment.lakes).toBeUndefined();
+    expect(enrichment.segmentProfiles.some((profile) => profile.onLake)).toBe(false);
+  });
+
+  it('sits the lake at the median height of the route points on lake segments', () => {
+    const polygons = [{ featureId: 'way/1', outer: lakeRing, inner: [] }];
+    const coordinates = [
+      { lat: 51.5, lng: -0.11 },
+      { lat: 51.50089, lng: -0.11 },
+      { lat: 51.50178, lng: -0.11 },
+    ];
+    // The points sit about 0, 99 and 198 m along; the lake segment covers the last two.
+    const segment = (startMeters: number, endMeters: number, onLake: boolean) =>
+      ({ index: 0, startMeters, endMeters, ...(onLake && { onLake: true }) }) as never;
+
+    expect(
+      lakeSurfaceFor('lake', polygons, coordinates, [10, 30, 90], [segment(0, 50, false), segment(50, 250, true)]).lakes?.elevationMeters,
+    ).toBe(60);
+    expect(lakeSurfaceFor('reservoir', polygons, coordinates, [10, 30, 90], []).lakes?.elevationMeters).toBe(30);
+    expect(lakeSurfaceFor('river', polygons, coordinates, [10, 30, 90], [])).toEqual({});
+    expect(lakeSurfaceFor('lake', [], coordinates, [10, 30, 90], [])).toEqual({});
+  });
+});

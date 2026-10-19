@@ -16,6 +16,7 @@ import { mapOsmTagsToSceneryProfile } from '../utils/sceneryFromTags';
 import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
 import type { RouteWaterClass } from '../utils/waterClassification';
 import { createWorkerDetectionRunner, type RouteDetectionRunner } from './routeDetectionRunner';
+import type { LakePolygon } from '../utils/lakePolygons';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 
@@ -24,9 +25,11 @@ const ROUTE_ENRICHMENT_CACHE_ROOT = 'virtualrow:route-enrichment:';
 /**
  * v2: the water type comes from OSM detection (#493). v3: each segment also
  * carries the measured shore on each side (FR16) and each bank's land (FR18).
+ * v4: a lake route carries its lake's outline (Phase 3) and each segment says
+ * whether it is on it.
  * Entries under the bare root or an older version are pruned on start-up (D9 b).
  */
-const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v3:`;
+const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v4:`;
 
 export type SceneryProfile =
   | 'forest'
@@ -75,6 +78,12 @@ export interface RouteSegmentEnrichment {
    */
   leftSceneryProfile?: SceneryProfile;
   rightSceneryProfile?: SceneryProfile;
+  /**
+   * The segment is on the lake whose outline `RouteEnrichmentData.lakes`
+   * carries (#493 Phase 3, D5 a): the lake is drawn there instead of the
+   * ribbon. Absent everywhere else.
+   */
+  onLake?: true;
 }
 
 export interface RouteEnrichmentData {
@@ -92,8 +101,21 @@ export interface RouteEnrichmentData {
    * of the on-water samples, and the sample counts. Absent on fallback data.
    */
   waterDetection?: WaterDetectionSummary;
+  /**
+   * The lake a lake or reservoir route is on, drawn by its real outline
+   * (#493 Phase 3, D2 a): the rings around the route with their islands, and
+   * the one height its flat surface sits at (D11 a). Absent on every other
+   * route, and on a lake route OSM has no outline for.
+   */
+  lakes?: LakeSurface;
   fetchedAt: number;
   source: 'network' | 'cache' | 'fallback';
+}
+
+export interface LakeSurface {
+  polygons: LakePolygon[];
+  /** The median route elevation over the lake segments, in metres. */
+  elevationMeters: number;
 }
 
 export interface WaterDetectionSummary {
@@ -807,6 +829,7 @@ const commonestLand = (water: DetectedSample[], side: 'leftLand' | 'rightLand'):
 export const applyMeasuredShores = (
   segmentProfiles: RouteSegmentEnrichment[],
   samples: DetectedSample[],
+  lakeIds: ReadonlySet<string> = new Set(),
 ): RouteSegmentEnrichment[] =>
   segmentProfiles.map((profile, index) => {
     const last = index === segmentProfiles.length - 1;
@@ -821,8 +844,11 @@ export const applyMeasuredShores = (
     const rightShoreMeters = measuredSide(water, 'rightShoreMeters');
     const leftSceneryProfile = commonestLand(water, 'leftLand');
     const rightSceneryProfile = commonestLand(water, 'rightLand');
+    // D5 a: most of the segment's water is the lake.
+    const onLake = water.filter(({ featureId }) => featureId !== undefined && lakeIds.has(featureId)).length * 2 > water.length;
     return {
       ...profile,
+      ...(onLake && { onLake: true as const }),
       leftShoreMeters,
       rightShoreMeters,
       ...(leftSceneryProfile && { leftSceneryProfile }),
@@ -833,6 +859,39 @@ export const applyMeasuredShores = (
           : profile.waterWidthMeters,
     };
   });
+
+const LAKE_ROUTE_TYPES: ReadonlySet<WaterBodyType> = new Set(['lake', 'reservoir']);
+
+/**
+ * The lake to draw on a lake or reservoir route (#493 Phase 3, D2 a): the
+ * outlines detection kept, at the median elevation of the route points on the
+ * lake segments (D11 a), or of the whole route if none is marked. A route that
+ * resolved to another type, a route tag over OSM for one, draws no lake.
+ */
+export const lakeSurfaceFor = (
+  waterBodyType: WaterBodyType,
+  polygons: LakePolygon[],
+  coordinates: Coordinate[],
+  elevations: ReadonlyArray<number>,
+  segmentProfiles: RouteSegmentEnrichment[],
+): { lakes?: LakeSurface } => {
+  if (!LAKE_ROUTE_TYPES.has(waterBodyType) || polygons.length === 0) return {};
+  const lakeSpans = segmentProfiles.filter((profile) => profile.onLake);
+  let distance = 0;
+  const onLake: number[] = [];
+  coordinates.forEach((coordinate, index) => {
+    if (index > 0) {
+      const previous = coordinates[index - 1];
+      distance += distanceBetweenLatLng(previous.lat, previous.lng, coordinate.lat, coordinate.lng);
+    }
+    const elevation = elevations[index];
+    if (!Number.isFinite(elevation)) return;
+    if (lakeSpans.length === 0 || lakeSpans.some((span) => distance >= span.startMeters && distance <= span.endMeters)) {
+      onLake.push(elevation);
+    }
+  });
+  return { lakes: { polygons, elevationMeters: onLake.length > 0 ? median(onLake) : 0 } };
+};
 
 /** Where the water ends either side of the route, in scene units from the centreline. */
 export interface WaterEdges {
@@ -1121,6 +1180,7 @@ export class RouteEnrichmentService {
         const segmentProfiles = applyMeasuredShores(
           createSegmentProfilesFromFeatures(route, nearElements),
           detection.samples,
+          new Set(detection.lakes.map((lake) => lake.featureId)),
         );
         const waterFeatures = nearElements.filter(
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
@@ -1146,6 +1206,7 @@ export class RouteEnrichmentService {
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),
           waterDetection: { shares: detected.shares, ...detection.summary },
+          ...lakeSurfaceFor(resolvedWaterBodyType, detection.lakes, route.coordinates, elevations, segmentProfiles),
           fetchedAt: Date.now(),
           source: 'network',
         };
