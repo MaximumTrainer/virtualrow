@@ -10,10 +10,12 @@ import {
   compactVisible,
   createFoliageGeometry,
   foliageStanding,
+  grassDensityStrengthForSegment,
   isFoliageEnabled,
   layoutFoliage,
   type FoliageTree,
 } from '../components/rower3d/foliagePlan';
+import { SCENERY_PROFILES } from '../components/rower3d/sceneryConfig';
 import { foliageShapeFor } from '../components/rower3d/foliageTexture';
 import { SCENE_CONFIG, type TreeSpeciesEntry } from '../components/rower3d/themeConfig';
 import {
@@ -414,5 +416,50 @@ describe('batchFoliageChunked', () => {
 
   it('is empty for an empty tree list', () => {
     expect(batchFoliageChunked([], speciesCount, 1_000, 200)).toEqual([]);
+  });
+});
+
+/**
+ * #496 Phase 2 AC5 — the bank's shader-grass density per segment is the
+ * biome's own `groundCover.density`, so the shader-painted cover and the
+ * trees above it agree on how lush the segment is.
+ */
+describe('grassDensityStrengthForSegment', () => {
+  const biomeAt = (profile: SceneryProfile): RouteEnrichmentData =>
+    ({
+      segmentProfiles: [
+        {
+          sceneryProfile: profile,
+          startDistance: 0,
+          endDistance: 1000,
+        },
+      ],
+    }) as unknown as RouteEnrichmentData;
+
+  it('is the biome\'s `groundCover.density` for the nearest segment', () => {
+    for (const profile of ['forest', 'wetland', 'commercial', 'beach'] as const) {
+      expect(grassDensityStrengthForSegment(biomeAt(profile), 0.5)).toBe(
+        SCENERY_PROFILES[profile].groundCover.density,
+      );
+    }
+  });
+
+  it('falls back to the fallback biome\'s density when enrichment is missing', () => {
+    expect(grassDensityStrengthForSegment(null, 0.5)).toBe(
+      SCENERY_PROFILES.fallback.groundCover.density,
+    );
+    expect(grassDensityStrengthForSegment(undefined, 0.5)).toBe(
+      SCENERY_PROFILES.fallback.groundCover.density,
+    );
+  });
+
+  it('clamps out-of-range progress to the nearest end rather than throwing', () => {
+    const enrichment = biomeAt('wetland');
+    expect(grassDensityStrengthForSegment(enrichment, -2)).toBe(
+      SCENERY_PROFILES.wetland.groundCover.density,
+    );
+    expect(grassDensityStrengthForSegment(enrichment, 2)).toBe(
+      SCENERY_PROFILES.wetland.groundCover.density,
+    );
   });
 });

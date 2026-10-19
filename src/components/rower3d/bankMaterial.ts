@@ -26,14 +26,36 @@ export interface BankMaterialTheme {
   metalness: number;
 }
 
+/**
+ * The optional density-field grass contribution (#496 Phase 2). When present,
+ * the triplanar material samples the baked biome tile and boosts the grass
+ * side of the slope/shore blend by `(0.72 + 0.56 * density) * strength`; when
+ * absent, the material compiles exactly as it did in Phase 1.
+ *
+ * Only mounted on tiers that run shader-grass (`isShaderGrassEnabled`), so
+ * `basic` and `low` go on compiling the single-albedo material above and the
+ * plain triplanar one below without the extra sampler.
+ */
+export interface BankGrassDensity {
+  /** The biome's baked density tile, from `createBiomeDensityTexture`. */
+  texture: THREE.Texture;
+  /** 0..1; 0 means the shader is wired but makes no visual change. */
+  strength: number;
+}
+
 /** Whether a material carries the triplanar chunk (a test asks this). */
 export const isBankTriplanarMaterial = (
   material: THREE.Material,
 ): boolean => material.userData?.virtualrowBank === 'triplanar';
 
+/** Whether a material carries the Phase 2 density-field grass contribution. */
+export const hasBankGrassDensity = (material: THREE.Material): boolean =>
+  material.userData?.virtualrowBankGrass === 'density-field';
+
 export const bankMaterial = (
   theme: BankMaterialTheme,
   tier: PerformanceMode,
+  grassDensity?: BankGrassDensity,
 ): THREE.MeshStandardMaterial => {
   const grass = createDetailTexture('grass');
   // Five tiers (#455 FR3): the two lowest (`basic` and `low`) return the
@@ -67,6 +89,10 @@ export const bankMaterial = (
   });
   material.userData.virtualrowBank = 'triplanar';
 
+  if (grassDensity) {
+    material.userData.virtualrowBankGrass = 'density-field';
+  }
+
   const chunks = bankTriplanarChunks();
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uGrass = { value: grass.albedo };
@@ -80,10 +106,16 @@ export const bankMaterial = (
       '#include <begin_vertex>',
       `#include <begin_vertex>\n${chunks.vertexAssign}`,
     );
-    shader.fragmentShader = chunks.fragmentDeclarations + shader.fragmentShader;
+    const fragmentDeclarations = grassDensity
+      ? chunks.fragmentDeclarations + chunks.grassDensityDeclarations
+      : chunks.fragmentDeclarations;
+    shader.fragmentShader = fragmentDeclarations + shader.fragmentShader;
+    const mapReplacement = grassDensity
+      ? `${chunks.mapReplacement}\n${chunks.grassDensityModulation}`
+      : chunks.mapReplacement;
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <map_fragment>',
-      `#include <map_fragment>\n${chunks.mapReplacement}`,
+      `#include <map_fragment>\n${mapReplacement}`,
     );
     // The bank has no bound `normalMap`, so three's own <normal_fragment_maps>
     // is a no-op here; replace it with a triplanar sample of `uGrassN`/`uEarthN`
@@ -92,9 +124,16 @@ export const bankMaterial = (
       '#include <normal_fragment_maps>',
       `#include <normal_fragment_maps>\n${chunks.normalReplacement}`,
     );
+    if (grassDensity) {
+      shader.uniforms.uBankGrassDensity = { value: grassDensity.texture };
+      shader.uniforms.uBankGrassDensityStrength = { value: grassDensity.strength };
+    }
   };
-  // A distinct cache key so three does not confuse this program with any
-  // other MeshStandardMaterial in the scene.
-  material.customProgramCacheKey = () => 'virtualrow-bank-triplanar';
+  // A distinct cache key per compile variant so three does not confuse the
+  // Phase 2 density program with the plain triplanar one.
+  material.customProgramCacheKey = () =>
+    grassDensity
+      ? 'virtualrow-bank-triplanar-density'
+      : 'virtualrow-bank-triplanar';
   return material;
 };

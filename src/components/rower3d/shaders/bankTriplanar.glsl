@@ -4,6 +4,13 @@
 // the fragment chunk replaces `#include <map_fragment>`. `uGrass`/`uEarth` are
 // the albedos from `createDetailTexture` (#353); no placeholders — the tile
 // metres are inlined at 0.5 m in world space.
+//
+// `grassDensityDeclarations` and `grassDensityModulation` are the #496 Phase 2
+// chunks — spliced in only when the bank is handed a biome density tile. They
+// read a baked density texture from `foliageTexture.ts` on a 32 m plan-view
+// grid and modulate the grass's own albedo contribution so a wetland bank
+// reads as lusher than a commercial one, with the slope-blended earth
+// contribution left as it was.
 
 // @chunk:vertexDeclarations
 attribute float shoreDist;
@@ -68,6 +75,24 @@ bankAlbedo = mix(bankWet, bankAlbedo, bankShore);
 float bankMacro = 0.85 + 0.25 * bankMacroNoise(vBankWorldPos.xz / 64.0);
 bankAlbedo *= bankMacro;
 diffuseColor.rgb *= bankAlbedo;
+
+// @chunk:grassDensityDeclarations
+uniform sampler2D uBankGrassDensity;
+uniform float uBankGrassDensityStrength;
+
+// @chunk:grassDensityModulation
+// `uBankGrassDensity` is the baked biome tile from `foliageTexture.ts`; its
+// red channel holds the lushness. Sampled on a 32 m plan-view grid so one
+// patch of the field covers a few boat-lengths of bank, then biased from
+// `0.5` to `(target - 0.5)` so a biome whose mean density is below 0.5 reads
+// drier and one above lusher. The modulation is only applied where
+// `bankSlope` says the surface is a bank top (grass side of the blend); on
+// steeper faces and the wet-earth shore it stays as it was.
+vec2 bankDensityUv = vBankWorldPos.xz / 32.0;
+float bankGrassDensity = texture2D(uBankGrassDensity, bankDensityUv).r;
+float bankGrassBoost = mix(1.0, 0.72 + 0.56 * bankGrassDensity, uBankGrassDensityStrength);
+float bankGrassWeight = bankSlope * bankShore;
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * bankGrassBoost, bankGrassWeight);
 
 // @chunk:normalReplacement
 // `<normal_fragment_maps>` samples a bound `normalMap` and perturbs `normal`;

@@ -398,3 +398,24 @@ export const createFoliageGeometry = (aspect: number): THREE.BufferGeometry => {
  */
 export const isFoliageEnabled = (): boolean =>
   window.__VIRTUALROW_FOLIAGE !== false;
+
+/**
+ * The grass density a route segment plants on its banks, 0..1 (#496 AC5).
+ *
+ * The density is the biome's own `groundCover.density` from
+ * `SCENERY_PROFILES`, looked up through the same `getSegmentSceneryProfile`
+ * path the trees and ground cover use, so a wetland segment and the trees it
+ * carries agree on how lush its banks are.
+ *
+ * Pure and defined for every progress — a route with no enrichment yields the
+ * `fallback` biome's density, and an out-of-range `progress` clamps to the
+ * nearest end — so `bankMaterial`'s shader-grass uniform always has a value.
+ */
+export const grassDensityStrengthForSegment = (
+  enrichment: RouteEnrichmentData | null | undefined,
+  progress: number,
+  track?: SceneryTrack | null,
+): number => {
+  const profile = getSegmentSceneryProfile(enrichment, progress, track);
+  return SCENERY_PROFILES[profile].groundCover.density;
+};

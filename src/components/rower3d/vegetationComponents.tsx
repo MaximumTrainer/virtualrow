@@ -218,7 +218,6 @@ export const GroundCover: React.FC<{
 
   const reedEntry  = useMemo(() => activeTypes.find(t => t.type === 'reed'),  [activeTypes]);
   const rockEntry  = useMemo(() => activeTypes.find(t => t.type === 'rock'),  [activeTypes]);
-  const grassEntry = useMemo(() => activeTypes.find(t => t.type === 'grass' || t.type === 'flower'), [activeTypes]);
 
   // densityScale is always 0–1 (clamped by SCENERY_PROFILES), so derived
   // counts never exceed the MAX constants below — no buffer overflow risk.
@@ -226,17 +225,18 @@ export const GroundCover: React.FC<{
 
   const reedMeshRef  = useRef<THREE.InstancedMesh>(null);
   const rockMeshRef  = useRef<THREE.InstancedMesh>(null);
-  const grassMeshRef = useRef<THREE.InstancedMesh>(null);
 
   // Maximum instance counts (allocated once); actual visible count is scaled
-  // by densityScale so reedCount <= REED_MAX, rockCount <= ROCK_MAX, etc.
+  // by densityScale so reedCount <= REED_MAX, rockCount <= ROCK_MAX.
+  // #496 Phase 2 retired the grass InstancedMesh (GRASS_MAX = 80 single-tuft
+  // planes): the bank's grass now rides in bankMaterial.ts as a density-field
+  // fragment contribution. Reeds and rocks stay as InstancedMesh because they
+  // are 3-D props the shader-painted cover cannot stand in for (D4-a).
   const REED_MAX  = 120;
   const ROCK_MAX  = 40;
-  const GRASS_MAX = 80;
 
   const reedCount  = Math.max(1, Math.round(REED_MAX  * densityScale));
   const rockCount  = Math.max(1, Math.round(ROCK_MAX  * densityScale));
-  const grassCount = Math.max(1, Math.round(GRASS_MAX * densityScale));
 
   const reedMat = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: reedEntry?.color ?? '#8a7a50',
@@ -252,16 +252,6 @@ export const GroundCover: React.FC<{
     metalness: 0.05,
   }), [rockEntry]);
   useEffect(() => () => { rockMat.dispose(); }, [rockMat]);
-
-  const grassMat = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: grassEntry?.color ?? '#4a7a40',
-    roughness: 0.8,
-    metalness: 0.0,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.9,
-  }), [grassEntry]);
-  useEffect(() => () => { grassMat.dispose(); }, [grassMat]);
 
   useEffect(() => {
     const dummy = new THREE.Object3D();
@@ -297,23 +287,7 @@ export const GroundCover: React.FC<{
       rockMeshRef.current.count = rockCount;
       rockMeshRef.current.instanceMatrix.needsUpdate = true;
     }
-
-    if (grassMeshRef.current && grassEntry) {
-      for (let i = 0; i < grassCount; i++) {
-        const side = seededRandom(i * 5 + 0) > 0.5 ? 1 : -1;
-        const x = side * (7 + seededRandom(i * 5 + 1) * 10);
-        const z = (seededRandom(i * 5 + 2) - 0.5) * 400;
-        const s = (grassEntry.scale ?? 1) * (0.5 + seededRandom(i * 5 + 3) * 0.4);
-        dummy.position.set(x, 0.3 * s, z);
-        dummy.scale.setScalar(s);
-        dummy.rotation.set(0, seededRandom(i * 5 + 4) * Math.PI * 2, 0);
-        dummy.updateMatrix();
-        grassMeshRef.current.setMatrixAt(i, dummy.matrix);
-      }
-      grassMeshRef.current.count = grassCount;
-      grassMeshRef.current.instanceMatrix.needsUpdate = true;
-    }
-  }, [reedEntry, rockEntry, grassEntry, reedCount, rockCount, grassCount]);
+  }, [reedEntry, rockEntry, reedCount, rockCount]);
 
   return (
     <group ref={coverRef}>
@@ -327,12 +301,6 @@ export const GroundCover: React.FC<{
         <instancedMesh ref={rockMeshRef} args={[undefined, undefined, ROCK_MAX]} frustumCulled={false}>
           <sphereGeometry args={[1, 5, 4]} />
           <primitive object={rockMat} attach="material" />
-        </instancedMesh>
-      )}
-      {grassEntry && (
-        <instancedMesh ref={grassMeshRef} args={[undefined, undefined, GRASS_MAX]} frustumCulled={false}>
-          <planeGeometry args={[0.6, 0.6]} />
-          <primitive object={grassMat} attach="material" />
         </instancedMesh>
       )}
     </group>

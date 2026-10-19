@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
-import { bankMaterial, isBankTriplanarMaterial } from '../components/rower3d/bankMaterial';
+import {
+  bankMaterial,
+  hasBankGrassDensity,
+  isBankTriplanarMaterial,
+} from '../components/rower3d/bankMaterial';
 import { resetDetailTextureCacheForTesting } from '../components/rower3d/detailTexture';
 
 let uninstallCanvas: () => void;
@@ -141,5 +145,61 @@ describe('bankMaterial (#430)', () => {
     resetDetailTextureCacheForTesting();
     const mat = bankMaterial(theme, 'basic');
     expect(mat.map).not.toBeNull();
+  });
+});
+
+/**
+ * #496 Phase 2 — the triplanar bank material carries a density-field grass
+ * contribution when a biome tile is handed in. The sampler, strength uniform
+ * and modulation chunk only compile into the fragment shader on that path;
+ * basic/low and medium+ without a tile keep the Phase 1 shape exactly.
+ */
+describe('bankMaterial density-field grass (#496 Phase 2)', () => {
+  const grassTexture = (): THREE.Texture => new THREE.DataTexture(
+    new Uint8Array([128, 128, 128, 255]),
+    1,
+    1,
+  );
+
+  it('without a density tile, the material compiles exactly as Phase 1', () => {
+    resetDetailTextureCacheForTesting();
+    const mat = bankMaterial(theme, 'medium');
+    expect(hasBankGrassDensity(mat)).toBe(false);
+    expect(mat.customProgramCacheKey!()).toBe('virtualrow-bank-triplanar');
+  });
+
+  it('with a density tile, carries the density flag and the strength uniform', () => {
+    resetDetailTextureCacheForTesting();
+    const texture = grassTexture();
+    const mat = bankMaterial(theme, 'medium', { texture, strength: 0.7 });
+    expect(hasBankGrassDensity(mat)).toBe(true);
+    expect(mat.customProgramCacheKey!()).toBe('virtualrow-bank-triplanar-density');
+
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader:
+        'placeholder-vertex\n#include <begin_vertex>\nplaceholder-vertex-end',
+      fragmentShader:
+        'placeholder-fragment\n#include <map_fragment>\n' +
+        '#include <normal_fragment_maps>\nplaceholder-fragment-end',
+    };
+    mat.onBeforeCompile!(
+      shader as unknown as THREE.WebGLProgramParametersWithUniforms,
+      {} as THREE.WebGLRenderer,
+    );
+    expect(shader.uniforms.uBankGrassDensity?.value).toBe(texture);
+    expect(shader.uniforms.uBankGrassDensityStrength?.value).toBe(0.7);
+    expect(shader.fragmentShader).toContain('uBankGrassDensity');
+    expect(shader.fragmentShader).toContain('bankGrassDensity');
+  });
+
+  it('is a no-op compile at basic — basic grass stays off (AC3)', () => {
+    resetDetailTextureCacheForTesting();
+    const texture = grassTexture();
+    const mat = bankMaterial(theme, 'basic', { texture, strength: 0.7 });
+    // Basic returns the single-albedo material above the triplanar branch; it
+    // ignores the density config so no sampler compiles into its shader.
+    expect(isBankTriplanarMaterial(mat)).toBe(false);
+    expect(hasBankGrassDensity(mat)).toBe(false);
   });
 });
