@@ -1,6 +1,7 @@
 /**
  * #493 detection as one call: the water mask, the samples along the route and
- * the route's water type, and the land beyond each bank (FR18), from the
+ * the route's water type, the land beyond each bank (FR18) and, on a lake
+ * route, the lake's outline (Phase 3), from the
  * Overpass response. Pure, so the same code
  * runs in the detection worker (D23 b) and inline where a worker can't run.
  *
@@ -13,7 +14,8 @@ import type { OverpassElement } from '../services/routeEnrichmentService';
 import { buildLandAreas, landAt } from './bankLand';
 import { buildWaterMask, type MaskBounds } from './osmWaterMask';
 import { detectRoute, type DetectedSample, type RouteDetection } from './shoreDetection';
-import { classifyDetectedRoute, type RouteWaterClass } from './waterClassification';
+import { lakePolygonsFor, type LakePolygon } from './lakePolygons';
+import { classifyDetectedRoute, lakeFeaturesOf, type RouteWaterClass } from './waterClassification';
 
 export interface RouteDetectionInput {
   coordinates: Coordinate[];
@@ -25,13 +27,24 @@ export interface RouteDetectionResult {
   samples: DetectedSample[];
   summary: RouteDetection['summary'];
   detected: RouteWaterClass;
+  /**
+   * The outlines of the lake water a lake or reservoir route is on (D2 a),
+   * clipped and slimmed for drawing and the cache. Empty on any other route.
+   */
+  lakes: LakePolygon[];
 }
+
+const LAKE_ROUTES = new Set(['lake', 'reservoir']);
 
 export const runRouteDetection = ({ coordinates, elements, coastlineBounds }: RouteDetectionInput): RouteDetectionResult => {
   const mask = buildWaterMask(elements, { coastlineBounds });
   const land = buildLandAreas(elements);
   const { samples, summary } = detectRoute(coordinates, mask, { landAt: (point) => landAt(land, point) });
-  return { samples, summary, detected: classifyDetectedRoute(samples, mask, elements) };
+  const detected = classifyDetectedRoute(samples, mask, elements);
+  const lakes = LAKE_ROUTES.has(detected.waterBodyType)
+    ? lakePolygonsFor(lakeFeaturesOf(samples, mask, elements), coastlineBounds)
+    : [];
+  return { samples, summary, detected, lakes };
 };
 
 export interface DetectionRequest {

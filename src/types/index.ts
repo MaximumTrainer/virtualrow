@@ -522,6 +522,12 @@ declare global {
      */
     __VIRTUALROW_CSM?: boolean;
     /**
+     * `true` draws a lake route's water, shoreline and islands from the lake's
+     * OSM outline (#493 Phase 3). Undefined (off) until the baselines are
+     * recorded with it on.
+     */
+    __VIRTUALROW_LAKE_OUTLINES?: boolean;
+    /**
      * Phase-1 kill switch for #505: the map-primary Routes-screen overhaul
      * (MapLibre overview, drawer, modal detail). Phase 1 defaults
      * `undefined` (off) so visual baselines don't move; Phase 2 flips the
