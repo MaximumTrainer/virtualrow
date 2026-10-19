@@ -42,6 +42,30 @@ export default defineConfig([
     extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
   },
 
+  // AC5 of #498: `@webgpu/types` lives inside `src/webgpu/` only. The rest of
+  // the codebase depends on the small `WebGPUCullPort` interface instead, so
+  // the ambient `GPUDevice`/`GPUAdapter` names don't leak into app files. The
+  // module itself is exempt below.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/webgpu/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@webgpu/types',
+              message:
+                "Import from 'src/webgpu/types' (the WebGPUCullPort shim) instead. " +
+                "AC5 of #498 keeps `@webgpu/types` inside `src/webgpu/` only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // A spec that imports the base `test` is a spec whose renderer can die
   // without anyone noticing.
   //
