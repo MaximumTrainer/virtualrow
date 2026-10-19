@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
 import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import { clearTelemetry, readTelemetry } from '../utils/sceneTelemetryLog';
 import type * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
 import { SCENE_SCALE } from '../components/rower3d/constants';
@@ -373,6 +374,15 @@ describe('RowerScene', () => {
       const names = scene.objects().map((o) => o.name);
       expect(names).toContain(LAKE_WATER_NAME);
       expect(names).toContain(LAKE_LAND_NAME);
+      await scene.unmount();
+    });
+
+    it('logs what detection found once the route is loaded (FR22)', async () => {
+      clearTelemetry();
+      const scene = await renderScene({ performanceMode: 'basic', enrichment });
+      const logged = readTelemetry().filter((event) => event.kind === 'water-detection');
+      expect(logged).toHaveLength(1);
+      expect(logged[0].detail).toMatchObject({ waterBodyType: 'lake', lakes: 1, islands: 0 });
       await scene.unmount();
     });
 

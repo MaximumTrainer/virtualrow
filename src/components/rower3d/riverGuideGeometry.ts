@@ -20,11 +20,17 @@ import {
   getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../../services/routeEnrichmentService';
+import type { Coordinate } from '../../types/index';
+import type { LakePolygon } from '../../utils/lakePolygons';
+import { projectRing } from './lakeGeometry';
 
 /** Yellow down the middle, red at the edges. */
 export const GUIDE_COLOURS = {
   centre: '#ffd400',
   edge: '#ff2d2d',
+  /** A lake's detected shoreline and its islands (#493 FR22). */
+  shore: '#00e5ff',
+  island: '#3dff6e',
 } as const;
 
 /** Just above the water, so the guides are not buried by it. */
@@ -92,4 +98,30 @@ export const guideLine = (points: THREE.Vector3[], colour: string): THREE.Line =
   const line = new THREE.Line(geometry, material);
   line.renderOrder = 999;
   return line;
+};
+
+export interface LakeGuides {
+  shores: THREE.Vector3[][];
+  islands: THREE.Vector3[][];
+}
+
+/**
+ * The lake's detected shoreline and each island, as closed loops just above the
+ * water (#493 FR22, AC23), in the route curve's frame: `origin` is the route's
+ * first coordinate. Drawn whether or not the lake itself is drawn from its
+ * outline, so the detection can be checked against the ribbon too.
+ */
+export const buildLakeGuides = (
+  lakes: LakePolygon[] | undefined,
+  origin: Coordinate | null | undefined,
+): LakeGuides => {
+  if (!lakes || !origin) return { shores: [], islands: [] };
+  const loop = (ring: Coordinate[]) => {
+    const points = projectRing(ring, origin).map((p) => new THREE.Vector3(p.x, GUIDE_Y, p.y));
+    return points.length > 0 ? [...points, points[0].clone()] : points;
+  };
+  return {
+    shores: lakes.map((lake) => loop(lake.outer)).filter((points) => points.length > 0),
+    islands: lakes.flatMap((lake) => lake.inner.map(loop)).filter((points) => points.length > 0),
+  };
 };
