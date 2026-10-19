@@ -222,10 +222,9 @@ describe('named predicates for the Rower3D gates', () => {
 
 /**
  * #496 — the bank's grass tufts become a density field the fragment shader
- * samples (D3-b: off at basic + low, on at medium+). Phase 1 ships the
- * predicates behind `__VIRTUALROW_SHADER_GRASS` defaulting off, so visual
- * baselines don't move; Phase 2 flips the sense and removes the single-tuft
- * `InstancedMesh` branch in `vegetationComponents.tsx`.
+ * samples (D3-b: off at basic + low, on at medium+). Phase 2 flips the
+ * `__VIRTUALROW_SHADER_GRASS` default on; only an explicit `false` reverts
+ * to the retired single-tuft `InstancedMesh` branch.
  */
 describe('density-field grass tier gate', () => {
   afterEach(() => {
@@ -243,9 +242,9 @@ describe('density-field grass tier gate', () => {
     }
   });
 
-  it('Phase 1 defaults the flag off: medium+ needs an explicit opt-in', () => {
+  it('Phase 2 defaults the flag on: medium+ runs the shader without opt-in', () => {
     for (const tier of ['medium', 'high', 'extra-high'] as const) {
-      expect(isShaderGrassEnabled(tier), `undefined flag on ${tier}`).toBe(false);
+      expect(isShaderGrassEnabled(tier), `undefined flag on ${tier}`).toBe(true);
     }
     window.__VIRTUALROW_SHADER_GRASS = true;
     for (const tier of ['medium', 'high', 'extra-high'] as const) {

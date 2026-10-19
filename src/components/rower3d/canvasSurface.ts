@@ -189,12 +189,12 @@ export const drawsShaderGrass = (mode: PerformanceMode): boolean =>
 
 /**
  * Whether the density-field grass is actually mounted on `mode`. The predicate
- * must be true AND `window.__VIRTUALROW_SHADER_GRASS === true`; an undefined
- * flag counts as off, so the shader path stays dormant until a spec or dev
- * console opts in (Phase 1 kill switch, matches #495's `__VIRTUALROW_CSM`).
+ * must be true AND the kill switch not set: Phase 2 flips `undefined` to on,
+ * so only an explicit `window.__VIRTUALROW_SHADER_GRASS = false` reverts to
+ * the retired single-tuft `InstancedMesh` path (mirrors #495's `__VIRTUALROW_CSM`).
  */
 export const isShaderGrassEnabled = (mode: PerformanceMode): boolean =>
-  drawsShaderGrass(mode) && window.__VIRTUALROW_SHADER_GRASS === true;
+  drawsShaderGrass(mode) && window.__VIRTUALROW_SHADER_GRASS !== false;
 
 /**
  * Whether this tier runs Cascaded Shadow Maps (#495).
