@@ -1109,6 +1109,17 @@ body {
   transform: translateX(0);
 }
 
+/* On laptop and wider, the drawer is pinned open by default (see routesDrawerOpen
+   in App.tsx). The drawer is position:fixed on the right 420px of the viewport,
+   so shift the centred screen content left to free that strip — otherwise the
+   drawer overlaps the Back to Row button and the right edge of the map. */
+@media (min-width: 900px) {
+  .route-search-screen--map-primary[data-drawer-open='true'] {
+    margin-right: min(420px, 92vw);
+    margin-left: auto;
+  }
+}
+
 .btn-routes-drawer-toggle {
   margin-left: auto;
   margin-right: var(--space-sm, 8px);
