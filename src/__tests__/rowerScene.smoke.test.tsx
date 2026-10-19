@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
+import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
 import type * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
 import { SCENE_SCALE } from '../components/rower3d/constants';
@@ -53,7 +54,8 @@ vi.mock('@react-three/drei', async () => {
 const { renderScene, demoRoute } = await import('./sceneTestRenderer');
 const { BOAT_GROUP_NAME } = await import('../components/rower3d/constants');
 const { fogFor } = await import('../components/rower3d/fogPlan');
-const { GROUND_PLANE_NAME } = await import('../components/rower3d/bankComponents');
+const { GROUND_PLANE_NAME, LAKE_LAND_NAME } = await import('../components/rower3d/bankComponents');
+const { LAKE_WATER_NAME } = await import('../components/rower3d/waterComponents');
 const { SCENERY_MODELS_NAME } = await import('../components/rower3d/sceneryModels');
 
 /** 2:00/500m — 4.17 m/s, and a pace a test can do arithmetic on. */
@@ -334,4 +336,52 @@ describe('RowerScene', () => {
     await scene.unmount();
   });
 
+  /**
+   * #493 Phase 3 (FR4-FR6, NFR7): a lake route's water and shore drawn from
+   * the lake's outline, only once the flag is on.
+   */
+  describe('lake outlines', () => {
+    const start = demoRoute.coordinates[0];
+    const d = 300 / 111_320;
+    const ring = [
+      { lat: start.lat - d, lng: start.lng - d },
+      { lat: start.lat - d, lng: start.lng + d },
+      { lat: start.lat + d, lng: start.lng + d },
+      { lat: start.lat + d, lng: start.lng - d },
+      { lat: start.lat - d, lng: start.lng - d },
+    ];
+    const enrichment: RouteEnrichmentData = {
+      routeId: demoRoute.id,
+      elevations: [],
+      segmentProfiles: [],
+      waterBodyType: 'lake',
+      waterWidthMeters: 120,
+      waterColor: '#335577',
+      waveIntensity: 0.3,
+      lakes: { polygons: [{ featureId: 'way/1', outer: ring, inner: [] }], elevationMeters: 0 },
+      fetchedAt: 0,
+      source: 'network',
+    };
+
+    afterEach(() => {
+      delete window.__VIRTUALROW_LAKE_OUTLINES;
+    });
+
+    it('draws the lake and its shore when the flag is on', async () => {
+      window.__VIRTUALROW_LAKE_OUTLINES = true;
+      const scene = await renderScene({ performanceMode: 'basic', enrichment });
+      const names = scene.objects().map((o) => o.name);
+      expect(names).toContain(LAKE_WATER_NAME);
+      expect(names).toContain(LAKE_LAND_NAME);
+      await scene.unmount();
+    });
+
+    it('keeps the ribbon alone while the flag is off', async () => {
+      const scene = await renderScene({ performanceMode: 'basic', enrichment });
+      const names = scene.objects().map((o) => o.name);
+      expect(names).not.toContain(LAKE_WATER_NAME);
+      expect(names).not.toContain(LAKE_LAND_NAME);
+      await scene.unmount();
+    });
+  });
 });

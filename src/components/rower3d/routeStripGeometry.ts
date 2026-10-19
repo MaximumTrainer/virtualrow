@@ -7,7 +7,7 @@ import {
 } from './curve';
 import { SCENE_SCALE } from './constants';
 import { WHOLE_ROUTE, type ProgressRange } from './geometryChunks';
-import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import { isOnLakeAtProgress, type RouteEnrichmentData } from '../../services/routeEnrichmentService';
 
 // ============================================================================
 // Shared frame math for the ribbons that follow a route: the water channel and
@@ -20,7 +20,18 @@ export interface StripGeometryOptions {
   enrichment?: RouteEnrichmentData | null;
   /** Slice of the curve to build. Defaults to the whole route. */
   range?: ProgressRange;
+  /**
+   * Leave out the stretch on the route's lake, which is drawn from the lake's
+   * outline instead (#493 Phase 3, D5 a).
+   */
+  omitLake?: boolean;
 }
+
+/** Whether the strip draws the quad between `from` and `to`: not where both ends are on the drawn lake. */
+export const drawsStripQuad = ({ enrichment, omitLake }: StripGeometryOptions, from: number, to: number): boolean =>
+  !omitLake ||
+  !isOnLakeAtProgress(enrichment?.segmentProfiles, from) ||
+  !isOnLakeAtProgress(enrichment?.segmentProfiles, to);
 
 const UP = new THREE.Vector3(0, 1, 0);
 const frameTangent = new THREE.Vector3();

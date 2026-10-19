@@ -3,6 +3,7 @@ import { SCENE_SCALE, WATER_CHANNEL_WIDTH, RIVERBANK_WIDTH } from './constants';
 import { WHOLE_ROUTE } from './geometryChunks';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import {
+  drawsStripQuad,
   sampleStripFrame,
   stripProgressSchedule,
   type StripGeometryOptions,
@@ -84,8 +85,9 @@ const signedCurvatureAt = (
 export const createBankGeometry = (
   curve: THREE.CatmullRomCurve3,
   side: 'left' | 'right',
-  { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
+  options: StripGeometryOptions = {},
 ): THREE.BufferGeometry => {
+  const { enrichment, range = WHOLE_ROUTE } = options;
   const schedule = stripProgressSchedule(curve, range);
   const segments = schedule.length - 1;
   const positions: number[] = [];
@@ -188,7 +190,7 @@ export const createBankGeometry = (
     // Inner vertex sits on the waterline; the outer sits at the reach.
     shoreDist.push(0);
     shoreDist.push(Math.max(0, reaches[i] - waterHalfWidth));
-    if (i < segments) {
+    if (i < segments && drawsStripQuad(options, t, schedule[i + 1])) {
       const base = i * 2;
       // Wound to match the side it is on.
       //
@@ -242,8 +244,9 @@ export const SHORELINE_WIDTH_METRES = SHORELINE_INNER_METRES + SHORELINE_OUTER_M
 export const createShorelineGeometry = (
   curve: THREE.CatmullRomCurve3,
   side: 'left' | 'right',
-  { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
+  options: StripGeometryOptions = {},
 ): THREE.BufferGeometry => {
+  const { enrichment, range = WHOLE_ROUTE } = options;
   const schedule = stripProgressSchedule(curve, range);
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -273,7 +276,7 @@ export const createShorelineGeometry = (
       uvs.push(u, t * 10);
     }
 
-    if (i > 0) {
+    if (i > 0 && drawsStripQuad(options, schedule[i - 1], t)) {
       const a = (i - 1) * 2;
       const b = i * 2;
       // Wound so the strip faces up on both banks; `outward` mirrors one of them.

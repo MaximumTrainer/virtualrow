@@ -937,6 +937,19 @@ export const getWaterEdgesSceneUnitsForProgress = (
 };
 
 /**
+ * Whether the route is on its lake at `progress` (#493 Phase 3, D5 a): the
+ * segment nearest that point is marked `onLake`.
+ */
+export const isOnLakeAtProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  progress: number,
+): boolean => {
+  if (!segmentProfiles || segmentProfiles.length === 0) return false;
+  const index = Math.round(Math.max(0, Math.min(1, progress)) * (segmentProfiles.length - 1));
+  return segmentProfiles[index].onLake === true;
+};
+
+/**
  * Shore to shore at `progress`, in scene units: the two edges added up, so
  * anything that only needs the width agrees with what is drawn either side.
  * Floored so the blades stay over water (#271).

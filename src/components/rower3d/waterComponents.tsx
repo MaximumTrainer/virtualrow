@@ -14,10 +14,12 @@ import { acquireSkyEnvironment } from './skyEnvironmentCache';
 import { rippleRepeat, rippleScroll, waterMaterialPlan } from './waterMaterial';
 import { curveLengthMeters } from './curve';
 import { createWaterChannelGeometry } from './waterGeometry';
+import { createLakeWaterGeometry } from './lakeGeometry';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
 import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import type { Coordinate } from '../../types/index';
 
 // ============================================================================
 // WATER REFLECTION PROBE — CubeCamera providing real-time env reflections
@@ -180,12 +182,22 @@ export interface CurvedWaterChannelProps {
   enrichment?: RouteEnrichmentData | null;
   /** Which water the tier pays for (#324). */
   performanceMode?: PerformanceMode;
+  /**
+   * The route's first coordinate, when the route's lake is drawn from its
+   * outline (#493 Phase 3): the lake goes in at the scene's origin and the
+   * ribbon leaves the lake stretch out. `null` keeps the ribbon everywhere.
+   */
+  lakeOrigin?: Coordinate | null;
 }
+
+/** The name on the lake surface, so a test can find it without counting meshes. */
+export const LAKE_WATER_NAME = 'LakeWater';
 
 export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   curve,
   enrichment,
   performanceMode = 'medium',
+  lakeOrigin = null,
 }) => {
   const timeUniformRef = useRef({ value: 0 });
   const { gl } = useThree();
@@ -311,39 +323,50 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
     /* eslint-enable react-hooks/immutability */
   });
 
+  const drawsLake = lakeOrigin !== null && (enrichment?.lakes?.polygons.length ?? 0) > 0;
   const buildChunk = useCallback(
     (range: ProgressRange) =>
-      createWaterChannelGeometry(curve as THREE.CatmullRomCurve3, { enrichment, range }),
-    [curve, enrichment],
+      createWaterChannelGeometry(curve as THREE.CatmullRomCurve3, { enrichment, range, omitLake: drawsLake }),
+    [curve, enrichment, drawsLake],
   );
+
+  // The same material as the ribbon (FR4): one shader, one set of ripples.
+  const lakeGeometry = useMemo(
+    () => (drawsLake && lakeOrigin ? createLakeWaterGeometry(enrichment!.lakes!.polygons, lakeOrigin) : null),
+    [drawsLake, lakeOrigin, enrichment],
+  );
+  useEffect(() => () => lakeGeometry?.dispose(), [lakeGeometry]);
 
   if (!curve) return null;
 
   return (
-    <RouteStripChunks
-      curve={curve}
-      material={material}
-      buildChunk={buildChunk}
-      viewDistance={chunkViewDistanceFor()}
-      renderMaterial={
-        plan.useMirror && !dropForCost()
-          ? () => (
-              <MeshReflectorMaterial
-                resolution={512}
-                mirror={0.6}
-                blur={[120, 40]}
-                mixBlur={0.6}
-                mixStrength={1.2}
-                color={waterConfig.color}
-                roughness={plan.roughness}
-                metalness={plan.metalness}
-                normalMap={rippleMap ?? undefined}
-                normalScale={new THREE.Vector2(plan.normalScale, plan.normalScale)}
-                side={THREE.DoubleSide}
-              />
-            )
-          : undefined
-      }
-    />
+    <>
+      {lakeGeometry && <mesh name={LAKE_WATER_NAME} geometry={lakeGeometry} material={material} receiveShadow />}
+      <RouteStripChunks
+        curve={curve}
+        material={material}
+        buildChunk={buildChunk}
+        viewDistance={chunkViewDistanceFor()}
+        renderMaterial={
+          plan.useMirror && !dropForCost()
+            ? () => (
+                <MeshReflectorMaterial
+                  resolution={512}
+                  mirror={0.6}
+                  blur={[120, 40]}
+                  mixBlur={0.6}
+                  mixStrength={1.2}
+                  color={waterConfig.color}
+                  roughness={plan.roughness}
+                  metalness={plan.metalness}
+                  normalMap={rippleMap ?? undefined}
+                  normalScale={new THREE.Vector2(plan.normalScale, plan.normalScale)}
+                  side={THREE.DoubleSide}
+                />
+              )
+            : undefined
+        }
+      />
+    </>
   );
 };

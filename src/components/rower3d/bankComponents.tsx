@@ -19,6 +19,8 @@ import { createBiomeDensityTexture } from './foliageTexture';
 import { isShaderGrassEnabled } from './canvasSurface';
 import { getSegmentSceneryProfile } from './segmentScenery';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
+import { createLakeLandGeometry } from './lakeGeometry';
+import type { Coordinate } from '../../types/index';
 import { createShorelineTexture } from './shorelineTexture';
 import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } from './groundPlane';
 import {
@@ -40,7 +42,19 @@ import { landClearance, publishSceneryClearance } from './sceneryClearance';
 export interface CurvedRiverbanksProps {
   curve: THREE.CatmullRomCurve3 | null;
   enrichment?: RouteEnrichmentData | null;
+  /**
+   * The route's first coordinate, when the route's lake is drawn from its
+   * outline (#493 Phase 3): the lake's shore and islands go in at the scene's
+   * origin and the ribbon banks leave the lake stretch out.
+   */
+  lakeOrigin?: Coordinate | null;
 }
+
+/** The name on the lake's shore and islands, so a test can find them without counting meshes. */
+export const LAKE_LAND_NAME = 'LakeLand';
+
+const drawsLakeFor = (enrichment: RouteEnrichmentData | null | undefined, lakeOrigin: Coordinate | null) =>
+  lakeOrigin !== null && (enrichment?.lakes?.polygons.length ?? 0) > 0;
 
 /** The name on the ground plane, so a test can find it without counting meshes. */
 export const GROUND_PLANE_NAME = 'GroundPlane';
@@ -131,7 +145,10 @@ export const SHORELINE_NAME = 'Shoreline';
 export const Shoreline: React.FC<{
   curve: THREE.CatmullRomCurve3;
   enrichment?: RouteEnrichmentData | null;
-}> = ({ curve, enrichment }) => {
+  /** As on `CurvedRiverbanks`: no foam strip along the drawn lake's stretch. */
+  lakeOrigin?: Coordinate | null;
+}> = ({ curve, enrichment, lakeOrigin = null }) => {
+  const omitLake = drawsLakeFor(enrichment, lakeOrigin);
   const texture = useMemo(() => createShorelineTexture(), []);
   useEffect(() => () => texture?.dispose(), [texture]);
 
@@ -153,12 +170,12 @@ export const Shoreline: React.FC<{
   useEffect(() => () => material.dispose(), [material]);
 
   const buildLeft = useCallback(
-    (range: ProgressRange) => createShorelineGeometry(curve, 'left', { enrichment, range }),
-    [curve, enrichment],
+    (range: ProgressRange) => createShorelineGeometry(curve, 'left', { enrichment, range, omitLake }),
+    [curve, enrichment, omitLake],
   );
   const buildRight = useCallback(
-    (range: ProgressRange) => createShorelineGeometry(curve, 'right', { enrichment, range }),
-    [curve, enrichment],
+    (range: ProgressRange) => createShorelineGeometry(curve, 'right', { enrichment, range, omitLake }),
+    [curve, enrichment, omitLake],
   );
 
   // No texture means no context to draw one in; the scene keeps its river.
@@ -175,7 +192,9 @@ export const Shoreline: React.FC<{
 export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   curve,
   enrichment,
+  lakeOrigin = null,
 }) => {
+  const omitLake = drawsLakeFor(enrichment, lakeOrigin);
   const bankConfig = SCENE_CONFIG.bank;
   const tier = resolvePerformanceMode();
 
@@ -239,19 +258,27 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
 
   const buildLeft = useCallback(
     (range: ProgressRange) =>
-      createBankGeometry(curve as THREE.CatmullRomCurve3, 'left', { enrichment, range }),
-    [curve, enrichment],
+      createBankGeometry(curve as THREE.CatmullRomCurve3, 'left', { enrichment, range, omitLake }),
+    [curve, enrichment, omitLake],
   );
   const buildRight = useCallback(
     (range: ProgressRange) =>
-      createBankGeometry(curve as THREE.CatmullRomCurve3, 'right', { enrichment, range }),
-    [curve, enrichment],
+      createBankGeometry(curve as THREE.CatmullRomCurve3, 'right', { enrichment, range, omitLake }),
+    [curve, enrichment, omitLake],
   );
+
+  // The lake's shore and islands are the same ground as the banks (FR5, FR6).
+  const lakeLand = useMemo(
+    () => (omitLake && lakeOrigin ? createLakeLandGeometry(enrichment!.lakes!.polygons, lakeOrigin) : null),
+    [omitLake, lakeOrigin, enrichment],
+  );
+  useEffect(() => () => lakeLand?.dispose(), [lakeLand]);
 
   if (!curve) return null;
 
   return (
     <group>
+      {lakeLand && <mesh name={LAKE_LAND_NAME} geometry={lakeLand} material={material} receiveShadow />}
       <RouteStripChunks
         curve={curve}
         material={material}
