@@ -102,6 +102,7 @@ import {
 import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
+import { isLakeOutlineEnabled } from './rower3d/lakeGeometry';
 import {
   createContactShadowTexture,
   CONTACT_SHADOW_RADIUS_M,
@@ -336,6 +337,14 @@ export const RowerScene: React.FC<
   const lastSceneryProgressRef = useRef(0);
 
   const terrainProfile = useMemo(() => buildTerrainProfile(enrichment?.elevations), [enrichment?.elevations]);
+
+  // #493 Phase 3: a lake route draws its water from the lake's outline (behind
+  // NFR7's flag), in the same frame as the route curve, whose origin is the
+  // route's first point.
+  const lakeOrigin = useMemo(
+    () => (isLakeOutlineEnabled() && enrichment?.lakes?.polygons.length ? route.coordinates[0] ?? null : null),
+    [enrichment?.lakes, route.coordinates],
+  );
 
   /**
    * Where the tiled bands sit: the boat's Z, lifted by the relief under it.
@@ -949,7 +958,12 @@ export const RowerScene: React.FC<
       />
       
       {routeCurve ? (
-        <CurvedWaterChannel curve={routeCurve} enrichment={enrichment} performanceMode={performanceMode} />
+        <CurvedWaterChannel
+          curve={routeCurve}
+          enrichment={enrichment}
+          performanceMode={performanceMode}
+          lakeOrigin={lakeOrigin}
+        />
       ) : (
         <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
       )}
@@ -960,8 +974,8 @@ export const RowerScene: React.FC<
       
       {routeCurve && (
         <>
-          <CurvedRiverbanks curve={routeCurve} enrichment={enrichment} />
-          <Shoreline curve={routeCurve} enrichment={enrichment} />
+          <CurvedRiverbanks curve={routeCurve} enrichment={enrichment} lakeOrigin={lakeOrigin} />
+          <Shoreline curve={routeCurve} enrichment={enrichment} lakeOrigin={lakeOrigin} />
         </>
       )}
 

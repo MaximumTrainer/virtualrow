@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import { WHOLE_ROUTE } from './geometryChunks';
 import {
+  drawsStripQuad,
   sampleStripFrame,
   stripProgressSchedule,
   type StripGeometryOptions,
@@ -28,8 +29,9 @@ const defaultWaterWidthMeters = (enrichment?: RouteEnrichmentData | null) =>
  */
 export const createWaterChannelGeometry = (
   curve: THREE.CatmullRomCurve3,
-  { enrichment, range = WHOLE_ROUTE }: StripGeometryOptions = {},
+  options: StripGeometryOptions = {},
 ): THREE.BufferGeometry => {
+  const { enrichment, range = WHOLE_ROUTE } = options;
   const schedule = stripProgressSchedule(curve, range);
   const segments = schedule.length - 1;
   const positions: number[] = [];
@@ -60,7 +62,7 @@ export const createWaterChannelGeometry = (
 
     uvs.push(0, t, 1, t);
 
-    if (i < segments) {
+    if (i < segments && drawsStripQuad(options, t, schedule[i + 1])) {
       const base = i * 2;
       // Wound to face the sky.
       //
