@@ -15,6 +15,7 @@ import { rippleRepeat, rippleScroll, waterMaterialPlan } from './waterMaterial';
 import { curveLengthMeters } from './curve';
 import { createWaterChannelGeometry } from './waterGeometry';
 import { createLakeWaterGeometry } from './lakeGeometry';
+import type { LakePolygon } from '../../utils/lakePolygons';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
@@ -188,6 +189,8 @@ export interface CurvedWaterChannelProps {
    * ribbon leaves the lake stretch out. `null` keeps the ribbon everywhere.
    */
   lakeOrigin?: Coordinate | null;
+  /** The lake outlines to draw, slimmed to the tier's cap (#493 FR9); defaults to the stored ones. */
+  lakePolygons?: LakePolygon[];
 }
 
 /** The name on the lake surface, so a test can find it without counting meshes. */
@@ -198,6 +201,7 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
   enrichment,
   performanceMode = 'medium',
   lakeOrigin = null,
+  lakePolygons,
 }) => {
   const timeUniformRef = useRef({ value: 0 });
   const { gl } = useThree();
@@ -332,8 +336,9 @@ export const CurvedWaterChannel: React.FC<CurvedWaterChannelProps> = ({
 
   // The same material as the ribbon (FR4): one shader, one set of ripples.
   const lakeGeometry = useMemo(
-    () => (drawsLake && lakeOrigin ? createLakeWaterGeometry(enrichment!.lakes!.polygons, lakeOrigin) : null),
-    [drawsLake, lakeOrigin, enrichment],
+    () =>
+      drawsLake && lakeOrigin ? createLakeWaterGeometry(lakePolygons ?? enrichment!.lakes!.polygons, lakeOrigin) : null,
+    [drawsLake, lakeOrigin, lakePolygons, enrichment],
   );
   useEffect(() => () => lakeGeometry?.dispose(), [lakeGeometry]);
 

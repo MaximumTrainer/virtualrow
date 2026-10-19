@@ -41,6 +41,7 @@ import {
   isTelemetryPublished,
   SCENE_SCALE,
   WATER_CHANNEL_WIDTH,
+  LAKE_VERTEX_CAP,
   hasExplicitPerformanceMode,
 } from './rower3d/constants';
 import {
@@ -104,6 +105,7 @@ import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
 import { isLakeOutlineEnabled } from './rower3d/lakeGeometry';
+import { lakePolygonsForTier } from '../utils/lakePolygons';
 import {
   createContactShadowTexture,
   CONTACT_SHADOW_RADIUS_M,
@@ -360,6 +362,14 @@ export const RowerScene: React.FC<
         ? route.coordinates[0] ?? null
         : null,
     [lakeOutlines, enrichment?.lakes, route.coordinates],
+  );
+  // Slimmed to this tier's cap (#493 FR9): re-run on a tier change, no fetch.
+  const lakePolygons = useMemo(
+    () =>
+      lakeOrigin && enrichment?.lakes
+        ? lakePolygonsForTier(enrichment.lakes.polygons, LAKE_VERTEX_CAP[performanceMode], route.coordinates)
+        : undefined,
+    [lakeOrigin, enrichment?.lakes, performanceMode, route.coordinates],
   );
 
   /**
@@ -979,6 +989,7 @@ export const RowerScene: React.FC<
           enrichment={enrichment}
           performanceMode={performanceMode}
           lakeOrigin={lakeOrigin}
+          lakePolygons={lakePolygons}
         />
       ) : (
         <PhotorealisticWater followRef={sceneryFollowRef} performanceMode={performanceMode} />
@@ -990,7 +1001,12 @@ export const RowerScene: React.FC<
       
       {routeCurve && (
         <>
-          <CurvedRiverbanks curve={routeCurve} enrichment={enrichment} lakeOrigin={lakeOrigin} />
+          <CurvedRiverbanks
+            curve={routeCurve}
+            enrichment={enrichment}
+            lakeOrigin={lakeOrigin}
+            lakePolygons={lakePolygons}
+          />
           <Shoreline curve={routeCurve} enrichment={enrichment} lakeOrigin={lakeOrigin} />
         </>
       )}

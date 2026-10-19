@@ -88,8 +88,15 @@ const triangleArea = (a: Coordinate, b: Coordinate, c: Coordinate) =>
  * neighbours is smallest, so the dropped detail is the detail that changes the
  * outline's area least. Keeps the vertices it keeps exactly where they were,
  * in order, and the ring closed. `maxVertices` counts the closing repeat.
+ *
+ * `pinned(before, vertex, after)` may refuse a drop; a pinned vertex stays
+ * even when that leaves the ring over its budget.
  */
-export const simplifyRing = (ring: Coordinate[], maxVertices: number): Coordinate[] => {
+export const simplifyRing = (
+  ring: Coordinate[],
+  maxVertices: number,
+  pinned: (before: Coordinate, vertex: Coordinate, after: Coordinate) => boolean = () => false,
+): Coordinate[] => {
   const open = closeRing(ring).slice(0, -1);
   const target = Math.max(3, maxVertices - 1);
   if (open.length <= target) return closeRing(ring);
@@ -101,7 +108,10 @@ export const simplifyRing = (ring: Coordinate[], maxVertices: number): Coordinat
     while (!kept[next]);
     return next;
   };
-  const areaAt = (index: number) => triangleArea(open[neighbour(index, -1)], open[index], open[neighbour(index, 1)]);
+  const areaAt = (index: number) => {
+    const [before, after] = [open[neighbour(index, -1)], open[neighbour(index, 1)]];
+    return pinned(before, open[index], after) ? Infinity : triangleArea(before, open[index], after);
+  };
   const areas = open.map((_, index) => areaAt(index));
 
   // O(n²) at worst, but n is a lake ring already clipped to the area around a
@@ -111,6 +121,7 @@ export const simplifyRing = (ring: Coordinate[], maxVertices: number): Coordinat
     for (let index = 0; index < open.length; index++) {
       if (kept[index] && (smallest === -1 || areas[index] < areas[smallest])) smallest = index;
     }
+    if (areas[smallest] === Infinity) break;
     kept[smallest] = false;
     const before = neighbour(smallest, -1);
     const after = neighbour(smallest, 1);
@@ -129,10 +140,25 @@ export const vertexCount = (lakes: LakePolygon[]) =>
   lakes.reduce((sum, lake) => sum + lake.outer.length + lake.inner.reduce((holes, hole) => holes + hole.length, 0), 0);
 
 /**
+ * Slim a set of lakes so that together they stay within `maxVertices`. Each
+ * ring gets a share of the budget in proportion to its own vertex count, and
+ * never fewer than four (a triangle and its closing repeat). Lakes already
+ * within budget come back as they are.
+ */
+const slimLakes = (lakes: LakePolygon[], maxVertices: number, pinned?: Parameters<typeof simplifyRing>[2]) => {
+  const total = vertexCount(lakes);
+  if (total <= maxVertices) return lakes;
+  // Every ring keeps its minimum of four; the rest of the budget is shared out.
+  const rings = lakes.reduce((sum, lake) => sum + 1 + lake.inner.length, 0);
+  const spare = Math.max(0, maxVertices - 4 * rings);
+  const share = (ring: Coordinate[]) =>
+    simplifyRing(ring, 4 + Math.floor(((ring.length - 4) / (total - 4 * rings)) * spare), pinned);
+  return lakes.map((lake) => ({ ...lake, outer: share(lake.outer), inner: lake.inner.map(share) }));
+};
+
+/**
  * The outlines of the given lake water areas inside `box`, slimmed so that all
- * of them together stay within `maxVertices`. Each ring gets a share of the
- * budget in proportion to its own vertex count, and never fewer than four
- * (a triangle and its closing repeat).
+ * of them together stay within `maxVertices` (see `slimLakes`).
  */
 export const lakePolygonsFor = (
   features: MaskFeature[],
@@ -150,15 +176,80 @@ export const lakePolygonsFor = (
       .filter((lake) => lake.outer.length > 0),
   );
 
-  const total = vertexCount(clipped);
-  // Every ring keeps its minimum of four; the rest of the budget is shared out.
-  const rings = clipped.reduce((sum, lake) => sum + 1 + lake.inner.length, 0);
-  const spare = Math.max(0, maxVertices - 4 * rings);
-  const share = (ring: Coordinate[]) =>
-    total <= maxVertices ? ring : simplifyRing(ring, 4 + Math.floor(((ring.length - 4) / (total - 4 * rings)) * spare));
-  return clipped.map((lake) => ({
+  return slimLakes(clipped, maxVertices).map((lake) => ({
     ...lake,
-    outer: share(lake.outer).map(round),
-    inner: lake.inner.map((hole) => share(hole).map(round)),
+    outer: lake.outer.map(round),
+    inner: lake.inner.map((hole) => hole.map(round)),
   }));
 };
+
+// ----------------------------------------------------------------------------
+// Drawing detail per tier (#493 Phase 4: FR9, D7 b)
+// ----------------------------------------------------------------------------
+
+/** Metres east and north of a fixed point, near enough flat across one lake. */
+const localMetres = (origin: Coordinate) => {
+  const perLat = 110_574;
+  const perLng = 111_320 * Math.cos((origin.lat * Math.PI) / 180);
+  return ({ lat, lng }: Coordinate) => ({ x: (lng - origin.lng) * perLng, y: (lat - origin.lat) * perLat });
+};
+
+type Point = { x: number; y: number };
+
+const distanceToSegment = (p: Point, a: Point, b: Point) => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+};
+
+const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+/** Metres from `p` to the triangle abc, inside counting as zero. */
+const distanceToTriangle = (p: Point, a: Point, b: Point, c: Point) => {
+  const [ab, bc, ca] = [cross(a, b, p), cross(b, c, p), cross(c, a, p)];
+  if ((ab >= 0 && bc >= 0 && ca >= 0) || (ab <= 0 && bc <= 0 && ca <= 0)) return 0;
+  return Math.min(distanceToSegment(p, a, b), distanceToSegment(p, b, c), distanceToSegment(p, c, a));
+};
+
+/**
+ * A drop that could bring the shore nearer some route sample is refused.
+ * Dropping a vertex replaces its two edges with the chord between its
+ * neighbours, which lies inside the triangle they make, so the shore can only
+ * get closer to a sample that is nearer that triangle than it was to the
+ * whole outline before any slimming.
+ */
+const routeShoreGuard = (lakes: LakePolygon[], route: Coordinate[]) => {
+  if (route.length === 0) return undefined;
+  const toMetres = localMetres(route[0]);
+  const rings = lakes.flatMap((lake) => [lake.outer, ...lake.inner]).map((ring) => ring.map(toMetres));
+  const samples = route.map(toMetres).map((point) => {
+    let shore = Infinity;
+    for (const ring of rings) {
+      for (let index = 0; index + 1 < ring.length; index++) shore = Math.min(shore, distanceToSegment(point, ring[index], ring[index + 1]));
+    }
+    return { point, shore };
+  });
+  return (before: Coordinate, vertex: Coordinate, after: Coordinate) => {
+    const [a, b, c] = [toMetres(before), toMetres(vertex), toMetres(after)];
+    const [minX, maxX] = [Math.min(a.x, b.x, c.x), Math.max(a.x, b.x, c.x)];
+    const [minY, maxY] = [Math.min(a.y, b.y, c.y), Math.max(a.y, b.y, c.y)];
+    return samples.some(
+      ({ point, shore }) =>
+        point.x > minX - shore &&
+        point.x < maxX + shore &&
+        point.y > minY - shore &&
+        point.y < maxY + shore &&
+        distanceToTriangle(point, a, b, c) < shore,
+    );
+  };
+};
+
+/**
+ * A route's stored lake outlines, slimmed to one tier's vertex cap for drawing
+ * (FR9). Visvalingam-Whyatt drops the detail that changes the area least, and
+ * no drop may pull a shoreline in towards `route`, so the blades never reach a
+ * simplified bank. Deterministic, so a tier change redraws the same shape.
+ */
+export const lakePolygonsForTier = (lakes: LakePolygon[], cap: number, route: Coordinate[]): LakePolygon[] =>
+  vertexCount(lakes) <= cap ? lakes : slimLakes(lakes, cap, routeShoreGuard(lakes, route));
