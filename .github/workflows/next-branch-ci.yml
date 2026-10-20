@@ -1,0 +1,47 @@
+name: Next Branch CI (Svelte + WebGPU)
+
+# #542: CI for the long-lived epic branch `next/svelte-webgpu`. Deliberately
+# lighter than the main `Playwright E2E Tests` workflow: it runs the full unit
+# preflight (lint, build, unit suite, shuffled run, coverage gate) plus a
+# single Playwright smoke that boots the SvelteKit scaffold. The 43-spec E2E
+# suite is NOT run here — the served app is the scaffold until P1 ports the
+# screens, so those specs would be red against it. P1 widens this as screens land.
+
+on:
+  push:
+    branches: [ next/svelte-webgpu ]
+  pull_request:
+    branches: [ next/svelte-webgpu ]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    uses: ./.github/workflows/npm-preflight.yml
+
+  smoke:
+    name: Scaffold smoke (SvelteKit boots at base path)
+    needs: preflight
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke — boot the scaffold
+        # The config's webServer builds and previews the app at
+        # /virtualrow/app/; this spec asserts the title and base path.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/svelte-scaffold-smoke.spec.ts
