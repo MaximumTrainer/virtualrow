@@ -60,10 +60,12 @@ describe('#493 Phase 3 lake outline flag (NFR7)', () => {
     delete window.__VIRTUALROW_LAKE_OUTLINES;
   });
 
-  it('is off unless turned on', () => {
-    expect(isLakeOutlineEnabled()).toBe(false);
+  it('is on unless the window flag turns it off', () => {
+    expect(isLakeOutlineEnabled()).toBe(true);
     window.__VIRTUALROW_LAKE_OUTLINES = true;
     expect(isLakeOutlineEnabled()).toBe(true);
+    window.__VIRTUALROW_LAKE_OUTLINES = false;
+    expect(isLakeOutlineEnabled()).toBe(false);
   });
 });
 

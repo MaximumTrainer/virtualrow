@@ -75,7 +75,7 @@ async function openLakeOffline(page: Page, lakeOutlines: boolean, traffic: LakeR
       window.__AUTH_USER = athlete;
       sessionStorage.setItem('vr_auth_user', JSON.stringify(athlete));
       sessionStorage.setItem('vr_auth_refresh_token', 'e2e-refresh-token');
-      if (lakeOutlines) window.__VIRTUALROW_LAKE_OUTLINES = true;
+      window.__VIRTUALROW_LAKE_OUTLINES = lakeOutlines;
       // The crash-watch fixture refuses the enrichment hosts in the page; this
       // spec blocks them at the network instead, to see the requests go out.
       (window as unknown as { __E2E_ENRICHMENT_NETWORK?: boolean }).__E2E_ENRICHMENT_NETWORK = true;

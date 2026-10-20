@@ -25,12 +25,11 @@ import {
 // ============================================================================
 
 /**
- * #493 NFR7: lake outlines are drawn only when `window.__VIRTUALROW_LAKE_OUTLINES`
- * is `true`. Phase 3 ships them off so nothing visible moves until the
- * baselines are recorded; flipping the default is its own change.
+ * #493: lake outlines are drawn by default. Setting
+ * `window.__VIRTUALROW_LAKE_OUTLINES` to `false` turns them off.
  */
 export const isLakeOutlineEnabled = (): boolean =>
-  typeof window !== 'undefined' && window.__VIRTUALROW_LAKE_OUTLINES === true;
+  typeof window === 'undefined' || window.__VIRTUALROW_LAKE_OUTLINES !== false;
 
 /**
  * #493 AC5: publish how many outline vertices the lake draws at this tier, for
