@@ -54,6 +54,24 @@ const readTelemetry = async (page: Page): Promise<TelemetryEvent[]> => {
   }
 };
 
+/**
+ * Runs in the page: wrap `fetch` so the enrichment hosts are refused (see the
+ * `enrichmentOffline` fixture). Exported for a spec that opens its own context.
+ */
+export const blockEnrichmentHosts = () => {
+  const ENRICHMENT_HOSTS = /^https:\/\/(overpass-api\.de|api\.opentopodata\.org)\//;
+  const scope = window as unknown as { __E2E_ENRICHMENT_NETWORK?: boolean; __E2E_ENRICHMENT_REFUSED?: string[] };
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (!scope.__E2E_ENRICHMENT_NETWORK && ENRICHMENT_HOSTS.test(url)) {
+      (scope.__E2E_ENRICHMENT_REFUSED ??= []).push(url);
+      return Promise.reject(new TypeError('Failed to fetch (enrichment hosts are offline in e2e)'));
+    }
+    return realFetch(input, init);
+  };
+};
+
 type CrashWatchWorkerFixtures = {
   /**
    * One simulator per worker, for the whole worker.
@@ -90,6 +108,24 @@ type CrashWatchFixtures = {
    * Auto-use, because a guard nobody remembers to switch on is not a guard.
    */
   crashWatch: void;
+
+  /**
+   * Keep route enrichment off the network (#493).
+   *
+   * Overpass and OpenTopoData are third-party services: a spec that waited on
+   * them would pass or fail with their load, and their answers would move the
+   * scene under the visual baselines. Every call to them is refused in the
+   * page, as a failed fetch, so enrichment takes its fallback the same way it
+   * does offline, with nothing on the wire and nothing in the console. Until
+   * #493's fix the browser never reached them at all (a bare `fetch` with the
+   * wrong receiver), so this keeps every existing spec on the data it was
+   * written against.
+   *
+   * A spec that wants the real requests, to route them itself, sets
+   * `window.__E2E_ENRICHMENT_NETWORK = true` in an init script. The attempts
+   * are counted in `window.__E2E_ENRICHMENT_REFUSED` either way.
+   */
+  enrichmentOffline: void;
 };
 
 export const test = base.extend<CrashWatchFixtures, CrashWatchWorkerFixtures>({
@@ -116,6 +152,14 @@ export const test = base.extend<CrashWatchFixtures, CrashWatchWorkerFixtures>({
       await page.addInitScript((value) => {
         (window as unknown as { __SIM_PORTS?: unknown }).__SIM_PORTS = value;
       }, ports);
+      await use();
+    },
+    { auto: true },
+  ],
+
+  enrichmentOffline: [
+    async ({ page }, use) => {
+      await page.addInitScript(blockEnrichmentHosts);
       await use();
     },
     { auto: true },
