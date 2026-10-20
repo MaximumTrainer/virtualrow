@@ -66,6 +66,39 @@ jobs:
           mkdir -p docs/app
           cp -r dist/. docs/app/
 
+      # #542: publish the next/svelte-webgpu epic branch as a preview at
+      # /virtualrow/next/, alongside the production app at /virtualrow/app/.
+      # GitHub Pages serves one site, so the preview rides this deploy's
+      # artifact rather than a second deploy that would clobber /app — it
+      # refreshes whenever main deploys (the epic branch is cherry-picked
+      # forward). Both steps are continue-on-error: a broken epic branch
+      # leaves last good /next (or none) and never blocks the /app deploy.
+      # Removed at the AC12 cutover, when the branch replaces main.
+      - name: Checkout next/svelte-webgpu
+        id: next_checkout
+        continue-on-error: true
+        uses: actions/checkout@v7
+        with:
+          ref: next/svelte-webgpu
+          path: next-preview
+
+      - name: Build next/svelte-webgpu preview into docs/next/
+        if: steps.next_checkout.outcome == 'success'
+        continue-on-error: true
+        working-directory: next-preview
+        env:
+          NODE_ENV: production
+          BASE_PATH: /virtualrow/next
+          VITE_INTERVALS_CLIENT_ID: ${{ secrets.INTERVALS_OAUTH_CLIENT_ID }}
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_CRASH_REPORT_ENDPOINT: ${{ secrets.CRASH_REPORT_ENDPOINT }}
+          VITE_CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
+        run: |
+          npm ci
+          npm run build
+          mkdir -p "$GITHUB_WORKSPACE/docs/next"
+          cp -r build/. "$GITHUB_WORKSPACE/docs/next/"
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
