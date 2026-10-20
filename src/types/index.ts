@@ -550,9 +550,8 @@ declare global {
         | 'device-request-failed';
     };
     /**
-     * `true` draws a lake route's water, shoreline and islands from the lake's
-     * OSM outline (#493 Phase 3). Undefined (off) until the baselines are
-     * recorded with it on.
+     * `false` stops a lake route drawing its water, shoreline and islands from
+     * the lake's OSM outline (#493). Undefined or `true` leaves them on.
      */
     __VIRTUALROW_LAKE_OUTLINES?: boolean;
     /**

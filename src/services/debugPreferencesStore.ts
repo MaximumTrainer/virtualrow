@@ -47,16 +47,15 @@ export const LAKE_OUTLINES_KEY = 'virtualrow:debug:lakeOutlines';
 
 /**
  * Whether lake routes draw their water and shore from the lake outline
- * (#493 Phase 3). The feature ships off (NFR7) until its baselines are
- * recorded; this lets a tester turn it on from the debug panel on main.
- * Anything but a stored `'true'` reads as off.
+ * (#493). On by default; a tester turns it off from the debug panel.
+ * Anything but a stored `'false'` reads as on.
  */
 function getLakeOutlines(): boolean {
   try {
-    return localStorage.getItem(LAKE_OUTLINES_KEY) === 'true';
+    return localStorage.getItem(LAKE_OUTLINES_KEY) !== 'false';
   } catch (err) {
     console.warn('[DebugPreferencesStore] Failed to read lakeOutlines:', err);
-    return false;
+    return true;
   }
 }
 

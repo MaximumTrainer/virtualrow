@@ -368,8 +368,7 @@ describe('RowerScene', () => {
       delete window.__VIRTUALROW_LAKE_OUTLINES;
     });
 
-    it('draws the lake and its shore when the flag is on', async () => {
-      window.__VIRTUALROW_LAKE_OUTLINES = true;
+    it('draws the lake and its shore by default', async () => {
       const scene = await renderScene({ performanceMode: 'basic', enrichment });
       const names = scene.objects().map((o) => o.name);
       expect(names).toContain(LAKE_WATER_NAME);
@@ -386,11 +385,20 @@ describe('RowerScene', () => {
       await scene.unmount();
     });
 
-    it('draws the lake from the debug panel switch with the window flag unset', async () => {
-      const scene = await renderScene({ performanceMode: 'basic', enrichment, lakeOutlines: true });
+    it('draws the ribbon instead when the debug panel switch is off', async () => {
+      const scene = await renderScene({ performanceMode: 'basic', enrichment, lakeOutlines: false });
       const names = scene.objects().map((o) => o.name);
-      expect(names).toContain(LAKE_WATER_NAME);
-      expect(names).toContain(LAKE_LAND_NAME);
+      expect(names).not.toContain(LAKE_WATER_NAME);
+      expect(names).not.toContain(LAKE_LAND_NAME);
+      await scene.unmount();
+    });
+
+    it('draws the ribbon instead when the window flag turns outlines off', async () => {
+      window.__VIRTUALROW_LAKE_OUTLINES = false;
+      const scene = await renderScene({ performanceMode: 'basic', enrichment });
+      const names = scene.objects().map((o) => o.name);
+      expect(names).not.toContain(LAKE_WATER_NAME);
+      expect(names).not.toContain(LAKE_LAND_NAME);
       await scene.unmount();
     });
 
@@ -417,14 +425,6 @@ describe('RowerScene', () => {
       const extraHigh = await vertices('extra-high');
       expect(extraHigh).toBeLessThanOrEqual(LAKE_VERTEX_CAP['extra-high']);
       expect(extraHigh).toBeGreaterThan(LAKE_VERTEX_CAP.basic);
-    });
-
-    it('keeps the ribbon alone while the flag is off', async () => {
-      const scene = await renderScene({ performanceMode: 'basic', enrichment });
-      const names = scene.objects().map((o) => o.name);
-      expect(names).not.toContain(LAKE_WATER_NAME);
-      expect(names).not.toContain(LAKE_LAND_NAME);
-      await scene.unmount();
     });
   });
 });
