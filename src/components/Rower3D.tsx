@@ -104,7 +104,7 @@ import {
 import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
-import { isLakeOutlineEnabled, ribbonClearings } from './rower3d/lakeGeometry';
+import { isLakeOutlineEnabled, publishLakeVertices, ribbonClearings } from './rower3d/lakeGeometry';
 import { lakePolygonsForTier } from '../utils/lakePolygons';
 import {
   createContactShadowTexture,
@@ -371,6 +371,7 @@ export const RowerScene: React.FC<
         : undefined,
     [lakeOrigin, enrichment?.lakes, performanceMode, route.coordinates],
   );
+  useEffect(() => publishLakeVertices(lakePolygons, performanceMode), [lakePolygons, performanceMode]);
   // Where the route is off its lake, the lake opens for the ribbon (FR8, D21 ii).
   const lakeClearings = useMemo(
     () => (lakeOrigin && enrichment && routeCurve ? ribbonClearings(routeCurve, enrichment) : undefined),

@@ -12,6 +12,7 @@
     "default:intervals-login-failure.spec.ts": 45,
     "default:kml-projection.spec.ts": 23,
     "default:lake-offline.spec.ts": 210,
+    "default:lake-performance.spec.ts": 265,
     "default:load-todays-workout.spec.ts": 20,
     "default:login-integration.spec.ts": 8,
     "default:oar-clearance.spec.ts": 124,

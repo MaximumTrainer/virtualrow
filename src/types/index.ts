@@ -556,6 +556,12 @@ declare global {
      */
     __VIRTUALROW_LAKE_OUTLINES?: boolean;
     /**
+     * The lake outline (#493 AC5): outline vertices drawn at `performanceMode`,
+     * the most drawn at that tier so far, and the tier's cap. Published with
+     * the other telemetry.
+     */
+    __ROWER3D_LAKE?: { performanceMode: string; cap: number; vertices: number; peakVertices: number };
+    /**
      * The billboard foliage (#333): how many trees the route was planted with,
      * how many meshes draw them, and how many trees the last cull kept.
      */

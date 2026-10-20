@@ -8,6 +8,7 @@ import {
   isLakeOutlineEnabled,
   LAKE_SHORE_RISE_METERS,
   projectRing,
+  publishLakeVertices,
 } from '../components/rower3d/lakeGeometry';
 import { BANK_WATERLINE_Y } from '../components/rower3d/bankGeometry';
 import { WATER_SURFACE_Y } from '../components/rower3d/waterGeometry';
@@ -149,5 +150,41 @@ describe('#493 Phase 3 lake geometry on Lake Quinsigamond (course 1)', () => {
     // NFR8 found 69% of course 1's route points on mapped water: the straight
     // line between its gates cuts across the bends.
     expect(onWater.length / fixture.route.length).toBeGreaterThanOrEqual(0.69);
+  });
+});
+
+describe('#493 AC5 lake vertex telemetry', () => {
+  afterEach(() => {
+    delete window.__VIRTUALROW_TELEMETRY;
+    delete window.__ROWER3D_LAKE;
+  });
+
+  // 5 + 5 vertices: the square's outer ring and its island, closing repeats included.
+  const island = (x: number): LakePolygon => ({ featureId: 'way/2', outer: square(x, 0, x + 10, 10), inner: [] });
+
+  it('publishes nothing unless telemetry is on', () => {
+    publishLakeVertices([lake], 'high');
+    expect(window.__ROWER3D_LAKE).toBeUndefined();
+  });
+
+  it('publishes the drawn vertex count against the tier cap', () => {
+    window.__VIRTUALROW_TELEMETRY = true;
+    publishLakeVertices([lake], 'basic');
+    expect(window.__ROWER3D_LAKE).toEqual({ performanceMode: 'basic', cap: 256, vertices: 10, peakVertices: 10 });
+  });
+
+  it('counts nothing drawn as zero', () => {
+    window.__VIRTUALROW_TELEMETRY = true;
+    publishLakeVertices(undefined, 'high');
+    expect(window.__ROWER3D_LAKE).toMatchObject({ vertices: 0, peakVertices: 0, cap: 1024 });
+  });
+
+  it('keeps the most any frame drew at the tier, and starts again on a new tier', () => {
+    window.__VIRTUALROW_TELEMETRY = true;
+    publishLakeVertices([lake, island(300)], 'high');
+    publishLakeVertices([lake], 'high');
+    expect(window.__ROWER3D_LAKE).toMatchObject({ vertices: 10, peakVertices: 15 });
+    publishLakeVertices([lake], 'basic');
+    expect(window.__ROWER3D_LAKE).toMatchObject({ performanceMode: 'basic', vertices: 10, peakVertices: 10 });
   });
 });
