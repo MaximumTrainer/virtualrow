@@ -16,7 +16,7 @@ import { mapOsmTagsToSceneryProfile } from '../utils/sceneryFromTags';
 import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
 import type { RouteWaterClass } from '../utils/waterClassification';
 import { createWorkerDetectionRunner, type RouteDetectionRunner } from './routeDetectionRunner';
-import type { LakePolygon } from '../utils/lakePolygons';
+import { LAKE_POLYGON_STORE_VERTICES, lakePolygonsForTier, type LakePolygon } from '../utils/lakePolygons';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 
@@ -644,6 +644,81 @@ export const createFallbackRouteEnrichment = (
   };
 };
 
+/** NFR3: the most one route's cache entry may take, in UTF-16 code units. */
+export const ROUTE_ENRICHMENT_STORAGE_BUDGET = 128 * 1024;
+
+const roundTo = (value: number, places: number) => {
+  const scale = 10 ** places;
+  return Math.round(value * scale) / scale;
+};
+
+const roundShore = (value: number | null | undefined) =>
+  typeof value === 'number' ? roundTo(value, 1) : value;
+
+/**
+ * The stored form of a route's enrichment (#493 NFR3). Each segment drops the
+ * densities its scenery profile already gives (restored on load), and its
+ * bearings and widths keep a hundredth of a degree and a tenth of a metre, far
+ * finer than anything drawn from them. A 22 km river was over budget without it.
+ */
+const DERIVED_SEGMENT_FIELDS = ['treeDensity', 'vegetationDensity', 'buildingDensity', 'objectScale'] as const;
+
+const compactForStorage = (data: RouteEnrichmentData): RouteEnrichmentData => ({
+  ...data,
+  segmentProfiles: data.segmentProfiles.map((segment) => {
+    const compact: Partial<RouteSegmentEnrichment> = {
+      ...segment,
+      waterWidthMeters: roundTo(segment.waterWidthMeters, 1),
+      bearing: roundTo(segment.bearing, 2),
+      bearingDelta: roundTo(segment.bearingDelta, 2),
+      ...('leftShoreMeters' in segment && { leftShoreMeters: roundShore(segment.leftShoreMeters) }),
+      ...('rightShoreMeters' in segment && { rightShoreMeters: roundShore(segment.rightShoreMeters) }),
+    };
+    for (const key of DERIVED_SEGMENT_FIELDS) delete compact[key];
+    return compact as RouteSegmentEnrichment;
+  }),
+});
+
+const LAKE_STORE_FLOOR_VERTICES = 256;
+
+/**
+ * The entry as JSON, within `ROUTE_ENRICHMENT_STORAGE_BUDGET` where it can be:
+ * a route over budget keeps fewer lake outlines, the ones farthest from the
+ * route going first, then slims the ones left, rather than lose detection
+ * (NFR3). An entry still over budget is written whole; the browser's own quota
+ * decides whether it fits.
+ */
+const serializeWithinBudget = (savedAt: number, data: RouteEnrichmentData, route: Coordinate[]) => {
+  const serialize = (candidate: RouteEnrichmentData) =>
+    JSON.stringify({ savedAt, data: candidate } satisfies CachedRouteEnrichment);
+  let json = serialize(data);
+  const lakes = data.lakes;
+  if (json.length <= ROUTE_ENRICHMENT_STORAGE_BUDGET || !lakes) return json;
+
+  const metres = (a: Coordinate, b: Coordinate) =>
+    Math.hypot((a.lat - b.lat) * 110_574, (a.lng - b.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180));
+  const distanceToRoute = (lake: LakePolygon) =>
+    route.length === 0 ? 0 : Math.min(...lake.outer.map((vertex) => Math.min(...route.map((point) => metres(vertex, point)))));
+  const nearestFirst = lakes.polygons
+    .map((lake) => ({ lake, distance: distanceToRoute(lake) }))
+    .sort((a, b) => a.distance - b.distance)
+    .map(({ lake }) => lake);
+  let polygons = nearestFirst;
+  let cap = LAKE_POLYGON_STORE_VERTICES;
+  while (json.length > ROUTE_ENRICHMENT_STORAGE_BUDGET) {
+    if (polygons.length > 1) {
+      polygons = polygons.slice(0, -1);
+    } else if (cap > LAKE_STORE_FLOOR_VERTICES) {
+      cap /= 2;
+      polygons = lakePolygonsForTier(polygons, cap, route);
+    } else {
+      break;
+    }
+    json = serialize({ ...data, lakes: { ...lakes, polygons } });
+  }
+  return json;
+};
+
 export const loadCachedRouteEnrichment = (
   routeId: string,
   storage: Storage | null = defaultStorage(),
@@ -661,7 +736,14 @@ export const loadCachedRouteEnrichment = (
     }
     const stale = Date.now() - parsed.savedAt > ROUTE_ENRICHMENT_CACHE_TTL_MS;
     return {
-      data: { ...parsed.data, source: 'cache' },
+      data: {
+        ...parsed.data,
+        segmentProfiles: parsed.data.segmentProfiles.map((segment) => ({
+          ...SCENERY_PROFILE_CONFIG[segment.sceneryProfile],
+          ...segment,
+        })),
+        source: 'cache',
+      },
       stale,
     };
   } catch {
@@ -673,14 +755,12 @@ export const saveCachedRouteEnrichment = (
   routeId: string,
   data: RouteEnrichmentData,
   storage: Storage | null = defaultStorage(),
+  route: Coordinate[] = [],
 ) => {
   if (!storage) return;
-  const entry: CachedRouteEnrichment = {
-    savedAt: Date.now(),
-    data,
-  };
+  const savedAt = Date.now();
   try {
-    storage.setItem(getRouteEnrichmentCacheKey(routeId), JSON.stringify(entry));
+    storage.setItem(getRouteEnrichmentCacheKey(routeId), serializeWithinBudget(savedAt, compactForStorage(data), route));
   } catch {
     return;
   }
@@ -1298,7 +1378,7 @@ export class RouteEnrichmentService {
           fetchedAt: Date.now(),
           source: 'network',
         };
-        saveCachedRouteEnrichment(route.id, enrichment, this.storage);
+        saveCachedRouteEnrichment(route.id, enrichment, this.storage, route.coordinates);
         return enrichment;
       } catch {
         return staleCachedData ?? getFallback();
