@@ -1116,7 +1116,11 @@ export class RouteEnrichmentService {
   private readonly inflight = new Map<string, Promise<RouteEnrichmentData>>();
 
   constructor(
-    fetchImpl: typeof fetch = fetch,
+    // Forwarded through an arrow, as in rownativeService: a bare `fetch` stored
+    // on the instance is called with the service as its receiver, which
+    // browsers reject with "Illegal invocation" - and the catch below turned
+    // that into fallback data on every route (#493 AC8).
+    fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
     storage: Storage | null = defaultStorage(),
     // #493 D23 b: a worker where the browser has one, inline otherwise.
     detect: RouteDetectionRunner = createWorkerDetectionRunner(),
