@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { Coordinate } from '../../types/index';
-import type { LakePolygon } from '../../utils/lakePolygons';
+import { vertexCount, type LakePolygon } from '../../utils/lakePolygons';
 import { latLngToMeters } from '../../utils/geoUtils';
-import { RIVERBANK_WIDTH, SCENE_SCALE } from './constants';
+import { LAKE_VERTEX_CAP, RIVERBANK_WIDTH, SCENE_SCALE, isTelemetryPublished, type PerformanceMode } from './constants';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import { BANK_WATERLINE_Y } from './bankGeometry';
 import {
@@ -31,6 +31,24 @@ import {
  */
 export const isLakeOutlineEnabled = (): boolean =>
   typeof window !== 'undefined' && window.__VIRTUALROW_LAKE_OUTLINES === true;
+
+/**
+ * #493 AC5: publish how many outline vertices the lake draws at this tier, for
+ * the performance spec to hold against `LAKE_VERTEX_CAP`. The drawn outlines
+ * change only when the tier's slimmed set does, so publishing on each change
+ * and keeping the peak covers every frame drawn at the tier.
+ */
+export const publishLakeVertices = (polygons: LakePolygon[] | undefined, performanceMode: PerformanceMode): void => {
+  if (!isTelemetryPublished()) return;
+  const vertices = polygons ? vertexCount(polygons) : 0;
+  const previous = window.__ROWER3D_LAKE?.performanceMode === performanceMode ? window.__ROWER3D_LAKE.peakVertices : 0;
+  window.__ROWER3D_LAKE = {
+    performanceMode,
+    cap: LAKE_VERTEX_CAP[performanceMode],
+    vertices,
+    peakVertices: Math.max(previous, vertices),
+  };
+};
 
 /** How high the lake's banks climb above the waterline, in metres (flat: D11 a). */
 export const LAKE_SHORE_RISE_METERS = 1.5;
