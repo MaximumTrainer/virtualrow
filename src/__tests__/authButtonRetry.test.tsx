@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { AuthProvider } from '../context/AuthContext';
 import { AuthButton } from '../components/AuthButton';
-import type { AuthErrorClass } from '../services/authService';
-import type { AuthPort } from '../ports';
+import type { AuthErrorClass } from '../lib/services/authService';
+import type { AuthPort } from '../lib/ports';
 
 /**
  * AuthButton — Retry behaviour (#486 Phase 2 FR2 / FR3, D2 = a, D4 = a).

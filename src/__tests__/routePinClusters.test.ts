@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { clusterRoutePins } from '../utils/routePinClusters';
-import type { WaterRoute } from '../types/index';
+import { clusterRoutePins } from '../lib/utils/routePinClusters';
+import type { WaterRoute } from '../lib/types/index';
 
 const route = (id: string, lat: number, lng: number): WaterRoute => ({
   id,

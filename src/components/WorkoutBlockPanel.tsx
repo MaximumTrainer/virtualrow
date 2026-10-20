@@ -1,5 +1,5 @@
 import React from 'react';
-import type { StructuredWorkout, WorkoutProgress, WorkoutSegment } from '../types';
+import type { StructuredWorkout, WorkoutProgress, WorkoutSegment } from '../lib/types';
 import {
   COMPLIANCE_LABELS,
   complianceOf,
@@ -7,8 +7,8 @@ import {
   intensityLabel,
   intensityMark,
   segmentTypeLabel,
-} from '../utils/workoutPlan';
-import { formatSplit } from '../utils/formatters';
+} from '../lib/utils/workoutPlan';
+import { formatSplit } from '../lib/utils/formatters';
 import './WorkoutBlockPanel.css';
 
 /**

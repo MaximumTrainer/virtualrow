@@ -7,7 +7,7 @@ import {
 } from './curve';
 import { SCENE_SCALE } from './constants';
 import { WHOLE_ROUTE, type ProgressRange } from './geometryChunks';
-import { isOnLakeAtProgress, type RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import { isOnLakeAtProgress, type RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
 
 // ============================================================================
 // Shared frame math for the ribbons that follow a route: the water channel and

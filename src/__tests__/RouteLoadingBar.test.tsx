@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { RouteLoadingBar } from '../components/RouteLoadingBar';
-import { describeLoadProgress, type LoadPhaseKey } from '../utils/loadingProgress';
+import { describeLoadProgress, type LoadPhaseKey } from '../lib/utils/loadingProgress';
 
 /**
  * What the rower sees while the route loads (#318).

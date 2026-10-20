@@ -5,12 +5,12 @@ vi.mock('react-chartjs-2', () => ({
   Line: () => <canvas data-testid="row-chart" />,
 }));
 
-import * as exporters from '../utils/exporters';
+import * as exporters from '../lib/utils/exporters';
 import { SessionSummary } from '../components/SessionSummary';
 import { ServicesProvider } from '../context/ServicesContext';
 import { AuthContext, type AuthContextValue } from '../context/useAuth';
-import type { ActivityUploadAuth, ActivityUploadResult } from '../services/intervalsIcuActivityService';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import type { ActivityUploadAuth, ActivityUploadResult } from '../lib/services/intervalsIcuActivityService';
+import type { ActivitySample, WorkoutSession } from '../lib/types/index';
 
 /**
  * The signed-in end-of-session summary (issue #221, R4) and the rule that a
@@ -74,7 +74,7 @@ function uploadMock(
     activityUrl: 'https://intervals.icu/activities/i9090',
   }),
 ) {
-  return vi.fn<UploadArgs, Promise<ActivityUploadResult>>(impl);
+  return vi.fn<(...args: UploadArgs) => Promise<ActivityUploadResult>>(impl);
 }
 
 function renderSummary(

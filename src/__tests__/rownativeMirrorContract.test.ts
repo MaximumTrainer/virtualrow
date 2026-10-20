@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RownativeService } from '../services/rownativeService';
-import { RouteService } from '../services/routeService';
+import { RownativeService } from '../lib/services/rownativeService';
+import { RouteService } from '../lib/services/routeService';
 
 /**
  * Contract check against the live GitHub mirror (issue #193 §8).

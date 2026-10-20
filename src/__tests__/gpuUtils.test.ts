@@ -5,7 +5,7 @@ import {
   classifyGPUTier,
   describeUnmaskedRenderer,
   recommendPerformanceMode,
-} from '../utils/gpuUtils';
+} from '../lib/utils/gpuUtils';
 
 // Availability is cached, because each probe costs a WebGL context - see
 // isWebGLAvailable. Cleared before *every* test in this file, not per describe:

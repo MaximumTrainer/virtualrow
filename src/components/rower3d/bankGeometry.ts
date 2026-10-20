@@ -12,7 +12,7 @@ import {
   buildTerrainProfile,
   getTerrainReliefForProgress,
   getWaterEdgesSceneUnitsForProgress,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 // ============================================================================
 // Pure riverbank geometry. Kept out of bankComponents.tsx so the terrain

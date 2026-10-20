@@ -5,8 +5,8 @@ import {
   segmentHasControllableTarget,
   computeTargetPayload,
 } from '../hooks/useWorkoutTargetController';
-import type { WorkoutSegment } from '../types';
-import type { RowerTargetPort } from '../ports';
+import type { WorkoutSegment } from '../lib/types';
+import type { RowerTargetPort } from '../lib/ports';
 
 const makeSegment = (partial: Partial<WorkoutSegment>): WorkoutSegment => ({
   id: 'seg-1',
@@ -17,7 +17,7 @@ const makeSegment = (partial: Partial<WorkoutSegment>): WorkoutSegment => ({
 });
 
 const stubPort = () => {
-  const setTargets = vi.fn<Parameters<RowerTargetPort['setTargets']>, void>();
+  const setTargets = vi.fn<(...args: Parameters<RowerTargetPort['setTargets']>) => void>();
   const port: RowerTargetPort = { setTargets };
   return { port, setTargets };
 };

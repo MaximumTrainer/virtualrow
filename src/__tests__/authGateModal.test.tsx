@@ -17,7 +17,7 @@ function makeServiceStub() {
     getAccessToken: vi.fn(() => null),
     scheduleRefresh: vi.fn(),
     get isAuthenticated() { return false; },
-  } as unknown as import('../services/authService').AuthService;
+  } as unknown as import('../lib/services/authService').AuthService;
 }
 
 function renderModal(props: {

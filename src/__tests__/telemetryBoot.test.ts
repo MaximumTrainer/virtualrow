@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { startTelemetry, stopTelemetryForTests } from '../utils/telemetryBoot';
-import { clearTelemetry, readTelemetry } from '../utils/sceneTelemetryLog';
+import { startTelemetry, stopTelemetryForTests } from '../lib/utils/telemetryBoot';
+import { clearTelemetry, readTelemetry } from '../lib/utils/sceneTelemetryLog';
 
 /**
  * The scene records its own lifecycle — a context made, lost, restored, a

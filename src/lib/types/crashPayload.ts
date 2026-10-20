@@ -11,7 +11,7 @@
  * content, or route id/name. `intervalsIcuAthleteId` is the one exception
  * (D2 = b), opaque numeric only.
  */
-import type { PerformanceMode } from '../components/rower3d/constants';
+import type { PerformanceMode } from '../../components/rower3d/constants';
 
 export const CRASH_PAYLOAD_SCHEMA_VERSION = 1 as const;
 

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { CrashPayload } from '../../src/types/crashPayload';
+import type { CrashPayload } from '../../src/lib/types/crashPayload';
 
 /**
  * Crash telemetry e2e (issue #473, Phase 2, AC1 + AC2).

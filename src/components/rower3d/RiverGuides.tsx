@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { buildLakeGuides, buildRiverGuides, guideLine, GUIDE_COLOURS } from './riverGuideGeometry';
-import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
-import type { Coordinate } from '../../types/index';
+import type { RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../../lib/types/index';
 
 /**
  * Draw the channel's centreline and water edges, behind the debug toggle.

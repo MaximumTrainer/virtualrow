@@ -25,7 +25,7 @@ import {
   trackProfiles,
   trackWaterForProfile,
 } from '../components/rower3d/sceneryTrack';
-import type { RouteEnrichmentData, SceneryProfile } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData, SceneryProfile } from '../lib/services/routeEnrichmentService';
 
 const fallbackResolved = resolveSceneryModels('fallback', 'unknown', ['pine', 'oak', 'willow']);
 const byProfile = (r: ResolvedScenery = fallbackResolved) => {

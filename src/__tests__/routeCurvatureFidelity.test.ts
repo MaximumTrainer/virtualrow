@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import { createRouteCurve } from '../components/rower3d/curve';
 import { createWaterChannelGeometry } from '../components/rower3d/waterGeometry';
 import { createBankGeometry } from '../components/rower3d/bankGeometry';
@@ -9,7 +9,7 @@ import {
   stripProgressSchedule,
   stripSegmentCount,
 } from '../components/rower3d/routeStripGeometry';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 
 /**
  * A channel narrow enough to negotiate a tight bend.

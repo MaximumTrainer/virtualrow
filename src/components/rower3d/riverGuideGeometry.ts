@@ -19,9 +19,9 @@ import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from './constants';
 import {
   getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
-} from '../../services/routeEnrichmentService';
-import type { Coordinate } from '../../types/index';
-import type { LakePolygon } from '../../utils/lakePolygons';
+} from '../../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../../lib/types/index';
+import type { LakePolygon } from '../../lib/utils/lakePolygons';
 import { projectRing } from './lakeGeometry';
 
 /** Yellow down the middle, red at the edges. */

@@ -6,8 +6,8 @@
  * for the whole module.
  */
 import { createContext, useContext } from 'react';
-import type { AuthUser } from '../types/index';
-import type { AuthErrorClass } from '../services/authService';
+import type { AuthUser } from '../lib/types/index';
+import type { AuthErrorClass } from '../lib/services/authService';
 
 export interface AuthContextValue {
   user: AuthUser | null;

@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { FTMSBluetoothService } from '../services/ftmsBluetoothService';
+import { FTMSBluetoothService } from '../lib/services/ftmsBluetoothService';
 
 /** Helper: build a DataView with an FTMS Rower Data payload. */
 function buildRowerData(params: {

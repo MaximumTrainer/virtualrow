@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { pm5Simulator } from '../services/pm5SimulatorService';
-import type { SimulatorSettings } from '../services/pm5SimulatorService';
-import type { PM5Data } from '../types/index';
+import { pm5Simulator } from '../lib/services/pm5SimulatorService';
+import type { SimulatorSettings } from '../lib/services/pm5SimulatorService';
+import type { PM5Data } from '../lib/types/index';
 import './PM5Simulator.css';
 
 interface PM5SimulatorProps {

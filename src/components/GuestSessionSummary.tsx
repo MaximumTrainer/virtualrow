@@ -1,5 +1,5 @@
-import type { WorkoutSession } from '../types/index';
-import { formatPace } from '../utils/formatters';
+import type { WorkoutSession } from '../lib/types/index';
+import { formatPace } from '../lib/utils/formatters';
 import { RowBreakdown } from './RowBreakdown';
 import './GuestSessionSummary.css';
 

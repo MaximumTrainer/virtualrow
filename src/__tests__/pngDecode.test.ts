@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { decodePng } from '../utils/pngDecode';
+import { decodePng } from '../lib/utils/pngDecode';
 
 /**
  * Enough PNG to answer "is there anything in this picture". Hand-written for

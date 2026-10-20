@@ -15,7 +15,7 @@ import {
   getTerrainReliefForProgress,
   type RouteEnrichmentData,
   type SceneryProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import type { ResolvedScenery, SceneryModelId } from './sceneryAssets';
 import { nearestBankOffset, sideOfOffset, waterHalfWidthAt } from './sceneryClearance';
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCurrentWorkout } from '../hooks/useCurrentWorkout';
-import type { PM5Data, StructuredWorkout, WorkoutSegment } from '../types/index';
+import type { PM5Data, StructuredWorkout, WorkoutSegment } from '../lib/types/index';
 
 const segment = (over: Partial<WorkoutSegment> = {}): WorkoutSegment => ({
   id: `s${over.order ?? 0}`,

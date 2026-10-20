@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
-import { clearTelemetry, readTelemetry } from '../utils/sceneTelemetryLog';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
+import { clearTelemetry, readTelemetry } from '../lib/utils/sceneTelemetryLog';
 import type * as THREE from 'three';
 import { installCanvasMock } from './canvasMock';
 import { LAKE_VERTEX_CAP, SCENE_SCALE } from '../components/rower3d/constants';

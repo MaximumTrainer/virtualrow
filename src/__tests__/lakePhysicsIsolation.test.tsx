@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
-import { RouteEnrichmentService } from '../services/routeEnrichmentService';
-import { runDetectionInline } from '../services/routeDetectionRunner';
-import type { WaterRoute } from '../types/index';
+import { RouteEnrichmentService } from '../lib/services/routeEnrichmentService';
+import { runDetectionInline } from '../lib/services/routeDetectionRunner';
+import type { WaterRoute } from '../lib/types/index';
 
 /**
  * #493 NFR4 / AC11: a stalled Overpass fetch never reaches the frame loop.

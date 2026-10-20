@@ -24,7 +24,7 @@ import {
   nearestBankOffset,
 } from '../components/rower3d/sceneryClearance';
 import type { SceneryTrack } from '../components/rower3d/sceneryTrack';
-import type { RouteEnrichmentData, SceneryProfile } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData, SceneryProfile } from '../lib/services/routeEnrichmentService';
 
 /**
  * Issue #333 — where the billboard trees stand.

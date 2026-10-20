@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { AuthProvider } from '../context/AuthContext';
 import { useAuth } from '../context/useAuth';
-import type { AuthUser } from '../types/index';
+import type { AuthUser } from '../lib/types/index';
 
 // Suppress console noise
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -27,7 +27,7 @@ function makeServiceStub(overrides: Partial<{
   getUser: () => AuthUser | null;
   handleCallback: (code: string, state: string) => Promise<AuthUser | null>;
   getLastError: () => string | null;
-  getLastErrorClass: () => import('../services/authService').AuthErrorClass | null;
+  getLastErrorClass: () => import('../lib/services/authService').AuthErrorClass | null;
   startLogin: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -44,7 +44,7 @@ function makeServiceStub(overrides: Partial<{
     scheduleRefresh: vi.fn(),
     get isAuthenticated() { return false; },
     ...overrides,
-  } satisfies import('../ports').AuthPort;
+  } satisfies import('../lib/ports').AuthPort;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

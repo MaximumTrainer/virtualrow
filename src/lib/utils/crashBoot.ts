@@ -14,7 +14,7 @@ import type { CrashReporterPort } from '../ports';
 import { describeCrashEvidence } from './crashEvidence';
 import { readTelemetry, formatTelemetry } from './sceneTelemetryLog';
 import type { CrashPayload } from '../types/crashPayload';
-import type { PerformanceMode } from '../components/rower3d/constants';
+import type { PerformanceMode } from '../../components/rower3d/constants';
 import { crashBannerStore, type CrashBannerStore } from '../services/crashBannerStore';
 
 interface BootCrashOptions {

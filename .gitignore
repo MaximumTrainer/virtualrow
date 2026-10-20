@@ -18,6 +18,9 @@ playwright/playwright-report/
 /build
 *.tsbuildinfo
 
+# SvelteKit generated files (#542)
+/.svelte-kit
+
 # Environment variables
 .env
 .env.local

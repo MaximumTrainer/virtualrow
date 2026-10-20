@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { RouteOverviewMap } from '../components/RouteOverviewMap';
-import type { WaterRoute } from '../types/index';
+import type { WaterRoute } from '../lib/types/index';
 
 const route = (over: Partial<WaterRoute>): WaterRoute => ({
   id: 'r1',

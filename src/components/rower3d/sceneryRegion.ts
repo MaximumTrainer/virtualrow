@@ -13,7 +13,7 @@
 // kit dresses the bank, not where anyone is.
 // ============================================================================
 
-import type { Coordinate } from '../../types/index';
+import type { Coordinate } from '../../lib/types/index';
 
 export type SceneryRegion = 'gb' | 'ce' | 'it' | 'nl' | 'us';
 

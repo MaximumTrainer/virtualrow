@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
-import { describeCrashEvidence } from '../../src/utils/crashEvidence';
-import type { TelemetryEvent } from '../../src/utils/sceneTelemetryLog';
+import { describeCrashEvidence } from '../../src/lib/utils/crashEvidence';
+import type { TelemetryEvent } from '../../src/lib/utils/sceneTelemetryLog';
 
 /**
  * The crash guard has to actually fire in this browser.

@@ -4,9 +4,9 @@ import './index.css'
 import App from './App.tsx'
 import { ServicesProvider } from './context/ServicesContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
-import { startTelemetry } from './utils/telemetryBoot.ts'
-import { checkBootCrash, reportFromErrorBoundary } from './utils/crashBoot.ts'
-import { crashReporterService } from './services/crashReporterService.ts'
+import { startTelemetry } from './lib/utils/telemetryBoot.ts'
+import { checkBootCrash, reportFromErrorBoundary } from './lib/utils/crashBoot.ts'
+import { crashReporterService } from './lib/services/crashReporterService.ts'
 
 // Before anything renders, so an error during the first mount is recorded too.
 startTelemetry()

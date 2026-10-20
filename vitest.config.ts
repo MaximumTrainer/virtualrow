@@ -1,6 +1,13 @@
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { svelteTesting } from '@testing-library/svelte/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // #542 P0: compile `.svelte` components in unit tests. `svelteTesting()`
+  // adds the `browser` resolve condition and `@testing-library/svelte`
+  // auto-cleanup. The React component tests (still present until P1) keep
+  // running through vitest's default esbuild transform alongside this.
+  plugins: [svelte(), svelteTesting()],
   // `.glsl` files are shaders, not modules (#341).
   //
   // They are imported with `?raw` and spliced into three's own shaders at
@@ -36,6 +43,12 @@ export default defineConfig({
         '**/node_modules/**',
         '.claude/**',
         'dist/**',
+        // #542 P0: SvelteKit's build output and generated files. `npm run build`
+        // runs before `npm run coverage` in pre-push and CI, so these exist on
+        // disk when coverage scans; without excluding them the compiled bundle
+        // joins the denominator and the gate reads ~57% instead of ~91%.
+        'build/**',
+        '.svelte-kit/**',
         'coverage/**',
         'playwright/**',
         // Build-time asset generators and utility scripts — not app logic.
@@ -47,7 +60,7 @@ export default defineConfig({
         // Generated Wasm bindings — tested through the services that call them.
         'src/wasm-pkg/**',
         'src/main.tsx',
-        'src/types/**',
+        'src/lib/types/**',
         // R3F 3D scene components — exercised by Playwright E2E; pure utilities
         // (curve, helpers, themeConfig) are unit-tested separately.
         //
@@ -91,7 +104,7 @@ export default defineConfig({
         // Pure coordinate-data exports (no executable logic).
         'src/data/**',
         // Vendor JS + hand-written ambient declarations.
-        'src/vendor/**',
+        'src/lib/vendor/**',
       ],
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
@@ -154,10 +167,24 @@ export default defineConfig({
         // both move up; branches (1.83 clear) and functions (1.98 clear) are
         // less than a point clear of their next integer once ratcheted, so
         // both stay.
-        lines: 93,
-        statements: 93,
-        branches: 85,
-        functions: 89,
+        //
+        // #542 P0 re-based these. The branch upgraded Vitest 1 -> 3 (required:
+        // the SvelteKit app runs on Vite 7, but Vitest 1 bundled Vite 5 and
+        // cannot host the Vite-7-era `@sveltejs/vite-plugin-svelte`). Vitest 3's
+        // `@vitest/coverage-v8` switched to AST-aware remapping, which attributes
+        // hits differently from v1's line counting. The SAME tests over the SAME
+        // code now read 91.01 / 91.01 / 87.95 / 91.87 (lines / statements /
+        // branches / functions) where v1 read 94.04 / 86.83 / 90.98. This is a
+        // measurement change, not a coverage regression: a lost test suite would
+        // pull every axis down, but branches and functions both ROSE. So branches
+        // and functions ratchet up to the new method's floor (87 / 91); lines and
+        // statements re-base to 90 — a point of margin under the 91.01 reading,
+        // since a floor set at 91.01's rounding edge flaps (the rule this block
+        // has followed since #340). Ratchet all four upward again from here.
+        lines: 90,
+        statements: 90,
+        branches: 87,
+        functions: 91,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
         // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch

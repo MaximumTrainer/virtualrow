@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { crashBannerStore, CRASH_BANNER_KEY } from '../services/crashBannerStore';
+import { crashBannerStore, CRASH_BANNER_KEY } from '../lib/services/crashBannerStore';
 
 /**
  * Unit tests for the FR9 banner store.

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { formatSplit } from '../utils/formatters';
-import { parsePaceInput, DEFAULT_TARGET_PACE } from '../utils/paceInput';
+import { formatSplit } from '../lib/utils/formatters';
+import { parsePaceInput, DEFAULT_TARGET_PACE } from '../lib/utils/paceInput';
 import './GhostPicker.css';
 
 /**

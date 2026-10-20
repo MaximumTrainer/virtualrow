@@ -43,8 +43,8 @@ import {
   describeUnmaskedRenderer,
   recommendPerformanceMode,
 } from './gpuUtils';
-import type { PerformanceMode } from '../components/rower3d/constants';
-import type { RenderCapabilities } from '../components/rower3d/sceneQuality';
+import type { PerformanceMode } from '../../components/rower3d/constants';
+import type { RenderCapabilities } from '../../components/rower3d/sceneQuality';
 
 /** localStorage key for the cached probe result. See D3. */
 export const DEVICE_PERFORMANCE_STORAGE_KEY = 'virtualrow:device-performance:v1';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildSessionGPX, sessionIdToSerialNumber } from '../utils/exporters';
-import type { WorkoutSession, WaterRoute } from '../types/index';
+import { buildSessionGPX, sessionIdToSerialNumber } from '../lib/utils/exporters';
+import type { WorkoutSession, WaterRoute } from '../lib/types/index';
 
 function makeRoute(): WaterRoute {
   return {

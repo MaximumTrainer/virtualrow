@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Decoder, Stream } from '@garmin/fitsdk';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { encodeSession } from '../services/fitEncoderService';
+import { encodeSession } from '../lib/services/fitEncoderService';
 import { buildRealisticSession } from './__helpers__/fitFixture';
 
 /**

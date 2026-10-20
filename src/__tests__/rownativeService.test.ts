@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RownativeCourseNotFoundError, RownativeService } from '../services/rownativeService';
-import { RouteService } from '../services/routeService';
-import { polylineLengthMeters } from '../utils/coordinateUtils';
+import { RownativeCourseNotFoundError, RownativeService } from '../lib/services/rownativeService';
+import { RouteService } from '../lib/services/routeService';
+import { polylineLengthMeters } from '../lib/utils/coordinateUtils';
 
 /** Response double exposing both json() and text(), as the service uses each. */
 function jsonResponse(body: unknown, status = 200) {

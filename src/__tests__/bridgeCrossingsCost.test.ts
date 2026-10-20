@@ -8,14 +8,14 @@ import { describe, it, expect, vi } from 'vitest';
  */
 const haversine = vi.hoisted(() => vi.fn());
 
-vi.mock('../utils/geoUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../utils/geoUtils')>();
+vi.mock('../lib/utils/geoUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/utils/geoUtils')>();
   haversine.mockImplementation(actual.distanceBetweenLatLng);
   return { ...actual, distanceBetweenLatLng: haversine };
 });
 
-const { findCrossings } = await import('../utils/bridgeCrossings');
-import type { OverpassElement } from '../services/routeEnrichmentService';
+const { findCrossings } = await import('../lib/utils/bridgeCrossings');
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
 
 describe('findCrossings cost', () => {
   it('rejects distant bridges without measuring every route point', () => {

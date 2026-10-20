@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { StructuredWorkout, WorkoutSegment } from '../types/index';
+import type { StructuredWorkout, WorkoutSegment } from '../lib/types/index';
 import {
   complianceOf,
   describeTargets,
@@ -8,7 +8,7 @@ import {
   segmentHasTarget,
   summariseWorkout,
   validateWorkout,
-} from '../utils/workoutPlan';
+} from '../lib/utils/workoutPlan';
 
 const segment = (over: Partial<WorkoutSegment> = {}): WorkoutSegment => ({
   id: 's1',

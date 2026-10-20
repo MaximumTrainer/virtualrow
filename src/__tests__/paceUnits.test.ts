@@ -19,8 +19,8 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { FTMSBluetoothService } from '../services/ftmsBluetoothService';
-import { pm5Simulator } from '../services/pm5SimulatorService';
+import { FTMSBluetoothService } from '../lib/services/ftmsBluetoothService';
+import { pm5Simulator } from '../lib/services/pm5SimulatorService';
 
 /** A two-minute split: the pace most rowers know by feel. */
 const TWO_MINUTE_SPLIT_SECONDS = 120;

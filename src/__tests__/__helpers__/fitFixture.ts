@@ -7,7 +7,7 @@
 // one intervals.icu's own importer is tested against.
 // ============================================================================
 
-import type { ActivitySample, Split, WorkoutSession } from '../../types/index';
+import type { ActivitySample, Split, WorkoutSession } from '../../lib/types/index';
 
 /**
  * Fixed timestamp for the round-trip fixture (issue #446, AC1).

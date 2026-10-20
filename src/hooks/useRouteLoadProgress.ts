@@ -3,7 +3,7 @@ import {
   describeLoadProgress,
   type LoadPhaseKey,
   type LoadProgress,
-} from '../utils/loadingProgress';
+} from '../lib/utils/loadingProgress';
 import { FIRST_FRAME_MARK, GEOMETRY_READY_MARK } from '../components/rower3d/sceneTiming';
 
 /**

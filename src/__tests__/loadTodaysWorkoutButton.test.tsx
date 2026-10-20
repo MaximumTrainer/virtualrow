@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoadTodaysWorkoutButton } from '../components/LoadTodaysWorkoutButton';
-import { IntervalsWorkoutFetchError } from '../services/intervalsIcuWorkoutService';
-import type { AuthPort, IntervalsIcuWorkoutPort } from '../ports';
-import type { StructuredWorkout, WorkoutPlan } from '../types/index';
+import { IntervalsWorkoutFetchError } from '../lib/services/intervalsIcuWorkoutService';
+import type { AuthPort, IntervalsIcuWorkoutPort } from '../lib/ports';
+import type { StructuredWorkout, WorkoutPlan } from '../lib/types/index';
 
 const fixedNow = () => new Date('2026-09-30T09:00:00Z');
 

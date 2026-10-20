@@ -7,8 +7,8 @@ import {
   getSegmentSceneryProfile,
   BASE_BUILDING_HEIGHT,
 } from '../components/rower3d/segmentScenery';
-import type { SceneryProfile } from '../services/routeEnrichmentService';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { SceneryProfile } from '../lib/services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 
 const ALL_PROFILES: SceneryProfile[] = [
   'forest',

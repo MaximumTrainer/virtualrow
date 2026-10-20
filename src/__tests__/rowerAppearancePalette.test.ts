@@ -5,7 +5,7 @@ import {
   SHOES_PALETTE,
   HAIR_PALETTE,
 } from '../components/rower3d/rowerAppearance';
-import { chromaticApart, parseHexColor } from '../utils/colorContrast';
+import { chromaticApart, parseHexColor } from '../lib/utils/colorContrast';
 
 /**
  * The shipping-scene water sample `shipping-scene-contrast.spec.ts` samples

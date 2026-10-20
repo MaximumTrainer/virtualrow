@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { routeService } from '../services/routeService';
+import { routeService } from '../lib/services/routeService';
 import {
   createFallbackRouteEnrichment,
   getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
   type SceneryProfile,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 import { createRouteCurve } from '../components/rower3d/curve';
 import { SCENE_SCALE } from '../components/rower3d/constants';
 import { SCENERY_PROFILES } from '../components/rower3d/sceneryConfig';

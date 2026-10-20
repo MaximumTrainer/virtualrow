@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { installCanvasMock } from './canvasMock';
-import { workoutService } from '../services/workoutService';
-import { pm5Simulator } from '../services/pm5SimulatorService';
-import { heartRateSimulator } from '../services/heartRateSimulatorService';
+import { workoutService } from '../lib/services/workoutService';
+import { pm5Simulator } from '../lib/services/pm5SimulatorService';
+import { heartRateSimulator } from '../lib/services/heartRateSimulatorService';
 import { RENDER_BUDGET } from '../components/rower3d/renderBudget';
 import { recordRenderStats, clearRenderStats } from '../components/rower3d/sceneStats';
 

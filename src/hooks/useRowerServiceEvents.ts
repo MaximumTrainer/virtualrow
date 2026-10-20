@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { PM5Data } from '../types/index';
+import type { PM5Data } from '../lib/types/index';
 
 /**
  * The slice of a rower BLE service this hook needs. Both `bluetoothService` (PM5)

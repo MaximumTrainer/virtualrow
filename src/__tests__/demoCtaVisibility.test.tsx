@@ -8,10 +8,10 @@ import { installCanvasMock } from './canvasMock';
 import {
   debugPreferencesStore,
   SHOW_DEMO_CTA_KEY,
-} from '../services/debugPreferencesStore';
-import { workoutService } from '../services/workoutService';
-import { pm5Simulator } from '../services/pm5SimulatorService';
-import { heartRateSimulator } from '../services/heartRateSimulatorService';
+} from '../lib/services/debugPreferencesStore';
+import { workoutService } from '../lib/services/workoutService';
+import { pm5Simulator } from '../lib/services/pm5SimulatorService';
+import { heartRateSimulator } from '../lib/services/heartRateSimulatorService';
 
 let uninstallCanvas: () => void;
 beforeAll(() => {

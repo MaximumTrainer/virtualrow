@@ -3,7 +3,7 @@ import {
   debugPreferencesStore,
   SHOW_DEMO_CTA_KEY,
   LAKE_OUTLINES_KEY,
-} from '../services/debugPreferencesStore';
+} from '../lib/services/debugPreferencesStore';
 
 /**
  * Static gate on `debugPreferencesStore` (#453, AC3).

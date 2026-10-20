@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { ServicesProvider } from '../context/ServicesContext';
 import { useServices, defaultServices } from '../context/useServices';
-import type { Services } from '../ports';
+import type { Services } from '../lib/ports';
 
 function Probe({ onResolve }: { onResolve: (s: Services) => void }) {
   const services = useServices();

@@ -3,8 +3,8 @@ import {
   distanceBetweenMeters,
   polylineLengthMeters,
   resampleCoordinates,
-} from '../utils/coordinateUtils';
-import type { Coordinate } from '../types/index';
+} from '../lib/utils/coordinateUtils';
+import type { Coordinate } from '../lib/types/index';
 
 const maxGap = (coords: Coordinate[]) => {
   let max = 0;

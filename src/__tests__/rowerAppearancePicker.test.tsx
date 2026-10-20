@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { RowerAppearancePicker } from '../components/RowerAppearancePicker';
-import { DEFAULT_ROWER_APPEARANCE } from '../services/rowerAppearanceService';
+import { DEFAULT_ROWER_APPEARANCE } from '../lib/services/rowerAppearanceService';
 import { TOP_PALETTE, HAIR_PALETTE } from '../components/rower3d/rowerAppearance';
 
 describe('RowerAppearancePicker', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WaterRoute, Coordinate } from '../types/index';
-import { routeCentroid } from '../utils/routeCentroid';
-import { clusterRoutePins, type ClusteredEntry } from '../utils/routePinClusters';
+import type { WaterRoute, Coordinate } from '../lib/types/index';
+import { routeCentroid } from '../lib/utils/routeCentroid';
+import { clusterRoutePins, type ClusteredEntry } from '../lib/utils/routePinClusters';
 import './RouteOverviewMap.css';
 
 const FALLBACK_ZOOM = 2;

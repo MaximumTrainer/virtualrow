@@ -11,14 +11,14 @@
 // ============================================================================
 
 import * as THREE from 'three';
-import type { Coordinate } from '../../types/index';
-import { distanceBetweenLatLng } from '../../utils/geoUtils';
-import type { Crossing } from '../../utils/bridgeCrossings';
+import type { Coordinate } from '../../lib/types/index';
+import { distanceBetweenLatLng } from '../../lib/utils/geoUtils';
+import type { Crossing } from '../../lib/utils/bridgeCrossings';
 import {
   getTerrainReliefForProgress,
   type RouteEnrichmentData,
   type TerrainProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import { nearestBankOffset, waterHalfWidthAt } from './sceneryClearance';
 import { bridgeModelFor } from './sceneryCrossings';
 import type { SceneryModelId } from './sceneryAssets';

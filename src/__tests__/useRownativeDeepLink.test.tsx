@@ -4,8 +4,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { ServicesProvider } from '../context/ServicesContext';
 import { defaultServices } from '../context/useServices';
 import { resetDeepLinkForTests, useRownativeDeepLink } from '../hooks/useRownativeDeepLink';
-import type { Services } from '../ports';
-import type { WaterRoute } from '../types/index';
+import type { Services } from '../lib/ports';
+import type { WaterRoute } from '../lib/types/index';
 
 function makeRoute(name = 'Deep Linked Course'): WaterRoute {
   return {

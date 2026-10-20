@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SCENE_SCALE } from '../utils/worldScale';
+import { SCENE_SCALE } from '../lib/utils/worldScale';
 import { WATER_CHANNEL_WIDTH, RIVERBANK_WIDTH, LANDSCAPE_OFFSET } from '../components/rower3d/constants';
 import { ASSET_SCALE } from '../components/rower3d/sceneryPlacement';
 import {
@@ -8,7 +8,7 @@ import {
   bladeClearanceMeters,
 } from '../components/rower3d/navigableWidth';
 import { createRouteCurve, getCurveDistances } from '../components/rower3d/curve';
-import type { Coordinate } from '../types';
+import type { Coordinate } from '../lib/types';
 
 /**
  * Issue #321 — one scene unit is one metre.

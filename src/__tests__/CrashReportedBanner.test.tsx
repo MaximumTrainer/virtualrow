@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CrashReportedBanner } from '../components/CrashReportedBanner';
-import { crashBannerStore, CRASH_BANNER_KEY } from '../services/crashBannerStore';
+import { crashBannerStore, CRASH_BANNER_KEY } from '../lib/services/crashBannerStore';
 import {
   crashReportsPreferenceStore,
   CRASH_REPORTS_ENABLED_KEY,
-} from '../services/crashReportsPreferenceStore';
+} from '../lib/services/crashReportsPreferenceStore';
 
 /**
  * Component tests for FR9 banner. The store carries persistence; this file

@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
-import type { OverpassElement } from '../services/routeEnrichmentService';
-import { buildWaterMask, pointInPolygon, type MaskBounds } from '../utils/osmWaterMask';
-import { detectRoute } from '../utils/shoreDetection';
+import type { Coordinate } from '../lib/types/index';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
+import { buildWaterMask, pointInPolygon, type MaskBounds } from '../lib/utils/osmWaterMask';
+import { detectRoute } from '../lib/utils/shoreDetection';
 
 /**
  * #493 FR21 / AC22: detection run on real courses. Each fixture is the Overpass

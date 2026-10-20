@@ -1,9 +1,9 @@
 import { waterBodyFromName } from '../utils/waterBodyFromName';
 import type { WaterRoute, Coordinate, RouteFormData } from '../types/index';
-import { WILLOWBROOK_ROUTE_ID } from '../components/rower3d/sceneryTrack';
+import { WILLOWBROOK_ROUTE_ID } from '../../components/rower3d/sceneryTrack';
 import {
   willowbrookRiverCoordinates,
-} from '../data/seedRouteCoordinates';
+} from '../../data/seedRouteCoordinates';
 import {
   exceedsDropAllowance,
   parseKMLCoordinateList,

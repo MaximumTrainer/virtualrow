@@ -1,6 +1,6 @@
-import { runDetectionInline } from '../services/routeDetectionRunner';
+import { runDetectionInline } from '../lib/services/routeDetectionRunner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WaterRoute } from '../types/index';
+import type { WaterRoute } from '../lib/types/index';
 import {
   OPEN_TOPO_DATA_URL,
   OVERPASS_API_URL,
@@ -26,7 +26,7 @@ import {
   splitCoordinatesIntoElevationBatches,
   type OverpassElement,
   type RouteEnrichmentData,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 const routeFixture: WaterRoute = {
   id: 'route-1',

@@ -8,10 +8,10 @@ import { installCanvasMock } from './canvasMock';
 import {
   defaultRoutePreferenceStore,
   DEFAULT_ROUTE_KEY_PREFIX,
-} from '../services/defaultRoutePreferenceStore';
-import { workoutService } from '../services/workoutService';
-import { pm5Simulator } from '../services/pm5SimulatorService';
-import { heartRateSimulator } from '../services/heartRateSimulatorService';
+} from '../lib/services/defaultRoutePreferenceStore';
+import { workoutService } from '../lib/services/workoutService';
+import { pm5Simulator } from '../lib/services/pm5SimulatorService';
+import { heartRateSimulator } from '../lib/services/heartRateSimulatorService';
 
 let uninstallCanvas: () => void;
 beforeAll(() => {

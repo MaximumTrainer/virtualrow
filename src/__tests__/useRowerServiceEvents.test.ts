@@ -5,7 +5,7 @@ import {
   type RowerEventSource,
   type RowerEventHandlers,
 } from '../hooks/useRowerServiceEvents';
-import type { PM5Data } from '../types/index';
+import type { PM5Data } from '../lib/types/index';
 
 function createMockService(): RowerEventSource & {
   emit: (event: string, data?: unknown) => void;

@@ -11,7 +11,7 @@
  * `useServices.ts`.
  */
 import { type ReactNode } from 'react';
-import type { Services } from '../ports';
+import type { Services } from '../lib/ports';
 import { ServicesContext, defaultServices } from './useServices';
 
 export interface ServicesProviderProps {

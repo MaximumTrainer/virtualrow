@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from 'react';
-import type { PM5Data } from '../types';
+import type { PM5Data } from '../lib/types';
 import { frozenStrokeCycle, readSceneFreeze } from '../components/rower3d/sceneFreeze';
 
 export interface BoatState {

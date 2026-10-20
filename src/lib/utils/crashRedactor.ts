@@ -19,7 +19,7 @@ import {
   type CrashErrorSummary,
   type CrashVerdictPayload,
 } from '../types/crashPayload';
-import type { PerformanceMode } from '../components/rower3d/constants';
+import type { PerformanceMode } from '../../components/rower3d/constants';
 
 /** Match "20+ characters of base64/url-safe id-ish" — the shape tokens have. */
 const TOKEN_PATTERN = /[A-Za-z0-9_-]{20,}/g;

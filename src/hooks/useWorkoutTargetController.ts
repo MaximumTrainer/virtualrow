@@ -18,8 +18,8 @@
  * can swap in a stub without going through a ServicesProvider (AC8).
  */
 import { useEffect, useRef } from 'react';
-import type { RowerTargetPort } from '../ports';
-import type { WorkoutSegment } from '../types';
+import type { RowerTargetPort } from '../lib/ports';
+import type { WorkoutSegment } from '../lib/types';
 
 const MIN_INTERVAL_MS = 200; // 5 Hz
 const SATURATION = 0.1; // ±10 % per D8(a)

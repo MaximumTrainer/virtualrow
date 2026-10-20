@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '../fixtures/crash-watch';
-import type { CrashPayload } from '../../src/types/crashPayload';
+import type { CrashPayload } from '../../src/lib/types/crashPayload';
 
 /**
  * intervals-login-failure.spec.ts — Phase 1 + Phase 2 of issue #486.

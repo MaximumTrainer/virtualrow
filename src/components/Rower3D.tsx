@@ -1,17 +1,17 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { WaterRoute } from '../types/index';
-import { routeTotalDistanceMeters } from '../utils/geoUtils';
+import type { WaterRoute } from '../lib/types/index';
+import { routeTotalDistanceMeters } from '../lib/utils/geoUtils';
 import {
   isWebGLAvailable,
   describeUnmaskedRenderer,
   recommendPerformanceMode,
-} from '../utils/gpuUtils';
+} from '../lib/utils/gpuUtils';
 import { usePhysicsEngine } from '../hooks/usePhysicsEngine';
 import { useReducedMotionRef, useReducedMotion } from '../hooks/useReducedMotion';
 import { useStrokeAudio } from '../hooks/useStrokeAudio';
-import type { AudioPort } from '../ports';
+import type { AudioPort } from '../lib/ports';
 import {
   buildTerrainProfile,
   getDragMultiplierForProgress,
@@ -19,7 +19,7 @@ import {
   getWaterEdgesSceneUnitsForProgress,
   waterDetectionTelemetry,
   type RouteEnrichmentData,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 import { chunkIndexFor, shouldRebuildScenery } from './rower3d/visibilityCull';
 import { useVector3Ref, useFollowZ } from './rower3d/followBoat';
 import { chunkCountForRoute, chunkProgressRanges } from './rower3d/geometryChunks';
@@ -59,8 +59,8 @@ import { readComposerMounted } from './rower3d/composerState';
 import { godRaysSun } from './rower3d/effectPlan';
 import { sceneExposure } from './rower3d/sceneExposure';
 import { easeProgressTowards } from './rower3d/progressEasing';
-import { CONTEXT_LOST_MESSAGE, CONTEXT_UNRECOVERABLE_MESSAGE } from '../utils/sceneHealth';
-import { recordTelemetry } from '../utils/sceneTelemetryLog';
+import { CONTEXT_LOST_MESSAGE, CONTEXT_UNRECOVERABLE_MESSAGE } from '../lib/utils/sceneHealth';
+import { recordTelemetry } from '../lib/utils/sceneTelemetryLog';
 import { SceneErrorBoundary } from './rower3d/SceneErrorBoundary';
 import {
   canvasSurfaceFor,
@@ -105,7 +105,7 @@ import type { SceneConfig } from './rower3d/themeConfig';
 import { CurvedLandscapeElements, CurvedRiverbanks, GroundPlane, ProceduralTerrain, Shoreline } from './rower3d/bankComponents';
 import { WATER_SURFACE_Y } from './rower3d/waterGeometry';
 import { isLakeOutlineEnabled, ribbonClearings } from './rower3d/lakeGeometry';
-import { lakePolygonsForTier } from '../utils/lakePolygons';
+import { lakePolygonsForTier } from '../lib/utils/lakePolygons';
 import {
   createContactShadowTexture,
   CONTACT_SHADOW_RADIUS_M,

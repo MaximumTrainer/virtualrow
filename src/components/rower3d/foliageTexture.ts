@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import { seededRandom } from './helpers';
 import { SCENERY_PROFILES } from './sceneryConfig';
-import type { SceneryProfile } from '../../services/routeEnrichmentService';
+import type { SceneryProfile } from '../../lib/services/routeEnrichmentService';
 
 export type FoliageShape = 'broadleaf' | 'conifer' | 'willow';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { HeartRateBluetoothService } from '../services/heartRateBluetoothService';
+import { HeartRateBluetoothService } from '../lib/services/heartRateBluetoothService';
 
 // Helper to build a Heart Rate Measurement notification DataView
 function buildHRMeasurement(bpm: number, useUint16 = false) {

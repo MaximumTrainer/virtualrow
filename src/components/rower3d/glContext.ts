@@ -14,7 +14,7 @@
 // caller's and nothing here proposes changing it.
 // ============================================================================
 
-import { describeUnmaskedRenderer } from '../../utils/gpuUtils';
+import { describeUnmaskedRenderer } from '../../lib/utils/gpuUtils';
 import type { RenderCapabilities } from './sceneQuality';
 
 export type PowerPreference = 'high-performance' | 'low-power' | 'default';

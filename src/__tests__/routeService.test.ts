@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RouteService } from '../services/routeService';
-import { polylineLengthMeters } from '../utils/coordinateUtils';
+import { RouteService } from '../lib/services/routeService';
+import { polylineLengthMeters } from '../lib/utils/coordinateUtils';
 
 // Willowbrook River bounding box
 const WILLOWBROOK_BBOX = { minLat: 48.1200, maxLat: 48.1634, minLng: 11.5750, maxLng: 11.5862 };

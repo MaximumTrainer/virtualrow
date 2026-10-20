@@ -5,7 +5,7 @@
 import type {
   RouteEnrichmentData,
   SceneryProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import type { BankSide } from './sceneryClearance';
 import { trackProfileAt, type SceneryTrack } from './sceneryTrack';
 

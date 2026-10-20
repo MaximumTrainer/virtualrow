@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import { createRouteCurve } from '../components/rower3d/curve';
 import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
 import { createWaterChannelGeometry, WATER_SURFACE_Y } from '../components/rower3d/waterGeometry';
@@ -8,7 +8,7 @@ import { createBankGeometry, BANK_WATERLINE_Y } from '../components/rower3d/bank
 import { chunkProgressRanges } from '../components/rower3d/geometryChunks';
 import { facingAway, faceNormals } from './faceNormals';
 import { SCENE_SCALE, WATER_CHANNEL_WIDTH } from '../components/rower3d/constants';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 
 const metersPerDegreeLat = 111_195;
 

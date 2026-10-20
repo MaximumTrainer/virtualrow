@@ -28,13 +28,13 @@ import {
   loadSceneryManifest,
   orderByCost,
   type SceneryManifest,
-} from '../../utils/sceneryManifest';
+} from '../../lib/utils/sceneryManifest';
 import type { PerformanceMode } from './constants';
 import {
   buildTerrainProfile,
   type RouteEnrichmentData,
   type SceneryProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import {
   resolveSceneryModels,
@@ -45,7 +45,7 @@ import {
 } from './sceneryAssets';
 import { trackWaterForProfile, type SceneryTrack } from './sceneryTrack';
 import type { SceneryRegion } from './sceneryRegion';
-import type { Coordinate } from '../../types/index';
+import type { Coordinate } from '../../lib/types/index';
 import {
   computeStructurePlacements,
   routeStructures,
@@ -62,7 +62,7 @@ import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import { useAnimationFrame } from './animationFrame';
 import { cullByDistance, withinMountRange } from './visibilityCull';
 import { chunkViewDistanceFor } from './fogPlan';
-import { routeTotalDistanceMeters } from '../../utils/geoUtils';
+import { routeTotalDistanceMeters } from '../../lib/utils/geoUtils';
 
 /**
  * Frames between scenery culls.

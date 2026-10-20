@@ -5,7 +5,7 @@ import {
   DEFAULT_ROWER_APPEARANCE,
   type RowerAppearancePreference,
   type RowerAppearanceService,
-} from '../services/rowerAppearanceService';
+} from '../lib/services/rowerAppearanceService';
 
 const stubService = (
   initial: RowerAppearancePreference = { ...DEFAULT_ROWER_APPEARANCE },

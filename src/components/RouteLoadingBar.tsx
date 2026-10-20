@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { LoadProgress } from '../utils/loadingProgress';
-import { BOAT_UNAVAILABLE_MESSAGE } from '../utils/loadingProgress';
+import type { LoadProgress } from '../lib/utils/loadingProgress';
+import { BOAT_UNAVAILABLE_MESSAGE } from '../lib/utils/loadingProgress';
 import './RouteLoadingBar.css';
 
 /**

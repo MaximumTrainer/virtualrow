@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../context/useAuth';
-import { RETRYABLE_AUTH_ERROR_CLASSES } from '../services/authService';
+import { RETRYABLE_AUTH_ERROR_CLASSES } from '../lib/services/authService';
 import './AuthButton.css';
 
 export function AuthButton() {

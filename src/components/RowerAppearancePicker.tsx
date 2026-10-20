@@ -13,7 +13,7 @@ import {
   type HairstyleId,
   type HatId,
 } from './rower3d/rowerAppearance';
-import type { RowerAppearancePreference } from '../services/rowerAppearanceService';
+import type { RowerAppearancePreference } from '../lib/services/rowerAppearanceService';
 import './RowerAppearancePicker.css';
 
 export interface RowerAppearancePickerProps {

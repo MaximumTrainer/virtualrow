@@ -13,7 +13,7 @@ import { MIN_NAVIGABLE_WIDTH_METERS } from '../components/rower3d/navigableWidth
 import {
   getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 /**
  * Where the water ends, and how far past it scenery has to stand (#379).

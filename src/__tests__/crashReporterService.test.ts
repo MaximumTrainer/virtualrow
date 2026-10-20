@@ -5,12 +5,12 @@ import {
   CrashReporterService,
   buildSignature,
   DAILY_CAP,
-} from '../services/crashReporterService';
+} from '../lib/services/crashReporterService';
 import {
   CrashReportsPreferenceStore,
   CRASH_REPORTS_ENABLED_KEY,
-} from '../services/crashReportsPreferenceStore';
-import type { CrashPayload } from '../types/crashPayload';
+} from '../lib/services/crashReportsPreferenceStore';
+import type { CrashPayload } from '../lib/types/crashPayload';
 
 /**
  * Unit tests for the crash reporter port + service (#473, FR3 / FR7 / FR8 /

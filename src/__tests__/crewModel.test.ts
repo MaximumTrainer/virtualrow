@@ -7,7 +7,7 @@ import {
   effectiveCrewPreference,
   CREW_URL,
 } from '../components/rower3d/crewModel';
-import { genderFromSex } from '../services/authService';
+import { genderFromSex } from '../lib/services/authService';
 
 /** Map a public URL ("/assets/…") to its file on disk under public/. */
 const publicPath = (url: string) => resolve(process.cwd(), 'public', url.replace(/^\//, ''));

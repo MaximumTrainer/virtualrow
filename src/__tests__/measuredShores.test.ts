@@ -10,9 +10,9 @@ import {
   getWaterWidthSceneUnitsForProgress,
   type RouteEnrichmentData,
   type RouteSegmentEnrichment,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 import { MIN_NAVIGABLE_WIDTH_METERS } from '../components/rower3d/navigableWidth';
-import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
+import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../lib/utils/shoreDetection';
 
 const segment = (index: number, overrides: Partial<RouteSegmentEnrichment> = {}): RouteSegmentEnrichment => ({
   index,

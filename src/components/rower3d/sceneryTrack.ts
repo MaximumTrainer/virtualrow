@@ -15,7 +15,7 @@
 import type {
   SceneryProfile,
   WaterBodyType,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 export interface SceneryBand {
   /** Upper bound of the band as a fraction of route length; the last band ends at 1. */

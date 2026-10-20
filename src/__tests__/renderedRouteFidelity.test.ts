@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import { createRouteCurve, gpsToScenePoints } from '../components/rower3d/curve';
 import { SCENE_SCALE } from '../components/rower3d/constants';
-import { DEFAULT_SIMPLIFY_EPSILON_METERS } from '../utils/coordinateUtils';
+import { DEFAULT_SIMPLIFY_EPSILON_METERS } from '../lib/utils/coordinateUtils';
 
 /**
  * The shape guarantee #224 actually asks for.

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
+import { heartRateBluetoothService } from '../lib/services/heartRateBluetoothService';
 import './BluetoothDevice.css';
 
 interface HeartRateMonitorProps {

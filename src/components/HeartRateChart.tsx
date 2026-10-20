@@ -12,7 +12,7 @@ import {
   CategoryScale,
 } from 'chart.js';
 import type { ChartOptions, ScriptableLineSegmentContext, Chart } from 'chart.js';
-import type { HeartRateSample } from '../types/index';
+import type { HeartRateSample } from '../lib/types/index';
 
 ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, Tooltip, Legend, Filler, CategoryScale);
 

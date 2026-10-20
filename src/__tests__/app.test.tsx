@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
-import { formatPace } from '../utils/formatters';
+import { formatPace } from '../lib/utils/formatters';
 import * as UseAuth from '../context/useAuth';
 import type { AuthContextValue } from '../context/useAuth';
 import { installCanvasMock } from './canvasMock';

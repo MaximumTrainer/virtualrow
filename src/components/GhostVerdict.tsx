@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatSplit } from '../utils/formatters';
+import { formatSplit } from '../lib/utils/formatters';
 import './GhostVerdict.css';
 
 /**

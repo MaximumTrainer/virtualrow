@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useStrokeAudio } from '../hooks/useStrokeAudio';
-import type { AudioPort } from '../ports';
+import type { AudioPort } from '../lib/ports';
 
 /**
  * Issue #339 — the stroke you hear.
