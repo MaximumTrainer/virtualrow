@@ -1,4 +1,4 @@
-import type { ActivitySample, WorkoutSession } from '../../types/index';
+import type { ActivitySample, WorkoutSession } from '../../lib/types/index';
 
 /**
  * The boat you are chasing (#338).

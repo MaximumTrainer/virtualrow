@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StartCallout, FinishBanner } from '../components/RaceCallouts';
-import { formatCourseMetres } from '../utils/formatters';
+import { formatCourseMetres } from '../lib/utils/formatters';
 
 /**
  * Issue #336 — what the rower is told at each end of the course.

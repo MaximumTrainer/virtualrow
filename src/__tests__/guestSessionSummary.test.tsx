@@ -6,7 +6,7 @@ vi.mock('react-chartjs-2', () => ({
 }));
 
 import { GuestSessionSummary } from '../components/GuestSessionSummary';
-import type { WorkoutSession } from '../types/index';
+import type { WorkoutSession } from '../lib/types/index';
 
 function makeSession(overrides: Partial<WorkoutSession> = {}): WorkoutSession {
   return {

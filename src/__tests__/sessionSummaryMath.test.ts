@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import type { ActivitySample, WorkoutSession } from '../lib/types/index';
 import {
   bestPaceOnRoute,
   chartSeries,
@@ -9,7 +9,7 @@ import {
   shareCardLines,
   splitsFrom,
   SHARE_CARD_SIZE,
-} from '../utils/sessionSummary';
+} from '../lib/utils/sessionSummary';
 
 /**
  * Issue #337 — the arithmetic of the post-row summary.

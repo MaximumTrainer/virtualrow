@@ -11,9 +11,9 @@
  * Guests (`accessToken` null) see nothing (FR7 / D7(a)).
  */
 import { useCallback, useMemo, useState } from 'react';
-import type { StructuredWorkout, WorkoutPlan } from '../types/index';
-import type { AuthPort, IntervalsIcuWorkoutPort } from '../ports';
-import { IntervalsWorkoutFetchError } from '../services/intervalsIcuWorkoutService';
+import type { StructuredWorkout, WorkoutPlan } from '../lib/types/index';
+import type { AuthPort, IntervalsIcuWorkoutPort } from '../lib/ports';
+import { IntervalsWorkoutFetchError } from '../lib/services/intervalsIcuWorkoutService';
 
 export interface LoadTodaysWorkoutButtonProps {
   authService: AuthPort;

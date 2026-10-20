@@ -4,7 +4,7 @@ import {
   DEFAULT_ROWER_APPEARANCE,
   ROWER_APPEARANCE_STORAGE_KEY,
   sanitizeAppearance,
-} from '../services/rowerAppearanceService';
+} from '../lib/services/rowerAppearanceService';
 
 describe('rowerAppearanceService', () => {
   beforeEach(() => localStorage.clear());

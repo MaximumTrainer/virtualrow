@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import {
   bearingRadians,
   distanceBetweenMeters,
@@ -8,7 +8,7 @@ import {
   resampleCoordinates,
   EARTH_RADIUS_M,
   DEFAULT_SIMPLIFY_EPSILON_METERS,
-} from '../utils/coordinateUtils';
+} from '../lib/utils/coordinateUtils';
 
 /**
  * Shortest distance in metres from `point` to the great-circle segment

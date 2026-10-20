@@ -7,7 +7,7 @@ import type { TreeSpeciesEntry } from './themeConfig';
 import { RENDER_CONFIG } from './constants';
 import type { PerformanceMode } from './constants';
 import { seededRandom } from './helpers';
-import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { makeSwayFoliageMaterial } from './foliageMaterial';
 

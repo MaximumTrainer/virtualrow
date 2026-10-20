@@ -3,7 +3,7 @@ import {
   bearingBetweenLatLng,
   bearingDelta,
   segmentRoute,
-} from '../utils/geoUtils';
+} from '../lib/utils/geoUtils';
 
 describe('geoUtils', () => {
   describe('bearingBetweenLatLng', () => {

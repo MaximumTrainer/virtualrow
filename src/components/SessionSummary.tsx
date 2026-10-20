@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ActivitySample, GeometrySource, WorkoutSession } from '../types/index';
-import type { ActivityUploadResult } from '../services/intervalsIcuActivityService';
+import type { ActivitySample, GeometrySource, WorkoutSession } from '../lib/types/index';
+import type { ActivityUploadResult } from '../lib/services/intervalsIcuActivityService';
 import { useAuth } from '../context/useAuth';
 import { useServices } from '../context/useServices';
-import { activityFileName, triggerBlobDownload } from '../utils/exporters';
-import { formatPace } from '../utils/formatters';
+import { activityFileName, triggerBlobDownload } from '../lib/utils/exporters';
+import { formatPace } from '../lib/utils/formatters';
 import { RowBreakdown } from './RowBreakdown';
 import { GhostVerdict } from './GhostVerdict';
 import './SessionSummary.css';
@@ -71,7 +71,7 @@ function averageOf(samples: ActivitySample[], pick: (sample: ActivitySample) => 
 
 /** The FIT bytes for this row. Encoder is dynamically imported so it stays out of the main chunk. */
 async function encode(session: WorkoutSession): Promise<Uint8Array> {
-  const { encodeSession } = await import('../services/fitEncoderService');
+  const { encodeSession } = await import('../lib/services/fitEncoderService');
   return encodeSession(session);
 }
 

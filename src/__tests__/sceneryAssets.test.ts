@@ -14,7 +14,7 @@ import {
 import type {
   SceneryProfile,
   WaterBodyType,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 const PROFILES: SceneryProfile[] = [
   'forest', 'residential', 'commercial', 'farmland', 'beach', 'wetland', 'fallback',

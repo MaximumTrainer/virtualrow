@@ -10,8 +10,8 @@
  * off never sees a disclosure about a report that would not have been sent.
  */
 import { useEffect, useState } from 'react';
-import { crashBannerStore } from '../services/crashBannerStore';
-import { crashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
+import { crashBannerStore } from '../lib/services/crashBannerStore';
+import { crashReportsPreferenceStore } from '../lib/services/crashReportsPreferenceStore';
 
 interface Props {
   /** Fires when the viewer taps the opt-out link. The App opens Settings. */

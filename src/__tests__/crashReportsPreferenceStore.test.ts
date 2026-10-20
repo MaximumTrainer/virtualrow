@@ -3,7 +3,7 @@ import {
   CrashReportsPreferenceStore,
   CRASH_REPORTS_ENABLED_KEY,
   CRASH_REPORTS_ENABLED_DEFAULT,
-} from '../services/crashReportsPreferenceStore';
+} from '../lib/services/crashReportsPreferenceStore';
 
 /**
  * Static gate on the crash-reports opt-out (#473, FR8 / AC8).

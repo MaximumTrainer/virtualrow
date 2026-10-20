@@ -1,11 +1,11 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { TrackAttachmentStore, trackAttachmentStore } from '../services/trackAttachmentStore';
+import { TrackAttachmentStore, trackAttachmentStore } from '../lib/services/trackAttachmentStore';
 import {
   TrackParseError,
   detectTrackFormat,
   parseTrackFile,
-} from '../utils/trackParsers';
-import type { Coordinate } from '../types/index';
+} from '../lib/utils/trackParsers';
+import type { Coordinate } from '../lib/types/index';
 
 /** The same three points, written three ways (issue #194 AC-11). */
 const POINTS: Coordinate[] = [

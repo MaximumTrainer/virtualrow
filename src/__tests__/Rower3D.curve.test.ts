@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import {
   gpsToScenePoints,
   createRouteCurve,
@@ -9,7 +9,7 @@ import {
   distanceToProgress,
   upsampleRouteCoordinates,
 } from '../components/rower3d/curve';
-import { distanceBetweenMeters } from '../utils/coordinateUtils';
+import { distanceBetweenMeters } from '../lib/utils/coordinateUtils';
 
 describe('Rower3D curve helpers', () => {
   describe('gpsToScenePoints', () => {

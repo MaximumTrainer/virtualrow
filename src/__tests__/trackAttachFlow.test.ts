@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RownativeService } from '../services/rownativeService';
-import { TrackAttachmentStore } from '../services/trackAttachmentStore';
-import type { Coordinate, WaterRoute } from '../types/index';
+import { RownativeService } from '../lib/services/rownativeService';
+import { TrackAttachmentStore } from '../lib/services/trackAttachmentStore';
+import type { Coordinate, WaterRoute } from '../lib/types/index';
 
 /**
  * Attaching a track, as something a person can actually do (#313).

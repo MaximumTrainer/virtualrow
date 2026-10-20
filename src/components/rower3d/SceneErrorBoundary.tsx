@@ -17,8 +17,8 @@
 // ============================================================================
 
 import React from 'react';
-import { crashReporterService } from '../../services/crashReporterService';
-import { reportFromErrorBoundary } from '../../utils/crashBoot';
+import { crashReporterService } from '../../lib/services/crashReporterService';
+import { reportFromErrorBoundary } from '../../lib/utils/crashBoot';
 
 interface OneLevelProps {
   children: React.ReactNode;

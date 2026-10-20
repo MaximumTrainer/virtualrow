@@ -16,11 +16,11 @@
 // data-only so it can be unit-tested and reused by any renderer.
 // ============================================================================
 
-import { assetUrl } from '../../utils/assetUrl';
+import { assetUrl } from '../../lib/utils/assetUrl';
 import type {
   SceneryProfile,
   WaterBodyType,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import type { SceneryRegion } from './sceneryRegion';
 
 /** A scenery model id, e.g. `f01-bank-earth-cut` or `e04-english-oak`. */

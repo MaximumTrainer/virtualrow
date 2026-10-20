@@ -5,12 +5,12 @@ import { PM5Simulator } from './components/PM5Simulator';
 import { HeartRateSimulator } from './components/HeartRateSimulator';
 import { RownativeRouteImport } from './components/RownativeRouteImport';
 import { FTMSDevice } from './components/FTMSDevice';
-import { routeService } from './services/routeService';
-import { workoutService } from './services/workoutService';
+import { routeService } from './lib/services/routeService';
+import { workoutService } from './lib/services/workoutService';
 import HeartRateMonitor from './components/HeartRateMonitor';
-import { heartRateBluetoothService } from './services/heartRateBluetoothService';
-import { bluetoothService } from './services/bluetoothService';
-import { ftmsBluetoothService } from './services/ftmsBluetoothService';
+import { heartRateBluetoothService } from './lib/services/heartRateBluetoothService';
+import { bluetoothService } from './lib/services/bluetoothService';
+import { ftmsBluetoothService } from './lib/services/ftmsBluetoothService';
 // Rower3D pulls in three, @react-three/{fiber,drei,postprocessing,rapier} (~hundreds of kB).
 // Code-split it so the routes view doesn't pay the cost — the chunk only
 // loads when the user actually starts a workout (currentView === 'workout').
@@ -23,21 +23,21 @@ import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CrashReportedBanner } from './components/CrashReportedBanner';
-import { heartRateSimulator } from './services/heartRateSimulatorService';
-import { pm5Simulator } from './services/pm5SimulatorService';
-import { debugPreferencesStore } from './services/debugPreferencesStore';
+import { heartRateSimulator } from './lib/services/heartRateSimulatorService';
+import { pm5Simulator } from './lib/services/pm5SimulatorService';
+import { debugPreferencesStore } from './lib/services/debugPreferencesStore';
 import { useAuth } from './context/useAuth';
 import { resolveCrew, effectiveCrewPreference, CREW_URL } from './components/rower3d/crewModel';
 import { RouteLoadingBar } from './components/RouteLoadingBar';
 import { useRouteLoadProgress } from './hooks/useRouteLoadProgress';
 import { isGlbSceneryEnabled } from './components/rower3d/sceneryAssets';
-import { readTelemetry, telemetryAsText, clearTelemetry } from './utils/sceneTelemetryLog';
+import { readTelemetry, telemetryAsText, clearTelemetry } from './lib/utils/sceneTelemetryLog';
 import { useServices } from './context/useServices';
 import { useRownativeDeepLink } from './hooks/useRownativeDeepLink';
 import { useRowerServiceEvents } from './hooks/useRowerServiceEvents';
-import { OUTLINE_ONLY_TAG } from './services/routeService';
-import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './utils/geometryProvenance';
-import { TrackParseError, detectTrackFormat } from './utils/trackParsers';
+import { OUTLINE_ONLY_TAG } from './lib/services/routeService';
+import { externalDistanceNote, formatRouteDistanceKm, geometryProvenanceBadge } from './lib/utils/geometryProvenance';
+import { TrackParseError, detectTrackFormat } from './lib/utils/trackParsers';
 import { useGraphicsQuality } from './hooks/useGraphicsQuality';
 import {
   useDevicePerformance,
@@ -65,9 +65,9 @@ import { RowHud } from './components/RowHud';
 import { useFullscreen } from './hooks/useFullscreen';
 import { isStrokeReading, useStartSequence } from './hooks/useStartSequence';
 import { FinishBanner, StartCallout } from './components/RaceCallouts';
-import { loadSessions, markSessionUploaded, saveCompletedSession } from './services/localStorageWorkoutStore';
-import { bestPaceOnRoute } from './utils/sessionSummary';
-import { formatSplit } from './utils/formatters';
+import { loadSessions, markSessionUploaded, saveCompletedSession } from './lib/services/localStorageWorkoutStore';
+import { bestPaceOnRoute } from './lib/utils/sessionSummary';
+import { formatSplit } from './lib/utils/formatters';
 import { GhostPicker, type GhostChoice } from './components/GhostPicker';
 import {
   bestRowOnRoute,
@@ -77,8 +77,8 @@ import {
   paceGhost,
   recordedGhost,
 } from './components/rower3d/ghost';
-import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './types/index';
-import type { RouteEnrichmentData } from './services/routeEnrichmentService';
+import type { WaterRoute, PM5Data, WorkoutSession, HeartRateSample } from './lib/types/index';
+import type { RouteEnrichmentData } from './lib/services/routeEnrichmentService';
 import './App.css';
 
 // Session state type for workout controls

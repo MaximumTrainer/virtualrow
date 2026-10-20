@@ -12,7 +12,7 @@ import {
   GHOST_LANE_OFFSET_M,
   type GhostSource,
 } from '../components/rower3d/ghost';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import type { ActivitySample, WorkoutSession } from '../lib/types/index';
 
 /**
  * Issue #338 — the boat you are chasing.

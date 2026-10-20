@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GhostPicker, type GhostChoice } from '../components/GhostPicker';
-import { parsePaceInput } from '../utils/paceInput';
+import { parsePaceInput } from '../lib/utils/paceInput';
 
 /**
  * Issue #338 — deciding what to race, before the row starts.

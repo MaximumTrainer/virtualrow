@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { findCrossings, bridgeKindFromTags } from '../utils/bridgeCrossings';
-import type { OverpassElement } from '../services/routeEnrichmentService';
+import { findCrossings, bridgeKindFromTags } from '../lib/utils/bridgeCrossings';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
 
 /** A straight run of route points heading north, ~11 m apart. */
 const routeNorth = (count = 101) =>

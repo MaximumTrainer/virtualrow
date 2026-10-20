@@ -1,4 +1,4 @@
-import { MIN_NAVIGABLE_WIDTH_METERS } from '../components/rower3d/navigableWidth';
+import { MIN_NAVIGABLE_WIDTH_METERS } from '../../components/rower3d/navigableWidth';
 import type { Coordinate, WaterRoute } from '../types/index';
 import {
   calculateBearing,

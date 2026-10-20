@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { RiverGuides } from '../components/rower3d/RiverGuides';
 import { buildLakeGuides } from '../components/rower3d/riverGuideGeometry';
-import { waterDetectionTelemetry, type RouteEnrichmentData } from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
-import type { LakePolygon } from '../utils/lakePolygons';
+import { waterDetectionTelemetry, type RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import type { LakePolygon } from '../lib/utils/lakePolygons';
 
 /**
  * #493 FR22 / AC23: the debug guides draw the lake's detected shoreline and

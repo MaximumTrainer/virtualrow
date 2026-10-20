@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { LakePolygon } from '../utils/lakePolygons';
-import type { Coordinate, WaterRoute } from '../types/index';
+import type { LakePolygon } from '../lib/utils/lakePolygons';
+import type { Coordinate, WaterRoute } from '../lib/types/index';
 import {
   getRouteEnrichmentCacheKey,
   ROUTE_ENRICHMENT_CACHE_TTL_MS,
@@ -12,8 +12,8 @@ import {
   OVERPASS_API_URL,
   RouteEnrichmentService,
   type OverpassElement,
-} from '../services/routeEnrichmentService';
-import { runDetectionInline } from '../services/routeDetectionRunner';
+} from '../lib/services/routeEnrichmentService';
+import { runDetectionInline } from '../lib/services/routeDetectionRunner';
 
 /** #493 NFR3 / AC10: a route's cache entry stays within 128 KB. */
 interface OsmFixture {

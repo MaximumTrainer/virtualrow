@@ -29,7 +29,7 @@ import {
   getTerrainReliefForProgress,
   type RouteEnrichmentData,
   type SceneryProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 /**
  * Metres of bank between planting slots, on each side.

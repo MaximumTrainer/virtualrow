@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import { createRouteCurve } from '../components/rower3d/curve';
 import { SCENE_SCALE } from '../components/rower3d/constants';
 import { drawsStripQuad, type StripGeometryOptions } from '../components/rower3d/routeStripGeometry';
@@ -10,7 +10,7 @@ import {
   isOnLakeAtProgress,
   type RouteEnrichmentData,
   type RouteSegmentEnrichment,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 /**
  * #493 Phase 3 (D5 a): on a lake route drawn from its outline, the ribbon, its

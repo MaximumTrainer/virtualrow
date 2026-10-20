@@ -4,7 +4,7 @@ import {
   readGlbWorldBounds,
   parseDeclaredDims,
   compareDims,
-} from '../utils/glbBounds';
+} from '../lib/utils/glbBounds';
 
 /** A minimal GLB: header, JSON chunk with one accessor's min/max, no BIN needed. */
 const makeGlb = (gltf: unknown): Buffer => {

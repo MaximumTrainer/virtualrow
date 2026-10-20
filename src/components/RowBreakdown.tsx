@@ -10,16 +10,16 @@ import {
   Tooltip,
   type ChartOptions,
 } from 'chart.js';
-import type { WorkoutSession } from '../types/index';
-import { activityFileName, triggerBlobDownload } from '../utils/exporters';
-import { formatCourseMetres, formatPace } from '../utils/formatters';
+import type { WorkoutSession } from '../lib/types/index';
+import { activityFileName, triggerBlobDownload } from '../lib/utils/exporters';
+import { formatCourseMetres, formatPace } from '../lib/utils/formatters';
 import {
   chartSeries,
   formatPbDelta,
   pbDelta,
   renderShareCard,
   splitsFrom,
-} from '../utils/sessionSummary';
+} from '../lib/utils/sessionSummary';
 import './RowBreakdown.css';
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);

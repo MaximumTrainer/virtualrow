@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { AudioPort } from '../ports';
+import type { AudioPort } from '../lib/ports';
 import type { StartPhase } from './useStartSequence';
 
 /**

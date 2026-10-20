@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { CrashReportsPreferencePort } from '../ports';
+import type { CrashReportsPreferencePort } from '../lib/ports';
 import './SettingsPanel.css';
 
 /**

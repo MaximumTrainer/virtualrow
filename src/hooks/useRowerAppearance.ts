@@ -4,7 +4,7 @@ import {
   DEFAULT_ROWER_APPEARANCE,
   type RowerAppearancePreference,
   type RowerAppearanceService,
-} from '../services/rowerAppearanceService';
+} from '../lib/services/rowerAppearanceService';
 
 export interface RowerAppearanceControl {
   appearance: RowerAppearancePreference;

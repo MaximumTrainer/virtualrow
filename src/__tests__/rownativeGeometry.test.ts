@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import {
   GATE_TOLERANCE_M,
   RownativeGeometryUnavailableError,
@@ -9,16 +9,16 @@ import {
   fitCandidateToGates,
   resolveCourseGeometry,
   type RownativeCourseGeometryInput,
-} from '../services/rownativeGeometry';
-import { OsmWaterwayPathProvider } from '../services/osmWaterwayPathProvider';
-import { RouteService } from '../services/routeService';
-import { RownativeService } from '../services/rownativeService';
-import { TrackAttachmentStore } from '../services/trackAttachmentStore';
+} from '../lib/services/rownativeGeometry';
+import { OsmWaterwayPathProvider } from '../lib/services/osmWaterwayPathProvider';
+import { RouteService } from '../lib/services/routeService';
+import { RownativeService } from '../lib/services/rownativeService';
+import { TrackAttachmentStore } from '../lib/services/trackAttachmentStore';
 import { createRouteCurve, distanceToProgress, getCurveDistances } from '../components/rower3d/curve';
-import { distanceBetweenMeters, polylineLengthMeters } from '../utils/coordinateUtils';
-import { routeTotalDistanceMeters } from '../utils/geoUtils';
-import { projectPointOntoPolyline } from '../utils/polylineGeometry';
-import { parseTrackFile } from '../utils/trackParsers';
+import { distanceBetweenMeters, polylineLengthMeters } from '../lib/utils/coordinateUtils';
+import { routeTotalDistanceMeters } from '../lib/utils/geoUtils';
+import { projectPointOntoPolyline } from '../lib/utils/polylineGeometry';
+import { parseTrackFile } from '../lib/utils/trackParsers';
 
 /**
  * Offline fixtures copied verbatim from the rownative/courses mirror

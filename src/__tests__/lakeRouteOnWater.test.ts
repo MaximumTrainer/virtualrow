@@ -13,10 +13,10 @@ import {
   waterDetectionTelemetry,
   type RouteEnrichmentData,
   type RouteSegmentEnrichment,
-} from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
-import type { LakePolygon } from '../utils/lakePolygons';
-import type { DetectedSample } from '../utils/shoreDetection';
+} from '../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import type { LakePolygon } from '../lib/utils/lakePolygons';
+import type { DetectedSample } from '../lib/utils/shoreDetection';
 
 /**
  * #493 Phase 4 (FR8, D21 b + ii, AC6): a route sample on land past the drift

@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ActivitySample, WorkoutSession } from '../types/index';
+import type { ActivitySample, WorkoutSession } from '../lib/types/index';
 
 vi.mock('react-chartjs-2', () => ({
   Line: () => <canvas data-testid="row-chart" />,
 }));
 
 const download = vi.hoisted(() => vi.fn());
-vi.mock('../utils/exporters', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/exporters')>()),
+vi.mock('../lib/utils/exporters', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/utils/exporters')>()),
   triggerBlobDownload: download,
 }));
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SimulatorRowerTargetService } from '../services/simulatorRowerTargetService';
+import { SimulatorRowerTargetService } from '../lib/services/simulatorRowerTargetService';
 
 describe('SimulatorRowerTargetService (#445)', () => {
   let svc: SimulatorRowerTargetService;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import {
   adaptiveSegmentCount,
   createRouteCurve,
@@ -13,7 +13,7 @@ import {
   TARGET_METERS_BETWEEN_SEGMENTS,
 } from '../components/rower3d/curve';
 import { SCENE_SCALE } from '../components/rower3d/constants';
-import { polylineLengthMeters } from '../utils/coordinateUtils';
+import { polylineLengthMeters } from '../lib/utils/coordinateUtils';
 
 /** A straight north-running course of the requested real-world length. */
 const straightRoute = (lengthMeters: number, points = 40): Coordinate[] => {

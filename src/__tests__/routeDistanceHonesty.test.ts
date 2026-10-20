@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { routeService } from '../services/routeService';
-import { routeTotalDistanceMeters } from '../utils/geoUtils';
+import { routeService } from '../lib/services/routeService';
+import { routeTotalDistanceMeters } from '../lib/utils/geoUtils';
 
 /**
  * A route must be as long as it says it is.

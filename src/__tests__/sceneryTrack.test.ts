@@ -9,7 +9,7 @@ import {
   trackWaterForProfile,
 } from '../components/rower3d/sceneryTrack';
 import { getSegmentSceneryProfile } from '../components/rower3d/segmentScenery';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 
 const enrichmentOf = (profiles: string[]): RouteEnrichmentData =>
   ({

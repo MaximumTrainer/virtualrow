@@ -11,11 +11,11 @@ import {
 } from '../components/rower3d/lakeGeometry';
 import { BANK_WATERLINE_Y } from '../components/rower3d/bankGeometry';
 import { WATER_SURFACE_Y } from '../components/rower3d/waterGeometry';
-import type { OverpassElement } from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
-import type { LakePolygon } from '../utils/lakePolygons';
-import type { MaskBounds } from '../utils/osmWaterMask';
-import { runRouteDetection } from '../utils/routeDetection';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import type { LakePolygon } from '../lib/utils/lakePolygons';
+import type { MaskBounds } from '../lib/utils/osmWaterMask';
+import { runRouteDetection } from '../lib/utils/routeDetection';
 
 /**
  * #493 Phase 3 (FR4, FR5, FR6, AC14, NFR7): a lake drawn from its outline,

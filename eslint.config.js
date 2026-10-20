@@ -12,6 +12,10 @@ export default defineConfig([
   // CI gate below unmeasurable.
   globalIgnores([
     'dist',
+    'build',
+    // #542 P0: SvelteKit's generated output and type files (`.svelte-kit/`) are
+    // not hand-written source and do not follow the project's lint rules.
+    '.svelte-kit',
     'coverage',
     'test-results',
     'playwright-report',

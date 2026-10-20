@@ -1,5 +1,5 @@
 import type { StartPhase } from '../hooks/useStartSequence';
-import { formatCourseMetres, formatTime } from '../utils/formatters';
+import { formatCourseMetres, formatTime } from '../lib/utils/formatters';
 import './RaceCallouts.css';
 
 /**

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useServices } from '../context/useServices';
-import type { WaterRoute } from '../types/index';
+import type { WaterRoute } from '../lib/types/index';
 
 /** Query parameter that deep-links a rownative course into VirtualRow. */
 export const DEEP_LINK_PARAM = 'rownativeCourseId';

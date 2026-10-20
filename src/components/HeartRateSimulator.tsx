@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { heartRateSimulator } from '../services/heartRateSimulatorService';
-import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
+import { heartRateSimulator } from '../lib/services/heartRateSimulatorService';
+import { heartRateBluetoothService } from '../lib/services/heartRateBluetoothService';
 import './PM5Simulator.css';
 
 interface HeartRateSimulatorProps {

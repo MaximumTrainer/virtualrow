@@ -4,11 +4,11 @@ import { BANK_WATERLINE_Y, createBankGeometry } from '../components/rower3d/bank
 import { stripSegmentCount } from '../components/rower3d/routeStripGeometry';
 import { facingAway } from './faceNormals';
 import { createRouteCurve } from '../components/rower3d/curve';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import {
   MAX_TERRAIN_RELIEF_SCENE_UNITS,
   type RouteEnrichmentData,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 /**
  * Proves the OpenTopoData elevations reach the geometry the rower actually

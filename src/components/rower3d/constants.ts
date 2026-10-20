@@ -123,7 +123,7 @@ export const BOAT_GROUP_NAME = 'BoatGroup';
  * because `routeEnrichmentService` needs it and a service may not import from
  * `components/`, so it used to keep a second copy of the number (#321).
  */
-export { SCENE_SCALE } from '../../utils/worldScale';
+export { SCENE_SCALE } from '../../lib/utils/worldScale';
 
 /**
  * True when the mode was pinned by a test or a user, and hardware detection

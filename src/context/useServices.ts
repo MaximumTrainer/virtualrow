@@ -7,25 +7,25 @@
  * for the whole module, so every services change forced a full reload.
  */
 import { createContext, useContext } from 'react';
-import type { Services } from '../ports';
-import { workoutService } from '../services/workoutService';
-import { routeService } from '../services/routeService';
-import { bluetoothService } from '../services/bluetoothService';
-import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
-import { heartRateBluetoothService } from '../services/heartRateBluetoothService';
-import { authService } from '../services/authService';
-import { rownativeService } from '../services/rownativeService';
-import { routeEnrichmentService } from '../services/routeEnrichmentService';
-import { defaultRoutePreferenceStore } from '../services/defaultRoutePreferenceStore';
-import { intervalsIcuActivityService } from '../services/intervalsIcuActivityService';
-import { intervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
-import { simulatorRowerTargetService } from '../services/simulatorRowerTargetService';
-import { ftmsRowerTargetService } from '../services/ftmsRowerTargetService';
-import { pm5RowerTargetService } from '../services/pm5RowerTargetService';
-import { audioService } from '../services/audioService';
-import { crashReporterService } from '../services/crashReporterService';
-import { crashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
-import type { RowerTargetPort } from '../ports';
+import type { Services } from '../lib/ports';
+import { workoutService } from '../lib/services/workoutService';
+import { routeService } from '../lib/services/routeService';
+import { bluetoothService } from '../lib/services/bluetoothService';
+import { ftmsBluetoothService } from '../lib/services/ftmsBluetoothService';
+import { heartRateBluetoothService } from '../lib/services/heartRateBluetoothService';
+import { authService } from '../lib/services/authService';
+import { rownativeService } from '../lib/services/rownativeService';
+import { routeEnrichmentService } from '../lib/services/routeEnrichmentService';
+import { defaultRoutePreferenceStore } from '../lib/services/defaultRoutePreferenceStore';
+import { intervalsIcuActivityService } from '../lib/services/intervalsIcuActivityService';
+import { intervalsIcuWorkoutService } from '../lib/services/intervalsIcuWorkoutService';
+import { simulatorRowerTargetService } from '../lib/services/simulatorRowerTargetService';
+import { ftmsRowerTargetService } from '../lib/services/ftmsRowerTargetService';
+import { pm5RowerTargetService } from '../lib/services/pm5RowerTargetService';
+import { audioService } from '../lib/services/audioService';
+import { crashReporterService } from '../lib/services/crashReporterService';
+import { crashReportsPreferenceStore } from '../lib/services/crashReportsPreferenceStore';
+import type { RowerTargetPort } from '../lib/ports';
 
 /**
  * Pick the {@link RowerTargetPort} implementation to use for a given rower

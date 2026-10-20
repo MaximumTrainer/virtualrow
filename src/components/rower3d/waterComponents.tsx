@@ -15,12 +15,12 @@ import { rippleRepeat, rippleScroll, waterMaterialPlan } from './waterMaterial';
 import { curveLengthMeters } from './curve';
 import { createWaterChannelGeometry } from './waterGeometry';
 import { createLakeWaterGeometry, type LakeClearing } from './lakeGeometry';
-import type { LakePolygon } from '../../utils/lakePolygons';
+import type { LakePolygon } from '../../lib/utils/lakePolygons';
 import { RouteStripChunks } from './routeStripChunks';
 import { chunkViewDistanceFor } from './fogPlan';
 import type { ProgressRange } from './geometryChunks';
-import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
-import type { Coordinate } from '../../types/index';
+import type { RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../../lib/types/index';
 
 // ============================================================================
 // WATER REFLECTION PROBE — CubeCamera providing real-time env reflections

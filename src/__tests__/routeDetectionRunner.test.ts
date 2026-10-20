@@ -1,22 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Coordinate } from '../types/index';
-import type { OverpassElement } from '../services/routeEnrichmentService';
-import { buildLandAreas, landAt } from '../utils/bankLand';
-import { buildWaterMask, type MaskBounds } from '../utils/osmWaterMask';
-import { detectRoute } from '../utils/shoreDetection';
-import { classifyDetectedRoute } from '../utils/waterClassification';
+import type { Coordinate } from '../lib/types/index';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
+import { buildLandAreas, landAt } from '../lib/utils/bankLand';
+import { buildWaterMask, type MaskBounds } from '../lib/utils/osmWaterMask';
+import { detectRoute } from '../lib/utils/shoreDetection';
+import { classifyDetectedRoute } from '../lib/utils/waterClassification';
 import {
   answerDetectionRequest,
   runRouteDetection,
   type RouteDetectionInput,
-} from '../utils/routeDetection';
+} from '../lib/utils/routeDetection';
 import {
   createWorkerDetectionRunner,
   runDetectionInline,
   type DetectionWorker,
-} from '../services/routeDetectionRunner';
+} from '../lib/services/routeDetectionRunner';
 
 /**
  * #493 D23 b: detection moves to a Web Worker, with the same work run inline

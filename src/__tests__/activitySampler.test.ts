@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { WorkoutService } from '../services/workoutService';
-import { LOOP_CLOSURE_EPSILON_METRES } from '../services/activitySampler';
-import type { Coordinate, PM5Data } from '../types/index';
+import { WorkoutService } from '../lib/services/workoutService';
+import { LOOP_CLOSURE_EPSILON_METRES } from '../lib/services/activitySampler';
+import type { Coordinate, PM5Data } from '../lib/types/index';
 
 /** A straight 2 km run of coastline, so distance along it is easy to reason about. */
 const ROUTE: Coordinate[] = [

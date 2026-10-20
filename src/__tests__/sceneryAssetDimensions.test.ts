@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readGlbWorldBounds, parseDeclaredDims } from '../utils/glbBounds';
+import { readGlbWorldBounds, parseDeclaredDims } from '../lib/utils/glbBounds';
 
 /**
  * Every scenery model is measured against the size it was specified at.

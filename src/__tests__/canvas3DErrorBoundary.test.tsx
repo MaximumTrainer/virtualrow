@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canvas3DErrorBoundary } from '../components/Canvas3DErrorBoundary';
-import { isWebGLAvailable } from '../utils/gpuUtils';
+import { isWebGLAvailable } from '../lib/utils/gpuUtils';
 
 // Mocked at the module, not spied on the namespace: the component binds the
 // import at load, so a namespace spy never reaches it - and the "no context"
 // case would then pass on jsdom having no WebGL rather than on the code.
-vi.mock('../utils/gpuUtils', () => ({ isWebGLAvailable: vi.fn(() => true) }));
+vi.mock('../lib/utils/gpuUtils', () => ({ isWebGLAvailable: vi.fn(() => true) }));
 const webglAvailable = vi.mocked(isWebGLAvailable);
 
 /**

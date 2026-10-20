@@ -5,8 +5,8 @@ import {
   redactCrashPayload,
   redactText,
   truncateField,
-} from '../utils/crashRedactor';
-import { CRASH_PAYLOAD_SCHEMA_VERSION } from '../types/crashPayload';
+} from '../lib/utils/crashRedactor';
+import { CRASH_PAYLOAD_SCHEMA_VERSION } from '../lib/types/crashPayload';
 
 /**
  * The redactor is the single path telemetry takes out of the browser

@@ -7,7 +7,7 @@ import {
   runDeviceProbe,
   staticTierFor,
   type DevicePerformanceProbeOptions,
-} from '../utils/devicePerformanceProbe';
+} from '../lib/utils/devicePerformanceProbe';
 
 /**
  * #454 Phase 2 — static gates on the device-performance probe.

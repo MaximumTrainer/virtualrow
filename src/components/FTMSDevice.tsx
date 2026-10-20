@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { BluetoothDeviceState, PM5Data } from '../types/index';
-import { ftmsBluetoothService } from '../services/ftmsBluetoothService';
+import type { BluetoothDeviceState, PM5Data } from '../lib/types/index';
+import { ftmsBluetoothService } from '../lib/services/ftmsBluetoothService';
 import './BluetoothDevice.css';
 
 /**

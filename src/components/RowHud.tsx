@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { metricTiles, HUD_METRIC_LABEL, type HudMetric } from './rowHudPlan';
-import { formatSplit, formatTime } from '../utils/formatters';
+import { formatSplit, formatTime } from '../lib/utils/formatters';
 import { formatGap } from './rower3d/ghost';
 import type { FullscreenControl } from '../hooks/useFullscreen';
 import './RowHud.css';

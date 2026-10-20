@@ -10,7 +10,7 @@ import {
 import {
   getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 // ============================================================================
 // Pure water-channel geometry. Kept out of waterComponents.tsx so the channel

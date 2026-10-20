@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { BluetoothDeviceState, PM5Data } from '../types/index';
-import { bluetoothService } from '../services/bluetoothService';
+import type { BluetoothDeviceState, PM5Data } from '../lib/types/index';
+import { bluetoothService } from '../lib/services/bluetoothService';
 import './BluetoothDevice.css';
 
 /**

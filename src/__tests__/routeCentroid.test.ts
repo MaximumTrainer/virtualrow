@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { routeCentroid } from '../utils/routeCentroid';
-import type { Coordinate } from '../types/index';
+import { routeCentroid } from '../lib/utils/routeCentroid';
+import type { Coordinate } from '../lib/types/index';
 
 describe('routeCentroid', () => {
   it('returns the single coordinate for a one-point route', () => {

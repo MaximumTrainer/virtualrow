@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CrashReporterService, RETRY_DELAYS_MS } from '../services/crashReporterService';
-import { CrashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
-import type { CrashPayload } from '../types/crashPayload';
+import { CrashReporterService, RETRY_DELAYS_MS } from '../lib/services/crashReporterService';
+import { CrashReportsPreferenceStore } from '../lib/services/crashReportsPreferenceStore';
+import type { CrashPayload } from '../lib/types/crashPayload';
 
 /**
  * Unit tests for the FR10 retry schedule.

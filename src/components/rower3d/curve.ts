@@ -7,12 +7,12 @@
  * the same inputs.
  */
 import * as THREE from 'three';
-import type { Coordinate } from '../../types/index';
+import type { Coordinate } from '../../lib/types/index';
 import {
   DEFAULT_SIMPLIFY_EPSILON_METERS,
   simplifyCoordinates,
-} from '../../utils/coordinateUtils';
-import { distanceBetweenLatLng, latLngToMeters } from '../../utils/geoUtils';
+} from '../../lib/utils/coordinateUtils';
+import { distanceBetweenLatLng, latLngToMeters } from '../../lib/utils/geoUtils';
 import { SCENE_SCALE } from './constants';
 
 export const DEFAULT_ROUTE_POINT_RESOLUTION_METERS = 10;

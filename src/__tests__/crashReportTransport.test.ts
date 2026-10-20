@@ -3,8 +3,8 @@ import {
   CRASH_DISPATCH_EVENT_TYPE,
   CrashTransportError,
   makeRepositoryDispatchTransport,
-} from '../services/crashReportTransport';
-import type { CrashPayload } from '../types/crashPayload';
+} from '../lib/services/crashReportTransport';
+import type { CrashPayload } from '../lib/types/crashPayload';
 
 const payload: CrashPayload = {
   schemaVersion: 1,

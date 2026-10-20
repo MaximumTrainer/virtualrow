@@ -23,7 +23,7 @@ import {
 } from './foliagePlan';
 import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import type { SceneryTrack } from './sceneryTrack';
-import type { RouteEnrichmentData } from '../../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
 import { isWebGPUCullEnabled } from '../../webgpu/featureFlag';
 
 // Lazy-imported so the WebGPU module (and `@webgpu/types` by extension) stays

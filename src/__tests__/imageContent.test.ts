@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeImageContent, isBlankImage } from '../utils/imageContent';
+import { describeImageContent, isBlankImage } from '../lib/utils/imageContent';
 
 /**
  * A synthetic RGB image, as {width, height, pixels} with pixels a flat

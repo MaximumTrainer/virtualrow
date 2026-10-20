@@ -20,10 +20,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AuthUser } from '../types/index';
-import { authService } from '../services/authService';
-import type { AuthErrorClass } from '../services/authService';
-import type { AuthPort } from '../ports';
+import type { AuthUser } from '../lib/types/index';
+import { authService } from '../lib/services/authService';
+import type { AuthErrorClass } from '../lib/services/authService';
+import type { AuthPort } from '../lib/ports';
 import { AuthContext } from './useAuth';
 
 export interface AuthProviderProps {

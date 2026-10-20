@@ -5,8 +5,8 @@ import {
   markSessionUploaded,
   saveCompletedSession,
   saveSession,
-} from '../services/localStorageWorkoutStore';
-import type { WorkoutSession } from '../types/index';
+} from '../lib/services/localStorageWorkoutStore';
+import type { WorkoutSession } from '../lib/types/index';
 
 /**
  * Local persistence for a finished row (issue #221, R6). `saveSession` had been

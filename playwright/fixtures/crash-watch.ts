@@ -1,7 +1,7 @@
 import { test as base, type Page, type TestInfo } from '@playwright/test';
-import { describeCrashEvidence } from '../../src/utils/crashEvidence';
-import { formatTelemetry } from '../../src/utils/sceneTelemetryLog';
-import type { TelemetryEvent } from '../../src/utils/sceneTelemetryLog';
+import { describeCrashEvidence } from '../../src/lib/utils/crashEvidence';
+import { formatTelemetry } from '../../src/lib/utils/sceneTelemetryLog';
+import type { TelemetryEvent } from '../../src/lib/utils/sceneTelemetryLog';
 import { simPortsForWorker } from '../utils/simPorts';
 import { releaseSimServer, useSimServer } from '../utils/sim-server';
 

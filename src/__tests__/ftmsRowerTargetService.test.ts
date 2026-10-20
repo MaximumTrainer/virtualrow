@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { FtmsRowerTargetService } from '../services/ftmsRowerTargetService';
+import { FtmsRowerTargetService } from '../lib/services/ftmsRowerTargetService';
 
 describe('FtmsRowerTargetService (#445, D3(a) / NFR5 / AC9)', () => {
   let svc: FtmsRowerTargetService;

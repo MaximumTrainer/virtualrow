@@ -1,7 +1,7 @@
 import React, { Component, type ReactNode } from 'react';
-import { isWebGLAvailable } from '../utils/gpuUtils';
-import { crashReporterService } from '../services/crashReporterService';
-import { reportFromErrorBoundary } from '../utils/crashBoot';
+import { isWebGLAvailable } from '../lib/utils/gpuUtils';
+import { crashReporterService } from '../lib/services/crashReporterService';
+import { reportFromErrorBoundary } from '../lib/utils/crashBoot';
 
 interface Props {
   children: ReactNode;

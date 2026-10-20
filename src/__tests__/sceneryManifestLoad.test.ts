@@ -5,7 +5,7 @@ import {
   orderByCost,
   modelIdFromPath,
   type SceneryManifest,
-} from '../utils/sceneryManifest';
+} from '../lib/utils/sceneryManifest';
 
 /**
  * Issue #332 — the app reading its own manifest.

@@ -13,15 +13,15 @@ import { grassDensityStrengthForSegment, isFoliageEnabled } from './foliagePlan'
 import {
   buildTerrainProfile,
   type RouteEnrichmentData,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 import { SCENERY_PROFILES } from './sceneryConfig';
 import { createBiomeDensityTexture } from './foliageTexture';
 import { isShaderGrassEnabled } from './canvasSurface';
 import { getSegmentSceneryProfile } from './segmentScenery';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
 import { createLakeLandGeometry, type LakeClearing } from './lakeGeometry';
-import type { LakePolygon } from '../../utils/lakePolygons';
-import type { Coordinate } from '../../types/index';
+import type { LakePolygon } from '../../lib/utils/lakePolygons';
+import type { Coordinate } from '../../lib/types/index';
 import { createShorelineTexture } from './shorelineTexture';
 import { GROUND_PLANE_DEPTH_OFFSET, GROUND_PLANE_DROP_METRES, groundPlaneFor } from './groundPlane';
 import {

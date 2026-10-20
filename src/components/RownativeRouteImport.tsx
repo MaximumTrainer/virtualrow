@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useServices } from '../context/useServices';
-import { RownativeCourseNotFoundError, type RownativeCourseSummary } from '../services/rownativeService';
-import type { WaterRoute } from '../types/index';
+import { RownativeCourseNotFoundError, type RownativeCourseSummary } from '../lib/services/rownativeService';
+import type { WaterRoute } from '../lib/types/index';
 import './RownativeRouteImport.css';
 
 /** What the file picker offers, and what parseTrackFile can actually read. */

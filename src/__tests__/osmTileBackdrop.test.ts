@@ -4,7 +4,7 @@ import {
   pickBackdropZoom,
   osmTileFor,
   projectInsideTile,
-} from '../utils/osmTileBackdrop';
+} from '../lib/utils/osmTileBackdrop';
 
 describe('osmTileBackdrop', () => {
   describe('lngLatToMercatorPixel', () => {

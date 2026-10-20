@@ -12,9 +12,9 @@
  * See #445 FR1/FR7/AC12.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PM5Data, StructuredWorkout, WorkoutProgress, WorkoutSegment } from '../types/index';
-import { validateWorkout, expandRepeats } from '../utils/workoutPlan';
-import { WorkoutProgressController, segmentSpeedFactor } from '../utils/workoutProgress';
+import type { PM5Data, StructuredWorkout, WorkoutProgress, WorkoutSegment } from '../lib/types/index';
+import { validateWorkout, expandRepeats } from '../lib/utils/workoutPlan';
+import { WorkoutProgressController, segmentSpeedFactor } from '../lib/utils/workoutProgress';
 
 export interface CurrentWorkoutControl {
   /** The workout that will run on the next session, if any. */

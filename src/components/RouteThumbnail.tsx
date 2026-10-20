@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { Coordinate } from '../types/index';
-import { osmTileFor, pickBackdropZoom, projectInsideTile } from '../utils/osmTileBackdrop';
-import { routeCentroid } from '../utils/routeCentroid';
+import type { Coordinate } from '../lib/types/index';
+import { osmTileFor, pickBackdropZoom, projectInsideTile } from '../lib/utils/osmTileBackdrop';
+import { routeCentroid } from '../lib/utils/routeCentroid';
 import './RouteThumbnail.css';
 
 interface RouteThumbnailProps {

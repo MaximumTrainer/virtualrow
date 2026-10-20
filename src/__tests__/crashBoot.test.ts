@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { checkBootCrash, reportFromErrorBoundary } from '../utils/crashBoot';
+import { checkBootCrash, reportFromErrorBoundary } from '../lib/utils/crashBoot';
 import {
   openTelemetry,
   clearTelemetry,
   TELEMETRY_STORAGE_KEY,
-} from '../utils/sceneTelemetryLog';
-import type { CrashReporterPort } from '../ports';
+} from '../lib/utils/sceneTelemetryLog';
+import type { CrashReporterPort } from '../lib/ports';
 
 /**
  * The boot wiring (FR1) and the error-boundary helper (FR2) tested without a

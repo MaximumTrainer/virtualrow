@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { describeCrashEvidence } from '../utils/crashEvidence';
-import type { TelemetryEvent } from '../utils/sceneTelemetryLog';
+import { describeCrashEvidence } from '../lib/utils/crashEvidence';
+import type { TelemetryEvent } from '../lib/utils/sceneTelemetryLog';
 
 /**
  * A renderer that dies during a spec can leave that spec passing. Two of the

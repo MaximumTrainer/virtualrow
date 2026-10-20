@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
-import { latLngToMeters } from '../utils/geoUtils';
+import { latLngToMeters } from '../lib/utils/geoUtils';
 import { createRouteMapTransform } from './routeMapProjection';
-import type { WaterRoute } from '../types/index';
+import type { WaterRoute } from '../lib/types/index';
 import './RouteMap.css';
 
 interface RouteMapProps {

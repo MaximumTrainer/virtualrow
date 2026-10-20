@@ -2,7 +2,7 @@ import { Profiler, Suspense, type ProfilerOnRenderCallback } from 'react';
 import ReactThreeTestRenderer from '@react-three/test-renderer';
 import type * as THREE from 'three';
 import { RowerScene } from '../components/Rower3D';
-import { routeService } from '../services/routeService';
+import { routeService } from '../lib/services/routeService';
 import type { Rower3DProps } from '../components/Rower3D';
 
 /**

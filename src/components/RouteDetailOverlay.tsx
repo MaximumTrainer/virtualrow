@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import type { WaterRoute } from '../types/index';
+import type { WaterRoute } from '../lib/types/index';
 import {
   externalDistanceNote,
   formatRouteDistanceKm,
   geometryProvenanceBadge,
-} from '../utils/geometryProvenance';
-import { OUTLINE_ONLY_TAG } from '../services/routeService';
+} from '../lib/utils/geometryProvenance';
+import { OUTLINE_ONLY_TAG } from '../lib/services/routeService';
 import { RouteThumbnail } from './RouteThumbnail';
 
 function routeGeometrySource(route: WaterRoute): WaterRoute['geometrySource'] {

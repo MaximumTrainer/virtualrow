@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildAttachedTrackGeoJSON,
   slugify,
-} from '../utils/exporters';
-import { parseGeoJsonTrack } from '../utils/trackParsers';
-import type { AttachedTrack } from '../services/trackAttachmentStore';
+} from '../lib/utils/exporters';
+import { parseGeoJsonTrack } from '../lib/utils/trackParsers';
+import type { AttachedTrack } from '../lib/services/trackAttachmentStore';
 
 function makeTrack(overrides: Partial<AttachedTrack> = {}): AttachedTrack {
   return {

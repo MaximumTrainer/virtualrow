@@ -24,7 +24,7 @@ import {
   type RouteEnrichmentData,
   type RouteSegmentEnrichment,
   type SceneryProfile,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 export type LandscapeElementType = 'mountain' | 'building';
 

@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
-import type { OverpassElement, SceneryProfile } from '../services/routeEnrichmentService';
-import type { MaskBounds } from '../utils/osmWaterMask';
-import { runRouteDetection } from '../utils/routeDetection';
-import type { DetectedSample } from '../utils/shoreDetection';
+import type { Coordinate } from '../lib/types/index';
+import type { OverpassElement, SceneryProfile } from '../lib/services/routeEnrichmentService';
+import type { MaskBounds } from '../lib/utils/osmWaterMask';
+import { runRouteDetection } from '../lib/utils/routeDetection';
+import type { DetectedSample } from '../lib/utils/shoreDetection';
 
 /**
  * #493 FR18 / AC19 on real courses: the land each bank's scenery is read from.

@@ -4,7 +4,7 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import {
   CrashReportsPreferenceStore,
   CRASH_REPORTS_ENABLED_KEY,
-} from '../services/crashReportsPreferenceStore';
+} from '../lib/services/crashReportsPreferenceStore';
 
 /**
  * SettingsPanel renders the Diagnostics opt-out (#473, FR8 / AC8 / AC9).

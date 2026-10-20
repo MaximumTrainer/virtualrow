@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildSessionGPX } from '../utils/exporters';
-import type { WorkoutSession, WaterRoute } from '../types/index';
+import { buildSessionGPX } from '../lib/utils/exporters';
+import type { WorkoutSession, WaterRoute } from '../lib/types/index';
 
 /**
  * Distance-fidelity tests for the GPX export path.

@@ -10,7 +10,7 @@ import {
   SCENERY_WATER_MARGIN_METRES,
   landClearance,
 } from '../components/rower3d/sceneryClearance';
-import type { RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 
 /**
  * The procedural trees, buildings and mountains of `CurvedLandscapeElements`

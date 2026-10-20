@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 import { ALL_PERFORMANCE_MODES, LAKE_VERTEX_CAP } from '../components/rower3d/constants';
-import { lakePolygonsForTier, vertexCount, type LakePolygon } from '../utils/lakePolygons';
+import { lakePolygonsForTier, vertexCount, type LakePolygon } from '../lib/utils/lakePolygons';
 
 /**
  * #493 Phase 4 (FR9, D7 b, AC7): lake outlines are slimmed to each graphics

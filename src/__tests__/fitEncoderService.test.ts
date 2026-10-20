@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { Decoder, Stream } from '@garmin/fitsdk';
-import { encodeSession, FIT_EPOCH_OFFSET_SECONDS } from '../services/fitEncoderService';
+import { encodeSession, FIT_EPOCH_OFFSET_SECONDS } from '../lib/services/fitEncoderService';
 import { FIXTURE_START as START, makeSample, makeSession } from './__helpers__/fitFixture';
-import { cumulativeLengths, interpolateAlong } from '../utils/polylineGeometry';
-import type { ActivitySample, Coordinate } from '../types/index';
+import { cumulativeLengths, interpolateAlong } from '../lib/utils/polylineGeometry';
+import type { ActivitySample, Coordinate } from '../lib/types/index';
 
 /**
  * The encoder's primary gate (issue #221, AC2.2): every assertion here goes

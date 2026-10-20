@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { GeometrySource } from '../types/index';
+import type { GeometrySource } from '../lib/types/index';
 import {
   externalDistanceNote,
   formatRouteDistanceKm,
   geometryProvenanceBadge,
-} from '../utils/geometryProvenance';
+} from '../lib/utils/geometryProvenance';
 
 const ALL_SOURCES: GeometrySource[] = ['track', 'polygon-path', 'osm-derived', 'gate-chain'];
 

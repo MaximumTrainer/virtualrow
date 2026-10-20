@@ -5,7 +5,7 @@ import type {
   StructuredWorkout,
   WorkoutProgress,
   WorkoutSegment,
-} from '../types';
+} from '../lib/types';
 
 const workout: StructuredWorkout = {
   id: 'wo-1',

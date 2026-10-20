@@ -3,7 +3,7 @@ import {
   parseKMLCoordinate,
   parseGeoJSONCoordinate,
   parseKMLCoordinateList,
-} from '../utils/coordinateUtils';
+} from '../lib/utils/coordinateUtils';
 
 describe('coordinateUtils', () => {
   describe('parseKMLCoordinate', () => {

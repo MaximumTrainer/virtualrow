@@ -10,11 +10,11 @@ import {
   type OverpassElement,
   type RouteEnrichmentData,
   type RouteSegmentEnrichment,
-} from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
-import { buildLandAreas, landAt } from '../utils/bankLand';
-import { runRouteDetection } from '../utils/routeDetection';
-import type { DetectedSample } from '../utils/shoreDetection';
+} from '../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import { buildLandAreas, landAt } from '../lib/utils/bankLand';
+import { runRouteDetection } from '../lib/utils/routeDetection';
+import type { DetectedSample } from '../lib/utils/shoreDetection';
 
 /**
  * #493 FR18 / AC19: each bank's land is read from the OSM area just beyond

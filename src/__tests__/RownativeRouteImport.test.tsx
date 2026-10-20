@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { ServicesProvider } from '../context/ServicesContext';
 import { defaultServices } from '../context/useServices';
 import { RownativeRouteImport } from '../components/RownativeRouteImport';
-import { RownativeCourseNotFoundError } from '../services/rownativeService';
-import type { Services } from '../ports';
-import type { WaterRoute } from '../types/index';
+import { RownativeCourseNotFoundError } from '../lib/services/rownativeService';
+import type { Services } from '../lib/ports';
+import type { WaterRoute } from '../lib/types/index';
 
 function createRoute(name = 'Quinsig S to N', externalId = '5'): WaterRoute {
   return {

@@ -7,14 +7,14 @@
 // adapter and callers that depend on the port stay unchanged.
 // ============================================================================
 
-import type { AppearanceSlot, HairstyleId, HatId } from '../components/rower3d/rowerAppearance';
+import type { AppearanceSlot, HairstyleId, HatId } from '../../components/rower3d/rowerAppearance';
 import {
   TOP_PALETTE,
   SHORTS_PALETTE,
   SHOES_PALETTE,
   HAIR_PALETTE,
   HAT_PALETTE,
-} from '../components/rower3d/rowerAppearance';
+} from '../../components/rower3d/rowerAppearance';
 
 export const ROWER_APPEARANCE_STORAGE_KEY = 'virtualrow:appearance:v1';
 

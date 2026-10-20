@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Pm5RowerTargetService } from '../services/pm5RowerTargetService';
+import { Pm5RowerTargetService } from '../lib/services/pm5RowerTargetService';
 
 describe('Pm5RowerTargetService (#445, D3(a) / NFR5 / AC9)', () => {
   let svc: Pm5RowerTargetService;

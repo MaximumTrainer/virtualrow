@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRaceCues } from '../hooks/useRaceCues';
-import type { AudioPort } from '../ports';
+import type { AudioPort } from '../lib/ports';
 import type { StartPhase } from '../hooks/useStartSequence';
 
 /**

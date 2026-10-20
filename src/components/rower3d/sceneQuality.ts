@@ -16,7 +16,7 @@
 // scene agree from the first frame (#232).
 // ============================================================================
 
-import { recommendPerformanceMode } from '../../utils/gpuUtils';
+import { recommendPerformanceMode } from '../../lib/utils/gpuUtils';
 import type { PerformanceMode } from './constants';
 
 export interface RenderCapabilities {

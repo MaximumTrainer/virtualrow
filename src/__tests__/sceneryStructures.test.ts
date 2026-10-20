@@ -11,8 +11,8 @@ import {
   crossingStructures,
   computeStructurePlacements,
 } from '../components/rower3d/sceneryStructures';
-import type { Crossing } from '../utils/bridgeCrossings';
-import { buildTerrainProfile, type RouteEnrichmentData } from '../services/routeEnrichmentService';
+import type { Crossing } from '../lib/utils/bridgeCrossings';
+import { buildTerrainProfile, type RouteEnrichmentData } from '../lib/services/routeEnrichmentService';
 import {
   SCENERY_WATER_MARGIN_METRES,
   waterHalfWidthAt,

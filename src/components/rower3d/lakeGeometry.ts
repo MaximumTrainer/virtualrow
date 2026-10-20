@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { Coordinate } from '../../types/index';
-import type { LakePolygon } from '../../utils/lakePolygons';
-import { latLngToMeters } from '../../utils/geoUtils';
+import type { Coordinate } from '../../lib/types/index';
+import type { LakePolygon } from '../../lib/utils/lakePolygons';
+import { latLngToMeters } from '../../lib/utils/geoUtils';
 import { RIVERBANK_WIDTH, SCENE_SCALE } from './constants';
 import { WATER_SURFACE_Y } from './waterGeometry';
 import { BANK_WATERLINE_Y } from './bankGeometry';
@@ -9,7 +9,7 @@ import {
   getWaterWidthSceneUnitsForProgress,
   isOnLakeAtProgress,
   type RouteEnrichmentData,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 // ============================================================================
 // Pure lake geometry (#493 Phase 3: FR4, FR5, FR6, D4 c, D5 a, D6 a, D11 a).
