@@ -99,6 +99,21 @@ test('AC3 — the CPU path still renders when WebGPU is unavailable', async ({ p
 });
 
 test('AC1 — flag-on and flag-off render the same number of trees within ±2', async ({ browser }) => {
+  // `__ROWER3D_FOLIAGE.trees` is published from a BankFoliage useEffect that
+  // fires after the scene first renders, which lands a frame or two after
+  // `.activity-view` becomes visible. Flag-on also has to resolve the lazy
+  // WebGPUFoliageCuller before BankFoliage commits, so poll on both pages
+  // rather than reading once.
+  const readTrees = async (page: Page): Promise<number> => {
+    await expect
+      .poll(async () => (await page.evaluate(() => window.__ROWER3D_FOLIAGE?.trees ?? 0)) > 0, {
+        timeout: 20_000,
+        intervals: [250],
+      })
+      .toBe(true);
+    return page.evaluate(() => window.__ROWER3D_FOLIAGE?.trees ?? 0);
+  };
+
   const flagOffPage = await (await browser.newContext()).newPage();
   await flagOffPage.addInitScript(() => {
     const w = window as unknown as Record<string, unknown>;
@@ -106,17 +121,13 @@ test('AC1 — flag-on and flag-off render the same number of trees within ±2', 
     w.__VIRTUALROW_PERFORMANCE_MODE = 'auto';
   });
   await enterDemo(flagOffPage);
-  const flagOffTrees = await flagOffPage.evaluate(
-    () => window.__ROWER3D_FOLIAGE?.trees ?? 0,
-  );
+  const flagOffTrees = await readTrees(flagOffPage);
   await flagOffPage.close();
 
   const flagOnPage = await (await browser.newContext()).newPage();
   await enableSpike(flagOnPage);
   await enterDemo(flagOnPage);
-  const flagOnTrees = await flagOnPage.evaluate(
-    () => window.__ROWER3D_FOLIAGE?.trees ?? 0,
-  );
+  const flagOnTrees = await readTrees(flagOnPage);
   await flagOnPage.close();
 
   expect(flagOnTrees).toBeGreaterThan(0);
