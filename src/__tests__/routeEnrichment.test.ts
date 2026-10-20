@@ -441,6 +441,29 @@ describe('RouteEnrichmentService', () => {
     expect(second.source).toBe('cache');
   });
 
+  it('calls the global fetch with the correct receiver when none is injected (#493 AC8)', async () => {
+    // Regression: the constructor default stored a bare `fetch` on an instance
+    // field, so `this.fetchImpl(...)` invoked it with the service as its
+    // receiver. Browsers throw "Illegal invocation" for that, the catch turned
+    // it into fallback data, and no browser ever asked Overpass or
+    // OpenTopoData. Every other test injects a double, so only a real browser
+    // hit it - the same defect rownativeService.test.ts pins for that service.
+    const stub = createFetchStub();
+    const globalFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+        if (this instanceof RouteEnrichmentService) throw new TypeError('Illegal invocation');
+        return stub.fetch(input, init);
+      });
+
+    const service = new RouteEnrichmentService(undefined, localStorage, runDetectionInline);
+    const enrichment = await service.enrichRoute(routeFixture);
+
+    expect(enrichment.source).toBe('network');
+    expect(globalFetch).toHaveBeenCalled();
+    expect(globalFetch.mock.instances.some((receiver) => receiver instanceof RouteEnrichmentService)).toBe(false);
+  });
+
   it('hands detection to its runner with the route and the Overpass response (#493 D23 b)', async () => {
     const stub = createFetchStub();
     const detect = vi.fn(runDetectionInline);
