@@ -164,6 +164,13 @@ async function rowFrozen(
 
   await page.getByRole('button', { name: 'Routes', exact: true }).click();
   await expect(page.locator('.view-container--search')).toBeVisible();
+  // #505 Phase 3: on narrow viewports the Routes screen is map-primary with
+  // the catalogue (which holds the import panel) in an overlay drawer that
+  // defaults closed. Open it before reaching for the Import a file button.
+  const drawerToggle = page.getByTestId('routes-drawer-toggle');
+  if ((await drawerToggle.count()) > 0 && (await drawerToggle.getAttribute('aria-expanded')) === 'false') {
+    await drawerToggle.click();
+  }
   await page.getByRole('button', { name: /import a file/i }).click();
   await page.getByLabel('Route name').fill(routeName);
   await page.locator('.route-import input[type="file"]').setInputFiles(courseFixturePath);
