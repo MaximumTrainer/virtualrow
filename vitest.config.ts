@@ -157,7 +157,7 @@ export default defineConfig({
         lines: 93,
         statements: 93,
         branches: 85,
-        functions: 89,
+        functions: 90,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:
         // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch
@@ -196,6 +196,23 @@ export default defineConfig({
         // main became 98.38 / 100. A point under the lines, and branches held
         // back for the same reason as before.
         '**/skyComponents.tsx': { lines: 97, statements: 97, branches: 90, functions: 100 },
+        // #493 AC12: OSM water detection and lake outlines, pinned at their
+        // 2026-10-20 measurement, rounded down and at least 0.3 below it, so a
+        // later change can't quietly drop tests from them. A file with its own threshold leaves
+        // the global count, so pinning these well-covered files lowers the
+        // global reading (lines 94.03, branches 86.2, functions 90.51 after);
+        // functions rises to 90, lines and branches stay where a floor is not
+        // within a rounding error of the measurement.
+        '**/lakePolygons.ts': { lines: 100, statements: 100, branches: 97, functions: 100 },
+        '**/lakeGeometry.ts': { lines: 100, statements: 100, branches: 93, functions: 100 },
+        '**/osmWaterMask.ts': { lines: 100, statements: 100, branches: 94, functions: 100 },
+        '**/shoreDetection.ts': { lines: 99, statements: 99, branches: 97, functions: 100 },
+        '**/routeDetection.ts': { lines: 100, statements: 100, branches: 91, functions: 100 },
+        '**/routeDetectionRunner.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/routeDetection.worker.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/waterClassification.ts': { lines: 99, statements: 99, branches: 93, functions: 100 },
+        '**/waterGeometry.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
+        '**/routeEnrichmentService.ts': { lines: 96, statements: 96, branches: 91, functions: 98 },
       },
     },
   },
