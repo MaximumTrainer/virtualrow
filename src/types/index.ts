@@ -556,14 +556,6 @@ declare global {
      */
     __VIRTUALROW_LAKE_OUTLINES?: boolean;
     /**
-     * Phase-1 kill switch for #505: the map-primary Routes-screen overhaul
-     * (MapLibre overview, drawer, modal detail). Phase 1 defaults
-     * `undefined` (off) so visual baselines don't move; Phase 2 flips the
-     * sense and removes the old route-search markup. Set `true` from a
-     * spec or dev console to opt in.
-     */
-    __VIRTUALROW_ROUTE_MAP_V2?: boolean;
-    /**
      * The billboard foliage (#333): how many trees the route was planted with,
      * how many meshes draw them, and how many trees the last cull kept.
      */

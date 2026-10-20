@@ -65,8 +65,7 @@ test.describe('rownative.icu course import', () => {
   test('imports a pasted course id and shows rownative badges (AC-1, AC-6)', async ({ page }) => {
     const apiCalls: string[] = [];
     const consoleErrors: string[] = [];
-    // The Routes screen renders the MapLibre overview under
-    // __VIRTUALROW_ROUTE_MAP_V2 (on by default from #505 Phase 3). Its web
+    // The Routes screen renders the MapLibre overview (#505). Its web
     // worker's URL does not resolve under Vite's `/virtualrow/app/` base in
     // preview, and the OSM tile fetches are not reachable from CI's egress
     // proxy, so MapLibre reports both as console errors and the component

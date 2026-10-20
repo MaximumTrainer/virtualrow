@@ -18,7 +18,6 @@ const Rower3D = lazy(() => import('./components/Rower3D'));
 import { RouteThumbnail } from './components/RouteThumbnail';
 import { RouteOverviewMap } from './components/RouteOverviewMap';
 import { RouteDetailOverlay } from './components/RouteDetailOverlay';
-import { isRouteOverviewV2Enabled } from './utils/routeOverviewFlag';
 import { GuestSessionSummary } from './components/GuestSessionSummary';
 import { SessionSummary } from './components/SessionSummary';
 import { AuthButton } from './components/AuthButton';
@@ -262,10 +261,9 @@ function App() {
   const [defaultRouteId, setDefaultRouteId] = useState<string | null>(null);
   // #505 Phase 2 (D8-c): the modal that opens when a map pin is clicked.
   const [routeDetailOpen, setRouteDetailOpen] = useState<WaterRoute | null>(null);
-  // #505 Phase 2e (D6-c): when the route-map-v2 flag is on, the Routes screen
-  // is map-primary and the catalogue slides in from the side. Default open on
-  // ≥900px (laptop and up), closed on narrower screens where the drawer would
-  // cover most of the map.
+  // #505 Phase 2e (D6-c): the Routes screen is map-primary and the catalogue
+  // slides in from the side. Default open on ≥900px (laptop and up), closed
+  // on narrower screens where the drawer would cover most of the map.
   const [routesDrawerOpen, setRoutesDrawerOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia('(min-width: 900px)').matches;
@@ -1481,25 +1479,21 @@ function App() {
           {currentView === 'route-search' && (
             <div className="view-container view-container--search">
               <div
-                className={`route-search-screen${
-                  isRouteOverviewV2Enabled() ? ' route-search-screen--map-primary' : ''
-                }`}
-                data-drawer-open={isRouteOverviewV2Enabled() ? routesDrawerOpen : undefined}
+                className="route-search-screen route-search-screen--map-primary"
+                data-drawer-open={routesDrawerOpen}
               >
                 <div className="route-search-header">
                   <h2>Routes</h2>
-                  {isRouteOverviewV2Enabled() && (
-                    <button
-                      type="button"
-                      className="btn-routes-drawer-toggle"
-                      data-testid="routes-drawer-toggle"
-                      aria-expanded={routesDrawerOpen}
-                      aria-controls="route-search-drawer"
-                      onClick={() => setRoutesDrawerOpen((o) => !o)}
-                    >
-                      {routesDrawerOpen ? 'Hide list' : 'Show list'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="btn-routes-drawer-toggle"
+                    data-testid="routes-drawer-toggle"
+                    aria-expanded={routesDrawerOpen}
+                    aria-controls="route-search-drawer"
+                    onClick={() => setRoutesDrawerOpen((o) => !o)}
+                  >
+                    {routesDrawerOpen ? 'Hide list' : 'Show list'}
+                  </button>
                   <button
                     type="button"
                     className="btn-back-to-row"
@@ -1509,30 +1503,26 @@ function App() {
                   </button>
                 </div>
 
-                {/* #505 Phase 1: a MapLibre overview above the drawer when
-                    `__VIRTUALROW_ROUTE_MAP_V2` is on. The current list and
-                    importers remain below it. Phase 2 adds the modal detail
-                    overlay (D8), clustering (D4) and tile-backdrop cards
-                    (D3), and Phase 3 flips the flag on by default. */}
-                {isRouteOverviewV2Enabled() && (
-                  <section
-                    className="route-search-section route-overview-section"
-                    data-testid="route-overview-section"
-                  >
-                    <div className="route-overview-section__map">
-                      <RouteOverviewMap
-                        routes={routes}
-                        defaultRouteId={defaultRouteId}
-                        selectedRouteId={selectedRoute?.id ?? null}
-                        dimmedRouteIds={dimmedRouteIds}
-                        onSelect={(route) => setRouteDetailOpen(route)}
-                      />
-                    </div>
-                  </section>
-                )}
+                {/* #505: a MapLibre overview sits above the catalogue, with
+                    the modal detail overlay (D8), clustering (D4) and
+                    tile-backdrop cards (D3) coming through the drawer. */}
+                <section
+                  className="route-search-section route-overview-section"
+                  data-testid="route-overview-section"
+                >
+                  <div className="route-overview-section__map">
+                    <RouteOverviewMap
+                      routes={routes}
+                      defaultRouteId={defaultRouteId}
+                      selectedRouteId={selectedRoute?.id ?? null}
+                      dimmedRouteIds={dimmedRouteIds}
+                      onSelect={(route) => setRouteDetailOpen(route)}
+                    />
+                  </div>
+                </section>
 
                 <RouteDetailOverlay
-                  route={isRouteOverviewV2Enabled() ? routeDetailOpen : null}
+                  route={routeDetailOpen}
                   onClose={() => setRouteDetailOpen(null)}
                   onStartRow={() => {
                     if (routeDetailOpen) {
@@ -1633,7 +1623,7 @@ function App() {
                             width={120}
                             height={60}
                             className="route-item-thumbnail"
-                            showBackdrop={isRouteOverviewV2Enabled()}
+                            showBackdrop
                           />
                         )}
                         {routeEnrichmentLoading[route.id] && (
