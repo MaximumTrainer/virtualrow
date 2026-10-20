@@ -26,10 +26,11 @@ const ROUTE_ENRICHMENT_CACHE_ROOT = 'virtualrow:route-enrichment:';
  * v2: the water type comes from OSM detection (#493). v3: each segment also
  * carries the measured shore on each side (FR16) and each bank's land (FR18).
  * v4: a lake route carries its lake's outline (Phase 3) and each segment says
- * whether it is on it.
+ * whether it is on it. v5: a segment with a sample on land is no longer on the
+ * lake, and the lake keeps those samples (Phase 4, FR8).
  * Entries under the bare root or an older version are pruned on start-up (D9 b).
  */
-const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v4:`;
+const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v5:`;
 
 export type SceneryProfile =
   | 'forest'
@@ -116,6 +117,8 @@ export interface LakeSurface {
   polygons: LakePolygon[];
   /** The median route elevation over the lake segments, in metres. */
   elevationMeters: number;
+  /** Route samples on land where the route is otherwise on the lake (FR8); absent when none. */
+  offWater?: Coordinate[];
 }
 
 export interface WaterDetectionSummary {
@@ -820,6 +823,41 @@ const commonestLand = (water: DetectedSample[], side: 'leftLand' | 'rightLand'):
   return [...counts].sort(([a, countA], [b, countB]) => countB - countA || (a < b ? -1 : 1))[0]?.[0];
 };
 
+/** The detection samples that fall in segment `index`; the last segment keeps its end. */
+const samplesIn = (segmentProfiles: RouteSegmentEnrichment[], index: number, samples: DetectedSample[]) => {
+  const { startMeters, endMeters } = segmentProfiles[index];
+  const last = index === segmentProfiles.length - 1;
+  return samples.filter(
+    ({ distanceMeters }) => distanceMeters >= startMeters && (distanceMeters < endMeters || (last && distanceMeters <= endMeters)),
+  );
+};
+
+const mostlyLake = (water: DetectedSample[], lakeIds: ReadonlySet<string>) =>
+  water.filter(({ featureId }) => featureId !== undefined && lakeIds.has(featureId)).length * 2 > water.length;
+
+/** Most route samples on land a lake route keeps for its diagnostics (FR22, NFR3). */
+const OFF_WATER_KEPT = 50;
+
+/**
+ * The samples on land, past the drift tolerance, in segments that are
+ * otherwise on the lake (#493 FR8, D21): where the lake's outline and the
+ * route disagree. Kept so a bad route or bad mapping can be found and fixed
+ * at the source.
+ */
+export const lakeLandSamples = (
+  segmentProfiles: RouteSegmentEnrichment[],
+  samples: DetectedSample[],
+  lakeIds: ReadonlySet<string>,
+): Coordinate[] =>
+  segmentProfiles
+    .flatMap((_, index) => {
+      const here = samplesIn(segmentProfiles, index, samples);
+      return mostlyLake(here.filter(({ kind }) => kind === 'water'), lakeIds)
+        ? here.filter(({ kind }) => kind === 'land').map(({ coordinate }) => coordinate)
+        : [];
+    })
+    .slice(0, OFF_WATER_KEPT);
+
 /**
  * Puts the measured shore distances on each segment (#493 FR16), and the
  * land beyond each shore (FR18). The width
@@ -832,20 +870,17 @@ export const applyMeasuredShores = (
   lakeIds: ReadonlySet<string> = new Set(),
 ): RouteSegmentEnrichment[] =>
   segmentProfiles.map((profile, index) => {
-    const last = index === segmentProfiles.length - 1;
-    const water = samples.filter(
-      ({ kind, distanceMeters }) =>
-        kind === 'water' &&
-        distanceMeters >= profile.startMeters &&
-        (distanceMeters < profile.endMeters || (last && distanceMeters <= profile.endMeters)),
-    );
+    const here = samplesIn(segmentProfiles, index, samples);
+    const water = here.filter(({ kind }) => kind === 'water');
     if (water.length === 0) return profile;
     const leftShoreMeters = measuredSide(water, 'leftShoreMeters');
     const rightShoreMeters = measuredSide(water, 'rightShoreMeters');
     const leftSceneryProfile = commonestLand(water, 'leftLand');
     const rightSceneryProfile = commonestLand(water, 'rightLand');
-    // D5 a: most of the segment's water is the lake.
-    const onLake = water.filter(({ featureId }) => featureId !== undefined && lakeIds.has(featureId)).length * 2 > water.length;
+    // D5 a: most of the segment's water is the lake. FR8, D21 ii: a sample on
+    // land past the drift tolerance keeps the ribbon on this segment, so the
+    // boat is never drawn on land.
+    const onLake = mostlyLake(water, lakeIds) && !here.some(({ kind }) => kind === 'land');
     return {
       ...profile,
       ...(onLake && { onLake: true as const }),
@@ -874,6 +909,7 @@ export const lakeSurfaceFor = (
   coordinates: Coordinate[],
   elevations: ReadonlyArray<number>,
   segmentProfiles: RouteSegmentEnrichment[],
+  offWater: Coordinate[] = [],
 ): { lakes?: LakeSurface } => {
   if (!LAKE_ROUTE_TYPES.has(waterBodyType) || polygons.length === 0) return {};
   const lakeSpans = segmentProfiles.filter((profile) => profile.onLake);
@@ -890,7 +926,13 @@ export const lakeSurfaceFor = (
       onLake.push(elevation);
     }
   });
-  return { lakes: { polygons, elevationMeters: onLake.length > 0 ? median(onLake) : 0 } };
+  return {
+    lakes: {
+      polygons,
+      elevationMeters: onLake.length > 0 ? median(onLake) : 0,
+      ...(offWater.length > 0 && { offWater }),
+    },
+  };
 };
 
 /** Where the water ends either side of the route, in scene units from the centreline. */
@@ -952,6 +994,11 @@ export const waterDetectionTelemetry = (
     ...enrichment.waterDetection,
     lakes: polygons.length,
     islands: polygons.reduce((sum, lake) => sum + lake.inner.length, 0),
+    // FR8: where the route left its lake, so the course or the map can be fixed.
+    ...(enrichment.lakes?.offWater && {
+      offWater: enrichment.lakes.offWater.length,
+      offWaterSamples: enrichment.lakes.offWater,
+    }),
   };
 };
 
@@ -1209,11 +1256,9 @@ export class RouteEnrichmentService {
           coastlineBounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS),
         });
         const { detected } = detection;
-        const segmentProfiles = applyMeasuredShores(
-          createSegmentProfilesFromFeatures(route, nearElements),
-          detection.samples,
-          new Set(detection.lakes.map((lake) => lake.featureId)),
-        );
+        const lakeIds = new Set(detection.lakes.map((lake) => lake.featureId));
+        const segmentRanges = createSegmentProfilesFromFeatures(route, nearElements);
+        const segmentProfiles = applyMeasuredShores(segmentRanges, detection.samples, lakeIds);
         const waterFeatures = nearElements.filter(
           (element) => inferWaterBodyType(element.tags) !== 'unknown',
         );
@@ -1238,7 +1283,14 @@ export class RouteEnrichmentService {
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),
           waterDetection: { shares: detected.shares, ...detection.summary },
-          ...lakeSurfaceFor(resolvedWaterBodyType, detection.lakes, route.coordinates, elevations, segmentProfiles),
+          ...lakeSurfaceFor(
+            resolvedWaterBodyType,
+            detection.lakes,
+            route.coordinates,
+            elevations,
+            segmentProfiles,
+            lakeLandSamples(segmentRanges, detection.samples, lakeIds),
+          ),
           fetchedAt: Date.now(),
           source: 'network',
         };

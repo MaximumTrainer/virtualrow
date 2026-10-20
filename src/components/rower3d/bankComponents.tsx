@@ -19,7 +19,7 @@ import { createBiomeDensityTexture } from './foliageTexture';
 import { isShaderGrassEnabled } from './canvasSurface';
 import { getSegmentSceneryProfile } from './segmentScenery';
 import { BANK_WATERLINE_Y, createBankGeometry, createShorelineGeometry } from './bankGeometry';
-import { createLakeLandGeometry } from './lakeGeometry';
+import { createLakeLandGeometry, type LakeClearing } from './lakeGeometry';
 import type { LakePolygon } from '../../utils/lakePolygons';
 import type { Coordinate } from '../../types/index';
 import { createShorelineTexture } from './shorelineTexture';
@@ -51,6 +51,8 @@ export interface CurvedRiverbanksProps {
   lakeOrigin?: Coordinate | null;
   /** The lake outlines to draw, slimmed to the tier's cap (#493 FR9); defaults to the stored ones. */
   lakePolygons?: LakePolygon[];
+  /** Where the lake opens for the ribbon (#493 FR8, D21 ii). */
+  lakeClearings?: LakeClearing[];
 }
 
 /** The name on the lake's shore and islands, so a test can find them without counting meshes. */
@@ -197,6 +199,7 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   enrichment,
   lakeOrigin = null,
   lakePolygons,
+  lakeClearings,
 }) => {
   const omitLake = drawsLakeFor(enrichment, lakeOrigin);
   const bankConfig = SCENE_CONFIG.bank;
@@ -274,8 +277,8 @@ export const CurvedRiverbanks: React.FC<CurvedRiverbanksProps> = ({
   // The lake's shore and islands are the same ground as the banks (FR5, FR6).
   const lakeLand = useMemo(
     () =>
-      omitLake && lakeOrigin ? createLakeLandGeometry(lakePolygons ?? enrichment!.lakes!.polygons, lakeOrigin) : null,
-    [omitLake, lakeOrigin, lakePolygons, enrichment],
+      omitLake && lakeOrigin ? createLakeLandGeometry(lakePolygons ?? enrichment!.lakes!.polygons, lakeOrigin, { clearings: lakeClearings }) : null,
+    [omitLake, lakeOrigin, lakePolygons, lakeClearings, enrichment],
   );
   useEffect(() => () => lakeLand?.dispose(), [lakeLand]);
 

@@ -791,14 +791,15 @@ describe('route enrichment cache version (#493 D9 b)', () => {
   afterEach(() => localStorage.clear());
 
   it('keys entries under a versioned prefix, so pre-detection water types are refetched', () => {
-    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v4:route-1');
+    expect(getRouteEnrichmentCacheKey('route-1')).toBe('virtualrow:route-enrichment:v5:route-1');
   });
 
   it('prunes entries written under the old prefix and leaves everything else', () => {
     localStorage.setItem('virtualrow:route-enrichment:route-1', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v2:route-2', '{"savedAt":0}');
     localStorage.setItem('virtualrow:route-enrichment:v3:route-3', '{"savedAt":0}');
-    localStorage.setItem('virtualrow:route-enrichment:v4:route-4', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v4:route-5', '{"savedAt":0}');
+    localStorage.setItem('virtualrow:route-enrichment:v5:route-4', '{"savedAt":0}');
     localStorage.setItem('virtualrow:unrelated', 'keep me');
 
     new RouteEnrichmentService(createFetchStub().fetch, localStorage);
@@ -808,7 +809,9 @@ describe('route enrichment cache version (#493 D9 b)', () => {
     expect(localStorage.getItem('virtualrow:route-enrichment:v2:route-2')).toBeNull();
     // v3 entries predate the lake outlines (#493 Phase 3).
     expect(localStorage.getItem('virtualrow:route-enrichment:v3:route-3')).toBeNull();
-    expect(localStorage.getItem('virtualrow:route-enrichment:v4:route-4')).not.toBeNull();
+    // v4 entries mark lake segments the route leaves the water on (#493 FR8).
+    expect(localStorage.getItem('virtualrow:route-enrichment:v4:route-5')).toBeNull();
+    expect(localStorage.getItem('virtualrow:route-enrichment:v5:route-4')).not.toBeNull();
     expect(localStorage.getItem('virtualrow:unrelated')).toBe('keep me');
   });
 
