@@ -20,11 +20,11 @@ interface PlacedPin {
 }
 
 /**
- * #505 Phase 1 — map-primary Routes-screen overview.
+ * #505 — map-primary Routes-screen overview.
  *
- * Behind `__VIRTUALROW_ROUTE_MAP_V2`. Lazy-loads MapLibre; when the module or
- * its init fails (jsdom, no WebGL, blocked tile host), falls back to an SVG
- * world sketch of the pins so the surface stays usable (NFR1 of #505).
+ * Lazy-loads MapLibre; when the module or its init fails (jsdom, no WebGL,
+ * blocked tile host), falls back to an SVG world sketch of the pins so the
+ * surface stays usable (NFR1 of #505).
  *
  * Clustering (D4), the modal detail overlay (D8) and the OSM-tile card
  * backdrop (D3) land in Phase 2 of the issue; this phase renders pins and

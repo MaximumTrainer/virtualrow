@@ -6,31 +6,23 @@ import { installCanvasMock } from './canvasMock';
 
 /**
  * #505 Phase 2e (D6-c): the Routes screen is map-primary and the catalogue
- * slides in from the right when `__VIRTUALROW_ROUTE_MAP_V2` is on.
+ * slides in from the right.
  */
 
 let uninstallCanvas: () => void;
 
-declare global {
-  interface Window {
-    __VIRTUALROW_ROUTE_MAP_V2?: boolean;
-  }
-}
-
 beforeAll(() => {
   uninstallCanvas = installCanvasMock();
-  window.__VIRTUALROW_ROUTE_MAP_V2 = true;
 });
 
 afterAll(() => {
   uninstallCanvas();
-  delete window.__VIRTUALROW_ROUTE_MAP_V2;
 });
 
 afterEach(() => cleanup());
 
 describe('Routes drawer toggle (D6-c)', () => {
-  it('renders the drawer toggle when the overview flag is on', async () => {
+  it('renders the drawer toggle on the Routes screen', async () => {
     render(<App />);
     const user = userEvent.setup();
     // Go to the Routes screen (header nav has a "Routes" entry).

@@ -1,6 +1,4 @@
-/* #505 Phase 1 — map-primary Routes overview.
-   The component ships behind __VIRTUALROW_ROUTE_MAP_V2 (default off); styles
-   here are scoped so the flag-off path doesn't inherit them. */
+/* #505 — map-primary Routes overview. */
 
 .route-overview-map {
   position: relative;
