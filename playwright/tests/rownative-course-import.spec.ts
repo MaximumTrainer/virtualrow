@@ -65,8 +65,28 @@ test.describe('rownative.icu course import', () => {
   test('imports a pasted course id and shows rownative badges (AC-1, AC-6)', async ({ page }) => {
     const apiCalls: string[] = [];
     const consoleErrors: string[] = [];
-    page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
-    page.on('pageerror', (e) => consoleErrors.push(e.message));
+    // The Routes screen renders the MapLibre overview under
+    // __VIRTUALROW_ROUTE_MAP_V2 (on by default from #505 Phase 3). Its web
+    // worker's URL does not resolve under Vite's `/virtualrow/app/` base in
+    // preview, and the OSM tile fetches are not reachable from CI's egress
+    // proxy, so MapLibre reports both as console errors and the component
+    // renders its SVG fallback — not a VR regression this spec is testing.
+    const isMaplibreNoise = (msg: string) =>
+      /Worker failed to load/i.test(msg) ||
+      /maplibre-gl/i.test(msg) ||
+      /tile\.openstreetmap\.org/i.test(msg) ||
+      /Failed to load resource.*ERR_(TUNNEL|BLOCKED|FAILED|NAME_NOT_RESOLVED)/i.test(msg);
+    page.on(
+      'console',
+      (m) =>
+        m.type() === 'error' &&
+        !isMaplibreNoise(m.text()) &&
+        consoleErrors.push(m.text()),
+    );
+    page.on(
+      'pageerror',
+      (e) => !isMaplibreNoise(e.message) && consoleErrors.push(e.message),
+    );
 
     await bootstrap(page, apiCalls);
     await page.goto('./');
