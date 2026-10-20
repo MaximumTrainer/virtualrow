@@ -1,0 +1,273 @@
+/* ============================================================================
+   AUTH BUTTON — Sign in / User menu
+
+   Lives in the brand header, so the trigger is styled for the dark #1a3a4a
+   background while the dropdown it opens is a light panel over page content
+   (issue #219, R1).
+   ============================================================================ */
+
+/* ── Sign-in button ── */
+.auth-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  /* 44px touch-target floor (issue #195). */
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.auth-button--signin {
+  background: transparent;
+  color: var(--color-brand-contrast);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@media (hover: hover) {
+  .auth-button--signin:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.auth-button--signin:focus-visible {
+  outline: 2px solid var(--color-brand-contrast);
+  outline-offset: 2px;
+}
+
+.auth-button--loading {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: default;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.auth-button-text--short {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .auth-button-text--long {
+    display: none;
+  }
+
+  .auth-button-text--short {
+    display: inline;
+  }
+}
+
+.auth-signin-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2xs);
+}
+
+.auth-login-error {
+  font-size: 0.75rem;
+  color: var(--color-status-provisional-bg);
+  max-width: 280px;
+  text-align: left;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  align-items: flex-start;
+}
+
+.auth-retry-button {
+  margin-top: var(--space-2xs);
+  min-height: 32px;
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-divider);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+@media (hover: hover) {
+  .auth-retry-button:hover {
+    background: var(--color-bg-tertiary, var(--color-bg-secondary));
+  }
+}
+
+.auth-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: auth-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner {
+    animation: none;
+  }
+}
+
+/* ── User menu trigger ── */
+.auth-user-menu {
+  position: relative;
+  display: inline-block;
+  z-index: 1001; /* establish stacking context above the fixed backdrop */
+}
+
+.auth-user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: var(--space-2xs) var(--space-md) var(--space-2xs) var(--space-2xs);
+  border-radius: var(--radius-control);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: var(--color-brand-contrast);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .auth-user-trigger:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.auth-user-trigger:focus-visible {
+  outline: 2px solid var(--color-brand-contrast);
+  outline-offset: 2px;
+}
+
+.auth-avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.auth-avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-brand-contrast);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.auth-display-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-caret {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+
+/* ── Dropdown ── */
+.auth-dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  /* Ensure pointer events pass through to dropdown items above */
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.auth-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 200px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-modal);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.auth-dropdown-header {
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-dropdown-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+}
+
+.auth-dropdown-email {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-dropdown-divider {
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--color-border-divider);
+}
+
+.auth-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-lg);
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .auth-dropdown-item:hover {
+    background: var(--color-bg-secondary);
+    border-color: transparent;
+  }
+}
+
+.auth-dropdown-item--signout {
+  color: var(--color-error);
+}
