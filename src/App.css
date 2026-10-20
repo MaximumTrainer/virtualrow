@@ -1090,14 +1090,6 @@ body {
   min-height: 420px;
 }
 
-/* Keep the header above the fixed overlay drawer on narrow viewports so the
-   Hide list button stays clickable even while the drawer is sliding over the
-   screen (responsive.spec.ts asserts the toggle closes the drawer again). */
-.route-search-screen--map-primary .route-search-header {
-  position: relative;
-  z-index: 30;
-}
-
 .route-search-screen--map-primary .route-search-drawer {
   position: fixed;
   top: 0;
@@ -1115,6 +1107,21 @@ body {
 
 .route-search-screen--map-primary[data-drawer-open='true'] .route-search-drawer {
   transform: translateX(0);
+}
+
+/* While the overlay drawer is open on narrow viewports it covers the toggle's
+   normal spot in the header. Float the toggle to the top-left corner (opposite
+   the drawer) so clicking it still closes the drawer and it does not visually
+   overlap the first route row the drawer renders. On wider viewports the
+   drawer sits inline (grid layout below) so the header stays as-is. */
+@media (max-width: 899.98px) {
+  .route-search-screen--map-primary[data-drawer-open='true'] .btn-routes-drawer-toggle {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    margin: 0;
+    z-index: 50;
+  }
 }
 
 /* On tablet-landscape and wider, the drawer defaults open (see routesDrawerOpen
