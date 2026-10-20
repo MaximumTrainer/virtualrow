@@ -98,10 +98,11 @@ test('AC3 — the CPU path still renders when WebGPU is unavailable', async ({ p
   await enterDemo(page);
   // Either `webgpu-unsupported` (delete worked) or `adapter-request-failed`
   // (stub returned null) — both land on the CPU path, which is what the AC
-  // guarantees.
+  // guarantees. 45s budget: on slow macOS runners the lazy chunk + Suspense
+  // + BankFoliage mount can land late after `.activity-view` is visible.
   await expect
     .poll(async () => (await pollHealth(page))?.fallbackReason ?? null, {
-      timeout: 20_000,
+      timeout: 45_000,
       intervals: [500],
     })
     .toBeTruthy();
@@ -190,7 +191,9 @@ test('AC4 — a synthesised device-lost raises deviceLostCount', async ({ page }
         if (health.fallbackReason) return 'fallback';
         return 'ready';
       },
-      { timeout: 20_000, intervals: [500] },
+      // 45s budget: slow macOS runners can take a while to resolve the
+      // lazy chunk + mount WebGPUFoliageCuller after `.activity-view`.
+      { timeout: 45_000, intervals: [500] },
     )
     .toMatch(/device-lost|fallback/);
 });
