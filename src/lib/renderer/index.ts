@@ -1,5 +1,6 @@
 export { attach, default, isSceneryRoute } from './engine/attach';
 export type { RideAttach, RideAttachOpts, RideRenderer, SceneryRoute } from './engine/attach';
+export type { RideFrame } from './engine/rideFrame';
 export type { WebGPUFallbackReason, WebGPUHealth } from './engine/health';
 export { buildSmokeFoliagePools, type PoolInput } from './plan/instancePools';
 export {

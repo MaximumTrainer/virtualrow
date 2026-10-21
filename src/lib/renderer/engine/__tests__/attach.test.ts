@@ -74,9 +74,9 @@ describe('attach', () => {
     const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
-    // sky, clouds, bank, buildings, scenery, floraSolid, water
-    // (#566 FR5/FR6/FR1 added clouds + buildings on medium+).
-    expect(renderer._telemetry.renderStats.draws).toBe(7);
+    // sky, clouds, bank, buildings, scenery, floraSolid, water, boat
+    // (#566 added clouds + buildings on medium+; #570 added boat).
+    expect(renderer._telemetry.renderStats.draws).toBe(8);
     renderer.dispose();
   });
 

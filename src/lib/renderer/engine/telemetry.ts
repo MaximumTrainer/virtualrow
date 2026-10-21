@@ -138,6 +138,44 @@ export interface Rower3DBuildings {
   cast: boolean;
 }
 
+/**
+ * Boat telemetry (#570 FR6 / AC1). Published as `__ROWER3D_BOAT`. Carries
+ * the per-frame world placement + the derived progress; the HUD reads this
+ * to decide the finish ribbon and the camera to decide where to look.
+ */
+export interface Rower3DBoat {
+  x: number;
+  y: number;
+  z: number;
+  heading: number;
+  distanceMeters: number;
+  progress: number;
+  holding: boolean;
+  finished: boolean;
+  isPlaying: boolean;
+}
+
+/**
+ * Crew telemetry (#570 FR6 / AC5). Published as `__ROWER3D_CREW`. Carries
+ * the stroke driver outputs so a spec can assert the crew is moving at
+ * cadence.
+ */
+export interface Rower3DCrew {
+  cadenceSpm: number;
+  strokePhase: number;
+  amplitude: number;
+  rowers: number;
+}
+
+/**
+ * Ghost metres (#570 FR6). Published as `__ROWER3D_GHOST_METERS`. Zero
+ * when there is no ghost or `elapsedSeconds <= 0`.
+ */
+export interface Rower3DGhostMetersHandle {
+  value: number;
+  active: boolean;
+}
+
 export interface TelemetryHandles {
   renderStats: Rower3DRenderStats;
   frameStats: Rower3DFrameStats;
@@ -151,6 +189,9 @@ export interface TelemetryHandles {
   shadows: Rower3DShadows;
   textures: Rower3DTextures;
   buildings: Rower3DBuildings;
+  boat: Rower3DBoat;
+  crew: Rower3DCrew;
+  ghostMeters: Rower3DGhostMetersHandle;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -212,6 +253,19 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
       resident: false,
       cast: false,
     },
+    boat: {
+      x: 0,
+      y: 0,
+      z: 0,
+      heading: 0,
+      distanceMeters: 0,
+      progress: 0,
+      holding: false,
+      finished: false,
+      isPlaying: false,
+    },
+    crew: { cadenceSpm: 0, strokePhase: 0, amplitude: 0, rowers: 1 },
+    ghostMeters: { value: 0, active: false },
   };
   const w = win();
   if (w) {
@@ -229,6 +283,9 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_SHADOWS'] = handles.shadows;
     w['__ROWER3D_TEXTURES'] = handles.textures;
     w['__ROWER3D_BUILDINGS'] = handles.buildings;
+    w['__ROWER3D_BOAT'] = handles.boat;
+    w['__ROWER3D_CREW'] = handles.crew;
+    w['__ROWER3D_GHOST_METERS'] = handles.ghostMeters;
   }
   return handles;
 };
@@ -251,6 +308,9 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_SHADOWS',
     '__ROWER3D_TEXTURES',
     '__ROWER3D_BUILDINGS',
+    '__ROWER3D_BOAT',
+    '__ROWER3D_CREW',
+    '__ROWER3D_GHOST_METERS',
   ]) {
     delete w[key];
   }

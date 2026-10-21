@@ -16,14 +16,18 @@ export interface BuildingTierCaps {
   drawBuildings: boolean;
   drawClouds: boolean;
   castBuildingShadows: boolean;
+  /** #570 D9: `basic` draws an empty cockpit (hull only, no crew). */
+  drawCrew: boolean;
+  /** #570 D7-c: crew only casts a shadow on medium+. */
+  castCharacterShadows: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
-  basic: { drawBuildings: false, drawClouds: false, castBuildingShadows: false },
-  low: { drawBuildings: true, drawClouds: false, castBuildingShadows: false },
-  medium: { drawBuildings: true, drawClouds: true, castBuildingShadows: true },
-  high: { drawBuildings: true, drawClouds: true, castBuildingShadows: true },
-  'extra-high': { drawBuildings: true, drawClouds: true, castBuildingShadows: true },
+  basic: { drawBuildings: false, drawClouds: false, castBuildingShadows: false, drawCrew: false, castCharacterShadows: false },
+  low: { drawBuildings: true, drawClouds: false, castBuildingShadows: false, drawCrew: true, castCharacterShadows: false },
+  medium: { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
+  high: { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
+  'extra-high': { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
 };
 
 export const tierCapsFor = (tier: string | undefined): BuildingTierCaps => {
