@@ -26,6 +26,8 @@
   import { setRoutesStore } from '$lib/ui/routesContext';
   import { setSessionStore } from '$lib/ui/sessionContext';
   import { SessionStore } from '$lib/ui/sessionStore.svelte';
+  import { setRideSession } from '$lib/ui/rideSessionContext';
+  import { RideSessionStore } from '$lib/ui/rideSession.svelte';
   import { setDeepLink } from '$lib/ui/deepLinkContext';
   import { RownativeDeepLinkRunner } from '$lib/ui/deepLink.svelte';
   import AuthButton from '$lib/ui/AuthButton.svelte';
@@ -41,6 +43,10 @@
   // every view switch, so the session store is provided here too — App kept its
   // BLE subscriptions alive outside the view for the same reason.
   const session = setSessionStore(new SessionStore());
+  // The live rower pipeline (the latest packet, the recording session, the start
+  // sequence and the finish) also outlives the view switch, so it is provided
+  // here and reads the session and route stores it was handed.
+  const ride = setRideSession(new RideSessionStore(session, routes));
   const deepLink = setDeepLink(new RownativeDeepLinkRunner());
 
   onMount(() => {
@@ -50,12 +56,19 @@
 
     // Keep the device connection listeners alive for the lifetime of the app.
     const stopSession = session.init();
+    // The rower-data and heart-rate subscriptions outlive the view switch too,
+    // so a workout keeps recording after Routes → Row (App.tsx kept these
+    // outside the view for exactly this reason).
+    const stopRide = ride.init();
 
     // A session started programmatically (by workoutService, including from the
     // Row screen's Start/demo) opens the workout route; ending it returns to the
     // Row screen (App.tsx's window session bridge).
-    const onStarted = () => {
+    const onStarted = (e: Event) => {
       session.onSessionStarted();
+      // Seed the recording session now (App set it from the event detail) so the
+      // workout view's `currentSession` guard is satisfied before the first packet.
+      if (e instanceof CustomEvent) ride.onStarted(e.detail);
       void goto(`${base}/row`);
     };
     const onEnded = () => {
@@ -67,9 +80,27 @@
 
     return () => {
       stopSession();
+      stopRide();
       window.removeEventListener('virtualrow:sessionStarted', onStarted);
       window.removeEventListener('virtualrow:sessionEnded', onEnded);
     };
+  });
+
+  // Drive the ride session from the session lifecycle. App ran the activity
+  // timer and the start sequence off the same `isWorkoutActive` flag and fed the
+  // demo its simulator frames while the demo was on.
+  $effect(() => {
+    ride.setActive(session.sessionActive);
+  });
+  $effect(() => {
+    ride.setDemoListening(session.isDemoMode);
+  });
+  $effect(() => {
+    ride.startSequence.setInputs({
+      active: session.sessionActive,
+      strokeAt: ride.strokeAt,
+      autoStart: session.isDemoMode,
+    });
   });
 
   // Resolve the default route and the opening selection once routes are loaded,

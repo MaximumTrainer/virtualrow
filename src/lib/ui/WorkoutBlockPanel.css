@@ -1,0 +1,170 @@
+/*
+ * Below-rower block panel styles (issue #445, D5(a)).
+ *
+ * Pinned to the bottom of `.activity-route-stage`; sits above `RowHud` when
+ * both are on the stage (the HUD strip takes the very bottom, the panel is
+ * the strip immediately above it). Tile chrome mirrors the RowHud
+ * `.activity-stat-card` pattern so a rower reads them as the same family of
+ * numbers.
+ */
+.workout-block-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--row-hud-strip-height, 0);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  min-height: 120px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #f7f9fb;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.workout-block-timeline {
+  display: flex;
+  gap: 2px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  height: 12px;
+}
+
+.workout-block-timeline-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6px;
+  height: 100%;
+  border-radius: 3px;
+  opacity: 0.55;
+  color: #0b0f14;
+  font-size: 10px;
+  font-weight: 600;
+  transition: opacity 200ms ease-out;
+}
+
+.workout-block-timeline-step.is-current {
+  opacity: 1;
+  outline: 2px solid #f7f9fb;
+  outline-offset: -1px;
+}
+
+.workout-block-timeline-mark {
+  display: block;
+  line-height: 1;
+}
+
+.workout-block-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.workout-block-card,
+.workout-block-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  min-width: 0;
+}
+
+.workout-block-card-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.workout-block-zone {
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #0b0f14;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workout-block-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workout-block-type {
+  font-size: 11px;
+  color: rgba(247, 249, 251, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.workout-block-timing {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(247, 249, 251, 0.85);
+}
+
+.workout-block-compliance {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.workout-block-compliance[data-compliance='on-target'] { color: #7dd57a; }
+.workout-block-compliance[data-compliance='too-fast'] { color: #ffb057; }
+.workout-block-compliance[data-compliance='too-slow'] { color: #f88; }
+.workout-block-compliance[data-compliance='off-target'] { color: #f88; }
+.workout-block-compliance[data-compliance='untargeted'] { color: rgba(247, 249, 251, 0.6); }
+
+.workout-block-done {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7dd57a;
+}
+
+.workout-block-tile-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(247, 249, 251, 0.7);
+}
+
+.workout-block-tile-prescribed {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(247, 249, 251, 0.9);
+}
+
+.workout-block-tile-actual {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.workout-block-tile-actual[data-has-target='false'] {
+  color: rgba(247, 249, 251, 0.6);
+}
+
+@media (max-width: 640px) {
+  .workout-block-panel {
+    min-height: 160px;
+    padding: 8px 10px;
+  }
+  .workout-block-body {
+    grid-template-columns: 1fr 1fr;
+  }
+  .workout-block-card {
+    grid-column: 1 / -1;
+  }
+}

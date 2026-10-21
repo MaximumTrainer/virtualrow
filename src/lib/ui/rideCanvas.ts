@@ -16,6 +16,36 @@
  * any Svelte.
  */
 
+/**
+ * The live row state the engine pulls once per frame to place the boat and the
+ * ghost (#542 workout slice). The shell computes it from the rower pipeline
+ * (see `rideSession.svelte.ts`); the engine reads it each `requestAnimationFrame`
+ * and publishes the `__ROWER3D_POS` / `__ROWER3D_GHOST_METERS` globals the
+ * workout specs read. Framework-free so the engine imports it without Svelte.
+ */
+export interface RideFrame {
+  /** Current split, seconds per 500 m, or null before the first stroke. */
+  readonly paceSPer500: number | null;
+  /** Metres rowed so far, or null before the first packet. */
+  readonly distanceMeters: number | null;
+  readonly cadence: number | null;
+  /** The session is active and not paused — the boat and crew are moving. */
+  readonly isPlaying: boolean;
+  /** Hold the boat at progress 0 (the start countdown, #336). */
+  readonly holdBoat: boolean;
+  /** The boat has crossed the line — the blade foam bursts (#336). */
+  readonly finished: boolean;
+  /** The structured workout's speed factor, 1 for a free row. */
+  readonly intensityFactor: number;
+  /** The row's clock in seconds, used to place the ghost. */
+  readonly elapsedSeconds: number;
+  /**
+   * What this row is rowed against (#338), or null when rowing alone. A plain
+   * discriminated union (pace / recorded) from `components/rower3d/ghost`.
+   */
+  readonly ghost: unknown;
+}
+
 /** Options the shell passes the engine when it starts a ride. */
 export interface RideRendererOptions {
   /** Resolved performance tier (basic | low | medium | high | extra-high). */
@@ -28,6 +58,12 @@ export interface RideRendererOptions {
   readonly route?: unknown;
   /** True under Playwright, so the engine honours the `__ROWER3D_*` contract. */
   readonly testMode?: boolean;
+  /**
+   * Pulled by the engine once per frame for the live row state (#542 workout
+   * slice). Optional and backward-compatible: an engine that ignores it draws a
+   * static scene, which is what P2's sky/bank/water skeleton does today.
+   */
+  readonly getFrame?: () => RideFrame;
 }
 
 /** A running renderer. The host calls {@link dispose} when the ride unmounts. */

@@ -16,7 +16,7 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { RideAttach, RideRenderer } from './rideCanvas';
+  import type { RideAttach, RideRenderer, RideFrame } from './rideCanvas';
 
   interface Props {
     /** The engine's `attach` entrypoint. Omitted in P1 → bare canvas. */
@@ -27,9 +27,11 @@
     route?: unknown;
     /** True under Playwright. */
     testMode?: boolean;
+    /** Live row state the engine pulls each frame (#542 workout slice). */
+    getFrame?: () => RideFrame;
   }
 
-  let { attach, tier, route, testMode = false }: Props = $props();
+  let { attach, tier, route, testMode = false, getFrame }: Props = $props();
 
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
@@ -41,7 +43,7 @@
     if (!attach || !canvas) return;
     let handle: RideRenderer | null = null;
     let disposed = false;
-    Promise.resolve(attach(canvas, { tier, route, testMode }))
+    Promise.resolve(attach(canvas, { tier, route, testMode, getFrame }))
       .then((r) => {
         if (disposed) {
           r?.dispose();
