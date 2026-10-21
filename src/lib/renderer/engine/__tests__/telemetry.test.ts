@@ -13,6 +13,7 @@ type Win = typeof window & {
   __ROWER3D_GPU_BACKEND?: unknown;
   __ROWER3D_FOLIAGE?: unknown;
   __ROWER3D_SCENERY?: unknown;
+  __ROWER3D_BUILDINGS?: unknown;
 };
 
 afterEach(() => {
@@ -37,6 +38,7 @@ describe('telemetry', () => {
       '__ROWER3D_GPU_BACKEND',
       '__ROWER3D_FOLIAGE',
       '__ROWER3D_SCENERY',
+      '__ROWER3D_BUILDINGS',
     ] as const;
     for (const key of keys) {
       expect(w[key]).toBeDefined();
@@ -71,6 +73,16 @@ describe('telemetry', () => {
       dispatchCount: expect.any(Number),
       drawCount: expect.any(Number),
     });
+    // #566 FR1/AC8: buildings telemetry is published and defaults to zero.
+    expect(handles.buildings).toMatchObject({
+      routes: 0,
+      drawn: 0,
+      pool: 0,
+      triangles: 0,
+      footprintM2: 0,
+      resident: false,
+      cast: false,
+    });
   });
 
   it('clears every global on release', () => {
@@ -82,5 +94,6 @@ describe('telemetry', () => {
     expect(w.__ROWER3D_GPU_BACKEND).toBeUndefined();
     expect(w.__ROWER3D_FOLIAGE).toBeUndefined();
     expect(w.__ROWER3D_SCENERY).toBeUndefined();
+    expect(w.__ROWER3D_BUILDINGS).toBeUndefined();
   });
 });

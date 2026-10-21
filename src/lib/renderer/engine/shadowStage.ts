@@ -24,8 +24,15 @@ import {
   createSceneryDepthPoolBindGroup,
   type SceneryDepthPipeline,
 } from '../passes/sceneryDepth';
+import {
+  createBuildingsDepthPipeline,
+  createBuildingsDepthPoolBindGroup,
+  type BuildingsDepthPipeline,
+} from '../passes/buildingsDepth';
 import type { InstancePool } from '../plan/instancePools';
+import type { BuildingPool } from '../plan/buildings';
 import type { Mat4 } from '../math/mat4';
+import { BUILDINGS_VERTEX_COUNT } from '../passes/buildings';
 
 export interface ShadowFramePayload {
   cascades: { viewProj: Mat4 }[];
@@ -46,6 +53,7 @@ export interface ShadowStage extends Pass {
   readonly atlas: ShadowAtlas;
   readonly bank: BankDepthPipeline;
   readonly scenery: SceneryDepthPipeline;
+  readonly buildings: BuildingsDepthPipeline;
   readonly payload: ShadowFramePayload;
   readonly telemetry: ShadowTelemetry;
 }
@@ -54,6 +62,12 @@ export interface ShadowStageOptions {
   device: GPUDevice;
   atlas: ShadowAtlas;
   scenePools: readonly InstancePool[];
+  /**
+   * Building pool to cast shadows into the atlas. `null` turns the
+   * buildings depth path off (#566 D4-c: `basic` / `low` tiers skip the
+   * cast). Lit `buildings` pass still receives shadows via `sampleShadow`.
+   */
+  buildingsPool: BuildingPool | null;
   telemetry: ShadowTelemetry;
 }
 
@@ -62,14 +76,17 @@ const CASCADE_UNIFORM_BYTES = 64;
 export const createShadowStage = (
   opts: ShadowStageOptions,
 ): ShadowStage => {
-  const { device, atlas, scenePools, telemetry } = opts;
+  const { device, atlas, scenePools, buildingsPool, telemetry } = opts;
   const bank = createBankDepthPipeline(device);
   const scenery = createSceneryDepthPipeline(device);
+  const buildings = createBuildingsDepthPipeline(device);
 
   const bankCascadeBuffers: GPUBuffer[] = [];
   const bankCascadeBindGroups: GPUBindGroup[] = [];
   const sceneryCascadeBuffers: GPUBuffer[] = [];
   const sceneryCascadeBindGroups: GPUBindGroup[] = [];
+  const buildingsCascadeBuffers: GPUBuffer[] = [];
+  const buildingsCascadeBindGroups: GPUBindGroup[] = [];
   for (let i = 0; i < atlas.cascades; i++) {
     const bankBuf = device.createBuffer({
       label: `bankDepth-cascade:${i}`,
@@ -97,6 +114,19 @@ export const createShadowStage = (
         entries: [{ binding: 0, resource: { buffer: sceneBuf } }],
       }),
     );
+    const buildBuf = device.createBuffer({
+      label: `buildingsDepth-cascade:${i}`,
+      size: CASCADE_UNIFORM_BYTES,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    buildingsCascadeBuffers.push(buildBuf);
+    buildingsCascadeBindGroups.push(
+      device.createBindGroup({
+        label: `buildingsDepth-cascade:${i}:bg`,
+        layout: buildings.cascadeLayout,
+        entries: [{ binding: 0, resource: { buffer: buildBuf } }],
+      }),
+    );
   }
 
   const sceneryPoolBindGroups = scenePools.map((pool) =>
@@ -106,6 +136,12 @@ export const createShadowStage = (
       speciesIndex: pool.speciesIndex,
     }),
   );
+  const buildingsPoolBindGroup = buildingsPool
+    ? createBuildingsDepthPoolBindGroup(device, buildings.poolLayout, {
+        centresBuffer: buildingsPool.centresBuffer,
+        sizesBuffer: buildingsPool.sizesBuffer,
+      })
+    : null;
 
   const atlasView = atlas.view;
   const uniformScratch = new Float32Array(16);
@@ -121,6 +157,7 @@ export const createShadowStage = (
     atlas,
     bank,
     scenery,
+    buildings,
     payload,
     telemetry,
     encode(ctx: FrameContext) {
@@ -142,6 +179,13 @@ export const createShadowStage = (
           0,
           uniformScratch as BufferSource,
         );
+        if (buildingsPoolBindGroup) {
+          ctx.device.queue.writeBuffer(
+            buildingsCascadeBuffers[i],
+            0,
+            uniformScratch as BufferSource,
+          );
+        }
       }
 
       let drawCount = 0;
@@ -180,6 +224,15 @@ export const createShadowStage = (
           triangleCount += (12 / 3) * pool.instanceCount;
         }
 
+        if (buildingsPoolBindGroup && buildingsPool && buildingsPool.instanceCount > 0) {
+          pass.setPipeline(buildings.pipeline);
+          pass.setBindGroup(0, buildingsCascadeBindGroups[i]);
+          pass.setBindGroup(1, buildingsPoolBindGroup);
+          pass.draw(BUILDINGS_VERTEX_COUNT, buildingsPool.instanceCount);
+          drawCount += 1;
+          triangleCount += (BUILDINGS_VERTEX_COUNT / 3) * buildingsPool.instanceCount;
+        }
+
         pass.end();
       }
 
@@ -195,8 +248,10 @@ export const createShadowStage = (
       disposed = true;
       for (const b of bankCascadeBuffers) b.destroy();
       for (const b of sceneryCascadeBuffers) b.destroy();
+      for (const b of buildingsCascadeBuffers) b.destroy();
       bank.dispose();
       scenery.dispose();
+      buildings.dispose();
     },
   };
 };

@@ -15,9 +15,12 @@
 import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective } from '../math/mat4';
 import { vec3 } from '../math/vec3';
 import { createBankPass } from '../passes/bank';
+import { createBuildingsPass } from '../passes/buildings';
+import { createCloudsPass } from '../passes/clouds';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
+import { createBuildingPool, type BuildingPool, type BuildingSpec } from '../plan/buildings';
 import { computeCascades } from './cascadedShadows';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
@@ -31,6 +34,7 @@ import { publishFallback } from './health';
 import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
+import { tierCapsFor } from './tierCaps';
 import { createTelemetry, releaseTelemetry, type TelemetryHandles } from './telemetry';
 import {
   createFrameUniformBuffer,
@@ -55,6 +59,15 @@ export interface RideRenderer {
  */
 export interface SceneryRoute {
   pools: PoolInput[];
+  /**
+   * Extruded OSM building footprints to draw as prisms (#566 FR1). Absent
+   * on a route with no mapped buildings — the engine then skips the
+   * `BuildingsPass` and leaves the sky + clouds + scenery as the only
+   * horizon. The engine does not call back into enrichment itself; the
+   * UI shell is expected to extrude footprints before passing the route
+   * (D1-b).
+   */
+  buildings?: BuildingSpec[];
 }
 
 export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
@@ -165,6 +178,25 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   // D7-a of #555: wire the scenery pass unconditionally.
   const sceneryPoolInputs: PoolInput[] = isSceneryRoute(opts.route) ? opts.route.pools : [];
   const scenePools: InstancePool[] = sceneryPoolInputs.map((input) => createInstancePool(device, input));
+
+  // #566 P6 — buildings pool. Per D5-b we skip the pool entirely when the
+  // route carries no `buildings`, which is what happens for a fallback
+  // enrichment. Tier gates then decide whether to build the pass + cast
+  // shadows (D8).
+  const tierCaps = tierCapsFor(opts.tier);
+  const buildingSpecs: BuildingSpec[] =
+    tierCaps.drawBuildings && isSceneryRoute(opts.route) && opts.route.buildings
+      ? opts.route.buildings
+      : [];
+  const buildingsPool: BuildingPool | null = buildingSpecs.length > 0
+    ? createBuildingPool(device, buildingSpecs)
+    : null;
+  const buildingsCastingPool = tierCaps.castBuildingShadows ? buildingsPool : null;
+  telemetry.buildings.routes = buildingsPool ? 1 : 0;
+  telemetry.buildings.pool = buildingsPool?.instanceCount ?? 0;
+  telemetry.buildings.footprintM2 = buildingsPool?.footprintM2 ?? 0;
+  telemetry.buildings.resident = !!buildingsPool;
+  telemetry.buildings.cast = !!buildingsCastingPool;
   const sceneryPass = createSceneryPass({
     device,
     format,
@@ -206,6 +238,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     device,
     atlas,
     scenePools,
+    buildingsPool: buildingsCastingPool,
     telemetry: shadowTelemetry,
   });
 
@@ -219,12 +252,28 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   };
   const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
   const waterPass = createWaterPass({ device, format, frameUniforms, shadow: shadowResources });
+  const buildingsPass = createBuildingsPass({
+    device,
+    format,
+    frameUniforms,
+    shadow: shadowResources,
+    pool: buildingsPool,
+    telemetry: telemetry.buildings,
+  });
+  // Clouds draw after the sky and before the lit passes so the sky's clear
+  // is still in place and lit depth writes compose over cloud alpha.
+  const cloudsPass = tierCaps.drawClouds
+    ? createCloudsPass({ device, format, frameUniforms })
+    : null;
 
-  // Pass order: shadowStage → sky → bank → scenery → floraSolid → water.
+  // Pass order (#566): shadowStage → sky → clouds? → bank → buildings →
+  // scenery → floraSolid → water.
   const passes: Pass[] = [
     shadowStage,
     createSkyPass({ device, format, frameUniforms }),
+    ...(cloudsPass ? [cloudsPass] : []),
     bankPass,
+    buildingsPass,
     sceneryPass,
     floraSolidStage,
     waterPass,
@@ -418,6 +467,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       for (const pool of scenePools) {
         pool.dispose();
       }
+      buildingsPool?.dispose();
       floraSolidCuller.dispose();
       depthTexture.destroy();
       frameUniforms.destroy();

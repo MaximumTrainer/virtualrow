@@ -120,6 +120,24 @@ export interface Rower3DShadows {
   atlasBytes: number;
 }
 
+/**
+ * Buildings telemetry (#566 FR1/FR4, AC8). `pool` is the resident
+ * instance count on the pool buffer, `drawn` the number issued this frame
+ * (no per-building cull in P6 so these match), `triangles` the resulting
+ * primitive count, and `footprintM2` the sum of `halfWidth*halfDepth*4` for
+ * the route — the AC6 memory check uses it together with `instances *
+ * BUILDINGS_FLOATS_PER_INSTANCE * 4` as the resident bound.
+ */
+export interface Rower3DBuildings {
+  routes: number;
+  drawn: number;
+  pool: number;
+  triangles: number;
+  footprintM2: number;
+  resident: boolean;
+  cast: boolean;
+}
+
 export interface TelemetryHandles {
   renderStats: Rower3DRenderStats;
   frameStats: Rower3DFrameStats;
@@ -132,6 +150,7 @@ export interface TelemetryHandles {
   scenery: Rower3DScenery;
   shadows: Rower3DShadows;
   textures: Rower3DTextures;
+  buildings: Rower3DBuildings;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -184,6 +203,15 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
       atlasBytes: 0,
     },
     textures: { atlasKind: 'pending', atlasBytes: 0, mipsGenerated: 0, transcodedMs: 0 },
+    buildings: {
+      routes: 0,
+      drawn: 0,
+      pool: 0,
+      triangles: 0,
+      footprintM2: 0,
+      resident: false,
+      cast: false,
+    },
   };
   const w = win();
   if (w) {
@@ -200,6 +228,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_SCENERY'] = handles.scenery;
     w['__ROWER3D_SHADOWS'] = handles.shadows;
     w['__ROWER3D_TEXTURES'] = handles.textures;
+    w['__ROWER3D_BUILDINGS'] = handles.buildings;
   }
   return handles;
 };
@@ -221,6 +250,7 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_SCENERY',
     '__ROWER3D_SHADOWS',
     '__ROWER3D_TEXTURES',
+    '__ROWER3D_BUILDINGS',
   ]) {
     delete w[key];
   }
