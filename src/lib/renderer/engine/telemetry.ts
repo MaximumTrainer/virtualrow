@@ -8,6 +8,8 @@
 
 export interface Rower3DRenderStats {
   draws: number;
+  /** Alias of `draws` for the legacy spec harness. Kept in sync via a getter. */
+  readonly drawCalls: number;
   triangles: number;
   instances: number;
   /**
@@ -178,6 +180,15 @@ export interface Rower3DGhostMetersHandle {
   active: boolean;
 }
 
+/**
+ * Boat speed (#570 — world-scale spec reads `__ROWER3D_SPEED_MPS`). The
+ * engine computes this from the per-frame `distanceMeters` delta divided by
+ * frame dt; zero when the boat is holding (`holdBoat`) or paused.
+ */
+export interface Rower3DSpeedHandle {
+  value: number;
+}
+
 export interface TelemetryHandles {
   renderStats: Rower3DRenderStats;
   frameStats: Rower3DFrameStats;
@@ -194,6 +205,7 @@ export interface TelemetryHandles {
   boat: Rower3DBoat;
   crew: Rower3DCrew;
   ghostMeters: Rower3DGhostMetersHandle;
+  speed: Rower3DSpeedHandle;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -209,18 +221,29 @@ const win = (): Win | undefined => {
 };
 
 export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
-  const handles: TelemetryHandles = {
-    renderStats: {
-      draws: 0,
-      triangles: 0,
-      instances: 0,
-      sceneryDispatch: 0,
-      sceneryDraws: 0,
-      sceneryTriangles: 0,
-      shadowDraws: 0,
-      shadowTriangles: 0,
-      shadowAtlasBytes: 0,
+  // `drawCalls` is a read-only alias of `draws` for the legacy spec harness
+  // (route-loading-progress.spec reads `__ROWER3D_RENDER_STATS.drawCalls`).
+  // A getter keeps it in sync without every per-frame writer having to set
+  // two fields.
+  const renderStats = {
+    draws: 0,
+    triangles: 0,
+    instances: 0,
+    sceneryDispatch: 0,
+    sceneryDraws: 0,
+    sceneryTriangles: 0,
+    shadowDraws: 0,
+    shadowTriangles: 0,
+    shadowAtlasBytes: 0,
+  } as Omit<Rower3DRenderStats, 'drawCalls'>;
+  Object.defineProperty(renderStats, 'drawCalls', {
+    enumerable: true,
+    get() {
+      return (this as { draws: number }).draws;
     },
+  });
+  const handles: TelemetryHandles = {
+    renderStats: renderStats as Rower3DRenderStats,
     frameStats: { frame: 0, dtMs: 0, gpuMs: 0 },
     camera: { x: 0, y: 0, z: 0, lookX: 0, lookY: 0, lookZ: 0, fov: 58 },
     contextState: { kind: 'pending', backend: 'none' },
@@ -269,6 +292,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     },
     crew: { cadenceSpm: 0, strokePhase: 0, amplitude: 0, rowers: 1 },
     ghostMeters: { value: 0, active: false },
+    speed: { value: 0 },
   };
   const w = win();
   if (w) {
@@ -289,8 +313,22 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_BOAT'] = handles.boat;
     w['__ROWER3D_CREW'] = handles.crew;
     w['__ROWER3D_GHOST_METERS'] = handles.ghostMeters;
+    // Speed is published as a scalar so the legacy world-scale spec can
+    // read it with a simple compare; the engine re-assigns the global each
+    // frame via `publishSpeedMps` below.
+    w['__ROWER3D_SPEED_MPS'] = 0;
   }
   return handles;
+};
+
+/**
+ * Write the per-frame boat speed scalar to `window.__ROWER3D_SPEED_MPS`.
+ * No-op outside a browser window (SSR, Node unit tests without a global).
+ */
+export const publishSpeedMps = (handles: TelemetryHandles, speedMps: number): void => {
+  handles.speed.value = speedMps;
+  const w = win();
+  if (w) w['__ROWER3D_SPEED_MPS'] = speedMps;
 };
 
 export const releaseTelemetry = (): void => {
@@ -314,6 +352,7 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_BOAT',
     '__ROWER3D_CREW',
     '__ROWER3D_GHOST_METERS',
+    '__ROWER3D_SPEED_MPS',
   ]) {
     delete w[key];
   }

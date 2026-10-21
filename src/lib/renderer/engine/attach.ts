@@ -42,7 +42,7 @@ import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
 import { tierCapsFor } from './tierCaps';
-import { createTelemetry, releaseTelemetry, type TelemetryHandles } from './telemetry';
+import { createTelemetry, publishSpeedMps, releaseTelemetry, type TelemetryHandles } from './telemetry';
 import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
@@ -384,6 +384,11 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     });
   };
 
+  // Per-frame boat speed is derived from the distanceMeters delta, so the
+  // frame loop keeps the previous reading across calls.
+  let lastDistanceMeters = 0;
+  let lastSpeedTime = -1;
+
   const frameOnce = (): void => {
     if (disposed) return;
     resize();
@@ -463,6 +468,21 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     telemetry.boat.holding = !!rideFrame?.holdBoat;
     telemetry.boat.finished = !!rideFrame?.finished;
     telemetry.boat.isPlaying = !!rideFrame?.isPlaying;
+
+    // Boat speed (m/s): the world-scale spec reads __ROWER3D_SPEED_MPS. Compute
+    // from the distanceMeters delta divided by frame time; hold at 0 while the
+    // boat is paused or in countdown so the scalar stays flat.
+    let speedMps = 0;
+    if (!telemetry.boat.holding && !telemetry.boat.finished && telemetry.boat.isPlaying) {
+      if (lastSpeedTime >= 0) {
+        const dt = Math.max(1e-3, frame.time - lastSpeedTime);
+        const dd = telemetry.boat.distanceMeters - lastDistanceMeters;
+        speedMps = Math.max(0, dd / dt);
+      }
+    }
+    lastDistanceMeters = telemetry.boat.distanceMeters;
+    lastSpeedTime = frame.time;
+    publishSpeedMps(telemetry, speedMps);
     telemetry.pos.x = boatPlacement.world[0];
     telemetry.pos.y = boatPlacement.world[1];
     telemetry.pos.z = boatPlacement.world[2];
