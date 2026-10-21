@@ -547,7 +547,11 @@ declare global {
         | 'software-adapter'
         | 'device-lost'
         | 'adapter-request-failed'
-        | 'device-request-failed';
+        | 'device-request-failed'
+        // #550 adds this when the second device-loss retry also fails and
+        // the engine stops drawing. P9 pairs it with the "needs WebGPU"
+        // screen (D11-c of #542).
+        | 'renderer-unavailable';
     };
     /**
      * `true` draws a lake route's water, shoreline and islands from the lake's
