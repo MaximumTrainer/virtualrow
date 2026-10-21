@@ -24,6 +24,10 @@
   import { setAuth } from '$lib/ui/authContext';
   import { AuthStore } from '$lib/ui/auth.svelte';
   import { setRoutesStore } from '$lib/ui/routesContext';
+  import { setSessionStore } from '$lib/ui/sessionContext';
+  import { SessionStore } from '$lib/ui/sessionStore.svelte';
+  import { setDeepLink } from '$lib/ui/deepLinkContext';
+  import { RownativeDeepLinkRunner } from '$lib/ui/deepLink.svelte';
   import AuthButton from '$lib/ui/AuthButton.svelte';
 
   let { children } = $props();
@@ -33,17 +37,55 @@
   // The route catalogue is cross-screen state: the Routes screen selects a
   // route and the Row screen rows it, so it is provided once here.
   const routes = setRoutesStore();
+  // Device connection, the loaded workout and the session lifecycle outlive
+  // every view switch, so the session store is provided here too — App kept its
+  // BLE subscriptions alive outside the view for the same reason.
+  const session = setSessionStore(new SessionStore());
+  const deepLink = setDeepLink(new RownativeDeepLinkRunner());
 
   onMount(() => {
     // Complete an OAuth callback (?code=&state=) or restore a session.
     auth.init();
     routes.load();
+
+    // Keep the device connection listeners alive for the lifetime of the app.
+    const stopSession = session.init();
+
+    // A session started programmatically (by workoutService, including from the
+    // Row screen's Start/demo) opens the workout route; ending it returns to the
+    // Row screen (App.tsx's window session bridge).
+    const onStarted = () => {
+      session.onSessionStarted();
+      void goto(`${base}/row`);
+    };
+    const onEnded = () => {
+      session.onSessionEnded();
+      void goto(`${base}/`);
+    };
+    window.addEventListener('virtualrow:sessionStarted', onStarted);
+    window.addEventListener('virtualrow:sessionEnded', onEnded);
+
+    return () => {
+      stopSession();
+      window.removeEventListener('virtualrow:sessionStarted', onStarted);
+      window.removeEventListener('virtualrow:sessionEnded', onEnded);
+    };
   });
 
   // Resolve the default route and the opening selection once routes are loaded,
   // following a later sign-in or sign-out (App.tsx's preselect effect).
   $effect(() => {
     routes.syncDefaults(auth.user?.id ?? null, auth.isLoading);
+  });
+
+  // Import a `?rownativeCourseId=` deep link once auth has resolved, then select
+  // the course and show the Row screen (App.tsx's deep-link effect, held until
+  // auth is ready so a shared link survives a sign-in round trip).
+  $effect(() => {
+    deepLink.run(!auth.isLoading, (route) => {
+      routes.routeImported(route);
+      void goto(`${base}/`);
+    });
   });
 
   // The three screens, as App.tsx's ViewMode. Derived from the route so the

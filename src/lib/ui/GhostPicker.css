@@ -1,0 +1,61 @@
+/*
+ * On the route panel, with the other pre-row decisions (#338).
+ */
+.ghost-picker {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+}
+
+.ghost-picker-legend {
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.ghost-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.ghost-picker-option input:disabled + span {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ghost-picker-detail {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ghost-picker-hint {
+  margin: 0 0 0.25rem 1.6rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.ghost-picker-pace {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  margin-left: 1.6rem;
+}
+
+.ghost-picker-pace-field {
+  width: 5rem;
+  min-height: 36px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
