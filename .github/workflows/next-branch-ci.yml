@@ -77,3 +77,8 @@ jobs:
         # D7-a / D8-a: scenery runs on the same job as the engine smoke; the
         # smoke page under /smoke/scenery feeds a canned foliage pool set.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-scenery-smoke.spec.ts
+      - name: Smoke — CSM + flora shadow depth pass (#559)
+        # P4-AC4: shadows run on the same job as the engine smoke; the
+        # smoke page under /smoke/shadows feeds a canned foliage pool
+        # set so the shadow stage has casters.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-shadows-smoke.spec.ts

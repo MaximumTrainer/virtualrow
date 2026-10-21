@@ -17,6 +17,10 @@ export interface Rower3DRenderStats {
   sceneryDispatch: number;
   sceneryDraws: number;
   sceneryTriangles: number;
+  /** Shadow stage counts (#559 FR7). */
+  shadowDraws: number;
+  shadowTriangles: number;
+  shadowAtlasBytes: number;
 }
 
 export interface Rower3DFrameStats {
@@ -88,6 +92,17 @@ export interface Rower3DScenery {
   drawCount: number;
 }
 
+/** Shadow telemetry (#559 FR7). */
+export interface Rower3DShadows {
+  cascades: number;
+  atlasSize: number;
+  drawsPerCascade: number;
+  lastSplits: number[];
+  draws: number;
+  triangles: number;
+  atlasBytes: number;
+}
+
 export interface TelemetryHandles {
   renderStats: Rower3DRenderStats;
   frameStats: Rower3DFrameStats;
@@ -98,6 +113,7 @@ export interface TelemetryHandles {
   clearance: Rower3DClearance;
   foliage: Rower3DFoliage;
   scenery: Rower3DScenery;
+  shadows: Rower3DShadows;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -121,6 +137,9 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
       sceneryDispatch: 0,
       sceneryDraws: 0,
       sceneryTriangles: 0,
+      shadowDraws: 0,
+      shadowTriangles: 0,
+      shadowAtlasBytes: 0,
     },
     frameStats: { frame: 0, dtMs: 0, gpuMs: 0 },
     camera: { x: 0, y: 0, z: 0, lookX: 0, lookY: 0, lookZ: 0, fov: 58 },
@@ -130,6 +149,15 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     clearance: { min: 0, samples: 0 },
     foliage: { trees: 0, meshes: 0, drawn: 0 },
     scenery: { pools: [], dispatchCount: 0, drawCount: 0 },
+    shadows: {
+      cascades: 0,
+      atlasSize: 0,
+      drawsPerCascade: 0,
+      lastSplits: [],
+      draws: 0,
+      triangles: 0,
+      atlasBytes: 0,
+    },
   };
   const w = win();
   if (w) {
@@ -144,6 +172,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_GPU_BACKEND'] = 'webgpu';
     w['__ROWER3D_FOLIAGE'] = handles.foliage;
     w['__ROWER3D_SCENERY'] = handles.scenery;
+    w['__ROWER3D_SHADOWS'] = handles.shadows;
   }
   return handles;
 };
@@ -163,6 +192,7 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_GPU_BACKEND',
     '__ROWER3D_FOLIAGE',
     '__ROWER3D_SCENERY',
+    '__ROWER3D_SHADOWS',
   ]) {
     delete w[key];
   }

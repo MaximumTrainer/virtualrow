@@ -1,17 +1,31 @@
 /// <reference types="@webgpu/types" />
 
 import type { FrameContext, Pass } from '../engine/frameGraph';
+import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippets';
 import { buildBankStrips } from '../plan/bankStrip';
 import bankWgsl from './bank.wgsl?raw';
+
+export interface ShadowResources {
+  uniforms: GPUBuffer;
+  atlasView: GPUTextureView;
+  cmpSampler: GPUSampler;
+}
 
 export interface BankPassOptions {
   device: GPUDevice;
   format: GPUTextureFormat;
   frameUniforms: GPUBuffer;
+  shadow: ShadowResources;
 }
 
-export const createBankPass = ({ device, format, frameUniforms }: BankPassOptions): Pass => {
-  const module = device.createShaderModule({ label: 'bank', code: bankWgsl });
+export const createBankPass = ({
+  device,
+  format,
+  frameUniforms,
+  shadow,
+}: BankPassOptions): Pass => {
+  const code = SHADOW_UNIFORMS_WGSL + SAMPLE_SHADOW_WGSL + bankWgsl;
+  const module = device.createShaderModule({ label: 'bank', code });
   const pipeline = device.createRenderPipeline({
     label: 'bank',
     layout: 'auto',
@@ -40,6 +54,15 @@ export const createBankPass = ({ device, format, frameUniforms }: BankPassOption
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [{ binding: 0, resource: { buffer: frameUniforms } }],
+  });
+  const shadowBindGroup = device.createBindGroup({
+    label: 'bank-shadow',
+    layout: pipeline.getBindGroupLayout(1),
+    entries: [
+      { binding: 0, resource: { buffer: shadow.uniforms } },
+      { binding: 1, resource: shadow.atlasView },
+      { binding: 2, resource: shadow.cmpSampler },
+    ],
   });
 
   const geom = buildBankStrips();
@@ -84,6 +107,7 @@ export const createBankPass = ({ device, format, frameUniforms }: BankPassOption
       });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
+      pass.setBindGroup(1, shadowBindGroup);
       pass.setVertexBuffer(0, positionBuffer);
       pass.setVertexBuffer(1, sideBuffer);
       pass.setIndexBuffer(indexBuffer, 'uint16');

@@ -116,6 +116,8 @@ export const makeMockDevice = (): MockDevice => {
       drawIndexedIndirect: () => {
         log.indirectDraws += 1;
       },
+      setViewport: () => undefined,
+      setScissorRect: () => undefined,
       end: () => undefined,
     } as unknown as GPURenderPassEncoder;
   };
@@ -170,6 +172,7 @@ export const makeMockDevice = (): MockDevice => {
         createView: () => ({}) as GPUTextureView,
         destroy: () => undefined,
       }) as unknown as GPUTexture,
+    createSampler: () => ({ label: 'sampler' }) as unknown as GPUSampler,
     createCommandEncoder: () => encoder,
     destroy: () => undefined,
     queue: {
