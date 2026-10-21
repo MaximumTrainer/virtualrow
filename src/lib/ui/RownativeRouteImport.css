@@ -1,0 +1,191 @@
+.rownative-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.rownative-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.rownative-section-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.rownative-status {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+/* Field and its action on one line, as rownative's own controls sit. */
+.rownative-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.rownative-controls .import-name-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.rownative-controls .filter-btn {
+  flex: 0 0 auto;
+}
+
+.rownative-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.rownative-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.rownative-result {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text-primary);
+}
+
+@media (hover: hover) {
+  .rownative-result:hover:not(:disabled) {
+    border-color: var(--color-border-hover);
+    background: var(--color-bg-tertiary);
+  }
+}
+
+.rownative-result:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rownative-result-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.rownative-result-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.rownative-result-distance {
+  font-variant-numeric: tabular-nums;
+}
+
+.rownative-result-busy {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.rownative-search-shortcut {
+  margin-left: var(--space-sm);
+  background: transparent;
+  border: none;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- attach ---
+   A rownative course file describes gates, not a path, so a gates-only course
+   renders as straight lines until someone who has rowed it attaches a track.
+   The control sits on the course row because that is what it applies to. */
+
+.rownative-attach {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0.6rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.rownative-attach-label {
+  display: inline-flex;
+  align-items: center;
+  /* 44px, so it is a real target on a phone (#270). */
+  min-height: 44px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border-color, #3a4657);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary, #9fb0c7);
+}
+
+.rownative-attach-label:hover {
+  color: var(--text-primary, #e8eef7);
+}
+
+/* The label is the control; the input itself is only the file dialog. It stays
+   in the layout rather than `display: none` so it keeps its accessible name
+   and Playwright can set files on it. */
+.rownative-attach-input {
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  position: absolute;
+  z-index: -1;
+}
+
+.rownative-attach-current {
+  color: var(--text-secondary, #9fb0c7);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.rownative-attach-remove {
+  min-height: 44px;
+  padding: 0 0.6rem;
+  background: none;
+  border: 1px solid var(--border-color, #3a4657);
+  border-radius: 6px;
+  color: var(--text-secondary, #9fb0c7);
+  cursor: pointer;
+}
+
+.rownative-attach-busy {
+  color: var(--text-secondary, #9fb0c7);
+}
+
+.rownative-attach-error {
+  margin: 0 0.6rem 0.5rem;
+}

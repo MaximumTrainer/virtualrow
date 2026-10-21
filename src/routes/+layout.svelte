@@ -17,21 +17,33 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import '../index.css';
   import '../App.css';
   import { setServices } from '$lib/ui/servicesContext';
   import { setAuth } from '$lib/ui/authContext';
   import { AuthStore } from '$lib/ui/auth.svelte';
+  import { setRoutesStore } from '$lib/ui/routesContext';
   import AuthButton from '$lib/ui/AuthButton.svelte';
 
   let { children } = $props();
 
   setServices();
   const auth = setAuth(new AuthStore());
+  // The route catalogue is cross-screen state: the Routes screen selects a
+  // route and the Row screen rows it, so it is provided once here.
+  const routes = setRoutesStore();
 
   onMount(() => {
     // Complete an OAuth callback (?code=&state=) or restore a session.
     auth.init();
+    routes.load();
+  });
+
+  // Resolve the default route and the opening selection once routes are loaded,
+  // following a later sign-in or sign-out (App.tsx's preselect effect).
+  $effect(() => {
+    routes.syncDefaults(auth.user?.id ?? null, auth.isLoading);
   });
 
   // The three screens, as App.tsx's ViewMode. Derived from the route so the
@@ -84,15 +96,16 @@
           ></button>
           <nav class="app-nav" aria-label="Main">
             {#each NAV_ITEMS as item (item.view)}
-              <a
-                class="nav-tab"
-                class:active={view === item.view}
-                href={item.href}
-                aria-current={view === item.view ? 'page' : undefined}
-                onclick={() => (isNavOpen = false)}
+              <button
+                type="button"
+                class="nav-tab{view === item.view ? ' active' : ''}"
+                onclick={() => {
+                  void goto(item.href);
+                  isNavOpen = false;
+                }}
               >
                 {item.label}
-              </a>
+              </button>
             {/each}
           </nav>
         </div>
