@@ -31,6 +31,8 @@
   import { setDeepLink } from '$lib/ui/deepLinkContext';
   import { RownativeDeepLinkRunner } from '$lib/ui/deepLink.svelte';
   import AuthButton from '$lib/ui/AuthButton.svelte';
+  import SessionSummary from '$lib/ui/SessionSummary.svelte';
+  import GuestSessionSummary from '$lib/ui/GuestSessionSummary.svelte';
 
   let { children } = $props();
 
@@ -46,7 +48,7 @@
   // The live rower pipeline (the latest packet, the recording session, the start
   // sequence and the finish) also outlives the view switch, so it is provided
   // here and reads the session and route stores it was handed.
-  const ride = setRideSession(new RideSessionStore(session, routes));
+  const ride = setRideSession(new RideSessionStore(session, routes, {}, auth));
   const deepLink = setDeepLink(new RownativeDeepLinkRunner());
 
   onMount(() => {
@@ -143,6 +145,31 @@
 </svelte:head>
 
 <div class="app-container">
+  <!-- The post-finish summary overlays whatever screen the row ended on (App
+       rendered it at the app-container root). A guest gets the guest summary;
+       a signed-in athlete the full one with the upload. -->
+  {#if ride.guestCompletedSession}
+    <GuestSessionSummary
+      session={ride.guestCompletedSession}
+      onRowAgain={() => ride.guestDone()}
+      onExit={() => ride.guestDone()}
+      onSignIn={() => void auth.login()}
+      isDemo={ride.completedSessionWasDemo}
+    />
+  {/if}
+
+  {#if ride.completedSession}
+    <SessionSummary
+      session={ride.completedSession}
+      onDone={() => ride.sessionDone()}
+      onSaved={(id) => ride.sessionSaved(id)}
+      isDemo={ride.completedSessionWasDemo}
+      personalBest={ride.completedSessionBest}
+      ghost={ride.completedGhost}
+      routeGeometrySource={routes.selectedRoute?.geometrySource}
+    />
+  {/if}
+
   <header class="app-header">
     <div class="header-content">
       <h1 class="app-title">VirtualRow</h1>
