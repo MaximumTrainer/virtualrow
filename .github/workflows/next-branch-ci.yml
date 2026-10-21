@@ -73,3 +73,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Smoke — attach the engine, draw one frame, read telemetry
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-engine-smoke.spec.ts
+      - name: Smoke — scenery pools + compute cull + drawIndirect (#555)
+        # D7-a / D8-a: scenery runs on the same job as the engine smoke; the
+        # smoke page under /smoke/scenery feeds a canned foliage pool set.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-scenery-smoke.spec.ts

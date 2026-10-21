@@ -11,6 +11,8 @@ type Win = typeof window & {
   __ROWER3D_CLEARANCE?: unknown;
   __ROWER3D_FORCE_RENDER?: unknown;
   __ROWER3D_GPU_BACKEND?: unknown;
+  __ROWER3D_FOLIAGE?: unknown;
+  __ROWER3D_SCENERY?: unknown;
 };
 
 afterEach(() => {
@@ -33,14 +35,42 @@ describe('telemetry', () => {
       '__ROWER3D_CLEARANCE',
       '__ROWER3D_FORCE_RENDER',
       '__ROWER3D_GPU_BACKEND',
+      '__ROWER3D_FOLIAGE',
+      '__ROWER3D_SCENERY',
     ] as const;
     for (const key of keys) {
       expect(w[key]).toBeDefined();
     }
     // Known main-branch shape (`src/lib/types/index.ts` lines 367+).
-    const stats = handles.renderStats as { draws: number; triangles: number; instances: number };
-    expect(stats).toMatchObject({ draws: expect.any(Number), triangles: expect.any(Number), instances: expect.any(Number) });
+    const stats = handles.renderStats as {
+      draws: number;
+      triangles: number;
+      instances: number;
+      sceneryDispatch: number;
+      sceneryDraws: number;
+      sceneryTriangles: number;
+    };
+    expect(stats).toMatchObject({
+      draws: expect.any(Number),
+      triangles: expect.any(Number),
+      instances: expect.any(Number),
+      sceneryDispatch: expect.any(Number),
+      sceneryDraws: expect.any(Number),
+      sceneryTriangles: expect.any(Number),
+    });
     expect(handles.contextState).toMatchObject({ kind: 'pending', backend: 'none' });
+    // #555 FR6: foliage shape matches the main scene's publishFoliage writes.
+    expect(handles.foliage).toMatchObject({
+      trees: expect.any(Number),
+      meshes: expect.any(Number),
+      drawn: expect.any(Number),
+    });
+    // #555 FR6: scenery is a {pools, dispatchCount, drawCount} bag.
+    expect(handles.scenery).toMatchObject({
+      pools: expect.any(Array),
+      dispatchCount: expect.any(Number),
+      drawCount: expect.any(Number),
+    });
   });
 
   it('clears every global on release', () => {
@@ -50,5 +80,7 @@ describe('telemetry', () => {
     expect(w.__ROWER3D_RENDER_STATS).toBeUndefined();
     expect(w.__ROWER3D_FORCE_RENDER).toBeUndefined();
     expect(w.__ROWER3D_GPU_BACKEND).toBeUndefined();
+    expect(w.__ROWER3D_FOLIAGE).toBeUndefined();
+    expect(w.__ROWER3D_SCENERY).toBeUndefined();
   });
 });

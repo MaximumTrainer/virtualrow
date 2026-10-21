@@ -6,10 +6,11 @@
 
 /// <reference types="@webgpu/types" />
 
-// `GPUBufferUsage` / `GPUTextureUsage` are globals at runtime in a WebGPU
-// browser; jsdom doesn't define them, so the engine's references throw
-// `ReferenceError` under Vitest. Shim them with the usage values from the
-// WebGPU spec so the engine can be loaded without touching the real driver.
+// `GPUBufferUsage` / `GPUTextureUsage` / `GPUShaderStage` are globals at
+// runtime in a WebGPU browser; jsdom doesn't define them, so the engine's
+// references throw `ReferenceError` under Vitest. Shim them with the usage
+// values from the WebGPU spec so the engine can be loaded without touching
+// the real driver.
 const g = globalThis as unknown as Record<string, unknown>;
 if (!g['GPUBufferUsage']) {
   g['GPUBufferUsage'] = {
@@ -34,12 +35,23 @@ if (!g['GPUTextureUsage']) {
     RENDER_ATTACHMENT: 0x10,
   };
 }
+if (!g['GPUShaderStage']) {
+  g['GPUShaderStage'] = {
+    VERTEX: 0x1,
+    FRAGMENT: 0x2,
+    COMPUTE: 0x4,
+  };
+}
 
 export interface MockGPULog {
   submits: number;
   encoderPasses: string[];
+  computePasses: string[];
   createdPipelines: string[];
+  createdComputePipelines: string[];
   destroyedBuffers: number;
+  computeDispatches: number;
+  indirectDraws: number;
 }
 
 export interface MockDevice extends GPUDevice {
@@ -51,8 +63,12 @@ export const makeMockDevice = (): MockDevice => {
   const log: MockGPULog = {
     submits: 0,
     encoderPasses: [],
+    computePasses: [],
     createdPipelines: [],
+    createdComputePipelines: [],
     destroyedBuffers: 0,
+    computeDispatches: 0,
+    indirectDraws: 0,
   };
 
   let resolveLost: (reason: GPUDeviceLostInfo) => void = () => undefined;
@@ -79,6 +95,12 @@ export const makeMockDevice = (): MockDevice => {
       getBindGroupLayout: () => ({ label: 'auto' }) as GPUBindGroupLayout,
     }) as unknown as GPURenderPipeline;
 
+  const makeComputePipeline = (label: string): GPUComputePipeline =>
+    ({
+      label,
+      getBindGroupLayout: () => ({ label: 'auto-compute' }) as GPUBindGroupLayout,
+    }) as unknown as GPUComputePipeline;
+
   const makePass = (name: string): GPURenderPassEncoder => {
     log.encoderPasses.push(name);
     return {
@@ -88,13 +110,36 @@ export const makeMockDevice = (): MockDevice => {
       setIndexBuffer: () => undefined,
       draw: () => undefined,
       drawIndexed: () => undefined,
+      drawIndirect: () => {
+        log.indirectDraws += 1;
+      },
+      drawIndexedIndirect: () => {
+        log.indirectDraws += 1;
+      },
       end: () => undefined,
     } as unknown as GPURenderPassEncoder;
+  };
+
+  const makeComputePassEncoder = (name: string): GPUComputePassEncoder => {
+    log.computePasses.push(name);
+    return {
+      setPipeline: () => undefined,
+      setBindGroup: () => undefined,
+      dispatchWorkgroups: () => {
+        log.computeDispatches += 1;
+      },
+      dispatchWorkgroupsIndirect: () => {
+        log.computeDispatches += 1;
+      },
+      end: () => undefined,
+    } as unknown as GPUComputePassEncoder;
   };
 
   const encoder = {
     beginRenderPass: (desc: GPURenderPassDescriptor) =>
       makePass((desc.label ?? 'pass') as string),
+    beginComputePass: (desc?: GPUComputePassDescriptor) =>
+      makeComputePassEncoder((desc?.label ?? 'compute') as string),
     finish: () => ({} as GPUCommandBuffer),
     label: '',
   } as unknown as GPUCommandEncoder;
@@ -107,9 +152,16 @@ export const makeMockDevice = (): MockDevice => {
     lost,
     createBuffer: () => makeBuffer(),
     createShaderModule: () => ({ label: '' }) as unknown as GPUShaderModule,
+    createBindGroupLayout: () => ({}) as unknown as GPUBindGroupLayout,
+    createPipelineLayout: () => ({}) as unknown as GPUPipelineLayout,
     createRenderPipeline: (desc: GPURenderPipelineDescriptor) => {
       const p = makePipeline((desc.label ?? '') as string);
       log.createdPipelines.push((desc.label ?? '') as string);
+      return p;
+    },
+    createComputePipeline: (desc: GPUComputePipelineDescriptor) => {
+      const p = makeComputePipeline((desc.label ?? '') as string);
+      log.createdComputePipelines.push((desc.label ?? '') as string);
       return p;
     },
     createBindGroup: () => ({}) as unknown as GPUBindGroup,
