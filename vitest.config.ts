@@ -105,6 +105,16 @@ export default defineConfig({
         'src/data/**',
         // Vendor JS + hand-written ambient declarations.
         'src/lib/vendor/**',
+        // #542 P1: the SvelteKit route glue — the shell layout and each screen's
+        // `+page.svelte` — is the view-machine equivalent of the old App.tsx: it
+        // wires context and composes the (unit-tested) `src/lib/ui` components and
+        // stores into a screen, and is exercised end-to-end by the Playwright
+        // suite, not in jsdom. Same class as the R3F scene components above. The
+        // components and stores it mounts stay in coverage and are unit-tested.
+        'src/routes/**/+layout.svelte',
+        'src/routes/**/+layout.ts',
+        'src/routes/**/+page.svelte',
+        'src/routes/**/+page.ts',
       ],
       thresholds: {
         // Locked to the measured floor (rounded down) so the gate enforces
