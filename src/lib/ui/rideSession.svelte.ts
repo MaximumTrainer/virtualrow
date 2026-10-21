@@ -320,6 +320,14 @@ export class RideSessionStore {
     this.currentSession = session ?? null;
   }
 
+  /**
+   * Feed a simulated PM5 frame from the debug panel's PM5 simulator into the
+   * same intake the demo uses (App wired the simulator through `handlePM5Data`).
+   */
+  onSimulatedData(data: PM5Data): void {
+    this.#handleData(data);
+  }
+
   pauseWorkout(): void {
     this.#session.sessionState = 'paused';
     this.#deps.workoutService.pauseSession();
