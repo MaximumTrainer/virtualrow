@@ -1,14 +1,19 @@
+<!--
+  Row screen (#542 P1, D1-b). This is App.tsx's `routes` view: the landing
+  where a device is picked and a session is started. The layout region
+  (`.app-sidebar` + `.app-main`) matches what App.tsx rendered for
+  `currentView === 'routes'`; the per-panel content (device pickers, route
+  list) is ported in a later slice. Class names are kept verbatim so the
+  Playwright selectors keep resolving.
+-->
 <svelte:head>
-  <title>virtualrow</title>
+  <title>VirtualRow</title>
 </svelte:head>
 
-<!--
-  #542 P0 placeholder. P1 ports the real screens (demo, routes, activity) onto
-  this route tree, reusing the existing CSS and class names verbatim so the
-  Playwright suite keeps acting as the harness. For now this is just proof the
-  SvelteKit app builds and serves at the deploy base path.
--->
-<main data-testid="svelte-scaffold">
-  <h1>virtualrow</h1>
-  <p>SvelteKit + WebGPU rebuild — scaffold.</p>
+<aside class="app-sidebar">
+  <!-- Device panels and the route list land here in a later P1 slice. -->
+</aside>
+<main class="app-main">
+  <!-- The Row landing content (session controls) lands here in a later P1
+       slice; the 3D view lives on the /row route. -->
 </main>
