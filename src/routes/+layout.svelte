@@ -17,6 +17,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';
   import '../index.css';
   import '../App.css';
   import { setServices } from '$lib/ui/servicesContext';
@@ -95,15 +96,16 @@
           ></button>
           <nav class="app-nav" aria-label="Main">
             {#each NAV_ITEMS as item (item.view)}
-              <a
-                class="nav-tab"
-                class:active={view === item.view}
-                href={item.href}
-                aria-current={view === item.view ? 'page' : undefined}
-                onclick={() => (isNavOpen = false)}
+              <button
+                type="button"
+                class="nav-tab{view === item.view ? ' active' : ''}"
+                onclick={() => {
+                  void goto(item.href);
+                  isNavOpen = false;
+                }}
               >
                 {item.label}
-              </a>
+              </button>
             {/each}
           </nav>
         </div>
