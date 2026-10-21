@@ -1,12 +1,11 @@
 /**
  * Procedural boat + crew mesh for the P7 passes (#570 D1 fallback & D2-a).
  *
- * The build-time path (D1-b, `scripts/build-boat-mesh.mjs`) emits the same
- * byte layout to `public/assets/boat/shell.bin`; the loader prefers the
- * baked buffer and this file is the deterministic fallback the engine uses
- * when the fetch is skipped (smoke pages, test harness, offline). The two
- * paths share the dimensions so the smoke's visual silhouette does not
- * depend on which one won.
+ * The build-time path (D1-b, `scripts/build-boat-mesh.mjs`) ships the
+ * baked `public/assets/boat/shell.bin` with byte-identical layout. The
+ * engine's `loadBoatMesh` prefers the baked buffer and this file is the
+ * deterministic fallback for SSR, tests, and fetch failures — the smoke
+ * silhouette is the same either way (asserted in `boatMeshLoader.test.ts`).
  *
  * Layout — one interleaved vertex is 32 bytes:
  *   - position: vec3<f32> (12 B)

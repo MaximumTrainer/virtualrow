@@ -153,6 +153,8 @@ export interface Rower3DBoat {
   holding: boolean;
   finished: boolean;
   isPlaying: boolean;
+  /** Which boat-mesh buffer the engine is drawing (#570 D1-b). */
+  meshSource: 'baked' | 'procedural';
 }
 
 /**
@@ -263,6 +265,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
       holding: false,
       finished: false,
       isPlaying: false,
+      meshSource: 'procedural',
     },
     crew: { cadenceSpm: 0, strokePhase: 0, amplitude: 0, rowers: 1 },
     ghostMeters: { value: 0, active: false },

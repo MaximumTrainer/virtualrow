@@ -22,7 +22,8 @@ import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
 import { createBuildingPool, type BuildingPool, type BuildingSpec } from '../plan/buildings';
-import { buildBoatMesh, BOAT_BONE_COUNT, BOAT_BONE_ARMS, BOAT_BONE_HEAD, BOAT_BONE_HULL, BOAT_BONE_TORSO } from '../plan/boatMesh';
+import { BOAT_BONE_COUNT, BOAT_BONE_ARMS, BOAT_BONE_HEAD, BOAT_BONE_HULL, BOAT_BONE_TORSO } from '../plan/boatMesh';
+import { loadBoatMesh } from '../plan/boatMeshLoader';
 import { computeCascades } from './cascadedShadows';
 import { createPlacement, placeBoat, placeGhost, strokePhase, strokeAmplitude } from './characterPlacement';
 import type { RideFrame } from './rideFrame';
@@ -251,10 +252,14 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     });
   }
 
-  // #570 P7 — boat mesh is procedural; the baked-buffer path (D1-b) ships
-  // in a later follow-up (filed in #556). The mesh is deterministic so the
-  // smoke-page and the ride view see the same silhouette.
-  const boatMesh = buildBoatMesh();
+  // #570 P7 D1-b — prefer the baked `shell.bin` buffer from
+  // `scripts/build-boat-mesh.mjs`; the procedural generator in `boatMesh.ts`
+  // is the deterministic fallback for SSR, tests, and fetch failures so the
+  // smoke silhouette is identical either way. Telemetry carries which path
+  // won on `__ROWER3D_BOAT.meshSource`.
+  const boatMeshHandle = await loadBoatMesh({ url: assetUrl('/assets/boat/shell.bin') });
+  const boatMesh = boatMeshHandle.mesh;
+  telemetry.boat.meshSource = boatMeshHandle.source;
   const boatPass = createBoatPass({ device, format, frameUniforms, mesh: boatMesh });
   const charactersMesh = tierCaps.castCharacterShadows ? boatMesh : null;
 
