@@ -28,9 +28,16 @@ import { formatSplit } from '../utils/formatters';
 import {
   paceGhost,
   ghostDistanceAt,
+  ghostFinishSeconds,
   gapMeters,
   type GhostSource,
 } from '../../components/rower3d/ghost';
+import { bestPaceOnRoute } from '../utils/sessionSummary';
+import {
+  saveCompletedSession,
+  markSessionUploaded,
+  loadSessions,
+} from '../services/localStorageWorkoutStore';
 import { StartSequenceStore, isStrokeReading } from './startSequence.svelte';
 import type { SessionState, RowerType } from './sessionStore.svelte';
 import type { GhostChoice } from './ghostChoice';
@@ -67,6 +74,16 @@ export interface RideSessionSession {
 /** The slice of {@link RoutesStore} this store reads. */
 export interface RideSessionRoutes {
   selectedRoute: WaterRoute | null;
+}
+
+/**
+ * The slice of {@link AuthStore} this store reads, to decide the guest vs
+ * signed-in summary and to key the local save/history (App read `user`).
+ * Defaults to signed-out so the store still constructs with two arguments.
+ */
+export interface RideSessionAuth {
+  readonly user: { id: string } | null;
+  readonly isAuthenticated: boolean;
 }
 
 export interface RideSessionDeps {
@@ -107,6 +124,7 @@ export class RideSessionStore {
   #deps: RideSessionDeps;
   #session: RideSessionSession;
   #routes: RideSessionRoutes;
+  #auth: RideSessionAuth;
 
   // Live state read by the workout view each frame.
   pm5Data = $state<PM5Data | null>(null);
@@ -115,6 +133,15 @@ export class RideSessionStore {
   strokeAt = $state<number | null>(null);
   finish = $state<{ distanceMeters: number; elapsedMs: number } | null>(null);
   activityElapsedMs = $state(0);
+
+  // The row just finished, held so the post-finish summary can show it over
+  // the Routes screen (App's completedSession / guestCompletedSession). A
+  // signed-in row goes in `completedSession`; a guest's in
+  // `guestCompletedSession`; `completedSessionWasDemo` flags a simulated row,
+  // which keeps the summary but never the upload (R5).
+  completedSession = $state<WorkoutSession | null>(null);
+  guestCompletedSession = $state<WorkoutSession | null>(null);
+  completedSessionWasDemo = $state(false);
 
   readonly startSequence = new StartSequenceStore();
 
@@ -174,14 +201,39 @@ export class RideSessionStore {
     };
   });
 
+  /**
+   * How the race came out, for the summary (App `completedGhost`, #338). The
+   * ghost's time to the distance the row actually covered, so a row cut short
+   * is compared where it stopped rather than at a finish neither boat reached.
+   */
+  readonly completedGhost = $derived.by(() => {
+    const completed = this.completedSession;
+    const source = this.ghostSource;
+    if (!completed || !source) return null;
+    return { seconds: ghostFinishSeconds(source, completed.distance), label: this.#ghostLabel };
+  });
+
+  /**
+   * This athlete's best on the route before this row (App `completedSessionBest`,
+   * #337). None for a demo row, which is not theirs to compare, or without an
+   * athlete to ask about.
+   */
+  readonly completedSessionBest = $derived.by(() => {
+    const completed = this.completedSession;
+    if (!completed || !this.#auth.user || this.completedSessionWasDemo) return undefined;
+    return bestPaceOnRoute(loadSessions(this.#auth.user.id), completed);
+  });
+
   constructor(
     session: RideSessionSession,
     routes: RideSessionRoutes,
     deps: Partial<RideSessionDeps> = {},
+    auth: RideSessionAuth = { user: null, isAuthenticated: false },
   ) {
     this.#session = session;
     this.#routes = routes;
     this.#deps = { ...defaultDeps(), ...deps };
+    this.#auth = auth;
   }
 
   /**
@@ -284,9 +336,16 @@ export class RideSessionStore {
   }
 
   /**
-   * End the row (App `handleEndWorkout`, minus the summary that lands with the
-   * next slice). `workoutService.endSession()` dispatches `virtualrow:sessionEnded`,
-   * which the shell turns into navigation back to Routes and `setActive(false)`.
+   * End the row (App `handleEndWorkout`). `workoutService.endSession()`
+   * dispatches `virtualrow:sessionEnded`, which the shell turns into navigation
+   * back to Routes and `setActive(false)`; the completed row is then held so the
+   * summary can show over the Routes screen.
+   *
+   * A guest's row goes to `guestCompletedSession`; a signed-in row is kept
+   * locally before any upload (so a row the athlete declines to upload still
+   * survives a reload, AC6.1) and goes to `completedSession`. The guest/
+   * signed-in split follows the row's own `isGuest` flag, set from the guest
+   * mode in force when it started.
    */
   endWorkout(): void {
     this.#clearFinishTimer();
@@ -294,12 +353,42 @@ export class RideSessionStore {
     this.finish = null;
     this.#strokeSeen = false;
     this.strokeAt = null;
-    this.#deps.workoutService.endSession();
+    const completed = this.#deps.workoutService.endSession();
     this.#session.currentWorkout.stop();
-    if (this.#session.isDemoMode) {
+    const wasDemo = this.#session.isDemoMode;
+    this.completedSessionWasDemo = wasDemo;
+    if (wasDemo) {
       this.#deps.pm5Simulator.stop();
       this.#deps.heartRateSimulator.stop();
     }
+
+    if (!completed) return;
+
+    if (completed.isGuest) {
+      this.guestCompletedSession = completed;
+      return;
+    }
+
+    if (this.#auth.user) saveCompletedSession(this.#auth.user.id, completed, { isDemo: wasDemo });
+    this.completedSession = completed;
+  }
+
+  /** Record that the signed-in row reached intervals.icu (App `handleSessionSaved`, AC6.2). */
+  sessionSaved(activityId: string): void {
+    const completed = this.completedSession;
+    if (this.#auth.user && completed) {
+      markSessionUploaded(this.#auth.user.id, completed.id, activityId);
+    }
+  }
+
+  /** Dismiss the signed-in summary (App `handleSessionDone`); the shell is already on Routes. */
+  sessionDone(): void {
+    this.completedSession = null;
+  }
+
+  /** Dismiss the guest summary (App `handleGuestRowAgain` / `handleGuestExit`). */
+  guestDone(): void {
+    this.guestCompletedSession = null;
   }
 
   /** The per-frame snapshot the engine pulls through the canvas seam. */

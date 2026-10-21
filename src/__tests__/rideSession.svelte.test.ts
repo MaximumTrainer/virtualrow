@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
 
+// The post-finish routing keys the local save/history off the store; stub the
+// store module so the routing can be asserted without touching localStorage.
+const localStore = vi.hoisted(() => ({
+  saveCompletedSession: vi.fn(),
+  markSessionUploaded: vi.fn(),
+  loadSessions: vi.fn(() => [] as unknown[]),
+}));
+vi.mock('../lib/services/localStorageWorkoutStore', () => localStore);
+
 import { RideSessionStore, FINISH_BANNER_MS } from '../lib/ui/rideSession.svelte';
 import type {
   RideSessionSession,
   RideSessionRoutes,
   RideSessionDeps,
+  RideSessionAuth,
 } from '../lib/ui/rideSession.svelte';
 import type { PM5Data, WaterRoute, WorkoutSession } from '../lib/types/index';
 import type { GhostChoice } from '../lib/ui/ghostChoice';
@@ -57,7 +67,13 @@ function evented() {
   };
 }
 
-function setup(over: { route?: WaterRoute | null; session?: Partial<WorkoutSession> } = {}) {
+function setup(
+  over: {
+    route?: WaterRoute | null;
+    session?: Partial<WorkoutSession>;
+    auth?: RideSessionAuth;
+  } = {},
+) {
   const session = new SessionStub();
   const routes = new RoutesStub();
   routes.selectedRoute = over.route ?? route(1);
@@ -89,7 +105,8 @@ function setup(over: { route?: WaterRoute | null; session?: Partial<WorkoutSessi
     raf: (cb) => cb(), // run the deferred update synchronously
     now: () => 0,
   };
-  const ride = new RideSessionStore(session, routes, deps);
+  const auth: RideSessionAuth = over.auth ?? { user: null, isAuthenticated: false };
+  const ride = new RideSessionStore(session, routes, deps, auth);
   return {
     ride,
     session,
@@ -97,6 +114,7 @@ function setup(over: { route?: WaterRoute | null; session?: Partial<WorkoutSessi
     pm5,
     ftms,
     hr,
+    auth,
     deps: deps as Required<RideSessionDeps>,
     setCurrent: (s: WorkoutSession | null) => (current = s),
   };
@@ -308,5 +326,118 @@ describe('RideSessionStore', () => {
     expect(ride.currentSession?.distance).toBe(7);
     ride.onStarted(null);
     expect(ride.currentSession).toBeNull();
+  });
+
+  describe('the post-finish summary (#221, #337, #338)', () => {
+    const athlete: RideSessionAuth = { user: { id: 'u1' }, isAuthenticated: true };
+
+    beforeEach(() => {
+      localStore.saveCompletedSession.mockClear();
+      localStore.markSessionUploaded.mockClear();
+      localStore.loadSessions.mockClear();
+      localStore.loadSessions.mockReturnValue([]);
+    });
+
+    it('keeps a signed-in row for the summary and stores it locally (AC6.1)', () => {
+      const completed = { id: 's1', isGuest: false, distance: 2000 } as unknown as WorkoutSession;
+      const { ride } = setup({ auth: athlete, session: completed });
+      ride.endWorkout();
+
+      expect(ride.completedSession?.id).toBe('s1');
+      expect(ride.guestCompletedSession).toBeNull();
+      expect(localStore.saveCompletedSession).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 's1' }), { isDemo: false });
+    });
+
+    it('sends a guest row to the guest summary and never stores it (AC5.1)', () => {
+      const completed = { id: 'g1', isGuest: true, distance: 1500 } as unknown as WorkoutSession;
+      const { ride } = setup({ auth: athlete, session: completed });
+      ride.endWorkout();
+
+      expect(ride.guestCompletedSession?.id).toBe('g1');
+      expect(ride.completedSession).toBeNull();
+      expect(localStore.saveCompletedSession).not.toHaveBeenCalled();
+    });
+
+    it('flags a signed-in demo so it keeps the summary but never the log (AC5.3)', () => {
+      const completed = { id: 'd1', isGuest: false, distance: 800 } as unknown as WorkoutSession;
+      const { ride, session, deps } = setup({ auth: athlete, session: completed });
+      session.isDemoMode = true;
+      ride.endWorkout();
+
+      expect(ride.completedSession?.id).toBe('d1');
+      expect(ride.completedSessionWasDemo).toBe(true);
+      expect(deps.pm5Simulator.stop).toHaveBeenCalled();
+      // saveCompletedSession is told it is a demo (the store itself then no-ops).
+      expect(localStore.saveCompletedSession).toHaveBeenCalledWith('u1', expect.anything(), { isDemo: true });
+    });
+
+    it('shows no summary when the row produced nothing', () => {
+      const { ride, setCurrent } = setup({ auth: athlete });
+      setCurrent(null);
+      ride.endWorkout();
+
+      expect(ride.completedSession).toBeNull();
+      expect(ride.guestCompletedSession).toBeNull();
+    });
+
+    it('records the upload against the stored row, then dismisses (AC6.2)', () => {
+      const completed = { id: 's1', isGuest: false, distance: 2000 } as unknown as WorkoutSession;
+      const { ride } = setup({ auth: athlete, session: completed });
+      ride.endWorkout();
+
+      ride.sessionSaved('a9');
+      expect(localStore.markSessionUploaded).toHaveBeenCalledWith('u1', 's1', 'a9');
+
+      ride.sessionDone();
+      expect(ride.completedSession).toBeNull();
+    });
+
+    it('dismisses the guest summary on Row Again / Done', () => {
+      const completed = { id: 'g1', isGuest: true, distance: 1500 } as unknown as WorkoutSession;
+      const { ride } = setup({ auth: athlete, session: completed });
+      ride.endWorkout();
+      expect(ride.guestCompletedSession).not.toBeNull();
+
+      ride.guestDone();
+      expect(ride.guestCompletedSession).toBeNull();
+    });
+
+    it('settles the race against the ghost once the row has finished (#338)', () => {
+      const completed = { id: 's1', isGuest: false, distance: 1000 } as unknown as WorkoutSession;
+      const { ride, session } = setup({ auth: athlete, session: completed });
+      session.ghostChoice = { kind: 'pace', paceSPer500: 120 };
+      ride.endWorkout();
+
+      const stop = $effect.root(() => {
+        flushSync();
+        expect(ride.completedGhost).not.toBeNull();
+        expect(typeof ride.completedGhost?.seconds).toBe('number');
+        expect(ride.completedGhost?.label).toContain('pace');
+      });
+      stop();
+    });
+
+    it('offers no personal-best comparison without an athlete or for a demo (#337)', () => {
+      const completed = { id: 's1', isGuest: false, distance: 1000 } as unknown as WorkoutSession;
+
+      // No athlete: nothing to compare against.
+      const guest = setup({ session: { ...completed, isGuest: true } });
+      guest.ride.endWorkout();
+      const stopGuest = $effect.root(() => {
+        flushSync();
+        expect(guest.ride.completedSessionBest).toBeUndefined();
+      });
+      stopGuest();
+
+      // Signed-in demo: not theirs to compare.
+      const demo = setup({ auth: athlete, session: completed });
+      demo.session.isDemoMode = true;
+      demo.ride.endWorkout();
+      const stopDemo = $effect.root(() => {
+        flushSync();
+        expect(demo.ride.completedSessionBest).toBeUndefined();
+      });
+      stopDemo();
+    });
   });
 });
