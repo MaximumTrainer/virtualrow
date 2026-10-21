@@ -24,12 +24,11 @@ import {
 import { landClearance, publishSceneryClearance } from './sceneryClearance';
 import type { SceneryTrack } from './sceneryTrack';
 import type { RouteEnrichmentData } from '../../lib/services/routeEnrichmentService';
-// #550 D7-c: the #498 WebGPU cull spike was retired on this branch. The engine
-// in src/lib/renderer/ owns WebGPU now, and the React scene (also retired in
-// P1) only still exists to keep the SvelteKit app's lint and build green
-// until the UI thread removes it. The CPU `cullTo` path below is the only
-// one that runs here now.
-const isWebGPUCullEnabled = (): boolean => false;
+// #550 D7-c: the #498 WebGPU cull spike was retired on this branch. The
+// engine in src/lib/renderer/ owns WebGPU now, and the React scene (also
+// retired in P1) only still exists to keep the SvelteKit app's lint and
+// build green until the UI thread removes it. The CPU `cullTo` path below
+// is the only one that runs here.
 
 /** The group's name, and the prefix of each species mesh's: `BankFoliage:oak`. */
 export const BANK_FOLIAGE_NAME = 'BankFoliage';
@@ -185,20 +184,12 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
     });
   }, [curve, enrichment, trees, chunks]);
 
-  // #498: when the spike's flag is on and a WebGPU device is ready, a child
-  // component drives the mesh writes and sets `webgpuActiveRef` to true; the
-  // CPU `cullTo` below reads this ref and no-ops to keep the two paths from
-  // writing the same instance buffer in one frame.
-  const webgpuActiveRef = useRef(false);
-  const webgpuEnabled = isWebGPUCullEnabled();
-
   const cullFrameRef = useRef(0);
   useAnimationFrame((time) => {
     advanceSway(swayTime, time);
 
     const boat = positionRef?.current;
     if (!boat) return;
-    if (webgpuActiveRef.current) return;
     cullFrameRef.current += 1;
     if (cullFrameRef.current % FOLIAGE_CULL_FRAME_INTERVAL !== 0) return;
 
@@ -214,9 +205,6 @@ export const BankFoliage: React.FC<BankFoliageProps> = ({
 
   return (
     <group name={BANK_FOLIAGE_NAME}>
-      {webgpuEnabled && positionRef && (
-        <>{/* retired in #550 D7-c */}</>
-      )}
       {chunks.map((chunk, i) => {
         const part = parts[chunk.species];
         return (
