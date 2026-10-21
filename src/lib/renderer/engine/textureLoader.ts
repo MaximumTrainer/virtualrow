@@ -37,6 +37,10 @@ export interface AtlasSource {
 
 export const highTierKtx2 = (tier?: string): boolean => tier === 'high' || tier === 'extra-high';
 
+/** True when the device has BC7 support — the format `uploadBc7` writes. */
+export const supportsBc7 = (device: GPUDevice): boolean =>
+  device.features.has('texture-compression-bc');
+
 /**
  * Load the flora sprite atlas. On `high`+ the loader tries the KTX2 path
  * (lazy-imports the decoder); on `medium` and below it uses the sibling PNG.
@@ -49,7 +53,7 @@ export const loadFloraAtlas = async (
   source: AtlasSource,
 ): Promise<AtlasHandle> => {
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-  if (highTierKtx2(tier)) {
+  if (highTierKtx2(tier) && supportsBc7(device)) {
     const decoded = await decodeKtx2(source.url + '.ktx2');
     if (decoded) {
       const texture = uploadBc7(device, decoded.width, decoded.height, decoded.levels, {
