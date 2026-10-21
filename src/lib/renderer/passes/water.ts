@@ -1,17 +1,27 @@
 /// <reference types="@webgpu/types" />
 
 import type { FrameContext, Pass } from '../engine/frameGraph';
+import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippets';
 import { buildWaterStrip } from '../plan/waterStrip';
 import waterWgsl from './water.wgsl?raw';
+
+import type { ShadowResources } from './bank';
 
 export interface WaterPassOptions {
   device: GPUDevice;
   format: GPUTextureFormat;
   frameUniforms: GPUBuffer;
+  shadow: ShadowResources;
 }
 
-export const createWaterPass = ({ device, format, frameUniforms }: WaterPassOptions): Pass => {
-  const module = device.createShaderModule({ label: 'water', code: waterWgsl });
+export const createWaterPass = ({
+  device,
+  format,
+  frameUniforms,
+  shadow,
+}: WaterPassOptions): Pass => {
+  const code = SHADOW_UNIFORMS_WGSL + SAMPLE_SHADOW_WGSL + waterWgsl;
+  const module = device.createShaderModule({ label: 'water', code });
   const pipeline = device.createRenderPipeline({
     label: 'water',
     layout: 'auto',
@@ -36,6 +46,15 @@ export const createWaterPass = ({ device, format, frameUniforms }: WaterPassOpti
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [{ binding: 0, resource: { buffer: frameUniforms } }],
+  });
+  const shadowBindGroup = device.createBindGroup({
+    label: 'water-shadow',
+    layout: pipeline.getBindGroupLayout(1),
+    entries: [
+      { binding: 0, resource: { buffer: shadow.uniforms } },
+      { binding: 1, resource: shadow.atlasView },
+      { binding: 2, resource: shadow.cmpSampler },
+    ],
   });
 
   const geom = buildWaterStrip(null);
@@ -74,6 +93,7 @@ export const createWaterPass = ({ device, format, frameUniforms }: WaterPassOpti
       });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
+      pass.setBindGroup(1, shadowBindGroup);
       pass.setVertexBuffer(0, positionBuffer);
       pass.setIndexBuffer(indexBuffer, 'uint16');
       pass.drawIndexed(geom.indices.length);

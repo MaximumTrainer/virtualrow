@@ -18,12 +18,22 @@ import { createBankPass } from '../passes/bank';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
+import { computeCascades } from './cascadedShadows';
 import { createSceneryPass } from './sceneryPass';
 import { requestDevice, type DeviceSession } from './device';
 import { createFrameGraph, type FrameGraph, type FrameUniforms, type Pass } from './frameGraph';
 import { publishFallback } from './health';
+import { createShadowAtlas } from './shadowAtlas';
+import { shadowConfigFor } from './shadowConfig';
+import { createShadowStage, type ShadowTelemetry } from './shadowStage';
 import { createTelemetry, releaseTelemetry, type TelemetryHandles } from './telemetry';
-import { createFrameUniformBuffer, packFrameUniforms } from './uniforms';
+import {
+  createFrameUniformBuffer,
+  createShadowUniformBuffer,
+  packFrameUniforms,
+  packShadowUniforms,
+  type ShadowUniformsCpu,
+} from './uniforms';
 
 export interface RideRenderer {
   dispose(): void;
@@ -110,8 +120,34 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   const frameUniforms = createFrameUniformBuffer(device);
   const uniformScratch = new Float32Array(64);
 
-  // D7-a of #555: wire the scenery pass unconditionally. When no scenery
-  // route is provided the pass is empty and encodes zero work.
+  // #559 P4: shadow atlas + per-tier cascade config. Default tier is medium
+  // (3 cascades @ 1024). `setTier` is a later-phase ask (#559 FR8); for P2
+  // we size on attach from opts.tier.
+  const shadowCfg = shadowConfigFor(opts.tier);
+  const atlas = createShadowAtlas(device, shadowCfg.atlasSize, shadowCfg.cascades);
+  telemetry.shadows.atlasSize = atlas.tileSize;
+  telemetry.shadows.cascades = atlas.cascades;
+  telemetry.shadows.atlasBytes = atlas.bytes;
+
+  const shadowUniformsBuf = createShadowUniformBuffer(device);
+  const shadowScratch = new Float32Array(80);
+  const shadowCpu: ShadowUniformsCpu = {
+    cascadeViewProj: [mat4(), mat4(), mat4(), mat4()],
+    cascadeSplits: new Float32Array(4),
+    cascadeRadius: new Float32Array(4),
+    cascadeBlendStartRatio: 0.1,
+    cascadeCount: atlas.cascades,
+    tileSize: atlas.tileSize,
+    atlasWidth: atlas.width,
+  };
+  const shadowCmpSampler = device.createSampler({
+    label: 'shadow-cmp',
+    compare: 'less-equal',
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
+
+  // D7-a of #555: wire the scenery pass unconditionally.
   const scenePools: InstancePool[] = isSceneryRoute(opts.route)
     ? opts.route.pools.map((input) => createInstancePool(device, input))
     : [];
@@ -131,14 +167,36 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       drawn: -1,
     });
   }
-  // Pass order: sky → bank → scenery → water. The scenery pass goes between
-  // the bank's ground and the translucent water strip so trees sit behind
-  // the water surface edges cleanly.
+
+  // Shadow stage before anything lit draws. Its own telemetry writes
+  // into `telemetry.shadows` so the per-tile atlas size + per-cascade
+  // draw count are visible on `window.__ROWER3D_SHADOWS`.
+  const shadowTelemetry: ShadowTelemetry = telemetry.shadows as ShadowTelemetry;
+  const shadowStage = createShadowStage({
+    device,
+    atlas,
+    scenePools,
+    telemetry: shadowTelemetry,
+  });
+
+  // Lit passes build their own shadow bind groups from
+  // `pipeline.getBindGroupLayout(1)` (both passes share the atlas +
+  // uniforms + sampler by resource, not by layout).
+  const shadowResources = {
+    uniforms: shadowUniformsBuf,
+    atlasView: atlas.view,
+    cmpSampler: shadowCmpSampler,
+  };
+  const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
+  const waterPass = createWaterPass({ device, format, frameUniforms, shadow: shadowResources });
+
+  // Pass order: shadowStage → sky → bank → scenery → water.
   const passes: Pass[] = [
+    shadowStage,
     createSkyPass({ device, format, frameUniforms }),
-    createBankPass({ device, format, frameUniforms }),
+    bankPass,
     sceneryPass,
-    createWaterPass({ device, format, frameUniforms }),
+    waterPass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
 
@@ -192,17 +250,56 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     packFrameUniforms(frame, uniformScratch);
     device.queue.writeBuffer(frameUniforms, 0, uniformScratch as BufferSource);
 
+    // Compute cascades for this frame and update the shadow stage.
+    const computed = computeCascades({
+      cascades: atlas.cascades,
+      near: 0.5,
+      far: 400,
+      fovY: (58 * Math.PI) / 180,
+      aspect: width / height,
+      camPos: eye,
+      camForward: vec3(target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]),
+      camUp: up,
+      lightDirection: vec3(-frame.sunDir[0], -frame.sunDir[1], -frame.sunDir[2]),
+      lambda: 0.5,
+      tileTexels: atlas.tileSize,
+    });
+    shadowStage.payload.cascadeCount = atlas.cascades;
+    for (let i = 0; i < 4; i++) {
+      const dst = shadowStage.payload.cascades[i] ?? { viewProj: mat4() };
+      shadowStage.payload.cascades[i] = dst;
+      if (i < atlas.cascades) {
+        dst.viewProj.set(computed.cascades[i].viewProj);
+        shadowCpu.cascadeViewProj[i].set(computed.cascades[i].viewProj);
+        shadowCpu.cascadeSplits[i] = computed.splits[i] ?? 0;
+        shadowCpu.cascadeRadius[i] = computed.cascades[i].radius;
+      } else {
+        shadowCpu.cascadeViewProj[i].fill(0);
+        shadowCpu.cascadeSplits[i] = 0;
+        shadowCpu.cascadeRadius[i] = 0;
+      }
+    }
+    shadowCpu.cascadeCount = atlas.cascades;
+    packShadowUniforms(shadowCpu, shadowScratch);
+    device.queue.writeBuffer(shadowUniformsBuf, 0, shadowScratch as BufferSource);
+    telemetry.shadows.lastSplits = Array.from(computed.splits);
+
     const swapView = context.getCurrentTexture().createView();
     const depthView = depthTexture.createView();
     graph.run(device, swapView, depthView, width, height, frame);
 
     telemetry.frameStats.frame += 1;
     telemetry.frameStats.dtMs = 0;
-    telemetry.renderStats.draws = graph.passes.length;
+    telemetry.renderStats.draws = graph.passes.filter(
+      (p) => !p.name.startsWith('shadow'),
+    ).length;
     telemetry.renderStats.sceneryDraws = telemetry.scenery.drawCount;
     telemetry.renderStats.sceneryDispatch = telemetry.scenery.dispatchCount;
     telemetry.renderStats.sceneryTriangles =
       telemetry.scenery.drawCount * 4 /* two crossed quads per instance */;
+    telemetry.renderStats.shadowDraws = telemetry.shadows.draws;
+    telemetry.renderStats.shadowTriangles = telemetry.shadows.triangles;
+    telemetry.renderStats.shadowAtlasBytes = telemetry.shadows.atlasBytes;
     // Keep `__ROWER3D_FOLIAGE` compatible with today's shape — summarise the
     // foliage pool counts rather than reporting per-pool here.
     let trees = 0;
@@ -261,6 +358,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       }
       depthTexture.destroy();
       frameUniforms.destroy();
+      shadowUniformsBuf.destroy();
+      atlas.dispose();
       session.dispose();
       releaseTelemetry();
       canvas.removeAttribute('data-backend');
