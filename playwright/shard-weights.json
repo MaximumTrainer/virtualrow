@@ -8,6 +8,7 @@
     "default:crew-model-loading.spec.ts": 69,
     "default:default-route-performance.spec.ts": 320,
     "default:gl-context-budget.spec.ts": 75,
+    "default:webgpu-engine-smoke.spec.ts": 45,
     "default:intervals-login.spec.ts": 20,
     "default:intervals-login-failure.spec.ts": 45,
     "default:kml-projection.spec.ts": 23,

@@ -45,3 +45,31 @@ jobs:
         # The config's webServer builds and previews the app at
         # /virtualrow/app/; this spec asserts the title and base path.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/svelte-scaffold-smoke.spec.ts
+
+  webgpu-engine:
+    # #550 D8-b: the engine's one Playwright smoke, run on a GPU-backed
+    # runner when one is provisioned, with SwiftShader as the fallback. The
+    # runner label is picked up from the repo variable `GPU_RUNNER_LABEL`
+    # (same convention as the gpu-smoke job the UI/epic track is adding).
+    # continue-on-error: true until a real WebGPU adapter is reachable; the
+    # smoke still runs with --enable-unsafe-webgpu so we exercise the fallback
+    # branches today.
+    name: WebGPU engine smoke (#550)
+    needs: preflight
+    runs-on: ${{ vars.GPU_RUNNER_LABEL || 'ubuntu-latest' }}
+    continue-on-error: ${{ vars.GPU_RUNNER_LABEL == '' }}
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke — attach the engine, draw one frame, read telemetry
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-engine-smoke.spec.ts
