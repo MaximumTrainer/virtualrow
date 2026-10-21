@@ -97,7 +97,16 @@ export const requestDevice = async (
 
   let device: GPUDevice;
   try {
-    device = await adapter.requestDevice();
+    // Opt in to BC compressed-texture support when the adapter has it (D4-b of
+    // #562, AC8). The KTX2 → BC7 path in `textureLoader` only runs on `high`+
+    // tiers, and the loader itself falls through to the uncompressed PNG when
+    // the feature is absent; requesting it is cheap and keeps the device
+    // capable of sampling the BC7 flora atlas on hardware that supports it.
+    const requiredFeatures: GPUFeatureName[] = [];
+    if (adapter.features.has('texture-compression-bc')) {
+      requiredFeatures.push('texture-compression-bc');
+    }
+    device = await adapter.requestDevice({ requiredFeatures });
   } catch {
     publishFallback('device-request-failed');
     return makeUnavailable('device-request-failed');

@@ -74,8 +74,8 @@ describe('attach', () => {
     const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
-    // sky, bank, scenery, water
-    expect(renderer._telemetry.renderStats.draws).toBe(4);
+    // sky, bank, scenery, floraSolid, water (#562 FR5)
+    expect(renderer._telemetry.renderStats.draws).toBe(5);
     renderer.dispose();
   });
 

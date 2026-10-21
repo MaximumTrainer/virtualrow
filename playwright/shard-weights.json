@@ -11,6 +11,7 @@
     "default:webgpu-engine-smoke.spec.ts": 45,
     "default:webgpu-scenery-smoke.spec.ts": 45,
     "default:webgpu-shadows-smoke.spec.ts": 45,
+    "default:webgpu-flora-smoke.spec.ts": 45,
     "default:intervals-login.spec.ts": 20,
     "default:intervals-login-failure.spec.ts": 45,
     "default:kml-projection.spec.ts": 23,

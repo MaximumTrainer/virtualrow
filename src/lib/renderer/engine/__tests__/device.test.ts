@@ -58,6 +58,43 @@ describe('device', () => {
     session.dispose();
   });
 
+  it('asks for texture-compression-bc when the adapter has it (#562 AC8)', async () => {
+    // Replace the adapter's requestDevice with a spy that captures the opts
+    // and still returns the mock device shape the real one does. The device
+    // itself comes from a sibling makeMockAdapter — one real call so the
+    // `lost` promise is wired up and the test does not throw at teardown.
+    const inner = makeMockAdapter();
+    const innerDevice = await inner.requestDevice();
+    const adapter = makeMockAdapter();
+    (adapter as unknown as { features: Set<string> }).features = new Set(['texture-compression-bc']);
+    let seenFeatures: readonly string[] = [];
+    (adapter as unknown as { requestDevice: unknown }).requestDevice = async (opts?: {
+      requiredFeatures?: readonly string[];
+    }) => {
+      seenFeatures = opts?.requiredFeatures ?? [];
+      return innerDevice;
+    };
+    const session = await requestDevice({ gpu: makeMockGPU(adapter) });
+    expect(session.state.kind).toBe('ready');
+    expect(seenFeatures).toContain('texture-compression-bc');
+  });
+
+  it('omits texture-compression-bc when the adapter cannot do it', async () => {
+    const inner = makeMockAdapter();
+    const innerDevice = await inner.requestDevice();
+    const adapter = makeMockAdapter();
+    let seenFeatures: readonly string[] | undefined;
+    (adapter as unknown as { requestDevice: unknown }).requestDevice = async (opts?: {
+      requiredFeatures?: readonly string[];
+    }) => {
+      seenFeatures = opts?.requiredFeatures;
+      return innerDevice;
+    };
+    const session = await requestDevice({ gpu: makeMockGPU(adapter) });
+    expect(session.state.kind).toBe('ready');
+    expect(seenFeatures).toEqual([]);
+  });
+
   it('notifies the caller on device loss and marks second loss as unavailable', async () => {
     const onDeviceLost = vi.fn();
     const session = await requestDevice(

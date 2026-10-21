@@ -19,7 +19,12 @@ import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
 import { computeCascades } from './cascadedShadows';
+import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
+import { createSceneryCuller } from '../passes/sceneryCull';
+import { createFloraSolidStage } from './floraSolidStage';
+import { loadFloraAtlas } from './textureLoader';
+import { textureBytes } from './textures';
 import { requestDevice, type DeviceSession } from './device';
 import { createFrameGraph, type FrameGraph, type FrameUniforms, type Pass } from './frameGraph';
 import { publishFallback } from './health';
@@ -30,8 +35,11 @@ import { createTelemetry, releaseTelemetry, type TelemetryHandles } from './tele
 import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
+  createSproutUniformBuffer,
   packFrameUniforms,
   packShadowUniforms,
+  packSproutUniforms,
+  sproutWindowFor,
   type ShadowUniformsCpu,
 } from './uniforms';
 
@@ -147,15 +155,37 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     minFilter: 'linear',
   });
 
+  // Sprout fade uniform (#562 FR6 / D6-b). The window metres are per-tier.
+  const sproutUniforms = createSproutUniformBuffer(device);
+  const sproutScratch = new Float32Array(4);
+  const sprout = sproutWindowFor(opts.tier);
+  packSproutUniforms(sprout.near, sprout.far, sproutScratch);
+  device.queue.writeBuffer(sproutUniforms, 0, sproutScratch as BufferSource);
+
   // D7-a of #555: wire the scenery pass unconditionally.
-  const scenePools: InstancePool[] = isSceneryRoute(opts.route)
-    ? opts.route.pools.map((input) => createInstancePool(device, input))
-    : [];
+  const sceneryPoolInputs: PoolInput[] = isSceneryRoute(opts.route) ? opts.route.pools : [];
+  const scenePools: InstancePool[] = sceneryPoolInputs.map((input) => createInstancePool(device, input));
   const sceneryPass = createSceneryPass({
     device,
     format,
     frameUniforms,
+    sproutUniforms,
     pools: scenePools,
+    telemetry: telemetry.scenery,
+  });
+
+  // Solid flora stage (#562 FR4 / FR5). Builds a low-poly 3D crown+trunk per
+  // foliage pool and renders it alongside the sprite pass with its own cull
+  // + indirect, cross-fading via `sproutUniforms`.
+  const floraSolidCuller = createSceneryCuller(device);
+  const floraSolidStage = createFloraSolidStage({
+    device,
+    format,
+    frameUniforms,
+    sproutUniforms,
+    culler: floraSolidCuller,
+    poolInputs: sceneryPoolInputs,
+    spritePools: scenePools,
     telemetry: telemetry.scenery,
   });
   for (const pool of scenePools) {
@@ -190,12 +220,13 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
   const waterPass = createWaterPass({ device, format, frameUniforms, shadow: shadowResources });
 
-  // Pass order: shadowStage → sky → bank → scenery → water.
+  // Pass order: shadowStage → sky → bank → scenery → floraSolid → water.
   const passes: Pass[] = [
     shadowStage,
     createSkyPass({ device, format, frameUniforms }),
     bankPass,
     sceneryPass,
+    floraSolidStage,
     waterPass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
@@ -296,7 +327,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     telemetry.renderStats.sceneryDraws = telemetry.scenery.drawCount;
     telemetry.renderStats.sceneryDispatch = telemetry.scenery.dispatchCount;
     telemetry.renderStats.sceneryTriangles =
-      telemetry.scenery.drawCount * 4 /* two crossed quads per instance */;
+      telemetry.scenery.spriteDraws * 4 /* two crossed quads per instance */
+      + telemetry.scenery.solidTriangles;
     telemetry.renderStats.shadowDraws = telemetry.shadows.draws;
     telemetry.renderStats.shadowTriangles = telemetry.shadows.triangles;
     telemetry.renderStats.shadowAtlasBytes = telemetry.shadows.atlasBytes;
@@ -330,6 +362,36 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     }
   };
 
+  // Lazy flora atlas load (#562 FR2 / FR3). The decoder lives in its own
+  // chunk — the engine's main chunk doesn't pull it unless a KTX2 asset is
+  // actually fetched. The texture itself is published to telemetry so the
+  // smoke can read atlasKind + atlasBytes without a GPU readback.
+  type AtlasHandle = Awaited<ReturnType<typeof loadFloraAtlas>>;
+  let atlasHandle: AtlasHandle | null = null;
+  void loadFloraAtlas(device, opts.tier, {
+    url: assetUrl('/assets/flora/atlas'),
+    pngWidth: 512,
+    pngHeight: 512,
+  })
+    .then((handle) => {
+      atlasHandle = handle;
+      telemetry.textures.atlasKind = handle.kind;
+      telemetry.textures.transcodedMs = handle.transcodedMs;
+      telemetry.textures.mipsGenerated = handle.texture.mipLevelCount;
+      const bytesFmt = handle.kind === 'ktx2' ? 'bc7-rgba-unorm-srgb' : 'rgba8unorm-srgb';
+      telemetry.textures.atlasBytes = textureBytes(
+        handle.texture.width,
+        handle.texture.height,
+        bytesFmt,
+        handle.texture.mipLevelCount,
+      );
+    })
+    .catch(() => {
+      // Loader guards everything; this is belt-and-braces so a rejected
+      // dynamic-import can't take the engine down.
+      telemetry.textures.atlasKind = 'placeholder';
+    });
+
   telemetry.contextState.kind = 'ready';
   telemetry.contextState.backend = 'webgpu';
 
@@ -356,9 +418,12 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       for (const pool of scenePools) {
         pool.dispose();
       }
+      floraSolidCuller.dispose();
       depthTexture.destroy();
       frameUniforms.destroy();
       shadowUniformsBuf.destroy();
+      sproutUniforms.destroy();
+      atlasHandle?.texture.dispose();
       atlas.dispose();
       session.dispose();
       releaseTelemetry();

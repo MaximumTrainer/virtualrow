@@ -76,6 +76,7 @@ describe('sceneryPass', () => {
       device,
       format: 'bgra8unorm',
       frameUniforms,
+      sproutUniforms: frameUniforms,
       pools,
     });
     expect(pass.name).toBe('scenery');
@@ -97,6 +98,7 @@ describe('sceneryPass', () => {
       device,
       format: 'bgra8unorm',
       frameUniforms,
+      sproutUniforms: frameUniforms,
       pools: [],
     });
     pass.encode(makeFrameCtx(device));
@@ -113,6 +115,7 @@ describe('sceneryPass', () => {
       device,
       format: 'bgra8unorm',
       frameUniforms,
+      sproutUniforms: frameUniforms,
       pools,
     });
     expect(pass.telemetry.pools.length).toBe(3);
@@ -137,6 +140,7 @@ describe('sceneryPass', () => {
       device,
       format: 'bgra8unorm',
       frameUniforms,
+      sproutUniforms: frameUniforms,
       pools,
     });
     pass.dispose();

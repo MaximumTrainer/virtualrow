@@ -31,6 +31,7 @@ export const createScenerySignature = (
     label: 'scenery-frame',
     entries: [
       { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
     ],
   });
   const poolLayout = device.createBindGroupLayout({
@@ -44,7 +45,21 @@ export const createScenerySignature = (
     label: 'scenery',
     layout: device.createPipelineLayout({ bindGroupLayouts: [frameLayout, poolLayout] }),
     vertex: { module, entryPoint: 'vs_main' },
-    fragment: { module, entryPoint: 'fs_main', targets: [{ format }] },
+    fragment: {
+      module,
+      entryPoint: 'fs_main',
+      targets: [
+        {
+          format,
+          // Alpha-blend so the sprout fade (#562 FR6) reads as a soft cross-fade
+          // with the solid pool.
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        },
+      ],
+    },
     primitive: { topology: 'triangle-list', cullMode: 'none' },
     depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth24plus' },
   });

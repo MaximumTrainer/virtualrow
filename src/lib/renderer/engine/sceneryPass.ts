@@ -40,12 +40,23 @@ export interface SceneryTelemetry {
   pools: SceneryTelemetryEntry[];
   dispatchCount: number;
   drawCount: number;
+  /** How many of the draws this frame were the sprite pass (#562 FR6). */
+  spriteDraws: number;
+  /** How many of the draws this frame were the solid pass (#562 FR6). */
+  solidDraws: number;
+  /** Rough triangle count emitted by the solid pass this frame. */
+  solidTriangles: number;
 }
 
 export interface SceneryPassOptions {
   device: GPUDevice;
   format: GPUTextureFormat;
   frameUniforms: GPUBuffer;
+  /**
+   * Sprout fade window uniform buffer (#562 FR6 / D6-b). The engine's
+   * `attach.ts` creates one at startup and writes per-tier near/far metres.
+   */
+  sproutUniforms: GPUBuffer;
   pools: InstancePool[];
   /**
    * Maximum distance from the camera at which a pool instance is drawn.
@@ -71,7 +82,7 @@ export interface SceneryPass extends Pass {
 export const DEFAULT_MAX_DISTANCE = 320;
 
 export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
-  const { device, format, frameUniforms, pools } = opts;
+  const { device, format, frameUniforms, sproutUniforms, pools } = opts;
   const maxDistance = opts.maxDistance ?? DEFAULT_MAX_DISTANCE;
   const signature = createScenerySignature(device, format);
   const culler = createSceneryCuller(device);
@@ -85,6 +96,9 @@ export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
     })),
     dispatchCount: 0,
     drawCount: 0,
+    spriteDraws: 0,
+    solidDraws: 0,
+    solidTriangles: 0,
   };
 
   // Pool-side cull + draw resources. One per pool, built once.
@@ -101,7 +115,10 @@ export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
   const frameBindGroup = device.createBindGroup({
     label: 'scenery-frame',
     layout: signature.frameLayout,
-    entries: [{ binding: 0, resource: { buffer: frameUniforms } }],
+    entries: [
+      { binding: 0, resource: { buffer: frameUniforms } },
+      { binding: 1, resource: { buffer: sproutUniforms } },
+    ],
   });
 
   const planes: FrustumPlanes = frustum();
@@ -150,6 +167,7 @@ export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
         pass.setBindGroup(1, r.bindGroup);
         pass.drawIndirect(r.cull.indirect, 0);
         telemetry.drawCount += 1;
+        telemetry.spriteDraws += 1;
       }
       pass.end();
     },

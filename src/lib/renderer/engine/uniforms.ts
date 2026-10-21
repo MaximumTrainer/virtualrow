@@ -78,6 +78,47 @@ export const createFrameUniformBuffer = (device: GPUDevice): GPUBuffer =>
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
+/**
+ * Sprout fade uniforms (#562 FR6 / D6-b). 16 bytes: {near, far, pad, pad}.
+ */
+export const SPROUT_UNIFORMS_BYTES = 16;
+
+export const createSproutUniformBuffer = (device: GPUDevice): GPUBuffer =>
+  device.createBuffer({
+    label: 'sprout-uniforms',
+    size: SPROUT_UNIFORMS_BYTES,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+export const packSproutUniforms = (
+  near: number,
+  far: number,
+  out = new Float32Array(4),
+): Float32Array => {
+  out[0] = near;
+  out[1] = far;
+  out[2] = 0;
+  out[3] = 0;
+  return out;
+};
+
+/** Per-tier sprout fade window metres (D6-b). */
+export const sproutWindowFor = (tier?: string): { near: number; far: number } => {
+  switch (tier) {
+    case 'basic':
+      return { near: 0, far: 6 };
+    case 'low':
+      return { near: 0, far: 8 };
+    case 'high':
+      return { near: 0, far: 12 };
+    case 'extra-high':
+      return { near: 0, far: 15 };
+    case 'medium':
+    default:
+      return { near: 0, far: 10 };
+  }
+};
+
 export const packFrameUniforms = (
   frame: FrameUniforms,
   out = new Float32Array(FRAME_UNIFORMS_FLOATS),

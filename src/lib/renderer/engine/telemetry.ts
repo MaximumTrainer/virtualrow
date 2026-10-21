@@ -90,6 +90,23 @@ export interface Rower3DScenery {
   pools: Rower3DSceneryEntry[];
   dispatchCount: number;
   drawCount: number;
+  /** Draws split (#562 FR6). `spriteDraws + solidDraws` equals `drawCount`. */
+  spriteDraws: number;
+  solidDraws: number;
+  solidTriangles: number;
+}
+
+/**
+ * Texture-pipeline telemetry (#562 FR2 / FR3). Written once per attach when
+ * the flora atlas resolves; carries the atlas kind (ktx2 / png / placeholder),
+ * the uploaded GPU footprint and the transcode cost. Published as
+ * `__ROWER3D_TEXTURES`.
+ */
+export interface Rower3DTextures {
+  atlasKind: 'ktx2' | 'png' | 'placeholder' | 'pending';
+  atlasBytes: number;
+  mipsGenerated: number;
+  transcodedMs: number;
 }
 
 /** Shadow telemetry (#559 FR7). */
@@ -114,6 +131,7 @@ export interface TelemetryHandles {
   foliage: Rower3DFoliage;
   scenery: Rower3DScenery;
   shadows: Rower3DShadows;
+  textures: Rower3DTextures;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -148,7 +166,14 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     route: { hasCurve: false, totalDistance: 0, curveLength: 0 },
     clearance: { min: 0, samples: 0 },
     foliage: { trees: 0, meshes: 0, drawn: 0 },
-    scenery: { pools: [], dispatchCount: 0, drawCount: 0 },
+    scenery: {
+      pools: [],
+      dispatchCount: 0,
+      drawCount: 0,
+      spriteDraws: 0,
+      solidDraws: 0,
+      solidTriangles: 0,
+    },
     shadows: {
       cascades: 0,
       atlasSize: 0,
@@ -158,6 +183,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
       triangles: 0,
       atlasBytes: 0,
     },
+    textures: { atlasKind: 'pending', atlasBytes: 0, mipsGenerated: 0, transcodedMs: 0 },
   };
   const w = win();
   if (w) {
@@ -173,6 +199,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_FOLIAGE'] = handles.foliage;
     w['__ROWER3D_SCENERY'] = handles.scenery;
     w['__ROWER3D_SHADOWS'] = handles.shadows;
+    w['__ROWER3D_TEXTURES'] = handles.textures;
   }
   return handles;
 };
@@ -193,6 +220,7 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_FOLIAGE',
     '__ROWER3D_SCENERY',
     '__ROWER3D_SHADOWS',
+    '__ROWER3D_TEXTURES',
   ]) {
     delete w[key];
   }
