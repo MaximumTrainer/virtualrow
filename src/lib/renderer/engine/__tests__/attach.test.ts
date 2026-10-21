@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { attach } from '../attach';
+import { attach, isSceneryRoute } from '../attach';
 import { resetWebGPUHealth } from '../health';
 import {
   installGPUStub,
@@ -8,11 +8,15 @@ import {
   makeMockGPU,
 } from '../../__tests__/_mockWebGPU';
 import { releaseTelemetry } from '../telemetry';
+import { buildSmokeFoliagePools } from '../../plan/instancePools';
 
 type WithTest = {
   _frameOnce: () => void;
   _telemetry: {
     frameStats: { frame: number };
+    renderStats: { draws: number; sceneryDraws: number; sceneryDispatch: number };
+    scenery: { pools: { kind: string; instanceCount: number }[]; dispatchCount: number; drawCount: number };
+    foliage: { trees: number; meshes: number; drawn: number };
     contextState: { kind: string; backend: string };
   };
   dispose(): void;
@@ -65,14 +69,35 @@ describe('attach', () => {
     expect(renderer).toBeNull();
   });
 
-  it('runs the full three-pass graph on every frame', async () => {
+  it('runs the full four-pass graph on every frame', async () => {
     const canvas = makeMockCanvas();
-    const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest & {
-      _telemetry: { renderStats: { draws: number } };
-    };
+    const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
-    expect(renderer._telemetry.renderStats.draws).toBe(3);
+    // sky, bank, scenery, water
+    expect(renderer._telemetry.renderStats.draws).toBe(4);
     renderer.dispose();
+  });
+
+  it('wires scenery pools from a SceneryRoute', async () => {
+    const canvas = makeMockCanvas();
+    const pools = buildSmokeFoliagePools({ speciesCount: 2, chunkCount: 2, perChunk: 10 });
+    const renderer = (await attach(canvas, {
+      testMode: true,
+      route: { pools },
+    })) as unknown as WithTest;
+    expect(renderer).not.toBeNull();
+    expect(renderer._telemetry.scenery.pools.length).toBeGreaterThanOrEqual(4);
+    expect(renderer._telemetry.scenery.dispatchCount).toBeGreaterThan(0);
+    expect(renderer._telemetry.foliage.trees).toBe(2 * 2 * 10);
+    expect(renderer._telemetry.foliage.meshes).toBe(4);
+    renderer.dispose();
+  });
+
+  it('isSceneryRoute recognises the shape', () => {
+    expect(isSceneryRoute({ pools: [] })).toBe(true);
+    expect(isSceneryRoute(null)).toBe(false);
+    expect(isSceneryRoute({})).toBe(false);
+    expect(isSceneryRoute({ pools: 'not-an-array' })).toBe(false);
   });
 });

@@ -10,6 +10,13 @@ export interface Rower3DRenderStats {
   draws: number;
   triangles: number;
   instances: number;
+  /**
+   * Per-pass counts for scenery (#555 FR6). Zero on `main`'s three scene;
+   * engine-written numbers from P3 onwards.
+   */
+  sceneryDispatch: number;
+  sceneryDraws: number;
+  sceneryTriangles: number;
 }
 
 export interface Rower3DFrameStats {
@@ -53,6 +60,34 @@ export interface Rower3DClearance {
   samples: number;
 }
 
+/**
+ * Compatible shape with today's `publishFoliage` writes in
+ * `src/components/rower3d/foliageComponents.tsx` (`trees`, `meshes`, `drawn`).
+ */
+export interface Rower3DFoliage {
+  trees: number;
+  meshes: number;
+  drawn: number;
+}
+
+/**
+ * Per-pool scenery entry (#555 FR6). The engine writes
+ * `__ROWER3D_SCENERY = { pools, dispatchCount, drawCount }`.
+ */
+export interface Rower3DSceneryEntry {
+  kind: string;
+  speciesIndex: number;
+  chunkIndex: number;
+  instanceCount: number;
+  drawn: number;
+}
+
+export interface Rower3DScenery {
+  pools: Rower3DSceneryEntry[];
+  dispatchCount: number;
+  drawCount: number;
+}
+
 export interface TelemetryHandles {
   renderStats: Rower3DRenderStats;
   frameStats: Rower3DFrameStats;
@@ -61,6 +96,8 @@ export interface TelemetryHandles {
   pos: Rower3DPos;
   route: Rower3DRoute;
   clearance: Rower3DClearance;
+  foliage: Rower3DFoliage;
+  scenery: Rower3DScenery;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -77,13 +114,22 @@ const win = (): Win | undefined => {
 
 export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
   const handles: TelemetryHandles = {
-    renderStats: { draws: 0, triangles: 0, instances: 0 },
+    renderStats: {
+      draws: 0,
+      triangles: 0,
+      instances: 0,
+      sceneryDispatch: 0,
+      sceneryDraws: 0,
+      sceneryTriangles: 0,
+    },
     frameStats: { frame: 0, dtMs: 0, gpuMs: 0 },
     camera: { x: 0, y: 0, z: 0, lookX: 0, lookY: 0, lookZ: 0, fov: 58 },
     contextState: { kind: 'pending', backend: 'none' },
     pos: { x: 0, y: 0, z: 0, progress: 0 },
     route: { hasCurve: false, totalDistance: 0, curveLength: 0 },
     clearance: { min: 0, samples: 0 },
+    foliage: { trees: 0, meshes: 0, drawn: 0 },
+    scenery: { pools: [], dispatchCount: 0, drawCount: 0 },
   };
   const w = win();
   if (w) {
@@ -96,6 +142,8 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     w['__ROWER3D_CLEARANCE'] = handles.clearance;
     w['__ROWER3D_FORCE_RENDER'] = forceRender;
     w['__ROWER3D_GPU_BACKEND'] = 'webgpu';
+    w['__ROWER3D_FOLIAGE'] = handles.foliage;
+    w['__ROWER3D_SCENERY'] = handles.scenery;
   }
   return handles;
 };
@@ -113,6 +161,8 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_CLEARANCE',
     '__ROWER3D_FORCE_RENDER',
     '__ROWER3D_GPU_BACKEND',
+    '__ROWER3D_FOLIAGE',
+    '__ROWER3D_SCENERY',
   ]) {
     delete w[key];
   }
