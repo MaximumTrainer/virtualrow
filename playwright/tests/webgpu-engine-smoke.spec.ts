@@ -20,7 +20,7 @@ test.use({
 
 /**
  * #550 P2-AC4 / AC5 — the engine's one Playwright smoke, matching the engine
- * attach contract agreed with the UI thread. We mount a hidden `/__smoke__/engine`
+ * attach contract agreed with the UI thread. We mount a hidden `/smoke/engine`
  * route (not linked from any UI chrome) that calls `attach` on a bare canvas
  * with `testMode: true`, then read:
  *
@@ -35,7 +35,7 @@ test.use({
  * until a real GPU runner is provisioned (D8-b).
  */
 test('webgpu engine smoke', async ({ page }) => {
-  await page.goto('./__smoke__/engine/');
+  await page.goto('./smoke/engine');
   const main = page.getByTestId('webgpu-engine-smoke');
   await expect(main).toBeVisible();
 

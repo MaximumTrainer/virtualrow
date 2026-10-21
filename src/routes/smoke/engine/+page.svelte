@@ -1,5 +1,5 @@
 <!--
-  #550 P2 engine smoke page (D8-b of #550). Hidden route under /__smoke__/engine
+  #550 P2 engine smoke page (D8-b of #550). Hidden route under /smoke/engine
   that mounts the WebGPU engine on a bare canvas. The Playwright smoke spec
   loads this to assert `data-backend="webgpu"`, the context state, and the
   frame counter. The UI thread's ride view is empty during P2 (#550 D6-a),
