@@ -33,6 +33,9 @@
   import AuthButton from '$lib/ui/AuthButton.svelte';
   import SessionSummary from '$lib/ui/SessionSummary.svelte';
   import GuestSessionSummary from '$lib/ui/GuestSessionSummary.svelte';
+  import SettingsPanel from '$lib/ui/SettingsPanel.svelte';
+  import CrashReportedBanner from '$lib/ui/CrashReportedBanner.svelte';
+  import { crashReportsPreferenceStore } from '$lib/services/crashReportsPreferenceStore';
 
   let { children } = $props();
 
@@ -138,6 +141,8 @@
   const isWorkoutActive = $derived(view === 'workout');
 
   let isNavOpen = $state(false);
+  // The Settings surface (gear button → SettingsPanel), App's `settingsOpen`.
+  let settingsOpen = $state(false);
 </script>
 
 <svelte:head>
@@ -169,6 +174,17 @@
       routeGeometrySource={routes.selectedRoute?.geometrySource}
     />
   {/if}
+
+  <!-- The crash-report Settings surface and the "a report was sent" banner,
+       both at the app-container root as App rendered them. -->
+  <SettingsPanel
+    isOpen={settingsOpen}
+    onClose={() => (settingsOpen = false)}
+    {crashReportsPreferenceStore}
+    intervalsIcuAthleteId={auth.user?.id ?? null}
+  />
+
+  <CrashReportedBanner onOpenSettings={() => (settingsOpen = true)} />
 
   <header class="app-header">
     <div class="header-content">
@@ -212,6 +228,16 @@
       {/if}
 
       <div class="header-auth">
+        {#if !isWorkoutActive}
+          <button
+            type="button"
+            class="settings-gear-btn"
+            aria-label="Settings"
+            onclick={() => (settingsOpen = true)}
+          >
+            ⚙︎
+          </button>
+        {/if}
         <AuthButton />
       </div>
     </div>
