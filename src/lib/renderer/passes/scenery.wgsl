@@ -21,7 +21,18 @@ struct Frame {
   _pad2: vec3<f32>,
 };
 
+// Sprout fade window (#562 FR6 / D6-b). Per-tier values 6/8/10/12/15 m.
+// Sprites fade in BELOW sproutNear; the solid pool (floraSolid.wgsl) fades
+// out ABOVE sproutFar. Together they form the hybrid LOD cross-fade with
+// no hard swap at a single range.
+struct Sprout {
+  near: f32,
+  far: f32,
+  _pad: vec2<f32>,
+};
+
 @group(0) @binding(0) var<uniform> frame: Frame;
+@group(0) @binding(1) var<uniform> sprout: Sprout;
 @group(1) @binding(0) var<storage, read> centres: array<vec4<f32>>;
 @group(1) @binding(1) var<storage, read> indices: array<u32>;
 
@@ -30,6 +41,7 @@ struct VSOut {
   @location(0) normal: vec3<f32>,
   @location(1) worldY: f32,
   @location(2) worldDist: f32,
+  @location(3) fade: f32,
 };
 
 // Four verts per billboard pair (two crossed quads, 6 indices each via a
@@ -84,12 +96,17 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   out.normal = n;
   out.worldY = p.y;
   let d = p - frame.camPos;
-  out.worldDist = length(vec3<f32>(d.x, 0.0, d.z));
+  let worldDist = length(vec3<f32>(d.x, 0.0, d.z));
+  out.worldDist = worldDist;
+  // Sprite fades IN above `sproutNear`, peaks at `sproutFar` and beyond.
+  let span = max(1.0, sprout.far - sprout.near);
+  out.fade = clamp((worldDist - sprout.near) / span, 0.0, 1.0);
   return out;
 }
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
+  if (in.fade <= 0.001) { discard; }
   let sun = normalize(frame.sunDir);
   let shade = clamp(dot(in.normal, sun) * 0.5 + 0.6, 0.3, 1.0);
   let base = vec3<f32>(0.26, 0.42, 0.22);
@@ -101,5 +118,6 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let density = near + far * in.worldDist;
   let f = 1.0 - exp(-density * in.worldDist);
   let fogCol = vec3<f32>(0.72, 0.78, 0.82);
-  return vec4<f32>(mix(col, fogCol, clamp(f, 0.0, 1.0)), 1.0);
+  // Fade modulates alpha so the handoff with the solid pool is a soft blend.
+  return vec4<f32>(mix(col, fogCol, clamp(f, 0.0, 1.0)), in.fade);
 }

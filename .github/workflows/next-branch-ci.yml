@@ -77,6 +77,12 @@ jobs:
         # D7-a / D8-a: scenery runs on the same job as the engine smoke; the
         # smoke page under /smoke/scenery feeds a canned foliage pool set.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-scenery-smoke.spec.ts
+      - name: Smoke — flora LOD + texture pipeline (#562)
+        # P5-AC4: flora LOD runs on the same job as the engine smoke; the
+        # smoke page under /smoke/flora exercises the solid + sprite passes
+        # and the lazy KTX2/PNG atlas path. SwiftShader is OK since the
+        # decoder currently returns null → PNG fallback.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-flora-smoke.spec.ts
       - name: Smoke — CSM + flora shadow depth pass (#559)
         # P4-AC4: shadows run on the same job as the engine smoke; the
         # smoke page under /smoke/shadows feeds a canned foliage pool
