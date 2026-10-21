@@ -1,0 +1,119 @@
+.rower-appearance {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rower-appearance-summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  list-style: none;
+  padding: 0.1rem 0;
+}
+
+.rower-appearance-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rower-appearance-summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.4rem;
+  transition: transform 150ms ease;
+}
+
+.rower-appearance[open] .rower-appearance-summary::before {
+  transform: rotate(90deg);
+}
+
+.rower-appearance-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.rower-appearance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rower-appearance-label {
+  flex: 0 0 3.5rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.rower-appearance-swatches {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rower-appearance-swatch {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.rower-appearance-swatch:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.rower-appearance-swatch:focus-visible {
+  outline: 2px solid #4aa3ff;
+  outline-offset: 2px;
+}
+
+.rower-appearance-swatch.is-selected {
+  border-color: #4aa3ff;
+  box-shadow: 0 0 0 2px rgba(74, 163, 255, 0.3);
+}
+
+.rower-appearance-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rower-appearance-chip {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.rower-appearance-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+.rower-appearance-chip:focus-visible {
+  outline: 2px solid #4aa3ff;
+  outline-offset: 2px;
+}
+
+.rower-appearance-chip.is-selected {
+  border-color: #4aa3ff;
+  background: rgba(74, 163, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(74, 163, 255, 0.3);
+}
