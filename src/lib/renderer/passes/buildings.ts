@@ -47,7 +47,7 @@ export const createBuildingsPass = (opts: BuildingsPassOptions): BuildingsPass =
     depthStencil: {
       depthWriteEnabled: true,
       depthCompare: 'less',
-      format: 'depth24plus',
+      format: 'depth32float',
     },
   });
   const frameBindGroup = device.createBindGroup({

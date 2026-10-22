@@ -40,7 +40,7 @@ export const createWaterPass = ({
     depthStencil: {
       depthWriteEnabled: true,
       depthCompare: 'less',
-      format: 'depth24plus',
+      format: 'depth32float',
     },
   });
   const bindGroup = device.createBindGroup({

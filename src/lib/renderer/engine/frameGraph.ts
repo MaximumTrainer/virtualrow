@@ -30,7 +30,14 @@ export interface FrameUniforms {
 export interface FrameContext {
   device: GPUDevice;
   encoder: GPUCommandEncoder;
+  /**
+   * The colour attachment lit passes render into. Before P8 this was the
+   * swap-chain back-buffer directly; from P8 onwards it's an HDR offscreen
+   * texture that `PostFxPass` reads and composites to `outputView`.
+   */
   swapView: GPUTextureView;
+  /** The actual swap-chain back-buffer `PostFxPass` writes to. */
+  outputView: GPUTextureView;
   depthView: GPUTextureView;
   width: number;
   height: number;
@@ -62,6 +69,7 @@ export interface FrameGraph {
     width: number,
     height: number,
     frame: FrameUniforms,
+    outputView?: GPUTextureView,
   ): void;
   dispose(): void;
 }
@@ -72,13 +80,14 @@ export const createFrameGraph = (passes: Pass[]): FrameGraph => {
     get passes() {
       return passes;
     },
-    run(device, swapView, depthView, width, height, frame) {
+    run(device, swapView, depthView, width, height, frame, outputView) {
       if (disposed) return;
       const encoder = device.createCommandEncoder({ label: 'engine-frame' });
       const ctx: FrameContext = {
         device,
         encoder,
         swapView,
+        outputView: outputView ?? swapView,
         depthView,
         width,
         height,

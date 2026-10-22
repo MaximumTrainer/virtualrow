@@ -20,14 +20,76 @@ export interface BuildingTierCaps {
   drawCrew: boolean;
   /** #570 D7-c: crew only casts a shadow on medium+. */
   castCharacterShadows: boolean;
+  /** #573 D8 — post-processing gates. Bloom/tone/vignette/LUT are universal;
+   *  SSAO is high+ only; DOF is extra-high only (and off behind a flag). */
+  drawBloom: boolean;
+  drawVignette: boolean;
+  drawLut: boolean;
+  drawSsao: boolean;
+  drawDof: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
-  basic: { drawBuildings: false, drawClouds: false, castBuildingShadows: false, drawCrew: false, castCharacterShadows: false },
-  low: { drawBuildings: true, drawClouds: false, castBuildingShadows: false, drawCrew: true, castCharacterShadows: false },
-  medium: { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
-  high: { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
-  'extra-high': { drawBuildings: true, drawClouds: true, castBuildingShadows: true, drawCrew: true, castCharacterShadows: true },
+  basic: {
+    drawBuildings: false,
+    drawClouds: false,
+    castBuildingShadows: false,
+    drawCrew: false,
+    castCharacterShadows: false,
+    drawBloom: true,
+    drawVignette: true,
+    drawLut: true,
+    drawSsao: false,
+    drawDof: false,
+  },
+  low: {
+    drawBuildings: true,
+    drawClouds: false,
+    castBuildingShadows: false,
+    drawCrew: true,
+    castCharacterShadows: false,
+    drawBloom: true,
+    drawVignette: true,
+    drawLut: true,
+    drawSsao: false,
+    drawDof: false,
+  },
+  medium: {
+    drawBuildings: true,
+    drawClouds: true,
+    castBuildingShadows: true,
+    drawCrew: true,
+    castCharacterShadows: true,
+    drawBloom: true,
+    drawVignette: true,
+    drawLut: true,
+    drawSsao: false,
+    drawDof: false,
+  },
+  high: {
+    drawBuildings: true,
+    drawClouds: true,
+    castBuildingShadows: true,
+    drawCrew: true,
+    castCharacterShadows: true,
+    drawBloom: true,
+    drawVignette: true,
+    drawLut: true,
+    drawSsao: true,
+    drawDof: false,
+  },
+  'extra-high': {
+    drawBuildings: true,
+    drawClouds: true,
+    castBuildingShadows: true,
+    drawCrew: true,
+    castCharacterShadows: true,
+    drawBloom: true,
+    drawVignette: true,
+    drawLut: true,
+    drawSsao: true,
+    drawDof: true,
+  },
 };
 
 export const tierCapsFor = (tier: string | undefined): BuildingTierCaps => {

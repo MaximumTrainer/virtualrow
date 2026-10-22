@@ -36,6 +36,7 @@ const BYTES_PER_PIXEL: Record<string, number> = {
   'rgba8unorm': 4,
   'rgba8unorm-srgb': 4,
   'bgra8unorm': 4,
+  'rgba16float': 8,
   'bc7-rgba-unorm': 1,
   'bc7-rgba-unorm-srgb': 1,
 };

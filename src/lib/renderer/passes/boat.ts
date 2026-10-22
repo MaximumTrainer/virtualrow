@@ -158,7 +158,7 @@ export const createBoatPass = (opts: BoatPassOptions): BoatPass => {
       ],
     },
     primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
-    depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth24plus' },
+    depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth32float' },
   });
 
   const frameBindGroup = device.createBindGroup({
