@@ -24,8 +24,18 @@ import {
   createSceneryDepthPoolBindGroup,
   type SceneryDepthPipeline,
 } from '../passes/sceneryDepth';
+import {
+  createBuildingsDepthPipeline,
+  createBuildingsDepthPoolBindGroup,
+  type BuildingsDepthPipeline,
+} from '../passes/buildingsDepth';
+import { createCharactersDepthPipeline, type CharactersDepthPipeline } from '../passes/charactersDepth';
+import type { BoatPass } from '../passes/boat';
 import type { InstancePool } from '../plan/instancePools';
+import type { BuildingPool } from '../plan/buildings';
+import type { BoatMeshBuffers } from '../plan/boatMesh';
 import type { Mat4 } from '../math/mat4';
+import { BUILDINGS_VERTEX_COUNT } from '../passes/buildings';
 
 export interface ShadowFramePayload {
   cascades: { viewProj: Mat4 }[];
@@ -46,6 +56,8 @@ export interface ShadowStage extends Pass {
   readonly atlas: ShadowAtlas;
   readonly bank: BankDepthPipeline;
   readonly scenery: SceneryDepthPipeline;
+  readonly buildings: BuildingsDepthPipeline;
+  readonly characters: CharactersDepthPipeline | null;
   readonly payload: ShadowFramePayload;
   readonly telemetry: ShadowTelemetry;
 }
@@ -54,6 +66,19 @@ export interface ShadowStageOptions {
   device: GPUDevice;
   atlas: ShadowAtlas;
   scenePools: readonly InstancePool[];
+  /**
+   * Building pool to cast shadows into the atlas. `null` turns the
+   * buildings depth path off (#566 D4-c: `basic` / `low` tiers skip the
+   * cast). Lit `buildings` pass still receives shadows via `sampleShadow`.
+   */
+  buildingsPool: BuildingPool | null;
+  /**
+   * Characters depth cast (#570 D7). `null` skips the pass entirely
+   * (`basic` / `low` tiers per D7-c). When present the pass pulls the
+   * boat mesh + the per-draw `boat` / `ghost` uniform bind groups.
+   */
+  charactersMesh?: BoatMeshBuffers | null;
+  boatPass?: BoatPass | null;
   telemetry: ShadowTelemetry;
 }
 
@@ -62,14 +87,20 @@ const CASCADE_UNIFORM_BYTES = 64;
 export const createShadowStage = (
   opts: ShadowStageOptions,
 ): ShadowStage => {
-  const { device, atlas, scenePools, telemetry } = opts;
+  const { device, atlas, scenePools, buildingsPool, charactersMesh, boatPass, telemetry } = opts;
   const bank = createBankDepthPipeline(device);
   const scenery = createSceneryDepthPipeline(device);
+  const buildings = createBuildingsDepthPipeline(device);
+  const characters = charactersMesh ? createCharactersDepthPipeline(device, charactersMesh) : null;
 
   const bankCascadeBuffers: GPUBuffer[] = [];
   const bankCascadeBindGroups: GPUBindGroup[] = [];
   const sceneryCascadeBuffers: GPUBuffer[] = [];
   const sceneryCascadeBindGroups: GPUBindGroup[] = [];
+  const buildingsCascadeBuffers: GPUBuffer[] = [];
+  const buildingsCascadeBindGroups: GPUBindGroup[] = [];
+  const charactersCascadeBuffers: GPUBuffer[] = [];
+  const charactersCascadeBindGroups: GPUBindGroup[] = [];
   for (let i = 0; i < atlas.cascades; i++) {
     const bankBuf = device.createBuffer({
       label: `bankDepth-cascade:${i}`,
@@ -97,7 +128,55 @@ export const createShadowStage = (
         entries: [{ binding: 0, resource: { buffer: sceneBuf } }],
       }),
     );
+    const buildBuf = device.createBuffer({
+      label: `buildingsDepth-cascade:${i}`,
+      size: CASCADE_UNIFORM_BYTES,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    buildingsCascadeBuffers.push(buildBuf);
+    buildingsCascadeBindGroups.push(
+      device.createBindGroup({
+        label: `buildingsDepth-cascade:${i}:bg`,
+        layout: buildings.cascadeLayout,
+        entries: [{ binding: 0, resource: { buffer: buildBuf } }],
+      }),
+    );
+    if (characters) {
+      const charBuf = device.createBuffer({
+        label: `charactersDepth-cascade:${i}`,
+        size: CASCADE_UNIFORM_BYTES,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      charactersCascadeBuffers.push(charBuf);
+      charactersCascadeBindGroups.push(
+        device.createBindGroup({
+          label: `charactersDepth-cascade:${i}:bg`,
+          layout: characters.cascadeLayout,
+          entries: [{ binding: 0, resource: { buffer: charBuf } }],
+        }),
+      );
+    }
   }
+  const charactersBoatBindGroup = characters && boatPass
+    ? device.createBindGroup({
+        label: 'charactersDepth-boat-bg',
+        layout: characters.drawLayout,
+        entries: [
+          { binding: 0, resource: { buffer: boatPass.boat.uniforms } },
+          { binding: 1, resource: { buffer: boatPass.boat.skin } },
+        ],
+      })
+    : null;
+  const charactersGhostBindGroup = characters && boatPass
+    ? device.createBindGroup({
+        label: 'charactersDepth-ghost-bg',
+        layout: characters.drawLayout,
+        entries: [
+          { binding: 0, resource: { buffer: boatPass.ghost.uniforms } },
+          { binding: 1, resource: { buffer: boatPass.ghost.skin } },
+        ],
+      })
+    : null;
 
   const sceneryPoolBindGroups = scenePools.map((pool) =>
     createSceneryDepthPoolBindGroup(device, scenery.poolLayout, {
@@ -106,6 +185,12 @@ export const createShadowStage = (
       speciesIndex: pool.speciesIndex,
     }),
   );
+  const buildingsPoolBindGroup = buildingsPool
+    ? createBuildingsDepthPoolBindGroup(device, buildings.poolLayout, {
+        centresBuffer: buildingsPool.centresBuffer,
+        sizesBuffer: buildingsPool.sizesBuffer,
+      })
+    : null;
 
   const atlasView = atlas.view;
   const uniformScratch = new Float32Array(16);
@@ -121,6 +206,8 @@ export const createShadowStage = (
     atlas,
     bank,
     scenery,
+    buildings,
+    characters,
     payload,
     telemetry,
     encode(ctx: FrameContext) {
@@ -142,6 +229,20 @@ export const createShadowStage = (
           0,
           uniformScratch as BufferSource,
         );
+        if (buildingsPoolBindGroup) {
+          ctx.device.queue.writeBuffer(
+            buildingsCascadeBuffers[i],
+            0,
+            uniformScratch as BufferSource,
+          );
+        }
+        if (characters && charactersCascadeBuffers[i]) {
+          ctx.device.queue.writeBuffer(
+            charactersCascadeBuffers[i],
+            0,
+            uniformScratch as BufferSource,
+          );
+        }
       }
 
       let drawCount = 0;
@@ -180,6 +281,34 @@ export const createShadowStage = (
           triangleCount += (12 / 3) * pool.instanceCount;
         }
 
+        if (buildingsPoolBindGroup && buildingsPool && buildingsPool.instanceCount > 0) {
+          pass.setPipeline(buildings.pipeline);
+          pass.setBindGroup(0, buildingsCascadeBindGroups[i]);
+          pass.setBindGroup(1, buildingsPoolBindGroup);
+          pass.draw(BUILDINGS_VERTEX_COUNT, buildingsPool.instanceCount);
+          drawCount += 1;
+          triangleCount += (BUILDINGS_VERTEX_COUNT / 3) * buildingsPool.instanceCount;
+        }
+
+        if (characters && boatPass) {
+          pass.setPipeline(characters.pipeline);
+          pass.setBindGroup(0, charactersCascadeBindGroups[i]);
+          pass.setVertexBuffer(0, characters.positions);
+          pass.setIndexBuffer(characters.indices, 'uint16');
+          if (boatPass.boatVisible.value && charactersBoatBindGroup) {
+            pass.setBindGroup(1, charactersBoatBindGroup);
+            pass.drawIndexed(characters.indexCount);
+            drawCount += 1;
+            triangleCount += characters.indexCount / 3;
+          }
+          if (boatPass.ghostVisible.value && charactersGhostBindGroup) {
+            pass.setBindGroup(1, charactersGhostBindGroup);
+            pass.drawIndexed(characters.indexCount);
+            drawCount += 1;
+            triangleCount += characters.indexCount / 3;
+          }
+        }
+
         pass.end();
       }
 
@@ -195,8 +324,12 @@ export const createShadowStage = (
       disposed = true;
       for (const b of bankCascadeBuffers) b.destroy();
       for (const b of sceneryCascadeBuffers) b.destroy();
+      for (const b of buildingsCascadeBuffers) b.destroy();
+      for (const b of charactersCascadeBuffers) b.destroy();
       bank.dispose();
       scenery.dispose();
+      buildings.dispose();
+      characters?.dispose();
     },
   };
 };

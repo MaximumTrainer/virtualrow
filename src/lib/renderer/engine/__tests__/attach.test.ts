@@ -69,13 +69,14 @@ describe('attach', () => {
     expect(renderer).toBeNull();
   });
 
-  it('runs the full four-pass graph on every frame', async () => {
+  it('runs the full colour-pass graph on every frame', async () => {
     const canvas = makeMockCanvas();
     const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
-    // sky, bank, scenery, floraSolid, water (#562 FR5)
-    expect(renderer._telemetry.renderStats.draws).toBe(5);
+    // sky, clouds, bank, buildings, scenery, floraSolid, water, boat
+    // (#566 added clouds + buildings on medium+; #570 added boat).
+    expect(renderer._telemetry.renderStats.draws).toBe(8);
     renderer.dispose();
   });
 

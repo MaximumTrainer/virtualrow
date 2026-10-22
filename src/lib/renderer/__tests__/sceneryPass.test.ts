@@ -50,6 +50,7 @@ const makeFrameCtx = (
     device,
     encoder,
     swapView: {} as GPUTextureView,
+    outputView: {} as GPUTextureView,
     depthView: {} as GPUTextureView,
     width: 320,
     height: 240,

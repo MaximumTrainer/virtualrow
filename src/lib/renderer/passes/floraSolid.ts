@@ -69,7 +69,7 @@ export const createFloraSolidSignature = (
       ],
     },
     primitive: { topology: 'triangle-list', cullMode: 'back' },
-    depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth24plus' },
+    depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth32float' },
   });
   let disposed = false;
   return {

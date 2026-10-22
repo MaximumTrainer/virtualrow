@@ -97,6 +97,19 @@ export const mat4LookAt = (out: Mat4, eye: Vec3, center: Vec3, up: Vec3): Mat4 =
   return out;
 };
 
+export const mat4FromRotationY = (out: Mat4, radians: number): Mat4 => {
+  const c = Math.cos(radians);
+  const s = Math.sin(radians);
+  out.fill(0);
+  out[0] = c;
+  out[2] = -s;
+  out[5] = 1;
+  out[8] = s;
+  out[10] = c;
+  out[15] = 1;
+  return out;
+};
+
 export const mat4Multiply = (out: Mat4, a: Mat4, b: Mat4): Mat4 => {
   const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
   const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];

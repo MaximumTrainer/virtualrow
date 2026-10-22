@@ -21,7 +21,7 @@ export const createSkyPass = ({ device, format, frameUniforms }: SkyPassOptions)
     depthStencil: {
       depthWriteEnabled: false,
       depthCompare: 'always',
-      format: 'depth24plus',
+      format: 'depth32float',
     },
   });
   const bindGroup = device.createBindGroup({

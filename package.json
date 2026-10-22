@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:assets": "node scripts/compress-scenery.mjs && node scripts/generate-scenery-manifest.mjs",
+    "build:boat-mesh": "node scripts/build-boat-mesh.mjs",
     "build:flora-atlas": "node scripts/build-flora-atlas.mjs && node scripts/build-ktx2.mjs",
     "lint": "eslint .",
     "preview": "vite preview",

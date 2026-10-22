@@ -12,13 +12,23 @@
 
 /// <reference types="@webgpu/types" />
 
-import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective } from '../math/mat4';
+import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY } from '../math/mat4';
 import { vec3 } from '../math/vec3';
 import { createBankPass } from '../passes/bank';
+import { createBoatPass } from '../passes/boat';
+import { createBuildingsPass } from '../passes/buildings';
+import { createCloudsPass } from '../passes/clouds';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
+import { createBuildingPool, type BuildingPool, type BuildingSpec } from '../plan/buildings';
+import { BOAT_BONE_COUNT, BOAT_BONE_ARMS, BOAT_BONE_HEAD, BOAT_BONE_HULL, BOAT_BONE_TORSO } from '../plan/boatMesh';
+import { loadBoatMesh } from '../plan/boatMeshLoader';
 import { computeCascades } from './cascadedShadows';
+import { createPlacement, placeBoat, placeGhost, strokePhase, strokeAmplitude } from './characterPlacement';
+import type { RideFrame } from './rideFrame';
+import { RouteCurve } from '../math/curve';
+import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
 import { createSceneryCuller } from '../passes/sceneryCull';
@@ -31,7 +41,9 @@ import { publishFallback } from './health';
 import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
-import { createTelemetry, releaseTelemetry, type TelemetryHandles } from './telemetry';
+import { tierCapsFor } from './tierCaps';
+import { createTelemetry, publishSpeedMps, releaseTelemetry, type TelemetryHandles } from './telemetry';
+import { createPostFx, type PostFxCaps } from './postFx';
 import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
@@ -55,6 +67,23 @@ export interface RideRenderer {
  */
 export interface SceneryRoute {
   pools: PoolInput[];
+  /**
+   * Extruded OSM building footprints to draw as prisms (#566 FR1). Absent
+   * on a route with no mapped buildings — the engine then skips the
+   * `BuildingsPass` and leaves the sky + clouds + scenery as the only
+   * horizon. The engine does not call back into enrichment itself; the
+   * UI shell is expected to extrude footprints before passing the route
+   * (D1-b).
+   */
+  buildings?: BuildingSpec[];
+  /**
+   * Points of the route curve in world space (#570 D6). Absent on the
+   * smoke pages — the engine falls back to a short straight-line curve so
+   * the boat still has a route to run on.
+   */
+  curvePoints?: readonly [number, number, number][];
+  /** Metres represented by the full curve (defaults to the chord length). */
+  totalDistanceMeters?: number;
 }
 
 export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
@@ -64,6 +93,13 @@ export type RideAttachOpts = {
   tier?: string;
   route?: unknown;
   testMode?: boolean;
+  /**
+   * Per-frame data from the UI shell (#570 FR7). Optional — the smoke
+   * pages pass no frame and the engine falls back to a canned chase
+   * camera. The engine never caches a `RideFrame`; it calls `getFrame`
+   * once per rendered frame and reads the returned object.
+   */
+  getFrame?: () => RideFrame;
 };
 
 export type RideAttach = (
@@ -109,20 +145,34 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     return null;
   }
 
-  const format: GPUTextureFormat =
+  const outputFormat: GPUTextureFormat =
     (navigator as unknown as { gpu?: GPU }).gpu?.getPreferredCanvasFormat?.() ?? 'bgra8unorm';
-  context.configure({ device, format, alphaMode: 'opaque' });
+  context.configure({ device, format: outputFormat, alphaMode: 'opaque' });
+  // #573 P8 — the lit passes render into an HDR offscreen target; PostFxPass
+  // composites to the real swap-chain. The `format` prop every lit pass takes
+  // is this HDR format; `outputFormat` is only used by the composite + DOF
+  // target configs inside PostFxPass.
+  const format: GPUTextureFormat = 'rgba16float';
 
   let width = Math.max(1, Math.floor(canvas.clientWidth || canvas.width || 320));
   let height = Math.max(1, Math.floor(canvas.clientHeight || canvas.height || 240));
   canvas.width = width;
   canvas.height = height;
 
+  // Scene HDR colour target (#573 FR1 / D1-a).
+  let sceneTexture = device.createTexture({
+    label: 'scene-hdr',
+    size: { width, height },
+    format,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+  });
+
+  // Depth is `depth32float` from P8 so SSAO + DOF can sample it (#573 FR9).
   let depthTexture = device.createTexture({
     label: 'depth',
     size: { width, height },
-    format: 'depth24plus',
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    format: 'depth32float',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
   });
 
   const frameUniforms = createFrameUniformBuffer(device);
@@ -165,6 +215,25 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   // D7-a of #555: wire the scenery pass unconditionally.
   const sceneryPoolInputs: PoolInput[] = isSceneryRoute(opts.route) ? opts.route.pools : [];
   const scenePools: InstancePool[] = sceneryPoolInputs.map((input) => createInstancePool(device, input));
+
+  // #566 P6 — buildings pool. Per D5-b we skip the pool entirely when the
+  // route carries no `buildings`, which is what happens for a fallback
+  // enrichment. Tier gates then decide whether to build the pass + cast
+  // shadows (D8).
+  const tierCaps = tierCapsFor(opts.tier);
+  const buildingSpecs: BuildingSpec[] =
+    tierCaps.drawBuildings && isSceneryRoute(opts.route) && opts.route.buildings
+      ? opts.route.buildings
+      : [];
+  const buildingsPool: BuildingPool | null = buildingSpecs.length > 0
+    ? createBuildingPool(device, buildingSpecs)
+    : null;
+  const buildingsCastingPool = tierCaps.castBuildingShadows ? buildingsPool : null;
+  telemetry.buildings.routes = buildingsPool ? 1 : 0;
+  telemetry.buildings.pool = buildingsPool?.instanceCount ?? 0;
+  telemetry.buildings.footprintM2 = buildingsPool?.footprintM2 ?? 0;
+  telemetry.buildings.resident = !!buildingsPool;
+  telemetry.buildings.cast = !!buildingsCastingPool;
   const sceneryPass = createSceneryPass({
     device,
     format,
@@ -198,6 +267,17 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     });
   }
 
+  // #570 P7 D1-b — prefer the baked `shell.bin` buffer from
+  // `scripts/build-boat-mesh.mjs`; the procedural generator in `boatMesh.ts`
+  // is the deterministic fallback for SSR, tests, and fetch failures so the
+  // smoke silhouette is identical either way. Telemetry carries which path
+  // won on `__ROWER3D_BOAT.meshSource`.
+  const boatMeshHandle = await loadBoatMesh({ url: assetUrl('/assets/boat/shell.bin') });
+  const boatMesh = boatMeshHandle.mesh;
+  telemetry.boat.meshSource = boatMeshHandle.source;
+  const boatPass = createBoatPass({ device, format, frameUniforms, mesh: boatMesh });
+  const charactersMesh = tierCaps.castCharacterShadows ? boatMesh : null;
+
   // Shadow stage before anything lit draws. Its own telemetry writes
   // into `telemetry.shadows` so the per-tile atlas size + per-cascade
   // draw count are visible on `window.__ROWER3D_SHADOWS`.
@@ -206,6 +286,9 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     device,
     atlas,
     scenePools,
+    buildingsPool: buildingsCastingPool,
+    charactersMesh,
+    boatPass,
     telemetry: shadowTelemetry,
   });
 
@@ -219,15 +302,57 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   };
   const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
   const waterPass = createWaterPass({ device, format, frameUniforms, shadow: shadowResources });
+  const buildingsPass = createBuildingsPass({
+    device,
+    format,
+    frameUniforms,
+    shadow: shadowResources,
+    pool: buildingsPool,
+    telemetry: telemetry.buildings,
+  });
+  // Clouds draw after the sky and before the lit passes so the sky's clear
+  // is still in place and lit depth writes compose over cloud alpha.
+  const cloudsPass = tierCaps.drawClouds
+    ? createCloudsPass({ device, format, frameUniforms })
+    : null;
 
-  // Pass order: shadowStage → sky → bank → scenery → floraSolid → water.
+  // #573 P8 — PostFx. Reads the HDR scene + depth; writes to the swap-chain.
+  const postCaps: PostFxCaps = {
+    bloom: tierCaps.drawBloom,
+    tone: true,
+    vignette: tierCaps.drawVignette,
+    lut: tierCaps.drawLut,
+    ssao: tierCaps.drawSsao,
+    dof:
+      tierCaps.drawDof &&
+      !!(globalThis as unknown as { window?: { __VIRTUALROW_POSTFX_DOF?: boolean } }).window
+        ?.__VIRTUALROW_POSTFX_DOF,
+  };
+  const postFx = createPostFx({ device, sceneFormat: format, outputFormat, caps: postCaps });
+  postFx.setInputs({
+    sceneView: sceneTexture.createView(),
+    sceneTexture,
+    depthView: depthTexture.createView(),
+    width,
+    height,
+  });
+
+  // Pass order (#570 extends #566; #573 appends post-fx): shadowStage → sky
+  // → clouds? → bank → buildings → scenery → floraSolid → water → boat →
+  // postFx. The lit passes write to the HDR offscreen (`ctx.swapView` is the
+  // scene texture view). PostFx reads the HDR scene + depth and composites
+  // to `ctx.outputView` (the real swap-chain back-buffer).
   const passes: Pass[] = [
     shadowStage,
     createSkyPass({ device, format, frameUniforms }),
+    ...(cloudsPass ? [cloudsPass] : []),
     bankPass,
+    buildingsPass,
     sceneryPass,
     floraSolidStage,
     waterPass,
+    boatPass,
+    postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
 
@@ -240,6 +365,41 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     fog: new Float32Array([0.001, 0.0005, 0, 0]),
     time: 0,
   };
+
+  // Route curve for boat / ghost placement. On a smoke page without a
+  // route this is a 200 m straight line heading −z so the engine still
+  // has a curve to sample (`placeBoat` falls back to origin when the
+  // curve is null, which it never is here).
+  const curvePoints: readonly [number, number, number][] = (() => {
+    if (isSceneryRoute(opts.route) && opts.route.curvePoints && opts.route.curvePoints.length >= 2) {
+      return opts.route.curvePoints;
+    }
+    return [
+      [0, 0, 0],
+      [0, 0, -200],
+    ];
+  })();
+  const curveVec3Points = curvePoints.map(([x, y, z]) => vec3(x, y, z));
+  const routeCurve = new RouteCurve(curveVec3Points, false);
+  const curveLength = routeCurve.approximateLength(32);
+  const totalDistanceMeters =
+    isSceneryRoute(opts.route) && typeof opts.route.totalDistanceMeters === 'number'
+      ? Math.max(1, opts.route.totalDistanceMeters)
+      : Math.max(1, curveLength);
+  telemetry.route.hasCurve = true;
+  telemetry.route.totalDistance = totalDistanceMeters;
+  telemetry.route.curveLength = curveLength;
+
+  const boatPlacement = createPlacement();
+  const ghostPlacement = createPlacement();
+  const boatBones = [mat4(), mat4(), mat4(), mat4()];
+  const ghostBones = [mat4(), mat4(), mat4(), mat4()];
+  for (let i = 0; i < BOAT_BONE_COUNT; i++) {
+    mat4Identity(boatBones[i]);
+    mat4Identity(ghostBones[i]);
+  }
+  const BOAT_TINT = new Float32Array([0.78, 0.78, 0.82, 1.0]);
+  const GHOST_TINT = new Float32Array([0.35, 0.85, 1.0, 0.5]);
 
   const start = now();
   let rafId: number | null = null;
@@ -257,15 +417,139 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     depthTexture = device.createTexture({
       label: 'depth',
       size: { width: w, height: h },
-      format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      format: 'depth32float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    sceneTexture.destroy();
+    sceneTexture = device.createTexture({
+      label: 'scene-hdr',
+      size: { width: w, height: h },
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    postFx.setInputs({
+      sceneView: sceneTexture.createView(),
+      sceneTexture,
+      depthView: depthTexture.createView(),
+      width: w,
+      height: h,
     });
   };
+
+  // Per-frame boat speed is derived from the distanceMeters delta, so the
+  // frame loop keeps the previous reading across calls.
+  let lastDistanceMeters = 0;
+  let lastSpeedTime = -1;
 
   const frameOnce = (): void => {
     if (disposed) return;
     resize();
     frame.time = (now() - start) / 1000;
+
+    // #570 P7 — if the UI shell provided `getFrame`, pull the ride state.
+    const rideFrame: RideFrame | null = opts.getFrame ? opts.getFrame() : null;
+
+    // Boat + ghost placement, run before the camera so the chase camera can
+    // follow the boat on later phases (P7 keeps the canned camera; the
+    // follow-camera lands in #556).
+    placeBoat(boatPlacement, routeCurve, rideFrame, totalDistanceMeters, curveLength, 0);
+    const ghostInfo = placeGhost(
+      ghostPlacement,
+      routeCurve,
+      rideFrame?.ghost ?? null,
+      rideFrame?.elapsedSeconds ?? frame.time,
+      totalDistanceMeters,
+      curveLength,
+      -GHOST_LANE_OFFSET_M,
+    );
+
+    // Analytic sinusoid stroke driver (D3-a). Hull bone stays identity so
+    // the hull itself does not sway; torso / arms / head rotate about the
+    // seat with the stroke phase. Oar feather uses rotation.x in YXZ (D4-a)
+    // which we apply on the arms bone directly.
+    const phase = strokePhase(rideFrame?.cadence ?? 0, frame.time, rideFrame?.isPlaying ?? false);
+    const amp = strokeAmplitude(rideFrame);
+    // Simple torso-lean + arm-pull sinusoid; keep amplitudes small so the
+    // crew visibly moves at tier basic without looking cartoonish.
+    const torsoLean = Math.sin(phase * Math.PI * 2) * 0.35 * amp;
+    const armPull = Math.sin(phase * Math.PI * 2 + 0.5) * 0.6 * amp;
+    const headNod = Math.sin(phase * Math.PI * 2) * 0.1 * amp;
+    mat4Identity(boatBones[BOAT_BONE_HULL]);
+    mat4FromRotationY(boatBones[BOAT_BONE_TORSO], torsoLean);
+    mat4FromRotationY(boatBones[BOAT_BONE_ARMS], armPull);
+    mat4FromRotationY(boatBones[BOAT_BONE_HEAD], headNod);
+    // Ghost stays rigid: its purpose is a silhouette to chase.
+    for (let i = 0; i < BOAT_BONE_COUNT; i++) mat4Identity(ghostBones[i]);
+
+    // Upload boat / ghost uniforms. Visibility: crew-casting + crew drawing
+    // are tier-gated inside `boatPass.boatVisible` isn't the right lever
+    // (that silences the hull too); the crew bone trio stays identity when
+    // `tierCaps.drawCrew === false`, so basic's "no crew" is "frozen crew"
+    // rather than invisible — the hull still draws.
+    if (!tierCaps.drawCrew) {
+      mat4Identity(boatBones[BOAT_BONE_TORSO]);
+      mat4Identity(boatBones[BOAT_BONE_ARMS]);
+      mat4Identity(boatBones[BOAT_BONE_HEAD]);
+    }
+    boatPass.boatVisible.value = true;
+    boatPass.ghostVisible.value = ghostInfo !== null;
+    boatPass.boat.write(device, {
+      model: boatPlacement.modelMatrix,
+      bones: boatBones,
+      tintRGBA: BOAT_TINT,
+      ghost: false,
+      visible: true,
+    });
+    if (ghostInfo) {
+      boatPass.ghost.write(device, {
+        model: ghostPlacement.modelMatrix,
+        bones: ghostBones,
+        tintRGBA: GHOST_TINT,
+        ghost: true,
+        visible: true,
+      });
+    }
+
+    // Publish telemetry for the HUD / specs.
+    telemetry.boat.x = boatPlacement.world[0];
+    telemetry.boat.y = boatPlacement.world[1];
+    telemetry.boat.z = boatPlacement.world[2];
+    telemetry.boat.heading = boatPlacement.heading;
+    telemetry.boat.distanceMeters = boatPlacement.distanceMeters;
+    telemetry.boat.progress = boatPlacement.progress;
+    telemetry.boat.holding = !!rideFrame?.holdBoat;
+    telemetry.boat.finished = !!rideFrame?.finished;
+    telemetry.boat.isPlaying = !!rideFrame?.isPlaying;
+
+    // Boat speed (m/s): the world-scale spec reads __ROWER3D_SPEED_MPS. Compute
+    // from the distanceMeters delta divided by frame time; hold at 0 while the
+    // boat is paused or in countdown so the scalar stays flat.
+    let speedMps = 0;
+    if (!telemetry.boat.holding && !telemetry.boat.finished && telemetry.boat.isPlaying) {
+      if (lastSpeedTime >= 0) {
+        const dt = Math.max(1e-3, frame.time - lastSpeedTime);
+        const dd = telemetry.boat.distanceMeters - lastDistanceMeters;
+        speedMps = Math.max(0, dd / dt);
+      }
+    }
+    lastDistanceMeters = telemetry.boat.distanceMeters;
+    lastSpeedTime = frame.time;
+    publishSpeedMps(telemetry, speedMps);
+    telemetry.pos.x = boatPlacement.world[0];
+    telemetry.pos.y = boatPlacement.world[1];
+    telemetry.pos.z = boatPlacement.world[2];
+    telemetry.pos.progress = boatPlacement.progress;
+    telemetry.crew.cadenceSpm = Math.max(0, rideFrame?.cadence ?? 0);
+    telemetry.crew.strokePhase = phase;
+    telemetry.crew.amplitude = amp;
+    telemetry.crew.rowers = 1;
+    if (ghostInfo) {
+      telemetry.ghostMeters.value = ghostInfo.metres;
+      telemetry.ghostMeters.active = true;
+    } else {
+      telemetry.ghostMeters.value = 0;
+      telemetry.ghostMeters.active = false;
+    }
 
     // Build view / proj. Chase camera at a canned offset above the strip.
     const eye = vec3(0, 2.6, 7);
@@ -315,15 +599,28 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     device.queue.writeBuffer(shadowUniformsBuf, 0, shadowScratch as BufferSource);
     telemetry.shadows.lastSplits = Array.from(computed.splits);
 
-    const swapView = context.getCurrentTexture().createView();
+    // Lit passes write to the HDR scene view; PostFx composites to the
+    // real swap-chain back-buffer (#573 P8 FR1 + FR2).
+    const outputView = context.getCurrentTexture().createView();
+    const sceneView = sceneTexture.createView();
     const depthView = depthTexture.createView();
-    graph.run(device, swapView, depthView, width, height, frame);
+    graph.run(device, sceneView, depthView, width, height, frame, outputView);
 
     telemetry.frameStats.frame += 1;
     telemetry.frameStats.dtMs = 0;
-    telemetry.renderStats.draws = graph.passes.filter(
-      (p) => !p.name.startsWith('shadow'),
-    ).length;
+    // Count scene colour passes as they encode: skip the shadow stage, skip
+    // the boat pass if neither boat nor ghost drew this frame, and skip the
+    // post-fx stage (its own sub-pass count is tracked internally; the
+    // scene `draws` number must stay the "N lit passes" invariant that
+    // existing specs assert).
+    let draws = 0;
+    for (const p of graph.passes) {
+      if (p.name.startsWith('shadow')) continue;
+      if (p.name === 'postfx') continue;
+      if (p.name === 'boat' && !boatPass.boatVisible.value && !boatPass.ghostVisible.value) continue;
+      draws += 1;
+    }
+    telemetry.renderStats.draws = draws;
     telemetry.renderStats.sceneryDraws = telemetry.scenery.drawCount;
     telemetry.renderStats.sceneryDispatch = telemetry.scenery.dispatchCount;
     telemetry.renderStats.sceneryTriangles =
@@ -418,7 +715,10 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       for (const pool of scenePools) {
         pool.dispose();
       }
+      buildingsPool?.dispose();
       floraSolidCuller.dispose();
+      postFx.dispose();
+      sceneTexture.destroy();
       depthTexture.destroy();
       frameUniforms.destroy();
       shadowUniformsBuf.destroy();
