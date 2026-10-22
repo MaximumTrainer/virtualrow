@@ -70,6 +70,47 @@ describe('shadowStage (#566 P6 — buildings cast through the same atlas)', () =
     stage.dispose();
   });
 
+  it('wires a charactersDepth path when a mesh + boat pass are passed in (#570 D7)', async () => {
+    const device = makeMockDevice();
+    const atlas = makeAtlasOnMock(device);
+    const { buildBoatMesh } = await import('../../plan/boatMesh');
+    const { createBoatPass } = await import('../../passes/boat');
+    const frameUniforms = device.createBuffer({
+      size: 256,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const mesh = buildBoatMesh();
+    const boatPass = createBoatPass({ device, format: 'bgra8unorm', frameUniforms, mesh });
+    const stage = createShadowStage({
+      device,
+      atlas,
+      scenePools: [],
+      buildingsPool: null,
+      charactersMesh: mesh,
+      boatPass,
+      telemetry: emptyTelemetry(),
+    });
+    expect(stage.characters).not.toBeNull();
+    stage.dispose();
+    boatPass.dispose();
+  });
+
+  it('skips the characters path when no mesh is passed (#570 D7-c basic/low)', () => {
+    const device = makeMockDevice();
+    const atlas = makeAtlasOnMock(device);
+    const stage = createShadowStage({
+      device,
+      atlas,
+      scenePools: [],
+      buildingsPool: null,
+      charactersMesh: null,
+      boatPass: null,
+      telemetry: emptyTelemetry(),
+    });
+    expect(stage.characters).toBeNull();
+    stage.dispose();
+  });
+
   it('accepts a buildings pool and includes it in the cast when armed', () => {
     const device = makeMockDevice();
     const atlas = makeAtlasOnMock(device);

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTelemetry, releaseTelemetry } from '../telemetry';
+import { createTelemetry, publishSpeedMps, releaseTelemetry } from '../telemetry';
 
 type Win = typeof window & {
-  __ROWER3D_RENDER_STATS?: unknown;
+  __ROWER3D_RENDER_STATS?: { draws: number; drawCalls: number } | unknown;
   __ROWER3D_FRAME_STATS?: unknown;
   __ROWER3D_CAMERA?: unknown;
   __ROWER3D_CONTEXT_STATE?: unknown;
@@ -14,6 +14,7 @@ type Win = typeof window & {
   __ROWER3D_FOLIAGE?: unknown;
   __ROWER3D_SCENERY?: unknown;
   __ROWER3D_BUILDINGS?: unknown;
+  __ROWER3D_SPEED_MPS?: number;
 };
 
 afterEach(() => {
@@ -95,5 +96,27 @@ describe('telemetry', () => {
     expect(w.__ROWER3D_FOLIAGE).toBeUndefined();
     expect(w.__ROWER3D_SCENERY).toBeUndefined();
     expect(w.__ROWER3D_BUILDINGS).toBeUndefined();
+    expect(w.__ROWER3D_SPEED_MPS).toBeUndefined();
+  });
+
+  it('__ROWER3D_RENDER_STATS.drawCalls aliases .draws (legacy spec harness)', () => {
+    const handles = createTelemetry(() => undefined);
+    const stats = handles.renderStats as { draws: number; drawCalls: number };
+    expect(stats.drawCalls).toBe(0);
+    stats.draws = 42;
+    expect(stats.drawCalls).toBe(42);
+    const published = (window as Win).__ROWER3D_RENDER_STATS as { drawCalls: number };
+    expect(published.drawCalls).toBe(42);
+  });
+
+  it('publishSpeedMps writes the scalar to window.__ROWER3D_SPEED_MPS', () => {
+    const handles = createTelemetry(() => undefined);
+    const w = window as Win;
+    expect(w.__ROWER3D_SPEED_MPS).toBe(0);
+    publishSpeedMps(handles, 4.25);
+    expect(w.__ROWER3D_SPEED_MPS).toBe(4.25);
+    expect(handles.speed.value).toBe(4.25);
+    publishSpeedMps(handles, 0);
+    expect(w.__ROWER3D_SPEED_MPS).toBe(0);
   });
 });

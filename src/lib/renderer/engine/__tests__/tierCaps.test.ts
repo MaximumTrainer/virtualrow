@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { tierCapsFor } from '../tierCaps';
 
-describe('tierCaps (P6 D8)', () => {
-  it('basic draws neither buildings nor clouds, no cast', () => {
+describe('tierCaps (P6 D8 + P7 D9)', () => {
+  it('basic draws neither buildings nor clouds, no cast, no crew', () => {
     expect(tierCapsFor('basic')).toEqual({
       drawBuildings: false,
       drawClouds: false,
       castBuildingShadows: false,
+      drawCrew: false,
+      castCharacterShadows: false,
     });
   });
 
-  it('low draws buildings but no clouds and no cast', () => {
+  it('low draws buildings + crew but no clouds and no cast', () => {
     expect(tierCapsFor('low')).toEqual({
       drawBuildings: true,
       drawClouds: false,
       castBuildingShadows: false,
+      drawCrew: true,
+      castCharacterShadows: false,
     });
   });
 
@@ -23,6 +27,8 @@ describe('tierCaps (P6 D8)', () => {
       drawBuildings: true,
       drawClouds: true,
       castBuildingShadows: true,
+      drawCrew: true,
+      castCharacterShadows: true,
     });
   });
 
@@ -31,6 +37,8 @@ describe('tierCaps (P6 D8)', () => {
       drawBuildings: true,
       drawClouds: true,
       castBuildingShadows: true,
+      drawCrew: true,
+      castCharacterShadows: true,
     });
   });
 
@@ -39,6 +47,8 @@ describe('tierCaps (P6 D8)', () => {
       drawBuildings: true,
       drawClouds: true,
       castBuildingShadows: true,
+      drawCrew: true,
+      castCharacterShadows: true,
     });
   });
 
