@@ -145,6 +145,23 @@ describe('RideSessionStore', () => {
     teardown();
   });
 
+  it('feeds a simulated PM5 frame from the debug panel into the session', () => {
+    const { ride, session, deps } = setup();
+    const teardown = ride.init();
+    session.sessionActive = true;
+
+    const stop = $effect.root(() => {
+      ride.onSimulatedData(packet({ distance: 42, pace: 118 }));
+      flushSync();
+      expect(deps.workoutService.updateSessionWithPM5Data).toHaveBeenCalledWith(
+        expect.objectContaining({ distance: 42 }),
+      );
+      expect(ride.pm5Data?.distance).toBe(42);
+    });
+    stop();
+    teardown();
+  });
+
   it('ignores a packet after the subscription is torn down', () => {
     const { ride, session, pm5, deps } = setup();
     const teardown = ride.init();

@@ -35,6 +35,8 @@
   import GuestSessionSummary from '$lib/ui/GuestSessionSummary.svelte';
   import SettingsPanel from '$lib/ui/SettingsPanel.svelte';
   import CrashReportedBanner from '$lib/ui/CrashReportedBanner.svelte';
+  import DebugPanel from '$lib/ui/DebugPanel.svelte';
+  import { GraphicsQualityStore } from '$lib/ui/graphicsQuality.svelte';
   import { crashReportsPreferenceStore } from '$lib/services/crashReportsPreferenceStore';
 
   let { children } = $props();
@@ -143,6 +145,11 @@
   let isNavOpen = $state(false);
   // The Settings surface (gear button → SettingsPanel), App's `settingsOpen`.
   let settingsOpen = $state(false);
+  // The developer debug panel (App's `debugMode`), global behind the 🐛 toggle.
+  let debugMode = $state(false);
+  // The rower's graphics-quality choice (App's `useGraphicsQuality`); the engine
+  // reads `graphics.performanceMode` once it consumes the tier.
+  const graphics = new GraphicsQualityStore();
 </script>
 
 <svelte:head>
@@ -185,6 +192,32 @@
   />
 
   <CrashReportedBanner onOpenSettings={() => (settingsOpen = true)} />
+
+  <!-- The developer debug panel + its toggle, global on every view as App
+       rendered them. -->
+  <div class="debug-panel-toggle">
+    <button
+      type="button"
+      class="btn-debug-toggle{debugMode ? ' active' : ''}"
+      onclick={() => (debugMode = !debugMode)}
+      title="Toggle Debug Mode"
+    >
+      🐛 Debug
+    </button>
+  </div>
+
+  <DebugPanel
+    isOpen={debugMode}
+    onClose={() => (debugMode = false)}
+    {graphics}
+    onPm5Data={(d) => ride.onSimulatedData(d)}
+    pm5Data={ride.pm5Data}
+    pm5Connected={session.selectedRowerConnected}
+    heartRateSamples={ride.heartRateSamples}
+    selectedRoute={routes.selectedRoute}
+    currentView={view}
+    {isWorkoutActive}
+  />
 
   <header class="app-header">
     <div class="header-content">
