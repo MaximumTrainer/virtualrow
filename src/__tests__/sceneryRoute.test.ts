@@ -64,4 +64,11 @@ describe('toEngineRoute (#570 AC2)', () => {
     expect(route?.pools).toHaveLength(0);
     expect(route?.totalDistanceMeters).toBe(2000);
   });
+
+  it('treats a route with no coordinates as an empty curve, still mounting', () => {
+    const route = toEngineRoute(makeRoute({ coordinates: undefined as never }));
+    expect(route?.curvePoints).toBeUndefined();
+    expect(Array.isArray(route?.pools)).toBe(true);
+    expect(route?.totalDistanceMeters).toBe(2000);
+  });
 });

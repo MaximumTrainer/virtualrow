@@ -35,6 +35,12 @@ describe('renderBudget (lib copy for #542)', () => {
     expect(overBudget('basic', {})).toEqual([]);
   });
 
+  it('names the triangle count when it alone is over budget', () => {
+    expect(overBudget('basic', { triangles: RENDER_BUDGET.basic.triangles + 1 })).toEqual([
+      'triangles',
+    ]);
+  });
+
   it('scales only the frame-time ceiling by cpuScale', () => {
     const mode = 'high';
     const justOver = RENDER_BUDGET[mode].p95Ms * 2 + 1;

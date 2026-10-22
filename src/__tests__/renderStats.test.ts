@@ -74,4 +74,9 @@ describe('renderStats seam (#542)', () => {
     recordContextLost('too early');
     expect(readContextState()).toBeNull();
   });
+
+  it('ignores a recovery reported before any context was created', () => {
+    recordContextRestored();
+    expect(readContextState()).toBeNull();
+  });
 });
