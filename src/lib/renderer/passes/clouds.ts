@@ -36,7 +36,7 @@ export const createCloudsPass = ({
     depthStencil: {
       depthWriteEnabled: false,
       depthCompare: 'less-equal',
-      format: 'depth24plus',
+      format: 'depth32float',
     },
   });
   const bindGroup = device.createBindGroup({

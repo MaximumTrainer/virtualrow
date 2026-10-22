@@ -43,6 +43,7 @@ import { shadowConfigFor } from './shadowConfig';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
 import { tierCapsFor } from './tierCaps';
 import { createTelemetry, publishSpeedMps, releaseTelemetry, type TelemetryHandles } from './telemetry';
+import { createPostFx, type PostFxCaps } from './postFx';
 import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
@@ -144,20 +145,34 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     return null;
   }
 
-  const format: GPUTextureFormat =
+  const outputFormat: GPUTextureFormat =
     (navigator as unknown as { gpu?: GPU }).gpu?.getPreferredCanvasFormat?.() ?? 'bgra8unorm';
-  context.configure({ device, format, alphaMode: 'opaque' });
+  context.configure({ device, format: outputFormat, alphaMode: 'opaque' });
+  // #573 P8 — the lit passes render into an HDR offscreen target; PostFxPass
+  // composites to the real swap-chain. The `format` prop every lit pass takes
+  // is this HDR format; `outputFormat` is only used by the composite + DOF
+  // target configs inside PostFxPass.
+  const format: GPUTextureFormat = 'rgba16float';
 
   let width = Math.max(1, Math.floor(canvas.clientWidth || canvas.width || 320));
   let height = Math.max(1, Math.floor(canvas.clientHeight || canvas.height || 240));
   canvas.width = width;
   canvas.height = height;
 
+  // Scene HDR colour target (#573 FR1 / D1-a).
+  let sceneTexture = device.createTexture({
+    label: 'scene-hdr',
+    size: { width, height },
+    format,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+  });
+
+  // Depth is `depth32float` from P8 so SSAO + DOF can sample it (#573 FR9).
   let depthTexture = device.createTexture({
     label: 'depth',
     size: { width, height },
-    format: 'depth24plus',
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    format: 'depth32float',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
   });
 
   const frameUniforms = createFrameUniformBuffer(device);
@@ -301,10 +316,32 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     ? createCloudsPass({ device, format, frameUniforms })
     : null;
 
-  // Pass order (#570 extends #566): shadowStage → sky → clouds? → bank →
-  // buildings → scenery → floraSolid → water → boat (ghost shares its
-  // pipeline). Boat draws last among the lit passes so its alpha-blended
-  // ghost composes over the opaque scene.
+  // #573 P8 — PostFx. Reads the HDR scene + depth; writes to the swap-chain.
+  const postCaps: PostFxCaps = {
+    bloom: tierCaps.drawBloom,
+    tone: true,
+    vignette: tierCaps.drawVignette,
+    lut: tierCaps.drawLut,
+    ssao: tierCaps.drawSsao,
+    dof:
+      tierCaps.drawDof &&
+      !!(globalThis as unknown as { window?: { __VIRTUALROW_POSTFX_DOF?: boolean } }).window
+        ?.__VIRTUALROW_POSTFX_DOF,
+  };
+  const postFx = createPostFx({ device, sceneFormat: format, outputFormat, caps: postCaps });
+  postFx.setInputs({
+    sceneView: sceneTexture.createView(),
+    sceneTexture,
+    depthView: depthTexture.createView(),
+    width,
+    height,
+  });
+
+  // Pass order (#570 extends #566; #573 appends post-fx): shadowStage → sky
+  // → clouds? → bank → buildings → scenery → floraSolid → water → boat →
+  // postFx. The lit passes write to the HDR offscreen (`ctx.swapView` is the
+  // scene texture view). PostFx reads the HDR scene + depth and composites
+  // to `ctx.outputView` (the real swap-chain back-buffer).
   const passes: Pass[] = [
     shadowStage,
     createSkyPass({ device, format, frameUniforms }),
@@ -315,6 +352,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     floraSolidStage,
     waterPass,
     boatPass,
+    postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
 
@@ -379,8 +417,22 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     depthTexture = device.createTexture({
       label: 'depth',
       size: { width: w, height: h },
-      format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      format: 'depth32float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    sceneTexture.destroy();
+    sceneTexture = device.createTexture({
+      label: 'scene-hdr',
+      size: { width: w, height: h },
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    postFx.setInputs({
+      sceneView: sceneTexture.createView(),
+      sceneTexture,
+      depthView: depthTexture.createView(),
+      width: w,
+      height: h,
     });
   };
 
@@ -547,17 +599,24 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     device.queue.writeBuffer(shadowUniformsBuf, 0, shadowScratch as BufferSource);
     telemetry.shadows.lastSplits = Array.from(computed.splits);
 
-    const swapView = context.getCurrentTexture().createView();
+    // Lit passes write to the HDR scene view; PostFx composites to the
+    // real swap-chain back-buffer (#573 P8 FR1 + FR2).
+    const outputView = context.getCurrentTexture().createView();
+    const sceneView = sceneTexture.createView();
     const depthView = depthTexture.createView();
-    graph.run(device, swapView, depthView, width, height, frame);
+    graph.run(device, sceneView, depthView, width, height, frame, outputView);
 
     telemetry.frameStats.frame += 1;
     telemetry.frameStats.dtMs = 0;
-    // Count colour passes as they encode: skip the shadow stage and skip
-    // the boat pass if neither boat nor ghost drew this frame.
+    // Count scene colour passes as they encode: skip the shadow stage, skip
+    // the boat pass if neither boat nor ghost drew this frame, and skip the
+    // post-fx stage (its own sub-pass count is tracked internally; the
+    // scene `draws` number must stay the "N lit passes" invariant that
+    // existing specs assert).
     let draws = 0;
     for (const p of graph.passes) {
       if (p.name.startsWith('shadow')) continue;
+      if (p.name === 'postfx') continue;
       if (p.name === 'boat' && !boatPass.boatVisible.value && !boatPass.ghostVisible.value) continue;
       draws += 1;
     }
@@ -658,6 +717,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       }
       buildingsPool?.dispose();
       floraSolidCuller.dispose();
+      postFx.dispose();
+      sceneTexture.destroy();
       depthTexture.destroy();
       frameUniforms.destroy();
       shadowUniformsBuf.destroy();

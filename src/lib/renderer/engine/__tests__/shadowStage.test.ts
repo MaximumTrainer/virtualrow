@@ -50,6 +50,7 @@ describe('shadowStage (#566 P6 — buildings cast through the same atlas)', () =
       device,
       encoder: device.createCommandEncoder(),
       swapView: {} as GPUTextureView,
+      outputView: {} as GPUTextureView,
       depthView: {} as GPUTextureView,
       width: 1,
       height: 1,
