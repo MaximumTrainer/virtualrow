@@ -15,6 +15,7 @@
 -->
 <script lang="ts">
   import { attach } from '$lib/renderer/engine/attach';
+  import { toEngineRoute } from '$lib/ui/sceneryRoute';
   import { describeLoadProgress, LOAD_PHASES } from '$lib/utils/loadingProgress';
   import { getSessionStore } from '$lib/ui/sessionContext';
   import { getRideSession } from '$lib/ui/rideSessionContext';
@@ -46,6 +47,11 @@
   $effect(() => fullscreen.bind(stageEl ?? null));
 
   const workout = $derived(session.currentWorkout);
+
+  // The engine reads a `SceneryRoute` (curvePoints + totalDistanceMeters) to
+  // run the boat along; the shell's `WaterRoute` carries neither, so adapt it
+  // (#570 AC2). Re-derives when the rower picks a different route.
+  const engineRoute = $derived(toEngineRoute(routes.selectedRoute));
 </script>
 
 <svelte:head>
@@ -59,7 +65,7 @@
         <div class="activity-route-stage" bind:this={stageEl}>
           <RouteLoadingBar progress={routeLoadProgress} />
 
-          <Canvas3DHost {attach} route={routes.selectedRoute} {testMode} getFrame={() => ride.frame()} />
+          <Canvas3DHost {attach} route={engineRoute} {testMode} getFrame={() => ride.frame()} />
 
           {#if workout.current && workout.progress}
             <WorkoutBlockPanel
