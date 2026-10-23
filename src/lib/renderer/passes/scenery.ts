@@ -32,6 +32,10 @@ export const createScenerySignature = (
     entries: [
       { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+      // Per-species foliage atlas (3 layers = broadleaf / conifer / willow)
+      // + sampler. Populated by `attach.ts` from `paintFoliage` output.
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
     ],
   });
   const poolLayout = device.createBindGroupLayout({

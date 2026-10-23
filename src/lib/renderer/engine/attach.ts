@@ -39,6 +39,7 @@ import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
+import { paintFoliage, FOLIAGE_SHAPES } from '../../scenery/foliageTexture';
 import { createSceneryCuller } from '../passes/sceneryCull';
 import { createFloraSolidStage } from './floraSolidStage';
 import { loadFloraAtlas } from './textureLoader';
@@ -265,6 +266,42 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   telemetry.buildings.footprintM2 = buildingsPool?.footprintM2 ?? 0;
   telemetry.buildings.resident = !!buildingsPool;
   telemetry.buildings.cast = !!buildingsCastingPool;
+  // Per-species leaf atlas (#549 slice 3). Three 256×256 RGBA layers (one per
+  // FoliageShape); `paintFoliage` generates the pixels, the fragment shader
+  // samples by species index. The pass alpha-tests transparent texels so the
+  // crossed quads read as individual trees instead of flat cards.
+  const foliageAtlasSize = 256;
+  const foliageAtlasLayers = FOLIAGE_SHAPES.length;
+  const foliageAtlasTex = device.createTexture({
+    label: 'foliage-atlas',
+    size: { width: foliageAtlasSize, height: foliageAtlasSize, depthOrArrayLayers: foliageAtlasLayers },
+    format: 'rgba8unorm-srgb',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  // writeTexture is on the real GPUQueue but not on the attach-test mock;
+  // skipping the upload leaves the atlas blank there, which is fine — no
+  // test depends on the leaf texture's content.
+  if (typeof device.queue.writeTexture === 'function') {
+    for (let layer = 0; layer < foliageAtlasLayers; layer += 1) {
+      const pixels = paintFoliage(FOLIAGE_SHAPES[layer], foliageAtlasSize);
+      device.queue.writeTexture(
+        { texture: foliageAtlasTex, origin: { x: 0, y: 0, z: layer } },
+        pixels as BufferSource,
+        { bytesPerRow: foliageAtlasSize * 4, rowsPerImage: foliageAtlasSize },
+        { width: foliageAtlasSize, height: foliageAtlasSize, depthOrArrayLayers: 1 },
+      );
+    }
+  }
+  const foliageAtlasView = foliageAtlasTex.createView({ dimension: '2d-array' });
+  const foliageSampler = device.createSampler({
+    label: 'foliage',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    mipmapFilter: 'linear',
+    addressModeU: 'clamp-to-edge',
+    addressModeV: 'clamp-to-edge',
+  });
+
   const sceneryPass = createSceneryPass({
     device,
     format,
@@ -272,6 +309,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     sproutUniforms,
     pools: scenePools,
     telemetry: telemetry.scenery,
+    foliageAtlasView,
+    foliageSampler,
   });
 
   // Solid flora stage (#562 FR4 / FR5). Builds a low-poly 3D crown+trunk per

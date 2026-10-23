@@ -33,6 +33,8 @@ struct Sprout {
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var<uniform> sprout: Sprout;
+@group(0) @binding(2) var foliageAtlas: texture_2d_array<f32>;
+@group(0) @binding(3) var foliageSampler: sampler;
 @group(1) @binding(0) var<storage, read> centres: array<vec4<f32>>;
 @group(1) @binding(1) var<storage, read> indices: array<u32>;
 
@@ -43,9 +45,12 @@ struct VSOut {
   @location(2) worldDist: f32,
   @location(3) fade: f32,
   // Per-species palette, picked in vs_main from the metadata's species bits.
-  // Flat-interpolated by holding the same vec3 at every vertex of a quad.
   @location(4) baseCol: vec3<f32>,
   @location(5) crownCol: vec3<f32>,
+  // UV for sampling the per-species leaf texture: (u, v).
+  @location(6) uv: vec2<f32>,
+  // Species index (flat), 0..2 — selects the atlas layer in fs_main.
+  @location(7) @interpolate(flat) species: u32,
 };
 
 // Four verts per billboard pair (two crossed quads, 6 indices each via a
@@ -131,6 +136,11 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   );
   out.baseCol = BASE_PAL[sIdx];
   out.crownCol = CROWN_PAL[sIdx];
+  // Billboard UV: both crossed quads share the same (0..1, 0..1) space so
+  // the same leaf texture tiles across both. local.x goes −0.6..0.6 and
+  // local.y goes 0..1 before the per-species scale, so remap to UV.
+  out.uv = vec2<f32>(local.x + 0.5, 1.0 - local.y);
+  out.species = sIdx;
   let d = p - frame.camPos;
   let worldDist = length(vec3<f32>(d.x, 0.0, d.z));
   out.worldDist = worldDist;
@@ -143,15 +153,25 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   if (in.fade <= 0.001) { discard; }
+  // Sample the per-species leaf texture atlas. Alpha carries the silhouette;
+  // use it to mask the quad into a tree shape via alpha blending (the pass's
+  // blend state is premult-friendly src-alpha / one-minus-src-alpha).
+  let tex = textureSample(foliageAtlas, foliageSampler, in.uv, i32(in.species));
+  // Discard pixels that are mostly transparent so the depth test still carves
+  // the tree silhouette (otherwise distant foliage occludes the water behind).
+  if (tex.a < 0.05) { discard; }
   let sun = normalize(frame.sunDir);
   let shade = clamp(dot(in.normal, sun) * 0.5 + 0.6, 0.3, 1.0);
-  let col = mix(in.baseCol, in.crownCol, clamp(in.worldY, 0.0, 1.0)) * shade;
+  let paletteCol = mix(in.baseCol, in.crownCol, clamp(in.worldY, 0.0, 1.0));
+  // Leaf texture's RGB is a grey leaf tone; multiply by the species palette.
+  let col = paletteCol * tex.rgb * shade;
   // Fog with the frame's exponential density.
   let near = frame.fog.x;
   let far = frame.fog.y;
   let density = near + far * in.worldDist;
   let f = 1.0 - exp(-density * in.worldDist);
   let fogCol = vec3<f32>(0.72, 0.78, 0.82);
-  // Fade modulates alpha so the handoff with the solid pool is a soft blend.
-  return vec4<f32>(mix(col, fogCol, clamp(f, 0.0, 1.0)), in.fade);
+  // Fade modulates alpha so the handoff with the solid pool is a soft blend;
+  // combined with the texture alpha so transparent leaves don't paint fog.
+  return vec4<f32>(mix(col, fogCol, clamp(f, 0.0, 1.0)), in.fade * tex.a);
 }
