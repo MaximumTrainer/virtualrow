@@ -34,7 +34,8 @@ import {
   getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
 } from '../services/routeEnrichmentService';
-import { distanceBetweenLatLng } from '../utils/geoUtils';
+import { distanceBetweenLatLng, latLngToMeters } from '../utils/geoUtils';
+import type { OsmBuilding } from '../services/routeEnrichmentService';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { routeCurvePoints } from '../utils/routeWorldCurve';
 import { RouteCurve } from '../renderer/math/curve';
@@ -127,6 +128,48 @@ export interface EngineRoute {
   waterEdgesForProgress?: (progress: number) => WaterEdges;
 }
 
+/** Default OSM building height when the tags carry neither `height` nor levels. */
+const DEFAULT_OSM_BUILDING_HEIGHT_M = 6;
+/** Minimum footprint area in m² to be worth drawing as a prism. */
+const MIN_OSM_BUILDING_FOOTPRINT_M2 = 4;
+
+const osmBuildingToSpec = (
+  osm: OsmBuilding,
+  origin: { lat: number; lng: number },
+): BuildingSpec | null => {
+  if (!osm.footprint || osm.footprint.length < 3) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const p of osm.footprint) {
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) continue;
+    const { x, y } = latLngToMeters(p.lat, p.lng, origin.lat, origin.lng);
+    // Scene +Z = south, so project y (north) onto −Z.
+    const sceneZ = -y;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (sceneZ < minZ) minZ = sceneZ;
+    if (sceneZ > maxZ) maxZ = sceneZ;
+  }
+  if (!Number.isFinite(minX)) return null;
+  const halfWidth = (maxX - minX) / 2;
+  const halfDepth = (maxZ - minZ) / 2;
+  if (halfWidth * halfDepth * 4 < MIN_OSM_BUILDING_FOOTPRINT_M2) return null;
+  return {
+    x: (minX + maxX) / 2,
+    z: (minZ + maxZ) / 2,
+    halfWidth,
+    halfDepth,
+    height: osm.heightMeters ?? DEFAULT_OSM_BUILDING_HEIGHT_M,
+    profile: osm.kind === 'commercial' || osm.kind === 'retail'
+      ? 'commercial'
+      : osm.kind === 'house' || osm.kind === 'residential' || osm.kind === 'apartments'
+        ? 'residential'
+        : 'fallback',
+  };
+};
+
 const detectClosedLoop = (route: WaterRoute): boolean => {
   const coords = route.coordinates ?? [];
   if (coords.length < 4) return false;
@@ -194,6 +237,16 @@ export const toEngineRoute = (
 
     const landscape = layoutLandscape({ curve, enrichment: enrichment ?? null, track });
     buildings = layoutToBuildingSpecs(landscape, SCENERY_PROFILES);
+    // Real OSM buildings on top of the procedural facades (#549 slice 4).
+    // Convert each footprint to an axis-aligned prism anchored at the
+    // first route coordinate so lat/lng → scene metres uses one origin.
+    const origin = route.coordinates?.[0];
+    if (origin && enrichment?.buildings?.length) {
+      for (const osm of enrichment.buildings) {
+        const spec = osmBuildingToSpec(osm, origin);
+        if (spec) buildings.push(spec);
+      }
+    }
 
     // GLB scenery (bank-edge, scatter, buildings, trees, landform, backdrop,
     // bridges, landmarks, finish-area furniture). The `/row` adapter is where

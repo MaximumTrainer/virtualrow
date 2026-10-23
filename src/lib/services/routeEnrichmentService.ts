@@ -109,8 +109,27 @@ export interface RouteEnrichmentData {
    * route, and on a lake route OSM has no outline for.
    */
   lakes?: LakeSurface;
+  /**
+   * OSM buildings near the route (#549 slice 4). Absent on fallback data,
+   * on cached entries written before this field, and when Overpass returned
+   * no building ways near the route. Each entry's `footprint` is the raw
+   * lat/lng polygon from `way["building"]` or the outer ring of a
+   * `relation["building"]`; the shell/engine convert to scene metres and
+   * build axis-aligned prisms through the `BuildingsPass`.
+   */
+  buildings?: OsmBuilding[];
   fetchedAt: number;
   source: 'network' | 'cache' | 'fallback';
+}
+
+/** OSM building footprint pulled from Overpass. */
+export interface OsmBuilding {
+  /** Lat/lng polygon vertices in Overpass order (closed if the source closed). */
+  footprint: Coordinate[];
+  /** Height in metres from `height` or `building:levels` × 3 m; absent → caller's default. */
+  heightMeters?: number;
+  /** The raw `building` tag value — handy for optional palette picking. */
+  kind?: string;
 }
 
 export interface LakeSurface {
@@ -590,6 +609,55 @@ const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
   if (route.tags.includes('reservoir')) return 'reservoir';
   if (route.tags.includes('river')) return 'river';
   return waterBodyFromName(route.name);
+};
+
+/**
+ * Pull OSM building footprints out of the elements returned by Overpass
+ * (#549 slice 4). Both `way["building"]` and the outer ring of
+ * `relation["building"]` are handled; relations use the member tagged
+ * `outer`. Returned footprints are filtered to at least 4 points and a
+ * sensible square-metre area so a stub way or a 1 m sliver doesn't
+ * dominate the pool.
+ */
+export const buildingsFromElements = (
+  elements: OverpassElement[],
+): OsmBuilding[] => {
+  const parseHeight = (tags: Record<string, string> | undefined): number | undefined => {
+    if (!tags) return undefined;
+    const raw = tags.height ?? tags['building:height'];
+    if (raw) {
+      const n = Number.parseFloat(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    const levels = tags['building:levels'] ?? tags.levels;
+    if (levels) {
+      const n = Number.parseFloat(levels);
+      if (Number.isFinite(n) && n > 0) return n * 3;
+    }
+    return undefined;
+  };
+  const toFootprint = (points: OverpassGeometryPoint[] | undefined): Coordinate[] => {
+    if (!points || points.length < 3) return [];
+    return points.map((p) => ({ lat: p.lat, lng: p.lon }));
+  };
+  const out: OsmBuilding[] = [];
+  for (const element of elements) {
+    const kind = element.tags?.building;
+    if (!kind) continue;
+    if (element.type === 'way') {
+      const footprint = toFootprint(element.geometry);
+      if (footprint.length >= 3) out.push({ footprint, heightMeters: parseHeight(element.tags), kind });
+    } else if (element.type === 'relation') {
+      for (const member of element.members ?? []) {
+        if (member.role !== 'outer') continue;
+        const footprint = toFootprint(member.geometry);
+        if (footprint.length >= 3) {
+          out.push({ footprint, heightMeters: parseHeight(element.tags), kind });
+        }
+      }
+    }
+  }
+  return out;
 };
 
 export const createFallbackRouteEnrichment = (
@@ -1358,11 +1426,13 @@ export class RouteEnrichmentService {
         const waterWidthMeters =
           segmentProfiles[0]?.waterWidthMeters ?? getFallback().waterWidthMeters;
 
+        const buildings = buildingsFromElements(nearElements);
         const enrichment: RouteEnrichmentData = {
           routeId: route.id,
           elevations,
           segmentProfiles,
           crossings: findCrossings(route.coordinates, nearElements),
+          ...(buildings.length > 0 ? { buildings } : {}),
           waterBodyType: resolvedWaterBodyType,
           waterWidthMeters,
           ...getWaterAppearance(resolvedWaterBodyType),
