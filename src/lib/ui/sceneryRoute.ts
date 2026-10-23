@@ -37,6 +37,15 @@ import {
 import { distanceBetweenLatLng } from '../utils/geoUtils';
 import { SCENE_SCALE } from '../utils/worldScale';
 import { routeCurvePoints } from '../utils/routeWorldCurve';
+import { RouteCurve } from '../renderer/math/curve';
+import { vec3 } from '../renderer/math/vec3';
+import type { PoolInput } from '../renderer/plan/instancePools';
+import {
+  batchFoliagePools,
+  FOLIAGE_SHAPES,
+  layoutFoliage,
+} from '../scenery/foliagePlan';
+import { getRouteSceneryTrack } from '../../components/rower3d/sceneryTrack';
 
 /**
  * Default navigable water width in metres. Mirrors
@@ -53,10 +62,13 @@ export interface WaterEdges {
   right: number;
 }
 
+/** Chunk size (metres of route) used when batching foliage into per-chunk pools. */
+export const FOLIAGE_CHUNK_METRES = 150;
+
 /** The engine-facing route shape (structural match for `SceneryRoute`). */
 export interface EngineRoute {
-  /** No scenery instancing in this slice; present so `isSceneryRoute` holds. */
-  pools: never[];
+  /** Foliage instance pools, one per (species, chunk). */
+  pools: PoolInput[];
   /** World-space boat/ghost curve; omitted when the route has too few points. */
   curvePoints?: [number, number, number][];
   /** Real route length in metres, matching the shell's finish detection. */
@@ -114,8 +126,28 @@ export const toEngineRoute = (
       progress,
     );
 
+  // Populate the foliage pools from the same deterministic layout the React
+  // scene uses. Three-free: `src/lib/scenery/foliagePlan.ts` samples the curve
+  // through the engine's `RouteCurve` and shares `getSegmentSceneryProfile`
+  // and `SCENERY_PROFILES` with the React side.
+  const pools: PoolInput[] = [];
+  if (curvePoints.length >= 2) {
+    const curve = new RouteCurve(
+      curvePoints.map(([x, y, z]) => vec3(x, y, z)),
+      isClosedLoop,
+    );
+    const trees = layoutFoliage({
+      curve,
+      enrichment: enrichment ?? null,
+      track: getRouteSceneryTrack(route.id),
+      speciesTypes: FOLIAGE_SHAPES,
+    });
+    const routeLength = (totalDistanceMeters ?? curve.approximateLength(32)) || 1;
+    pools.push(...batchFoliagePools(trees, FOLIAGE_SHAPES.length, routeLength, FOLIAGE_CHUNK_METRES));
+  }
+
   return {
-    pools: [],
+    pools,
     ...(curvePoints.length >= 2 ? { curvePoints } : {}),
     ...(totalDistanceMeters !== undefined ? { totalDistanceMeters } : {}),
     ...(isClosedLoop ? { isClosedLoop } : {}),

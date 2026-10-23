@@ -35,7 +35,39 @@ describe('toEngineRoute (#570 AC2)', () => {
   it('always carries a pools array so isSceneryRoute holds', () => {
     const route = toEngineRoute(makeRoute());
     expect(Array.isArray(route?.pools)).toBe(true);
+    // The adapter populates foliage pools when the curve is well-formed; the
+    // engine mounts an empty scenery pass for an empty `pools`, which is the
+    // path taken when the curve is too short — tested below.
+    for (const pool of route?.pools ?? []) {
+      expect(pool.kind).toBe('foliage');
+      expect(pool.positions.length % 3).toBe(0);
+      expect(pool.metadata?.length).toBe(pool.positions.length / 3);
+    }
+  });
+
+  it('leaves pools empty when the route has too few coordinates to form a curve', () => {
+    const route = toEngineRoute(makeRoute({ coordinates: [{ lat: 1, lng: 1 }] }));
     expect(route?.pools).toHaveLength(0);
+  });
+
+  it('places more foliage on a longer route (deterministic density scales with length)', () => {
+    const short = toEngineRoute(makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.001 },
+      ],
+      distance: 0.1, // 100 m
+    }));
+    const long = toEngineRoute(makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.01 },
+      ],
+      distance: 1, // 1 km
+    }));
+    const shortCount = (short?.pools ?? []).reduce((n, p) => n + p.positions.length / 3, 0);
+    const longCount = (long?.pools ?? []).reduce((n, p) => n + p.positions.length / 3, 0);
+    expect(longCount).toBeGreaterThan(shortCount);
   });
 
   it('derives curvePoints from the route geometry', () => {
@@ -121,6 +153,7 @@ describe('toEngineRoute (#570 AC2)', () => {
           onMappedWater: true,
           mappedWaterType: 'river',
           mappedWaterSource: 'overpass',
+          sceneryProfile: 'fallback',
         },
         {
           waterBodyType: 'river',
@@ -134,6 +167,7 @@ describe('toEngineRoute (#570 AC2)', () => {
           onMappedWater: true,
           mappedWaterType: 'river',
           mappedWaterSource: 'overpass',
+          sceneryProfile: 'fallback',
         },
       ],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
