@@ -57,4 +57,95 @@ describe('layoutLandscape parity with React', () => {
     expect(layoutLandscape({ curve: null })).toEqual({ leftElements: [], rightElements: [] });
     expect(layoutToBuildingSpecs({ leftElements: [], rightElements: [] }, SCENERY_PROFILES)).toEqual([]);
   });
+
+  it('honours an authored scenery track (track branch of getSegmentSceneryProfile)', () => {
+    const track = {
+      bands: [
+        { untilProgress: 0.5, profile: 'commercial' as const, water: 'river' as const, label: 'town' },
+        { untilProgress: 1, profile: 'wetland' as const, water: 'river' as const, label: 'marsh' },
+      ],
+    };
+    const layout = layoutLandscape({ curve: engineCurve, track });
+    expect(layout.leftElements.length + layout.rightElements.length).toBeGreaterThan(0);
+    // The commercial half has a high buildings probability, so most elements
+    // in t < 0.5 should be buildings when a slot rolls above `tree`.
+    const earlyBuildings = [...layout.leftElements, ...layout.rightElements]
+      .filter((e) => e.progress < 0.5 && e.type === 'building').length;
+    expect(earlyBuildings).toBeGreaterThan(0);
+  });
+
+  it('toBuildingSpecs maps every scenery profile through the palette switch', () => {
+    // Hand-build a layout with one building per profile so the switch hits
+    // every case (commercial, residential, farmland/forest/beach/wetland→residential, unknown→fallback).
+    const profiles: Array<string> = ['residential', 'commercial', 'wetland', 'beach', 'farmland', 'forest', 'unknown-profile'];
+    const layout = {
+      leftElements: profiles.map((p, i) => ({
+        position: [i, 0, 0] as [number, number, number],
+        type: 'building' as const,
+        scale: 1,
+        rotation: 0,
+        sceneryProfile: p as 'residential',
+        progress: i / profiles.length,
+        side: 'left' as const,
+      })),
+      rightElements: [],
+    };
+    const specs = layoutToBuildingSpecs(layout, SCENERY_PROFILES);
+    expect(specs.length).toBe(profiles.length);
+    expect(specs[0].profile).toBe('residential');
+    expect(specs[1].profile).toBe('commercial');
+    expect(specs[2].profile).toBe('residential');
+    expect(specs[6].profile).toBe('fallback');
+    // Unknown profile also exercises the heightRange ?? [0.7, 1.0] fallback.
+    expect(specs[6].height).toBeGreaterThan(0);
+  });
+
+  it('falls back to the default channel width when enrichment has no segment profiles', () => {
+    // Hits the no-segmentProfiles branch in the port's inlined waterHalfWidthAt.
+    const enrichment = {
+      source: 'fallback' as const,
+      enrichedAt: 0,
+      elevations: [],
+      segmentProfiles: [],
+      waterWidthMeters: 30,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    const layout = layoutLandscape({ curve: engineCurve, enrichment });
+    // Didn't throw; produced some elements with offsets measured off a
+    // 15 m-each-side waterline.
+    expect(layout.leftElements.length + layout.rightElements.length).toBeGreaterThan(0);
+    for (const el of [...layout.leftElements, ...layout.rightElements]) {
+      // Lateral offset ≥ LANDSCAPE_OFFSET (50 m) — further than the water on either side.
+      expect(Math.abs(el.position[0])).toBeGreaterThan(0);
+    }
+  });
+
+  it('uses enrichment-derived densities when no track is supplied', () => {
+    const enrichment = {
+      source: 'overpass' as const,
+      enrichedAt: 0,
+      elevations: [],
+      segmentProfiles: Array.from({ length: 4 }, () => ({
+        waterBodyType: 'river' as const,
+        waterWidthMeters: 40,
+        leftShoreMeters: 20,
+        rightShoreMeters: 20,
+        waterBodyName: null as string | null,
+        dragModifier: 1,
+        elevationMeters: 0,
+        windModifier: 1,
+        onMappedWater: true,
+        mappedWaterType: 'river' as const,
+        mappedWaterSource: 'overpass' as const,
+        sceneryProfile: 'residential' as const,
+        treeDensity: 0.4,
+        vegetationDensity: 0.6,
+        buildingDensity: 0.5,
+        objectScale: 1,
+      })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    const layout = layoutLandscape({ curve: engineCurve, enrichment });
+    expect(layout.leftElements.length + layout.rightElements.length).toBeGreaterThan(0);
+  });
 });

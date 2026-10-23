@@ -115,6 +115,108 @@ describe('loadGlb', () => {
     expect(model.primitives[0].baseColor).toEqual([1, 1, 1, 1]);
   });
 
+  it('decodes a hand-built GLB with uncompressed FLOAT positions (no meshopt / no normalize)', async () => {
+    // A single tri with raw float positions + normals and uint16 indices in a
+    // single uncompressed BIN. Exercises the non-meshopt bufferView path and
+    // the raw (non-normalized) FLOAT branch in `readFloatVecs`.
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+    const indices = new Uint16Array([0, 1, 2, 0]); // pad to 8 bytes
+    const posBytes = new Uint8Array(positions.buffer);
+    const nrmBytes = new Uint8Array(normals.buffer);
+    const idxBytes = new Uint8Array(indices.buffer);
+    const bin = new Uint8Array(posBytes.length + nrmBytes.length + idxBytes.length);
+    bin.set(posBytes, 0);
+    bin.set(nrmBytes, posBytes.length);
+    bin.set(idxBytes, posBytes.length + nrmBytes.length);
+    const json = {
+      asset: { version: '2.0' },
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: posBytes.length },
+        { buffer: 0, byteOffset: posBytes.length, byteLength: nrmBytes.length },
+        { buffer: 0, byteOffset: posBytes.length + nrmBytes.length, byteLength: 6 },
+      ],
+      accessors: [
+        { bufferView: 0, componentType: 5126 /* FLOAT */, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0] },
+        { bufferView: 1, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: 5123 /* UNSIGNED_SHORT */, count: 3, type: 'SCALAR' },
+      ],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      nodes: [{ mesh: 0 }],
+      scenes: [{ nodes: [0] }],
+      scene: 0,
+    };
+    const patched = encodeGlb(json, bin);
+    const model = await loadGlb(patched);
+    expect(model.primitives.length).toBe(1);
+    const prim = model.primitives[0];
+    // Raw path: positions come back as what was written (identity node transform).
+    expect([prim.positions[0], prim.positions[1], prim.positions[2]]).toEqual([0, 0, 0]);
+    expect([prim.positions[3], prim.positions[4], prim.positions[5]]).toEqual([1, 0, 0]);
+    expect(prim.indices.length).toBe(3);
+    expect(model.bounds.min[0]).toBe(0);
+    expect(model.bounds.max[0]).toBe(1);
+  });
+
+  it('dequantizes normalized UNSIGNED_SHORT positions through `KHR_mesh_quantization`', async () => {
+    // Triangle whose positions are stored as uint16s with `normalized=true`;
+    // the dequantize path turns 65535 → 1.0 and 0 → 0.0 in local space (the
+    // node matrix is identity so the output positions equal the dequantize).
+    const positions = new Uint16Array([0, 0, 0, 65535, 0, 0, 0, 65535, 0]);
+    const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+    const indices = new Uint16Array([0, 1, 2, 0]);
+    const posBytes = new Uint8Array(positions.buffer);
+    const nrmBytes = new Uint8Array(normals.buffer);
+    const idxBytes = new Uint8Array(indices.buffer);
+    const bin = new Uint8Array(posBytes.length + nrmBytes.length + idxBytes.length);
+    bin.set(posBytes, 0);
+    bin.set(nrmBytes, posBytes.length);
+    bin.set(idxBytes, posBytes.length + nrmBytes.length);
+    const json = {
+      asset: { version: '2.0' },
+      extensionsRequired: ['KHR_mesh_quantization'],
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: posBytes.length },
+        { buffer: 0, byteOffset: posBytes.length, byteLength: nrmBytes.length },
+        { buffer: 0, byteOffset: posBytes.length + nrmBytes.length, byteLength: 6 },
+      ],
+      accessors: [
+        { bufferView: 0, componentType: 5123 /* UNSIGNED_SHORT */, normalized: true, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: 5123, count: 3, type: 'SCALAR' },
+      ],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      nodes: [{ mesh: 0 }],
+      scenes: [{ nodes: [0] }],
+      scene: 0,
+    };
+    const patched = encodeGlb(json, bin);
+    const model = await loadGlb(patched);
+    expect(model.primitives[0].positions[3]).toBeCloseTo(1.0, 4);
+  });
+
+  it('falls back to zero bounds when every mesh is empty', async () => {
+    // Minimum valid GLB with no meshes referenced. Only exercises the empty-
+    // bounds guard in loadGlb (`Number.isFinite(bounds.min[0])` false path).
+    const bin = new Uint8Array(0);
+    const json = {
+      asset: { version: '2.0' },
+      buffers: [{ byteLength: 0 }],
+      bufferViews: [],
+      accessors: [],
+      meshes: [],
+      scenes: [{ nodes: [] }],
+      scene: 0,
+    };
+    const patched = encodeGlb(json, bin);
+    const model = await loadGlb(patched);
+    expect(model.primitives).toEqual([]);
+    expect(model.bounds.min).toEqual([0, 0, 0]);
+    expect(model.bounds.max).toEqual([0, 0, 0]);
+  });
+
   it('decodes a GLB with no `scene` field by walking every node from identity', async () => {
     const bytes = read('tier-a/a01-buoy-lane-sphere.glb');
     const { json, bin } = parseGlbContainer(bytes);

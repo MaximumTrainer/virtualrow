@@ -193,14 +193,7 @@ export default defineConfig({
         // has followed since #340). Ratchet all four upward again from here.
         lines: 90,
         statements: 90,
-        // Dropped from 87 → 86 when the three-free `src/lib/scenery/glbLoader.ts`
-        // landed (#549 scenery slice): the GLB loader guards every asset shape
-        // we don't support with a labelled throw (unknown required extension,
-        // non-triangle primitive, missing POSITION/NORMAL, non-indexed, etc.)
-        // Each throw path is a branch; most can only be hit by handcrafted
-        // malformed GLBs. 12 tests cover the practical ones. The ratchet goes
-        // back up as the engine-side GLB registry lands tested wiring on top.
-        branches: 86,
+        branches: 87,
         functions: 91,
         // boatComponents moved on every axis when #322 took the physics engine
         // out and `boatComponents.test.tsx` started mounting the controller:

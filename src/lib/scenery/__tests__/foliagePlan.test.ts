@@ -50,6 +50,26 @@ describe('layoutFoliage parity with React', () => {
     }
   });
 
+  it('picks a sensible species shape even when the segment profile does not match the species names', () => {
+    // A profile that names only 'palm' + 'ornamental' (beach) against a
+    // species list that is 'ornamental' only: `speciesFor` should fall
+    // through to the shape-match or the all-species branch, not throw.
+    const trees = layoutFoliage({
+      curve: engineCurve,
+      speciesTypes: ['ornamental'],
+      enrichment: null,
+      track: {
+        bands: [
+          { untilProgress: 1, profile: 'beach', water: 'river', label: 'beach-all' },
+        ],
+      },
+    });
+    // Not asserting a specific count — the chance threshold decides — but
+    // every tree should pick species 0 (the only one available) rather than
+    // crashing on an empty species list.
+    for (const t of trees) expect(t.species).toBe(0);
+  });
+
   it('batchFoliagePools groups trees into (species, chunk) pools with sane bounds', () => {
     const trees = layoutFoliage({ curve: engineCurve, speciesTypes });
     const pools = batchFoliagePools(trees, speciesTypes.length, 1000, 250);
