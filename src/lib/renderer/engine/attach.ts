@@ -350,8 +350,13 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
 
   // Scenery-mesh pass. Loads the course-furniture GLBs and keeps a registry
   // keyed by `SceneryModelId`; `placeFurniture` (called below once the route
-  // curve is known) feeds the per-instance mat4 buffers each attach.
+  // curve is known) feeds the per-instance mat4 buffers each attach. The
+  // same pass also hosts the per-frame boat GLB — scull.glb has 19 primitives
+  // with distinct materials (hull vs rower vs oars), each registered as its
+  // own mesh id so the per-primitive base colours survive.
   const sceneryMeshPass = createSceneryMeshPass({ device, format, frameUniforms });
+  const BOAT_SCULL_PREFIX = 'boat-scull';
+  const boatScullMeshIds: string[] = [];
   const COURSE_FURNITURE_MODELS: SceneryModelId[] = [
     'a01-buoy-lane-sphere',
     'a06-finish-tower',
@@ -375,6 +380,37 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     const tier = 'abcdefgl'.includes(prefix) ? prefix : 'a';
     return `tier-${tier}`;
   };
+  // Load the scull GLB (one primitive registered per material so the hull's
+  // grey, the rower's warmer tone and the oars' tint all survive). Each
+  // primitive gets the same per-frame instance matrix. The old baked
+  // `shell.bin` stays loaded as the test-mode / load-failure fallback,
+  // mirroring React's Suspense fallback shape.
+  try {
+    // scull-male.glb has the crewed hero (scull + rower + oars + riggers,
+    // 155 KB, 45 meshes); scull.glb is the empty hull (68 KB, no crew).
+    // The rower appearance seam is in `useCrewPreference`/`useRowerAppearance`
+    // but doesn't yet reach the engine attach — default to male; follow-up
+    // slice can read the preference and pick scull-female.glb when set.
+    const res = await fetch(assetUrl('/assets/boat/scull-male.glb'));
+    if (res.ok) {
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const model = await loadGlb(bytes);
+      for (let i = 0; i < model.primitives.length; i += 1) {
+        const prim = model.primitives[i];
+        const id = `${BOAT_SCULL_PREFIX}:${i}`;
+        sceneryMeshPass.register({
+          id,
+          positions: prim.positions,
+          normals: prim.normals,
+          indices: prim.indices,
+          baseColor: prim.baseColor,
+          maxInstances: 1,
+        });
+        boatScullMeshIds.push(id);
+      }
+    }
+  } catch { /* scull GLB load failed — the old baked boat remains as fallback */ }
+
   await Promise.all([...allModelIds].map(async (id) => {
     try {
       const url = assetUrl(`/assets/scenery/${tierFolderFor(id)}/${id}.glb`);
@@ -727,8 +763,32 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       mat4Identity(boatBones[BOAT_BONE_ARMS]);
       mat4Identity(boatBones[BOAT_BONE_HEAD]);
     }
-    boatPass.boatVisible.value = true;
+    // The GLB scull takes over the hero draw when it loaded successfully;
+    // the old minimal baked shell stays resident for shadow-casting and the
+    // ghost chaser. If the GLB didn't load, keep the baked boat visible so
+    // the user still sees something.
+    const scullLoaded = boatScullMeshIds.length > 0;
+    boatPass.boatVisible.value = !scullLoaded;
     boatPass.ghostVisible.value = ghostInfo !== null;
+
+    if (scullLoaded) {
+      // One mat4 = translation at the boat's world position * rotation
+      // about Y to face the route tangent. Boat world Y already includes
+      // the BOAT_HEIGHT_Y freeboard, so the GLB (pivot at hull waterline
+      // per `public/assets/boat/README.md`) sits above the water surface.
+      const scullTrs = mat4();
+      const scullRot = mat4();
+      const scullTrans = mat4();
+      mat4FromRotationY(scullRot, boatPlacement.heading);
+      mat4Identity(scullTrans);
+      scullTrans[12] = boatPlacement.world[0];
+      scullTrans[13] = boatPlacement.world[1];
+      scullTrans[14] = boatPlacement.world[2];
+      mat4Multiply(scullTrs, scullTrans, scullRot);
+      for (const id of boatScullMeshIds) {
+        sceneryMeshPass.setInstances(id, [scullTrs]);
+      }
+    }
     boatPass.boat.write(device, {
       model: boatPlacement.modelMatrix,
       bones: boatBones,
