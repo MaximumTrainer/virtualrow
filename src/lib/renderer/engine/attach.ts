@@ -12,7 +12,7 @@
 
 /// <reference types="@webgpu/types" />
 
-import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY } from '../math/mat4';
+import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY, type Mat4 } from '../math/mat4';
 import { vec3 } from '../math/vec3';
 import { cameraTarget, createRigTarget } from './camera';
 import { createBankPass } from '../passes/bank';
@@ -21,6 +21,13 @@ import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
+import { createSceneryMeshPass } from '../passes/sceneryMesh';
+import { loadGlb } from '../../scenery/glbLoader';
+import {
+  placeFurniture,
+  type FurniturePlacement,
+  type SceneryModelId,
+} from '../../scenery/courseFurniture';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
 import { createBuildingPool, type BuildingPool, type BuildingSpec } from '../plan/buildings';
 import { BOAT_BONE_COUNT, BOAT_BONE_ARMS, BOAT_BONE_HEAD, BOAT_BONE_HULL, BOAT_BONE_TORSO } from '../plan/boatMesh';
@@ -292,6 +299,69 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   const boatPass = createBoatPass({ device, format, frameUniforms, mesh: boatMesh });
   const charactersMesh = tierCaps.castCharacterShadows ? boatMesh : null;
 
+  // Scenery-mesh pass. Loads the course-furniture GLBs and keeps a registry
+  // keyed by `SceneryModelId`; `placeFurniture` (called below once the route
+  // curve is known) feeds the per-instance mat4 buffers each attach.
+  const sceneryMeshPass = createSceneryMeshPass({ device, format, frameUniforms });
+  const COURSE_FURNITURE_MODELS: SceneryModelId[] = [
+    'a01-buoy-lane-sphere',
+    'a06-finish-tower',
+    'a07-distance-marker-post',
+  ];
+  // Course furniture is a small fixed set per route (≤32 of each kind for
+  // any route we ship), so a generous ceiling keeps the GPU buffer stable
+  // across route switches.
+  const COURSE_FURNITURE_MAX_INSTANCES = 64;
+  await Promise.all(COURSE_FURNITURE_MODELS.map(async (id) => {
+    try {
+      const url = assetUrl(`/assets/scenery/tier-a/${id}.glb`);
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const model = await loadGlb(bytes);
+      // Concatenate the model's primitives into one vertex/index set per
+      // registered id — the pass doesn't need per-primitive materials for
+      // course furniture, and reusing one id/one bind group keeps the draw
+      // list short.
+      let posTotal = 0;
+      let nrmTotal = 0;
+      let idxTotal = 0;
+      for (const p of model.primitives) {
+        posTotal += p.positions.length;
+        nrmTotal += p.normals.length;
+        idxTotal += p.indices.length;
+      }
+      const positions = new Float32Array(posTotal);
+      const normals = new Float32Array(nrmTotal);
+      const needs32 = model.primitives.some((p) => p.indices instanceof Uint32Array);
+      const indices = needs32 ? new Uint32Array(idxTotal) : new Uint16Array(idxTotal);
+      let pOff = 0;
+      let nOff = 0;
+      let iOff = 0;
+      let vertBase = 0;
+      for (const p of model.primitives) {
+        positions.set(p.positions, pOff);
+        normals.set(p.normals, nOff);
+        for (let i = 0; i < p.indices.length; i += 1) indices[iOff + i] = p.indices[i] + vertBase;
+        pOff += p.positions.length;
+        nOff += p.normals.length;
+        iOff += p.indices.length;
+        vertBase += p.positions.length / 3;
+      }
+      sceneryMeshPass.register({
+        id,
+        positions,
+        normals,
+        indices,
+        baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
+        maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
+      });
+    } catch {
+      // A fetch or decode failure leaves the model unregistered; the pass
+      // silently skips it rather than taking the engine down.
+    }
+  }));
+
   // Shadow stage before anything lit draws. Its own telemetry writes
   // into `telemetry.shadows` so the per-tile atlas size + per-cascade
   // draw count are visible on `window.__ROWER3D_SHADOWS`.
@@ -383,6 +453,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     floraSolidStage,
     waterPass,
     boatPass,
+    sceneryMeshPass,
     postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
@@ -412,6 +483,46 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   telemetry.route.hasCurve = true;
   telemetry.route.totalDistance = totalDistanceMeters;
   telemetry.route.curveLength = curveLength;
+
+  // Place course furniture along the real route curve and feed the
+  // per-model instance buffers once at attach — this scene isn't dynamic,
+  // so there's no reason to re-send the mat4s every frame.
+  const furniture: FurniturePlacement[] = placeFurniture({
+    curve: routeCurve,
+    routeMeters: totalDistanceMeters,
+    shoreHalfWidth: (progress, side) => {
+      if (!waterEdgesForProgress) return 10;
+      const edges = waterEdgesForProgress(progress);
+      return side === 'left' ? edges.left : edges.right;
+    },
+  });
+  const byModel = new Map<SceneryModelId, Mat4[]>();
+  for (const model of COURSE_FURNITURE_MODELS) byModel.set(model, []);
+  // Scenery GLBs are authored in millimetres and the loader bakes the
+  // node transform into metres-of-the-mesh; `ASSET_SCALE = 0.001` brings
+  // them back to scene units (matches `sceneryPlacement.ts`'s React path).
+  const ASSET_SCALE = 0.001;
+  for (const place of furniture) {
+    const trs = mat4();
+    const rot = mat4();
+    const t = mat4();
+    mat4FromRotationY(rot, place.rotationY);
+    // Build TRS = T · R · S by hand so the uniform scale lands on the
+    // mesh before the rotation applies — the engine's math/ helpers don't
+    // ship a mat4FromScale yet.
+    rot[0] *= ASSET_SCALE; rot[1] *= ASSET_SCALE; rot[2] *= ASSET_SCALE;
+    rot[4] *= ASSET_SCALE; rot[5] *= ASSET_SCALE; rot[6] *= ASSET_SCALE;
+    rot[8] *= ASSET_SCALE; rot[9] *= ASSET_SCALE; rot[10] *= ASSET_SCALE;
+    mat4Identity(t);
+    t[12] = place.position[0];
+    t[13] = place.position[1];
+    t[14] = place.position[2];
+    mat4Multiply(trs, t, rot);
+    byModel.get(place.id)?.push(trs);
+  }
+  for (const model of COURSE_FURNITURE_MODELS) {
+    sceneryMeshPass.setInstances(model, byModel.get(model) ?? []);
+  }
 
   // Chase camera rig state, driven by `cameraTarget` each frame. Allocated
   // once so the FOV/position/lookAt don't retain stale per-frame GC pressure.
