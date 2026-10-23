@@ -48,10 +48,15 @@
 
   const workout = $derived(session.currentWorkout);
 
-  // The engine reads a `SceneryRoute` (curvePoints + totalDistanceMeters) to
-  // run the boat along; the shell's `WaterRoute` carries neither, so adapt it
-  // (#570 AC2). Re-derives when the rower picks a different route.
-  const engineRoute = $derived(toEngineRoute(routes.selectedRoute));
+  // The engine reads a `SceneryRoute` (curvePoints + totalDistanceMeters + loop
+  // flag + per-progress shore widths) to run the boat along and build the
+  // water strip. Shell's `WaterRoute` carries none of this, so adapt it, and
+  // pass whatever enrichment the routes store already has cached so the water
+  // bends with the OSM-measured river (#570 AC2 + #549 scenery slice).
+  const selectedEnrichment = $derived(
+    routes.selectedRoute ? routes.routeEnrichments[routes.selectedRoute.id] ?? null : null,
+  );
+  const engineRoute = $derived(toEngineRoute(routes.selectedRoute, selectedEnrichment));
 </script>
 
 <svelte:head>
