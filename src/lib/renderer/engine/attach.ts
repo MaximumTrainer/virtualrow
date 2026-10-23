@@ -100,6 +100,16 @@ export interface SceneryRoute {
    */
   isClosedLoop?: boolean;
   /**
+   * GLB scenery (bank-edge, scatter, buildings, trees, landform, backdrop,
+   * course furniture, bridges, landmarks) — one group per model id, with
+   * per-instance world-space transforms. The adapter computes the layout;
+   * attach loads each referenced GLB and feeds instances into the registry.
+   */
+  sceneryGlbs?: Array<{
+    id: string;
+    instances: Array<{ position: [number, number, number]; rotationY: number; scale: number }>;
+  }>;
+  /**
    * Per-progress shore widths (scene units) so the water strip bends with
    * the OSM-measured river. Called once per vertex column at build time, not
    * per frame. Omitted → symmetric `WATER_CHANNEL_HALF_WIDTH`.
@@ -308,13 +318,27 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     'a06-finish-tower',
     'a07-distance-marker-post',
   ];
-  // Course furniture is a small fixed set per route (≤32 of each kind for
-  // any route we ship), so a generous ceiling keeps the GPU buffer stable
-  // across route switches.
-  const COURSE_FURNITURE_MAX_INSTANCES = 64;
-  await Promise.all(COURSE_FURNITURE_MODELS.map(async (id) => {
+  // Full set of GLB ids this route references: the fixed course furniture
+  // plus everything `computePlacements` + `computeStructurePlacements`
+  // asked for on the adapter side.
+  const sceneryGlbList = isSceneryRoute(opts.route) ? opts.route.sceneryGlbs ?? [] : [];
+  const allModelIds: Set<string> = new Set<string>(COURSE_FURNITURE_MODELS);
+  for (const group of sceneryGlbList) allModelIds.add(group.id);
+  // Fixed per-GLB ceiling. Routes we ship touch at most ~900 instances per
+  // bank for the heaviest category; 1024 keeps the GPU buffer size stable
+  // through a route switch without reallocating.
+  const COURSE_FURNITURE_MAX_INSTANCES = 1024;
+  // Where in the asset tree a given model id lives. All scenery GLBs are
+  // under `public/assets/scenery/tier-{a..g,l}/`; we figure out the folder
+  // from the id's first character.
+  const tierFolderFor = (id: string): string => {
+    const prefix = id[0]?.toLowerCase() ?? 'a';
+    const tier = 'abcdefgl'.includes(prefix) ? prefix : 'a';
+    return `tier-${tier}`;
+  };
+  await Promise.all([...allModelIds].map(async (id) => {
     try {
-      const url = assetUrl(`/assets/scenery/tier-a/${id}.glb`);
+      const url = assetUrl(`/assets/scenery/${tierFolderFor(id)}/${id}.glb`);
       const res = await fetch(url);
       if (!res.ok) return;
       const bytes = new Uint8Array(await res.arrayBuffer());
@@ -522,6 +546,31 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   }
   for (const model of COURSE_FURNITURE_MODELS) {
     sceneryMeshPass.setInstances(model, byModel.get(model) ?? []);
+  }
+
+  // Full-scene GLB scenery (bank-edge, scatter, buildings, trees, landform,
+  // backdrop, bridges, landmarks, finish-area furniture). Instances come
+  // pre-computed from the UI adapter so this is a straight transform-build
+  // + setInstances per model id.
+  for (const group of sceneryGlbList) {
+    const mats: Mat4[] = [];
+    for (const inst of group.instances) {
+      const trs = mat4();
+      const rot = mat4();
+      const t = mat4();
+      mat4FromRotationY(rot, inst.rotationY);
+      // T · (R · S) built by hand — see the course-furniture block above.
+      rot[0] *= inst.scale; rot[1] *= inst.scale; rot[2] *= inst.scale;
+      rot[4] *= inst.scale; rot[5] *= inst.scale; rot[6] *= inst.scale;
+      rot[8] *= inst.scale; rot[9] *= inst.scale; rot[10] *= inst.scale;
+      mat4Identity(t);
+      t[12] = inst.position[0];
+      t[13] = inst.position[1];
+      t[14] = inst.position[2];
+      mat4Multiply(trs, t, rot);
+      mats.push(trs);
+    }
+    sceneryMeshPass.setInstances(group.id, mats);
   }
 
   // Chase camera rig state, driven by `cameraTarget` each frame. Allocated

@@ -46,9 +46,31 @@ import {
   layoutFoliage,
 } from '../scenery/foliagePlan';
 import { layoutLandscape, layoutToBuildingSpecs } from '../scenery/landscapeLayout';
-import { getRouteSceneryTrack } from '../../components/rower3d/sceneryTrack';
+import {
+  getRouteSceneryTrack,
+  trackWaterForProfile,
+} from '../../components/rower3d/sceneryTrack';
 import { SCENERY_PROFILES } from '../../components/rower3d/sceneryConfig';
 import type { BuildingSpec } from '../renderer/plan/buildings';
+import {
+  computePlacements,
+  distinctProfiles,
+  keepsKitTrees,
+  type PerformanceMode,
+  type Placement,
+} from '../scenery/sceneryPlacement';
+import {
+  computeStructurePlacements,
+  routeStructures,
+} from '../scenery/sceneryStructures';
+import {
+  resolveSceneryModels,
+  type ResolvedScenery,
+  type SceneryModelId,
+} from '../../components/rower3d/sceneryAssets';
+import { resolveRegion } from '../../components/rower3d/sceneryRegion';
+import type { SceneryProfile } from '../services/routeEnrichmentService';
+import { buildTerrainProfile } from '../services/routeEnrichmentService';
 
 /**
  * Default navigable water width in metres. Mirrors
@@ -68,12 +90,28 @@ export interface WaterEdges {
 /** Chunk size (metres of route) used when batching foliage into per-chunk pools. */
 export const FOLIAGE_CHUNK_METRES = 150;
 
+/** One GLB-asset instance in world space, ready for `sceneryMeshPass.setInstances`. */
+export interface SceneryInstance {
+  position: [number, number, number];
+  rotationY: number;
+  scale: number;
+}
+
+/** All GLB instances for one `SceneryModelId`, so the engine knows what to load. */
+export interface SceneryGlbGroup {
+  id: SceneryModelId;
+  instances: SceneryInstance[];
+}
+
 /** The engine-facing route shape (structural match for `SceneryRoute`). */
 export interface EngineRoute {
   /** Foliage instance pools, one per (species, chunk). */
   pools: PoolInput[];
   /** Procedural facade buildings along the banks (`landscapeLayout` → `BuildingSpec[]`). */
   buildings?: BuildingSpec[];
+  /** GLB scenery (bank-edge, scatter, buildings, trees, landform, backdrop,
+   * course furniture, bridges, landmarks) — one group per model id. */
+  sceneryGlbs?: SceneryGlbGroup[];
   /** World-space boat/ghost curve; omitted when the route has too few points. */
   curvePoints?: [number, number, number][];
   /** Real route length in metres, matching the shell's finish detection. */
@@ -138,6 +176,7 @@ export const toEngineRoute = (
   // React side.
   const pools: PoolInput[] = [];
   let buildings: BuildingSpec[] = [];
+  let sceneryGlbsResult: SceneryGlbGroup[] = [];
   if (curvePoints.length >= 2) {
     const curve = new RouteCurve(
       curvePoints.map(([x, y, z]) => vec3(x, y, z)),
@@ -155,11 +194,46 @@ export const toEngineRoute = (
 
     const landscape = layoutLandscape({ curve, enrichment: enrichment ?? null, track });
     buildings = layoutToBuildingSpecs(landscape, SCENERY_PROFILES);
+
+    // GLB scenery (bank-edge, scatter, buildings, trees, landform, backdrop,
+    // bridges, landmarks, finish-area furniture). The `/row` adapter is where
+    // the layout runs so the engine stays about rendering; this is pure maths
+    // on the curve + enrichment + track, matching the React scene's pipeline.
+    const mode: PerformanceMode = 'medium';
+    const budget = 0.7;
+    const profiles: SceneryProfile[] = distinctProfiles(enrichment ?? null, track);
+    const region = resolveRegion(route.coordinates ?? null);
+    const resolvedByProfile = new Map<SceneryProfile, ResolvedScenery>();
+    for (const profile of profiles) {
+      const waterType = track ? trackWaterForProfile(track, profile) : (enrichment?.waterBodyType ?? 'unknown');
+      const treeSpecies = SCENERY_PROFILES[profile]?.trees.species ?? [];
+      resolvedByProfile.set(profile, resolveSceneryModels(profile, waterType, treeSpecies, region));
+    }
+    const kitTrees = keepsKitTrees(mode);
+    const left = computePlacements({ curve, enrichment: enrichment ?? null, resolvedByProfile, budget, side: 'left', track, kitTrees });
+    const right = computePlacements({ curve, enrichment: enrichment ?? null, resolvedByProfile, budget, side: 'right', track, kitTrees });
+    const requests = routeStructures({
+      side: 'left',
+      hasCurve: true,
+      coordinates: route.coordinates ?? null,
+      crossings: enrichment?.crossings ?? null,
+      routeMeters: totalDistanceMeters,
+    });
+    const terrain = buildTerrainProfile(enrichment?.elevations);
+    const structures: Placement[] = computeStructurePlacements(curve, requests, terrain, enrichment ?? null);
+    const grouped = new Map<SceneryModelId, SceneryInstance[]>();
+    for (const p of [...left, ...right, ...structures]) {
+      const list = grouped.get(p.id) ?? [];
+      list.push({ position: p.position, rotationY: p.rotationY, scale: p.scale });
+      grouped.set(p.id, list);
+    }
+    sceneryGlbsResult = [...grouped.entries()].map(([id, instances]) => ({ id, instances }));
   }
 
   return {
     pools,
     ...(buildings.length > 0 ? { buildings } : {}),
+    ...(sceneryGlbsResult.length > 0 ? { sceneryGlbs: sceneryGlbsResult } : {}),
     ...(curvePoints.length >= 2 ? { curvePoints } : {}),
     ...(totalDistanceMeters !== undefined ? { totalDistanceMeters } : {}),
     ...(isClosedLoop ? { isClosedLoop } : {}),
