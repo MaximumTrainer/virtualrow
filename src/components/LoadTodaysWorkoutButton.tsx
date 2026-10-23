@@ -31,7 +31,15 @@ export interface LoadTodaysWorkoutButtonProps {
 /** ±14 days per the issue's search window (D2(a)). */
 const SEARCH_WINDOW_DAYS = 14;
 
-const formatDate = (date: Date): string => date.toISOString().slice(0, 10);
+const formatDate = (date: Date): string => {
+  // Local-calendar YYYY-MM-DD, not UTC: plan.scheduledDate strings are
+  // naive-local (e.g. "2026-09-30T07:00:00"), so "today" must also come
+  // from the local calendar or a +1/−1 timezone offset flips the day.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 const startOfDay = (date: Date): Date => {
   const d = new Date(date);

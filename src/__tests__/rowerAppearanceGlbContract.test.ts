@@ -41,6 +41,9 @@ const dryRunAvailable = hasPython3 && fs.existsSync(SCRIPT_PATH);
 describe('rower appearance GLB contract (#474 Phase 2)', () => {
   it.skipIf(!dryRunAvailable)(
     'build_crew.py --dry-run lists every hairstyle and hat sibling the renderer toggles',
+    { timeout: 30_000 }, // Python startup + import takes several seconds; the
+                        // pre-commit's parallel vitest workers push it past
+                        // the default 5 s, so give the dry run room.
     () => {
       let out: string;
       try {
@@ -62,7 +65,11 @@ describe('rower appearance GLB contract (#474 Phase 2)', () => {
         expect(crewed, `Hat_${hat}`).toContain(`Hat_${hat}`);
       }
       expect(crewed).toContain('Hairstyles');
-      expect(crewed, 'Hat parent').toMatch(/\n {2}Hat\n/);
+      // Match \r?\n: Python's print emits LF, but Node's execFileSync captures
+      // the child's stdout through the OS pipe layer, which on Windows comes
+      // back as CRLF. The renderer only cares that `Hat` is a 2-space-indented
+      // sibling of the hat variants, not which line ending surrounds it.
+      expect(crewed, 'Hat parent').toMatch(/\r?\n {2}Hat\r?\n/);
     },
   );
 
