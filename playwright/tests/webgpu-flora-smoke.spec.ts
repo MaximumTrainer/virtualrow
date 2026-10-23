@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/crash-watch';
+import { assertCanvasNotBlank } from './helpers/assertCanvasNotBlank';
 
 test.use({
   launchOptions: {
@@ -66,6 +67,8 @@ test('webgpu flora LOD smoke', async ({ page }) => {
         }).__ROWER3D_TEXTURES,
     );
     expect(textures?.atlasKind).toMatch(/^(ktx2|png|placeholder|pending)$/);
+    // Guards the #549 black-canvas regression (see helper).
+    await assertCanvasNotBlank(page, canvas);
   } else {
     const health = await page.evaluate(
       () =>

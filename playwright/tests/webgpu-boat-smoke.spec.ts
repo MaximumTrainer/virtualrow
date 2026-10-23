@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/crash-watch';
+import { assertCanvasNotBlank } from './helpers/assertCanvasNotBlank';
 
 test.use({
   launchOptions: {
@@ -86,6 +87,8 @@ test('webgpu boat smoke', async ({ page }) => {
     expect(snapshot.crew?.rowers).toBe(1);
     expect(snapshot.ghost?.active).toBe(true);
     expect(snapshot.ghost?.value ?? 0).toBeGreaterThan(0);
+    // Guards the #549 black-canvas regression (see helper).
+    await assertCanvasNotBlank(page, canvas);
   } else {
     const health = await page.evaluate(
       () =>
