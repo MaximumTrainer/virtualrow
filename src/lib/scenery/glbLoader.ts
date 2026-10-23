@@ -35,12 +35,48 @@ export interface GlbPrimitive {
   indices: Uint16Array | Uint32Array;
   /** Linear-space RGBA base colour, taken from the PBR material, default white. */
   baseColor: [number, number, number, number];
+  /**
+   * Node name the primitive's mesh was referenced from. Useful for picking
+   * out animated parts (e.g. `LeftOar`, `RightOar`). Present only when the
+   * loader was called with `preserveNodeTransforms: true`.
+   */
+  nodeName?: string;
+  /**
+   * Column-major 4x4 world matrix (parent chain accumulated). Present only
+   * when `preserveNodeTransforms: true`; the vertices in `positions` are in
+   * mesh-local space (not pre-multiplied by this matrix) so the caller can
+   * animate the node (e.g. swing an oar) at draw time by multiplying the
+   * matrix before upload.
+   */
+  nodeWorldMatrix?: Float32Array;
+  /**
+   * Name of the nearest articulated ancestor (e.g. `LeftOar`). Set when the
+   * primitive sits inside a known animated group so the caller can treat
+   * shaft + blade as one swung piece.
+   */
+  groupName?: string;
+  /**
+   * World matrix at the articulated-ancestor node. The caller rotates about
+   * this pivot's translation to swing the whole group as a unit.
+   */
+  pivotWorldMatrix?: Float32Array;
 }
 
 export interface GlbModel {
   primitives: GlbPrimitive[];
   /** Axis-aligned bounding box in local model space. */
   bounds: { min: [number, number, number]; max: [number, number, number] };
+}
+
+export interface LoadGlbOptions {
+  /**
+   * Keep each primitive's vertices in its mesh-local space and return the
+   * node's world matrix alongside, so the caller can animate node-level
+   * articulations (e.g. oar sweep) by applying its own matrix at draw time.
+   * Default is `false` — the loader bakes node transforms into vertex
+   * data so each GLB becomes one static mesh ready for upload.
+   */
+  preserveNodeTransforms?: boolean;
 }
 
 interface GltfBufferView {
@@ -86,6 +122,7 @@ interface GltfMaterial {
 }
 
 interface GltfNode {
+  name?: string;
   mesh?: number;
   children?: number[];
   matrix?: readonly number[]; // column-major mat4
@@ -93,6 +130,19 @@ interface GltfNode {
   rotation?: readonly number[]; // quat xyzw
   scale?: readonly number[];
 }
+
+/**
+ * Node names whose descendants form an articulated group. We expose each
+ * primitive under the first ancestor whose name starts with one of these
+ * prefixes so the engine can swing the whole oar (shaft + blade + mount)
+ * about a shared pivot. Case-sensitive; the scull GLB uses TitleCase.
+ */
+const ARTICULATED_PREFIXES = ['LeftOar', 'RightOar'];
+
+const isArticulatedRoot = (name: string | undefined): boolean => {
+  if (!name) return false;
+  return ARTICULATED_PREFIXES.some((p) => name === p || name.startsWith(`${p}_`));
+};
 
 interface GltfJson {
   asset: { version: string };
@@ -341,7 +391,11 @@ const transformDir = (m: Float64Array, x: number, y: number, z: number, out: Flo
  * GLB be registered as one static mesh ready for an instance pool without a
  * per-node matrix stack at draw time.
  */
-export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel> => {
+export const loadGlb = async (
+  file: ArrayBuffer | Uint8Array,
+  options: LoadGlbOptions = {},
+): Promise<GlbModel> => {
+  const preserve = options.preserveNodeTransforms === true;
   const { json, bin } = parseGlbContainer(file);
   const required = new Set(json.extensionsRequired ?? []);
   const unknown = [...required].filter(
@@ -361,7 +415,13 @@ export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel>
   const primitives: GlbPrimitive[] = [];
   const bounds = { min: [Infinity, Infinity, Infinity] as [number, number, number], max: [-Infinity, -Infinity, -Infinity] as [number, number, number] };
 
-  const emitPrimitive = async (meshIndex: number, worldMatrix: Float64Array): Promise<void> => {
+  const emitPrimitive = async (
+    meshIndex: number,
+    worldMatrix: Float64Array,
+    nodeName?: string,
+    groupName?: string,
+    pivotMatrix?: Float64Array,
+  ): Promise<void> => {
     const mesh = json.meshes[meshIndex];
     for (const prim of mesh.primitives) {
       if ((prim.mode ?? 4) !== 4) {
@@ -393,17 +453,36 @@ export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel>
       const rawNormals = readFloatVecs(nrmBytes, nrmAcc, nrmBv, 3);
       const indices = readIndices(idxBytes, idxAcc, idxBv);
 
-      // Bake the walked node transform into local-space positions/normals so
-      // the engine registers each GLB as one static mesh ready for upload.
-      const positions = new Float32Array(rawPositions.length);
-      const normals = new Float32Array(rawNormals.length);
-      for (let i = 0; i < rawPositions.length; i += 3) {
-        transformPoint(worldMatrix, rawPositions[i], rawPositions[i + 1], rawPositions[i + 2], positions, i);
-        transformDir(worldMatrix, rawNormals[i], rawNormals[i + 1], rawNormals[i + 2], normals, i);
-        for (let c = 0; c < 3; c += 1) {
-          const v = positions[i + c];
-          if (v < bounds.min[c]) bounds.min[c] = v;
-          if (v > bounds.max[c]) bounds.max[c] = v;
+      let positions: Float32Array;
+      let normals: Float32Array;
+      if (preserve) {
+        // Keep raw local-space vertices; the caller will apply the node
+        // matrix (plus any per-frame articulation) at draw time.
+        positions = new Float32Array(rawPositions);
+        normals = new Float32Array(rawNormals);
+        // Bounds are approximated from `nodeWorldMatrix × local` so the
+        // model's AABB still reflects world extents.
+        for (let i = 0; i < rawPositions.length; i += 3) {
+          const tx = new Float32Array(3);
+          transformPoint(worldMatrix, rawPositions[i], rawPositions[i + 1], rawPositions[i + 2], tx, 0);
+          for (let c = 0; c < 3; c += 1) {
+            if (tx[c] < bounds.min[c]) bounds.min[c] = tx[c];
+            if (tx[c] > bounds.max[c]) bounds.max[c] = tx[c];
+          }
+        }
+      } else {
+        // Bake the walked node transform into local-space positions/normals
+        // so the engine registers each GLB as one static mesh ready for upload.
+        positions = new Float32Array(rawPositions.length);
+        normals = new Float32Array(rawNormals.length);
+        for (let i = 0; i < rawPositions.length; i += 3) {
+          transformPoint(worldMatrix, rawPositions[i], rawPositions[i + 1], rawPositions[i + 2], positions, i);
+          transformDir(worldMatrix, rawNormals[i], rawNormals[i + 1], rawNormals[i + 2], normals, i);
+          for (let c = 0; c < 3; c += 1) {
+            const v = positions[i + c];
+            if (v < bounds.min[c]) bounds.min[c] = v;
+            if (v > bounds.max[c]) bounds.max[c] = v;
+          }
         }
       }
 
@@ -414,7 +493,21 @@ export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel>
         ? [materialBase[0] ?? 1, materialBase[1] ?? 1, materialBase[2] ?? 1, materialBase[3] ?? 1]
         : [1, 1, 1, 1];
 
-      primitives.push({ positions, normals, indices, baseColor });
+      const primitive: GlbPrimitive = { positions, normals, indices, baseColor };
+      if (preserve) {
+        primitive.nodeName = nodeName;
+        // Convert the walked Float64 matrix to Float32 for upload.
+        const m32 = new Float32Array(16);
+        for (let i = 0; i < 16; i += 1) m32[i] = worldMatrix[i];
+        primitive.nodeWorldMatrix = m32;
+        if (groupName && pivotMatrix) {
+          primitive.groupName = groupName;
+          const p32 = new Float32Array(16);
+          for (let i = 0; i < 16; i += 1) p32[i] = pivotMatrix[i];
+          primitive.pivotWorldMatrix = p32;
+        }
+      }
+      primitives.push(primitive);
     }
   };
 
@@ -424,7 +517,12 @@ export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel>
   const sceneIdx = json.scene ?? 0;
   const roots = json.scenes?.[sceneIdx]?.nodes ?? (json.nodes ? json.nodes.map((_, i) => i) : []);
   const seen = new Set<number>();
-  const walk = async (nodeIndex: number, parentMatrix: Float64Array): Promise<void> => {
+  const walk = async (
+    nodeIndex: number,
+    parentMatrix: Float64Array,
+    inheritedGroup?: string,
+    inheritedPivot?: Float64Array,
+  ): Promise<void> => {
     if (seen.has(nodeIndex)) return;
     seen.add(nodeIndex);
     const node = json.nodes?.[nodeIndex];
@@ -432,9 +530,27 @@ export const loadGlb = async (file: ArrayBuffer | Uint8Array): Promise<GlbModel>
     const local = nodeMatrix(node);
     const world = new Float64Array(16);
     mul4(world, parentMatrix, local);
-    if (node.mesh !== undefined) await emitPrimitive(node.mesh, world);
+
+    // Promote to an articulated group when this node is itself a known
+    // root (its name starts the chain). Descendants inherit the same group
+    // + pivot so shaft + blade swing with the root oar.
+    let group = inheritedGroup;
+    let pivot = inheritedPivot;
+    if (preserve && !group && isArticulatedRoot(node.name)) {
+      // Strip the `_subpart` suffix so `LeftOar_Shaft` and `LeftOar_Blade`
+      // land under the same group name as the bare `LeftOar` root.
+      const base = ARTICULATED_PREFIXES.find(
+        (p) => node.name === p || node.name!.startsWith(`${p}_`),
+      );
+      group = base ?? node.name;
+      pivot = new Float64Array(world);
+    }
+
+    if (node.mesh !== undefined) {
+      await emitPrimitive(node.mesh, world, node.name, group, pivot);
+    }
     for (const child of node.children ?? []) {
-      await walk(child, world);
+      await walk(child, world, group, pivot);
     }
   };
   for (const root of roots) await walk(root, identity4());

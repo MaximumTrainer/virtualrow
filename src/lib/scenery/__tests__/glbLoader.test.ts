@@ -217,6 +217,67 @@ describe('loadGlb', () => {
     expect(model.bounds.max).toEqual([0, 0, 0]);
   });
 
+  it('with preserveNodeTransforms, exposes raw local vertices + node matrix + articulated group', async () => {
+    // Scene:
+    //   root (translate +10 along X) → mesh 0 (one tri)
+    //   LeftOar (translate +0.5 along Z) → LeftOar_Blade (translate +1 along Z) → mesh 0
+    // Baked path would collapse the Blade's local tri with full world
+    // transform. preserved path keeps the local tri and reports LeftOar
+    // as the group with its own pivot world matrix.
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+    const indices = new Uint16Array([0, 1, 2, 0]);
+    const bin = new Uint8Array(positions.byteLength + normals.byteLength + indices.byteLength);
+    bin.set(new Uint8Array(positions.buffer), 0);
+    bin.set(new Uint8Array(normals.buffer), positions.byteLength);
+    bin.set(new Uint8Array(indices.buffer), positions.byteLength + normals.byteLength);
+    const json = {
+      asset: { version: '2.0' },
+      buffers: [{ byteLength: bin.length }],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: positions.byteLength },
+        { buffer: 0, byteOffset: positions.byteLength, byteLength: normals.byteLength },
+        { buffer: 0, byteOffset: positions.byteLength + normals.byteLength, byteLength: 6 },
+      ],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: 5126, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: 5123, count: 3, type: 'SCALAR' },
+      ],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      nodes: [
+        { name: 'Hull', mesh: 0, translation: [10, 0, 0] },
+        { name: 'LeftOar', translation: [0, 0, 0.5], children: [2] },
+        { name: 'LeftOar_Blade', mesh: 0, translation: [0, 0, 1] },
+      ],
+      scenes: [{ nodes: [0, 1] }],
+      scene: 0,
+    };
+    const patched = encodeGlb(json, bin);
+    const model = await loadGlb(patched, { preserveNodeTransforms: true });
+
+    const hull = model.primitives.find((p) => p.nodeName === 'Hull')!;
+    const blade = model.primitives.find((p) => p.nodeName === 'LeftOar_Blade')!;
+    expect(hull).toBeDefined();
+    expect(blade).toBeDefined();
+
+    // Positions stay in LOCAL space (the raw triangle), not baked.
+    expect(blade.positions[0]).toBe(0);
+    expect(blade.positions[3]).toBe(1);
+
+    // Hull: no articulated ancestor → no group fields.
+    expect(hull.groupName).toBeUndefined();
+    expect(hull.pivotWorldMatrix).toBeUndefined();
+    // Hull's own node matrix translates by +10 X.
+    expect(hull.nodeWorldMatrix![12]).toBe(10);
+
+    // Blade: belongs to the LeftOar group; pivot sits at LeftOar's world
+    // position (+0.5 Z), not the blade's own (+1.5 Z).
+    expect(blade.groupName).toBe('LeftOar');
+    expect(blade.pivotWorldMatrix![14]).toBeCloseTo(0.5, 6);
+    expect(blade.nodeWorldMatrix![14]).toBeCloseTo(1.5, 6);
+  });
+
   it('decodes a GLB with no `scene` field by walking every node from identity', async () => {
     const bytes = read('tier-a/a01-buoy-lane-sphere.glb');
     const { json, bin } = parseGlbContainer(bytes);

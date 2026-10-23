@@ -357,6 +357,18 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   const sceneryMeshPass = createSceneryMeshPass({ device, format, frameUniforms });
   const BOAT_SCULL_PREFIX = 'boat-scull';
   const boatScullMeshIds: string[] = [];
+  // Per-primitive articulation data for the crewed scull: each primitive's
+  // local-space geometry needs its own node world matrix as the "static"
+  // part of its instance transform, and primitives belonging to an
+  // articulated group (LeftOar / RightOar) also carry a pivot so attach can
+  // swing the whole oar about it each frame.
+  interface BoatScullPrimitive {
+    id: string;
+    nodeWorld: Mat4;
+    group?: string;
+    pivotWorld?: Mat4;
+  }
+  const boatScullPrimitives: BoatScullPrimitive[] = [];
   const COURSE_FURNITURE_MODELS: SceneryModelId[] = [
     'a01-buoy-lane-sphere',
     'a06-finish-tower',
@@ -394,7 +406,10 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     const res = await fetch(assetUrl('/assets/boat/scull-male.glb'));
     if (res.ok) {
       const bytes = new Uint8Array(await res.arrayBuffer());
-      const model = await loadGlb(bytes);
+      // Preserve node transforms so LeftOar / RightOar descendants come back
+      // in LOCAL space with their pivot world matrix attached. The engine
+      // multiplies through the pivot each frame to swing them.
+      const model = await loadGlb(bytes, { preserveNodeTransforms: true });
       for (let i = 0; i < model.primitives.length; i += 1) {
         const prim = model.primitives[i];
         const id = `${BOAT_SCULL_PREFIX}:${i}`;
@@ -407,6 +422,24 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
           maxInstances: 1,
         });
         boatScullMeshIds.push(id);
+        // Convert the loader's Float32 matrices into the engine's Mat4 type.
+        const nodeWorld = mat4();
+        if (prim.nodeWorldMatrix) {
+          for (let k = 0; k < 16; k += 1) nodeWorld[k] = prim.nodeWorldMatrix[k];
+        } else {
+          mat4Identity(nodeWorld);
+        }
+        let pivotWorld: Mat4 | undefined;
+        if (prim.pivotWorldMatrix) {
+          pivotWorld = mat4();
+          for (let k = 0; k < 16; k += 1) pivotWorld[k] = prim.pivotWorldMatrix[k];
+        }
+        boatScullPrimitives.push({
+          id,
+          nodeWorld,
+          group: prim.groupName,
+          pivotWorld,
+        });
       }
     }
   } catch { /* scull GLB load failed — the old baked boat remains as fallback */ }
@@ -806,11 +839,12 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     boatPass.ghostVisible.value = ghostInfo !== null;
 
     if (scullLoaded) {
-      // One mat4 = translation at the boat's world position * rotation
-      // about Y to face the route tangent. Boat world Y already includes
-      // the BOAT_HEIGHT_Y freeboard, so the GLB (pivot at hull waterline
-      // per `public/assets/boat/README.md`) sits above the water surface.
-      const scullTrs = mat4();
+      // Boat body transform (places the hull on the route): translation at
+      // the boat's world position * rotation about Y to face the tangent.
+      // World Y already includes BOAT_HEIGHT_Y so the hull (pivot at the
+      // waterline per `public/assets/boat/README.md`) rides above the
+      // surface.
+      const boatTrs = mat4();
       const scullRot = mat4();
       const scullTrans = mat4();
       mat4FromRotationY(scullRot, boatPlacement.heading);
@@ -818,9 +852,61 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       scullTrans[12] = boatPlacement.world[0];
       scullTrans[13] = boatPlacement.world[1];
       scullTrans[14] = boatPlacement.world[2];
-      mat4Multiply(scullTrs, scullTrans, scullRot);
-      for (const id of boatScullMeshIds) {
-        sceneryMeshPass.setInstances(id, [scullTrs]);
+      mat4Multiply(boatTrs, scullTrans, scullRot);
+
+      // Oar sweep: phase ∈ [0,1) wraps once per stroke. Map to a sinusoid
+      // centred on 0 so the oar swings symmetrically through recovery and
+      // drive. Amplitude follows intensity so a cold stop freezes the oars.
+      const cadence = rideFrame?.cadence ?? 0;
+      const elapsed = rideFrame?.elapsedSeconds ?? 0;
+      const playing = rideFrame?.isPlaying ?? false;
+      const phase = strokePhase(cadence, elapsed, playing);
+      const amp = strokeAmplitude(rideFrame);
+      // ±45° peak-to-peak swing matches React `GltfScull` sweep. Half-span
+      // because sin(2π·phase) ∈ [−1, 1].
+      const SWEEP_PEAK_RAD = Math.PI / 4;
+      const sweep = Math.sin(phase * Math.PI * 2) * SWEEP_PEAK_RAD * amp;
+
+      // Scratch matrices reused across primitives to avoid allocations.
+      const nodeAfterSwing = mat4();
+      const toPivot = mat4();
+      const fromPivot = mat4();
+      const rotSweep = mat4();
+      const tmp = mat4();
+      const perInstance = mat4();
+
+      for (const prim of boatScullPrimitives) {
+        if (prim.group && prim.pivotWorld) {
+          // Articulated: rotate the primitive's local vertices about the
+          // pivot's world translation. Left and right oars swing in
+          // opposite phase so the catches alternate — matches a sweep rig
+          // where port and starboard are mirrored about the hull axis.
+          const sign = prim.group === 'RightOar' ? -1 : 1;
+          mat4FromRotationY(rotSweep, sweep * sign);
+
+          const px = prim.pivotWorld[12];
+          const py = prim.pivotWorld[13];
+          const pz = prim.pivotWorld[14];
+          mat4Identity(toPivot);
+          toPivot[12] = -px;
+          toPivot[13] = -py;
+          toPivot[14] = -pz;
+          mat4Identity(fromPivot);
+          fromPivot[12] = px;
+          fromPivot[13] = py;
+          fromPivot[14] = pz;
+
+          // nodeAfterSwing = fromPivot * rotSweep * toPivot * nodeWorld
+          mat4Multiply(tmp, toPivot, prim.nodeWorld);
+          mat4Multiply(nodeAfterSwing, rotSweep, tmp);
+          mat4Multiply(tmp, fromPivot, nodeAfterSwing);
+          // perInstance = boatTrs * tmp (apply the hull placement last).
+          mat4Multiply(perInstance, boatTrs, tmp);
+        } else {
+          // Static primitive: boatTrs × nodeWorld.
+          mat4Multiply(perInstance, boatTrs, prim.nodeWorld);
+        }
+        sceneryMeshPass.setInstances(prim.id, [perInstance]);
       }
     }
     boatPass.boat.write(device, {
