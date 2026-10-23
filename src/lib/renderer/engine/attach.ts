@@ -14,6 +14,7 @@
 
 import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY } from '../math/mat4';
 import { vec3 } from '../math/vec3';
+import { cameraTarget, createRigTarget } from './camera';
 import { createBankPass } from '../passes/bank';
 import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
@@ -412,6 +413,9 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   telemetry.route.totalDistance = totalDistanceMeters;
   telemetry.route.curveLength = curveLength;
 
+  // Chase camera rig state, driven by `cameraTarget` each frame. Allocated
+  // once so the FOV/position/lookAt don't retain stale per-frame GC pressure.
+  const cameraRig = createRigTarget();
   const boatPlacement = createPlacement();
   const ghostPlacement = createPlacement();
   const boatBones = [mat4(), mat4(), mat4(), mat4()];
@@ -573,12 +577,26 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       telemetry.ghostMeters.active = false;
     }
 
-    // Build view / proj. Chase camera at a canned offset above the strip.
-    const eye = vec3(0, 2.6, 7);
-    const target = vec3(0, 0.3, -5);
+    // Build view / proj. Chase camera follows the boat along the curve — on
+    // smoke pages where the boat isn't driven, it falls back to the canned
+    // over-the-shoulder stand-in (the fallback goes through `cameraTarget`
+    // too so the rig has one code path).
+    const camBoat = vec3(boatPlacement.world[0], boatPlacement.world[1], boatPlacement.world[2]);
+    const camTangent = vec3();
+    // Tangent at the boat's progress — the chase camera sits −tangent * back.
+    const camSample = routeCurve.sample(boatPlacement.progress);
+    camTangent[0] = camSample.tangent[0];
+    camTangent[1] = camSample.tangent[1];
+    camTangent[2] = camSample.tangent[2];
+    cameraTarget(
+      { boat: camBoat, tangent: camTangent, velocityMps: speedMps, view: 'chase', bendSign: 0 },
+      cameraRig,
+    );
+    const eye = cameraRig.position;
+    const target = cameraRig.lookAt;
     const up = vec3(0, 1, 0);
     mat4LookAt(frame.view, eye, target, up);
-    mat4Perspective(frame.proj, (58 * Math.PI) / 180, width / height, 0.1, 2000);
+    mat4Perspective(frame.proj, (cameraRig.fov * Math.PI) / 180, width / height, 0.1, 2000);
     mat4Multiply(frame.viewProj, frame.proj, frame.view);
     frame.camPos[0] = eye[0];
     frame.camPos[1] = eye[1];
