@@ -83,8 +83,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   out.viewZ = -viewPos.z;
   // The palette index is in the fourth lane of `centres[ii]`, reinterpreted
   // from the pre-packed u32.
-  let meta = bitcast<u32>(instance.w);
-  out.paletteIndex = meta;
+  let packed = bitcast<u32>(instance.w);
+  out.paletteIndex = packed;
   // Per-instance seed for the facade stripe pattern.
   out.faceSeed = f32(ii & 0xffu) * 0.3719;
   return out;

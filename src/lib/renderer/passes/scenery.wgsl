@@ -80,8 +80,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let world = instance.xyz;
   // Metadata reinterpretation — only the low 16 bits (species index) matter
   // for the P3 look; sway seed stays available for a later pass.
-  let meta = bitcast<u32>(instance.w);
-  let swaySeed = f32((meta >> 16u) & 0xffffu) / 65535.0;
+  let packed = bitcast<u32>(instance.w);
+  let swaySeed = f32((packed >> 16u) & 0xffffu) / 65535.0;
 
   let local = QUAD_VERTS[QUAD_INDICES[vi]];
   // Gentle sway at the top of the card so standing fields are not static.

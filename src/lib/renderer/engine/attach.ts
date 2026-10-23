@@ -48,6 +48,7 @@ import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
   createSproutUniformBuffer,
+  FRAME_UNIFORMS_FLOATS,
   packFrameUniforms,
   packShadowUniforms,
   packSproutUniforms,
@@ -176,7 +177,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   });
 
   const frameUniforms = createFrameUniformBuffer(device);
-  const uniformScratch = new Float32Array(64);
+  const uniformScratch = new Float32Array(FRAME_UNIFORMS_FLOATS);
 
   // #559 P4: shadow atlas + per-tier cascade config. Default tier is medium
   // (3 cascades @ 1024). `setTier` is a later-phase ask (#559 FR8); for P2
