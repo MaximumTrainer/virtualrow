@@ -713,6 +713,15 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   let lastDistanceMeters = 0;
   let lastSpeedTime = -1;
 
+  // Smoothed boat distance so a slow-ticking `getFrame` (the Svelte ride
+  // session updates distanceMeters at ~4 Hz, where rAF runs at 60 Hz)
+  // doesn't make the boat snap by ~1 m every 250 ms. We track the last
+  // two getFrame samples, derive an instantaneous speed from their
+  // deltas, and extrapolate between them each engine frame.
+  let smoothedDistance = 0;
+  let lastDistSample = { d: 0, t: now() };
+  let prevDistSample = { d: 0, t: now() };
+
   const frameOnce = (): void => {
     if (disposed) return;
     resize();
@@ -721,10 +730,35 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     // #570 P7 — if the UI shell provided `getFrame`, pull the ride state.
     const rideFrame: RideFrame | null = opts.getFrame ? opts.getFrame() : null;
 
+    // Interpolate the boat distance so the shell's discrete samples turn
+    // into a smooth per-frame position. When the shell's `distanceMeters`
+    // advances, treat it as the newest truth; between advances, keep
+    // extrapolating from the last known speed.
+    if (rideFrame) {
+      const nowMs = now();
+      if (rideFrame.distanceMeters !== lastDistSample.d) {
+        prevDistSample = lastDistSample;
+        lastDistSample = { d: rideFrame.distanceMeters, t: nowMs };
+        smoothedDistance = rideFrame.distanceMeters;
+      } else if (rideFrame.isPlaying && !rideFrame.holdBoat && !rideFrame.finished) {
+        const dtSample = Math.max(1e-3, (lastDistSample.t - prevDistSample.t) / 1000);
+        const speedMps = (lastDistSample.d - prevDistSample.d) / dtSample;
+        const dtExtrap = (nowMs - lastDistSample.t) / 1000;
+        // Cap extrapolation so a stalled getFrame doesn't fling the boat
+        // off the end of the route — half a sample window is enough to
+        // smooth 4 Hz up to 60 FPS.
+        const capped = Math.min(dtExtrap, dtSample * 1.5);
+        smoothedDistance = lastDistSample.d + speedMps * capped;
+      }
+    }
+    const smoothedFrame: RideFrame | null = rideFrame
+      ? { ...rideFrame, distanceMeters: smoothedDistance }
+      : null;
+
     // Boat + ghost placement, run before the camera so the chase camera can
     // follow the boat on later phases (P7 keeps the canned camera; the
     // follow-camera lands in #556).
-    placeBoat(boatPlacement, routeCurve, rideFrame, totalDistanceMeters, curveLength, 0);
+    placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
     const ghostInfo = placeGhost(
       ghostPlacement,
       routeCurve,
