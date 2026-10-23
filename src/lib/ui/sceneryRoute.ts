@@ -45,7 +45,10 @@ import {
   FOLIAGE_SHAPES,
   layoutFoliage,
 } from '../scenery/foliagePlan';
+import { layoutLandscape, layoutToBuildingSpecs } from '../scenery/landscapeLayout';
 import { getRouteSceneryTrack } from '../../components/rower3d/sceneryTrack';
+import { SCENERY_PROFILES } from '../../components/rower3d/sceneryConfig';
+import type { BuildingSpec } from '../renderer/plan/buildings';
 
 /**
  * Default navigable water width in metres. Mirrors
@@ -69,6 +72,8 @@ export const FOLIAGE_CHUNK_METRES = 150;
 export interface EngineRoute {
   /** Foliage instance pools, one per (species, chunk). */
   pools: PoolInput[];
+  /** Procedural facade buildings along the banks (`landscapeLayout` → `BuildingSpec[]`). */
+  buildings?: BuildingSpec[];
   /** World-space boat/ghost curve; omitted when the route has too few points. */
   curvePoints?: [number, number, number][];
   /** Real route length in metres, matching the shell's finish detection. */
@@ -126,28 +131,35 @@ export const toEngineRoute = (
       progress,
     );
 
-  // Populate the foliage pools from the same deterministic layout the React
-  // scene uses. Three-free: `src/lib/scenery/foliagePlan.ts` samples the curve
-  // through the engine's `RouteCurve` and shares `getSegmentSceneryProfile`
-  // and `SCENERY_PROFILES` with the React side.
+  // Populate the foliage pools and facade buildings from the same
+  // deterministic layouts the React scene uses. Three-free:
+  // `src/lib/scenery/*` samples the curve through `RouteCurve` and shares
+  // `getSegmentSceneryProfile`, `SCENERY_PROFILES`, `SceneryTrack` with the
+  // React side.
   const pools: PoolInput[] = [];
+  let buildings: BuildingSpec[] = [];
   if (curvePoints.length >= 2) {
     const curve = new RouteCurve(
       curvePoints.map(([x, y, z]) => vec3(x, y, z)),
       isClosedLoop,
     );
+    const track = getRouteSceneryTrack(route.id);
     const trees = layoutFoliage({
       curve,
       enrichment: enrichment ?? null,
-      track: getRouteSceneryTrack(route.id),
+      track,
       speciesTypes: FOLIAGE_SHAPES,
     });
     const routeLength = (totalDistanceMeters ?? curve.approximateLength(32)) || 1;
     pools.push(...batchFoliagePools(trees, FOLIAGE_SHAPES.length, routeLength, FOLIAGE_CHUNK_METRES));
+
+    const landscape = layoutLandscape({ curve, enrichment: enrichment ?? null, track });
+    buildings = layoutToBuildingSpecs(landscape, SCENERY_PROFILES);
   }
 
   return {
     pools,
+    ...(buildings.length > 0 ? { buildings } : {}),
     ...(curvePoints.length >= 2 ? { curvePoints } : {}),
     ...(totalDistanceMeters !== undefined ? { totalDistanceMeters } : {}),
     ...(isClosedLoop ? { isClosedLoop } : {}),
