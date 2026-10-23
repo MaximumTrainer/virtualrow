@@ -425,6 +425,18 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     }
   }));
 
+  // Build the water/bank curve + edges fn FIRST so every geometry pass
+  // that follows the river (water strip, bank strips lit + depth, boat
+  // placement, course furniture, camera) can share one spline.
+  const waterCurveSource = isSceneryRoute(opts.route) && opts.route.curvePoints && opts.route.curvePoints.length >= 2
+    ? opts.route.curvePoints
+    : [[0, 0, 0] as [number, number, number], [0, 0, -200] as [number, number, number]];
+  const waterCurve = new RouteCurve(
+    waterCurveSource.map(([x, y, z]) => vec3(x, y, z)),
+    isSceneryRoute(opts.route) ? !!opts.route.isClosedLoop : false,
+  );
+  const waterEdgesForProgress = isSceneryRoute(opts.route) ? opts.route.waterEdgesForProgress : undefined;
+
   // Shadow stage before anything lit draws. Its own telemetry writes
   // into `telemetry.shadows` so the per-tile atlas size + per-cascade
   // draw count are visible on `window.__ROWER3D_SHADOWS`.
@@ -437,6 +449,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     charactersMesh,
     boatPass,
     telemetry: shadowTelemetry,
+    bankCurve: waterCurve,
+    bankEdgesForProgress: waterEdgesForProgress,
   });
 
   // Lit passes build their own shadow bind groups from
@@ -447,17 +461,14 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     atlasView: atlas.view,
     cmpSampler: shadowCmpSampler,
   };
-  const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
-  // Water geometry is built from the route curve so the strip bends with it;
-  // see the comment on the `curvePoints` → `routeCurve` block below.
-  const waterCurveSource = isSceneryRoute(opts.route) && opts.route.curvePoints && opts.route.curvePoints.length >= 2
-    ? opts.route.curvePoints
-    : [[0, 0, 0] as [number, number, number], [0, 0, -200] as [number, number, number]];
-  const waterCurve = new RouteCurve(
-    waterCurveSource.map(([x, y, z]) => vec3(x, y, z)),
-    isSceneryRoute(opts.route) ? !!opts.route.isClosedLoop : false,
-  );
-  const waterEdgesForProgress = isSceneryRoute(opts.route) ? opts.route.waterEdgesForProgress : undefined;
+  const bankPass = createBankPass({
+    device,
+    format,
+    frameUniforms,
+    shadow: shadowResources,
+    curve: waterCurve,
+    edgesForProgress: waterEdgesForProgress,
+  });
   const waterPass = createWaterPass({
     device,
     format,

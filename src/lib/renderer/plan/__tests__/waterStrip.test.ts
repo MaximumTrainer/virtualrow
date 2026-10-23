@@ -103,6 +103,20 @@ describe('buildWaterStrip', () => {
     });
   });
 
+  it('defaults divisions along the curve to one column per ~10 m of route', () => {
+    // Curve ≈ 1000 m chord → ≥100 divisions picked by the length-scaled default.
+    const curve = new RouteCurve(
+      [vec3(0, 0, 0), vec3(0, 0, -500), vec3(0, 0, -1000)].map((v) => v),
+      false,
+    );
+    const { positions } = buildWaterStrip(curve);
+    const vertexColumns = positions.length / 6;
+    // Minimum 128 columns, more for a longer route.
+    expect(vertexColumns).toBeGreaterThanOrEqual(128);
+    // At one column per 10 m on a ~1000 m route, ≥100 columns is the floor.
+    expect(vertexColumns).toBeGreaterThan(99);
+  });
+
   it('defaults divisions to at least 2 even when the caller asks for less', () => {
     const { positions, indices } = buildWaterStrip(null, { divisions: 1 });
     // Floor is 2, so vertex columns = 3.

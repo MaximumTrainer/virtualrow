@@ -5,7 +5,9 @@
 
 /// <reference types="@webgpu/types" />
 
+import type { RouteCurve } from '../math/curve';
 import { buildBankStrips } from '../plan/bankStrip';
+import type { WaterEdges } from '../plan/waterStrip';
 import bankDepthWgsl from './bankDepth.wgsl?raw';
 
 export interface BankDepthPipeline {
@@ -18,8 +20,16 @@ export interface BankDepthPipeline {
   dispose(): void;
 }
 
+export interface BankDepthOptions {
+  /** Route curve for the strip to follow (must match the lit bank pass). */
+  curve?: RouteCurve | null;
+  /** Same per-progress shore widths the lit bank pass uses. */
+  edgesForProgress?: (progress: number) => WaterEdges;
+}
+
 export const createBankDepthPipeline = (
   device: GPUDevice,
+  options: BankDepthOptions = {},
 ): BankDepthPipeline => {
   const module = device.createShaderModule({ label: 'bankDepth', code: bankDepthWgsl });
   const cascadeLayout = device.createBindGroupLayout({
@@ -42,7 +52,7 @@ export const createBankDepthPipeline = (
     primitive: { topology: 'triangle-list', cullMode: 'none' },
     depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth32float' },
   });
-  const geom = buildBankStrips();
+  const geom = buildBankStrips({ curve: options.curve ?? null, edgesForProgress: options.edgesForProgress });
   const positions = device.createBuffer({
     label: 'bankDepth-pos',
     size: geom.positions.byteLength,

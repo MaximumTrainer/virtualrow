@@ -51,7 +51,14 @@ export const buildWaterStrip = (
 ): WaterStripGeometry => {
   const halfWidth = options.halfWidth ?? 20;
   const length = options.length ?? 400;
-  const divisions = Math.max(2, options.divisions ?? 128);
+  // Default divisions scale with the route's chord length so each strip
+  // quad represents ≈10 m of route. Low division counts (the old 128) let a
+  // sharp bend between two columns pull the straight-line strip quad off
+  // the curve centre and read the boat as drifting onto the bank.
+  const defaultDivisions = curve && curve.length >= 2
+    ? Math.max(128, Math.min(16000, Math.ceil(curve.approximateLength(64) / 10)))
+    : 128;
+  const divisions = Math.max(2, options.divisions ?? defaultDivisions);
   const edgesForProgress = options.edgesForProgress
     ?? ((_t: number): WaterEdges => ({ left: halfWidth, right: halfWidth }));
 
