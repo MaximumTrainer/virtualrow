@@ -42,6 +42,10 @@ struct VSOut {
   @location(1) worldY: f32,
   @location(2) worldDist: f32,
   @location(3) fade: f32,
+  // Per-species palette, picked in vs_main from the metadata's species bits.
+  // Flat-interpolated by holding the same vec3 at every vertex of a quad.
+  @location(4) baseCol: vec3<f32>,
+  @location(5) crownCol: vec3<f32>,
 };
 
 // Four verts per billboard pair (two crossed quads, 6 indices each via a
@@ -78,15 +82,31 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let instanceId = indices[ii];
   let instance = centres[instanceId];
   let world = instance.xyz;
-  // Metadata reinterpretation — only the low 16 bits (species index) matter
-  // for the P3 look; sway seed stays available for a later pass.
+  // Metadata layout (matches `buildSmokeFoliagePools` + `batchFoliagePools`):
+  //   bits 0..15   species index
+  //   bits 16..31  sway seed (f32 in [0, 1) via /65535)
   let packed = bitcast<u32>(instance.w);
+  let species = packed & 0xffffu;
   let swaySeed = f32((packed >> 16u) & 0xffffu) / 65535.0;
+
+  // Species sizes (metres). Matches React's `FOLIAGE_SHAPE_SIZE` scaled down
+  // to a cleaner silhouette at chase-camera height — unscaled 14-17 m crossed
+  // quads form a visible wall at the horizon because the camera is only 2.6 m
+  // off the water. The procedural crown art reads as a single tree at ~4 m.
+  const SPECIES_HEIGHTS = array<f32, 3>(4.0, 5.0, 3.5);
+  const SPECIES_WIDTHS  = array<f32, 3>(0.9, 0.55, 1.15);
+  let sIdx = min(species, 2u);
+  let heightM = SPECIES_HEIGHTS[sIdx];
+  let widthFactor = SPECIES_WIDTHS[sIdx];
 
   let local = QUAD_VERTS[QUAD_INDICES[vi]];
   // Gentle sway at the top of the card so standing fields are not static.
   let sway = sin(frame.time * 1.6 + swaySeed * 6.283) * 0.05 * local.y;
-  let swept = vec3<f32>(local.x + sway, local.y * 1.8, local.z + sway * 0.5);
+  let swept = vec3<f32>(
+    (local.x + sway) * widthFactor * heightM,
+    local.y * heightM,
+    (local.z + sway * 0.5) * widthFactor * heightM,
+  );
   let p = world + swept;
   let normalIdx = vi / 6u;
   let n = normalize(QUAD_NORMALS[normalIdx]);
@@ -94,7 +114,23 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   var out: VSOut;
   out.pos = frame.viewProj * vec4<f32>(p, 1.0);
   out.normal = n;
-  out.worldY = p.y;
+  out.worldY = p.y / max(heightM, 0.001); // 0..1 along the crown.
+
+  // Per-species foliage palettes. Broadleaf = oak-green, conifer = pine,
+  // willow = pale lime. Trunk darker than crown so the mix on worldY reads
+  // from bottom to top.
+  const BASE_PAL = array<vec3<f32>, 3>(
+    vec3<f32>(0.20, 0.34, 0.18),
+    vec3<f32>(0.18, 0.26, 0.16),
+    vec3<f32>(0.32, 0.45, 0.22),
+  );
+  const CROWN_PAL = array<vec3<f32>, 3>(
+    vec3<f32>(0.42, 0.60, 0.30),
+    vec3<f32>(0.30, 0.52, 0.28),
+    vec3<f32>(0.60, 0.74, 0.38),
+  );
+  out.baseCol = BASE_PAL[sIdx];
+  out.crownCol = CROWN_PAL[sIdx];
   let d = p - frame.camPos;
   let worldDist = length(vec3<f32>(d.x, 0.0, d.z));
   out.worldDist = worldDist;
@@ -109,9 +145,7 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   if (in.fade <= 0.001) { discard; }
   let sun = normalize(frame.sunDir);
   let shade = clamp(dot(in.normal, sun) * 0.5 + 0.6, 0.3, 1.0);
-  let base = vec3<f32>(0.26, 0.42, 0.22);
-  let crown = vec3<f32>(0.42, 0.56, 0.26);
-  let col = mix(base, crown, clamp(in.worldY / 1.8, 0.0, 1.0)) * shade;
+  let col = mix(in.baseCol, in.crownCol, clamp(in.worldY, 0.0, 1.0)) * shade;
   // Fog with the frame's exponential density.
   let near = frame.fog.x;
   let far = frame.fog.y;
