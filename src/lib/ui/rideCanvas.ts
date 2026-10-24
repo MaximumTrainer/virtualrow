@@ -64,6 +64,13 @@ export interface RideRendererOptions {
    * static scene, which is what P2's sky/bank/water skeleton does today.
    */
   readonly getFrame?: () => RideFrame;
+  /**
+   * Which crewed scull GLB to render (#232 / #443 appearance seam). Already
+   * resolved by the shell against the signed-in profile's `sex` field and the
+   * stored CrewPreference, so the engine stays free of that policy. Defaults
+   * to `male` when omitted — the GLB the engine shipped with before the seam.
+   */
+  readonly crew?: 'male' | 'female';
 }
 
 /** A running renderer. The host calls {@link dispose} when the ride unmounts. */

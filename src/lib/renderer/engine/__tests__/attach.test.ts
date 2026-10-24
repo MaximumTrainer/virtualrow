@@ -102,4 +102,68 @@ describe('attach', () => {
     expect(isSceneryRoute({})).toBe(false);
     expect(isSceneryRoute({ pools: 'not-an-array' })).toBe(false);
   });
+
+  describe('crew option', () => {
+    const captureBoatFetches = (): { urls: string[] } => {
+      const urls: string[] = [];
+      const original = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+        urls.push(url);
+        // Return a 404 so the engine quietly falls back to the baked boat —
+        // we only care about which URL was requested, not GLB bytes.
+        return new Response(null, { status: 404 });
+      }) as typeof fetch;
+      // Patch-cleanup helper the test awaits before restoring.
+      (urls as unknown as { restore(): void }).restore = () => {
+        globalThis.fetch = original;
+      };
+      return urls as unknown as { urls: string[] };
+    };
+
+    it('defaults to scull-male.glb when no crew is passed (unchanged pre-seam behaviour)', async () => {
+      const captured = captureBoatFetches() as unknown as string[] & { restore(): void };
+      try {
+        const canvas = makeMockCanvas();
+        const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
+        expect(renderer).not.toBeNull();
+        const boatRequests = (captured as unknown as string[]).filter((u: string) => u.includes('/assets/boat/'));
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-male.glb'))).toBe(true);
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-female.glb'))).toBe(false);
+        renderer.dispose();
+      } finally {
+        captured.restore();
+      }
+    });
+
+    it('fetches scull-female.glb when crew is "female"', async () => {
+      const captured = captureBoatFetches() as unknown as string[] & { restore(): void };
+      try {
+        const canvas = makeMockCanvas();
+        const renderer = (await attach(canvas, { testMode: true, crew: 'female' })) as unknown as WithTest;
+        expect(renderer).not.toBeNull();
+        const boatRequests = (captured as unknown as string[]).filter((u: string) => u.includes('/assets/boat/'));
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-female.glb'))).toBe(true);
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-male.glb'))).toBe(false);
+        renderer.dispose();
+      } finally {
+        captured.restore();
+      }
+    });
+
+    it('fetches scull-male.glb when crew is explicitly "male"', async () => {
+      const captured = captureBoatFetches() as unknown as string[] & { restore(): void };
+      try {
+        const canvas = makeMockCanvas();
+        const renderer = (await attach(canvas, { testMode: true, crew: 'male' })) as unknown as WithTest;
+        expect(renderer).not.toBeNull();
+        const boatRequests = (captured as unknown as string[]).filter((u: string) => u.includes('/assets/boat/'));
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-male.glb'))).toBe(true);
+        expect(boatRequests.some((u: string) => u.endsWith('/scull-female.glb'))).toBe(false);
+        renderer.dispose();
+      } finally {
+        captured.restore();
+      }
+    });
+  });
 });
