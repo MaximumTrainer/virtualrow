@@ -33,6 +33,8 @@ import { createCharactersDepthPipeline, type CharactersDepthPipeline } from '../
 import type { BoatPass } from '../passes/boat';
 import type { InstancePool } from '../plan/instancePools';
 import type { BuildingPool } from '../plan/buildings';
+import type { RouteCurve } from '../math/curve';
+import type { WaterEdges } from '../plan/waterStrip';
 import type { BoatMeshBuffers } from '../plan/boatMesh';
 import type { Mat4 } from '../math/mat4';
 import { BUILDINGS_VERTEX_COUNT } from '../passes/buildings';
@@ -80,6 +82,13 @@ export interface ShadowStageOptions {
   charactersMesh?: BoatMeshBuffers | null;
   boatPass?: BoatPass | null;
   telemetry: ShadowTelemetry;
+  /**
+   * Route curve the bank depth cast follows. Must match the lit bank pass
+   * or the shadow and the ground diverge.
+   */
+  bankCurve?: RouteCurve | null;
+  /** Same per-progress shore widths the lit bank pass uses. */
+  bankEdgesForProgress?: (progress: number) => WaterEdges;
 }
 
 const CASCADE_UNIFORM_BYTES = 64;
@@ -88,7 +97,10 @@ export const createShadowStage = (
   opts: ShadowStageOptions,
 ): ShadowStage => {
   const { device, atlas, scenePools, buildingsPool, charactersMesh, boatPass, telemetry } = opts;
-  const bank = createBankDepthPipeline(device);
+  const bank = createBankDepthPipeline(device, {
+    curve: opts.bankCurve ?? null,
+    edgesForProgress: opts.bankEdgesForProgress,
+  });
   const scenery = createSceneryDepthPipeline(device);
   const buildings = createBuildingsDepthPipeline(device);
   const characters = charactersMesh ? createCharactersDepthPipeline(device, charactersMesh) : null;

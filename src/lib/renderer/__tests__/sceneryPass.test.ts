@@ -133,6 +133,25 @@ describe('sceneryPass', () => {
     expect(DEFAULT_MAX_DISTANCE).toBe(320);
   });
 
+  it('creates a 1×1 placeholder atlas when no foliageAtlasView is supplied', () => {
+    // The pass has to bind a texture to its frame bind-group, so when a
+    // caller mounts it without a real atlas (unit tests) it falls back to a
+    // tiny placeholder; mount succeeds, dispose stays idempotent.
+    const device = makeMockDevice();
+    const frameUniforms = makeUniformBuffer(device);
+    const pools = makePools(device);
+    const pass = createSceneryPass({
+      device,
+      format: 'bgra8unorm',
+      frameUniforms,
+      sproutUniforms: frameUniforms,
+      pools,
+    });
+    expect(pass.name).toBe('scenery');
+    pass.dispose();
+    for (const p of pools) p.dispose();
+  });
+
   it('refuses work after dispose', () => {
     const device = makeMockDevice();
     const frameUniforms = makeUniformBuffer(device);

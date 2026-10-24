@@ -35,7 +35,39 @@ describe('toEngineRoute (#570 AC2)', () => {
   it('always carries a pools array so isSceneryRoute holds', () => {
     const route = toEngineRoute(makeRoute());
     expect(Array.isArray(route?.pools)).toBe(true);
+    // The adapter populates foliage pools when the curve is well-formed; the
+    // engine mounts an empty scenery pass for an empty `pools`, which is the
+    // path taken when the curve is too short — tested below.
+    for (const pool of route?.pools ?? []) {
+      expect(pool.kind).toBe('foliage');
+      expect(pool.positions.length % 3).toBe(0);
+      expect(pool.metadata?.length).toBe(pool.positions.length / 3);
+    }
+  });
+
+  it('leaves pools empty when the route has too few coordinates to form a curve', () => {
+    const route = toEngineRoute(makeRoute({ coordinates: [{ lat: 1, lng: 1 }] }));
     expect(route?.pools).toHaveLength(0);
+  });
+
+  it('places more foliage on a longer route (deterministic density scales with length)', () => {
+    const short = toEngineRoute(makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.001 },
+      ],
+      distance: 0.1, // 100 m
+    }));
+    const long = toEngineRoute(makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.01 },
+      ],
+      distance: 1, // 1 km
+    }));
+    const shortCount = (short?.pools ?? []).reduce((n, p) => n + p.positions.length / 3, 0);
+    const longCount = (long?.pools ?? []).reduce((n, p) => n + p.positions.length / 3, 0);
+    expect(longCount).toBeGreaterThan(shortCount);
   });
 
   it('derives curvePoints from the route geometry', () => {
@@ -70,5 +102,78 @@ describe('toEngineRoute (#570 AC2)', () => {
     expect(route?.curvePoints).toBeUndefined();
     expect(Array.isArray(route?.pools)).toBe(true);
     expect(route?.totalDistanceMeters).toBe(2000);
+  });
+
+  it('marks a lap route as closed when the endpoints are within 5 m', () => {
+    const lap = makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0.001, lng: 0 },
+        { lat: 0.001, lng: 0.001 },
+        { lat: 0.000001, lng: 0.000001 }, // ~15 cm from the start
+      ],
+    });
+    expect(toEngineRoute(lap)?.isClosedLoop).toBe(true);
+    const open = makeRoute({
+      coordinates: [
+        { lat: 0, lng: 0 },
+        { lat: 0, lng: 0.001 },
+        { lat: 0.001, lng: 0.001 },
+        { lat: 0.001, lng: 0.002 },
+      ],
+    });
+    // Open routes carry no isClosedLoop at all so the engine's default (false) applies.
+    expect(toEngineRoute(open)?.isClosedLoop).toBeUndefined();
+    // Too-short routes can't be loops regardless of endpoint proximity.
+    expect(toEngineRoute(makeRoute())?.isClosedLoop).toBeUndefined();
+  });
+
+  it('always publishes waterEdgesForProgress, with a sensible fallback when there is no enrichment', () => {
+    const route = toEngineRoute(makeRoute());
+    const edges = route?.waterEdgesForProgress?.(0.5);
+    // Fallback width is 20 m / 2 on each side, floored at MIN_NAVIGABLE_WIDTH_METERS / 2.
+    expect(edges?.left).toBeGreaterThan(0);
+    expect(edges?.left).toBeCloseTo(edges?.right ?? 0);
+  });
+
+  it('uses enrichment-derived shore widths when enrichment is supplied', () => {
+    const enriched = toEngineRoute(makeRoute(), {
+      source: 'overpass',
+      enrichedAt: 0,
+      segmentProfiles: [
+        {
+          waterBodyType: 'river',
+          waterWidthMeters: 40,
+          leftShoreMeters: 5,
+          rightShoreMeters: 35,
+          waterBodyName: null,
+          dragModifier: 1,
+          elevationMeters: 0,
+          windModifier: 1,
+          onMappedWater: true,
+          mappedWaterType: 'river',
+          mappedWaterSource: 'overpass',
+          sceneryProfile: 'fallback',
+        },
+        {
+          waterBodyType: 'river',
+          waterWidthMeters: 40,
+          leftShoreMeters: 5,
+          rightShoreMeters: 35,
+          waterBodyName: null,
+          dragModifier: 1,
+          elevationMeters: 0,
+          windModifier: 1,
+          onMappedWater: true,
+          mappedWaterType: 'river',
+          mappedWaterSource: 'overpass',
+          sceneryProfile: 'fallback',
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    const mid = enriched?.waterEdgesForProgress?.(0.5);
+    expect(mid?.left).toBeCloseTo(5);
+    expect(mid?.right).toBeCloseTo(35);
   });
 });

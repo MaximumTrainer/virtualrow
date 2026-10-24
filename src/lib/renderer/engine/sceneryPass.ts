@@ -23,6 +23,9 @@ import {
 import { createSceneryCuller, type PoolCullResources, type SceneryCuller } from '../passes/sceneryCull';
 import type { InstancePool } from '../plan/instancePools';
 
+/** Must match the layer count in `src/lib/scenery/foliageTexture.ts`. */
+const FOLIAGE_SHAPES_COUNT = 3;
+
 export interface SceneryTelemetryEntry {
   kind: string;
   speciesIndex: number;
@@ -70,6 +73,16 @@ export interface SceneryPassOptions {
    * `telemetry.ts`; a null entry means "don't report".
    */
   telemetry?: SceneryTelemetry;
+  /**
+   * Per-species leaf atlas: a 3-layer `rgba8unorm-srgb` texture whose layers
+   * are indexed by the metadata species index (0=broadleaf, 1=conifer,
+   * 2=willow). Attach creates it from `paintFoliage` output. Optional so
+   * existing unit tests that mount the pass without a texture still work;
+   * the pass creates a 1×1 placeholder in that case.
+   */
+  foliageAtlasView?: GPUTextureView;
+  /** Shared sampler for the foliage atlas. */
+  foliageSampler?: GPUSampler;
 }
 
 export interface SceneryPass extends Pass {
@@ -83,6 +96,23 @@ export const DEFAULT_MAX_DISTANCE = 320;
 
 export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
   const { device, format, frameUniforms, sproutUniforms, pools } = opts;
+  // 1×1 placeholder atlas so a caller without textures (unit tests) can still
+  // mount the pass; attach always supplies the real `paintFoliage` atlas.
+  let placeholderTex: GPUTexture | null = null;
+  let placeholderSampler: GPUSampler | null = null;
+  const foliageAtlasView = opts.foliageAtlasView ?? (() => {
+    placeholderTex = device.createTexture({
+      label: 'foliage-atlas-placeholder',
+      size: { width: 1, height: 1, depthOrArrayLayers: FOLIAGE_SHAPES_COUNT },
+      format: 'rgba8unorm-srgb',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    return placeholderTex.createView({ dimension: '2d-array' });
+  })();
+  const foliageSampler = opts.foliageSampler ?? (() => {
+    placeholderSampler = device.createSampler({ label: 'foliage-placeholder' });
+    return placeholderSampler;
+  })();
   const maxDistance = opts.maxDistance ?? DEFAULT_MAX_DISTANCE;
   const signature = createScenerySignature(device, format);
   const culler = createSceneryCuller(device);
@@ -118,6 +148,8 @@ export const createSceneryPass = (opts: SceneryPassOptions): SceneryPass => {
     entries: [
       { binding: 0, resource: { buffer: frameUniforms } },
       { binding: 1, resource: { buffer: sproutUniforms } },
+      { binding: 2, resource: foliageAtlasView },
+      { binding: 3, resource: foliageSampler },
     ],
   });
 

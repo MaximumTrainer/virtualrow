@@ -12,14 +12,22 @@
 
 /// <reference types="@webgpu/types" />
 
-import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY } from '../math/mat4';
+import { mat4, mat4Identity, mat4LookAt, mat4Multiply, mat4Perspective, mat4FromRotationY, type Mat4 } from '../math/mat4';
 import { vec3 } from '../math/vec3';
+import { cameraTarget, createRigTarget } from './camera';
 import { createBankPass } from '../passes/bank';
 import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
+import { createSceneryMeshPass } from '../passes/sceneryMesh';
+import { loadGlb } from '../../scenery/glbLoader';
+import {
+  placeFurniture,
+  type FurniturePlacement,
+  type SceneryModelId,
+} from '../../scenery/courseFurniture';
 import { createInstancePool, type InstancePool, type PoolInput } from '../plan/instancePools';
 import { createBuildingPool, type BuildingPool, type BuildingSpec } from '../plan/buildings';
 import { BOAT_BONE_COUNT, BOAT_BONE_ARMS, BOAT_BONE_HEAD, BOAT_BONE_HULL, BOAT_BONE_TORSO } from '../plan/boatMesh';
@@ -31,6 +39,7 @@ import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
+import { paintFoliage, FOLIAGE_SHAPES } from '../../scenery/foliageTexture';
 import { createSceneryCuller } from '../passes/sceneryCull';
 import { createFloraSolidStage } from './floraSolidStage';
 import { loadFloraAtlas } from './textureLoader';
@@ -48,6 +57,7 @@ import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
   createSproutUniformBuffer,
+  FRAME_UNIFORMS_FLOATS,
   packFrameUniforms,
   packShadowUniforms,
   packSproutUniforms,
@@ -84,6 +94,28 @@ export interface SceneryRoute {
   curvePoints?: readonly [number, number, number][];
   /** Metres represented by the full curve (defaults to the chord length). */
   totalDistanceMeters?: number;
+  /**
+   * Loop routes wrap at the ends rather than mirroring virtual endpoints;
+   * omitted or false means an open route. Mirrors `createRouteCurve`'s
+   * closed-loop detection in the React scene (`src/components/rower3d/curve.ts`).
+   */
+  isClosedLoop?: boolean;
+  /**
+   * GLB scenery (bank-edge, scatter, buildings, trees, landform, backdrop,
+   * course furniture, bridges, landmarks) — one group per model id, with
+   * per-instance world-space transforms. The adapter computes the layout;
+   * attach loads each referenced GLB and feeds instances into the registry.
+   */
+  sceneryGlbs?: Array<{
+    id: string;
+    instances: Array<{ position: [number, number, number]; rotationY: number; scale: number }>;
+  }>;
+  /**
+   * Per-progress shore widths (scene units) so the water strip bends with
+   * the OSM-measured river. Called once per vertex column at build time, not
+   * per frame. Omitted → symmetric `WATER_CHANNEL_HALF_WIDTH`.
+   */
+  waterEdgesForProgress?: (progress: number) => { left: number; right: number };
 }
 
 export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
@@ -176,7 +208,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   });
 
   const frameUniforms = createFrameUniformBuffer(device);
-  const uniformScratch = new Float32Array(64);
+  const uniformScratch = new Float32Array(FRAME_UNIFORMS_FLOATS);
 
   // #559 P4: shadow atlas + per-tier cascade config. Default tier is medium
   // (3 cascades @ 1024). `setTier` is a later-phase ask (#559 FR8); for P2
@@ -234,6 +266,42 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   telemetry.buildings.footprintM2 = buildingsPool?.footprintM2 ?? 0;
   telemetry.buildings.resident = !!buildingsPool;
   telemetry.buildings.cast = !!buildingsCastingPool;
+  // Per-species leaf atlas (#549 slice 3). Three 256×256 RGBA layers (one per
+  // FoliageShape); `paintFoliage` generates the pixels, the fragment shader
+  // samples by species index. The pass alpha-tests transparent texels so the
+  // crossed quads read as individual trees instead of flat cards.
+  const foliageAtlasSize = 256;
+  const foliageAtlasLayers = FOLIAGE_SHAPES.length;
+  const foliageAtlasTex = device.createTexture({
+    label: 'foliage-atlas',
+    size: { width: foliageAtlasSize, height: foliageAtlasSize, depthOrArrayLayers: foliageAtlasLayers },
+    format: 'rgba8unorm-srgb',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  // writeTexture is on the real GPUQueue but not on the attach-test mock;
+  // skipping the upload leaves the atlas blank there, which is fine — no
+  // test depends on the leaf texture's content.
+  if (typeof device.queue.writeTexture === 'function') {
+    for (let layer = 0; layer < foliageAtlasLayers; layer += 1) {
+      const pixels = paintFoliage(FOLIAGE_SHAPES[layer], foliageAtlasSize);
+      device.queue.writeTexture(
+        { texture: foliageAtlasTex, origin: { x: 0, y: 0, z: layer } },
+        pixels as BufferSource,
+        { bytesPerRow: foliageAtlasSize * 4, rowsPerImage: foliageAtlasSize },
+        { width: foliageAtlasSize, height: foliageAtlasSize, depthOrArrayLayers: 1 },
+      );
+    }
+  }
+  const foliageAtlasView = foliageAtlasTex.createView({ dimension: '2d-array' });
+  const foliageSampler = device.createSampler({
+    label: 'foliage',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    mipmapFilter: 'linear',
+    addressModeU: 'clamp-to-edge',
+    addressModeV: 'clamp-to-edge',
+  });
+
   const sceneryPass = createSceneryPass({
     device,
     format,
@@ -241,6 +309,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     sproutUniforms,
     pools: scenePools,
     telemetry: telemetry.scenery,
+    foliageAtlasView,
+    foliageSampler,
   });
 
   // Solid flora stage (#562 FR4 / FR5). Builds a low-poly 3D crown+trunk per
@@ -278,6 +348,164 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   const boatPass = createBoatPass({ device, format, frameUniforms, mesh: boatMesh });
   const charactersMesh = tierCaps.castCharacterShadows ? boatMesh : null;
 
+  // Scenery-mesh pass. Loads the course-furniture GLBs and keeps a registry
+  // keyed by `SceneryModelId`; `placeFurniture` (called below once the route
+  // curve is known) feeds the per-instance mat4 buffers each attach. The
+  // same pass also hosts the per-frame boat GLB — scull.glb has 19 primitives
+  // with distinct materials (hull vs rower vs oars), each registered as its
+  // own mesh id so the per-primitive base colours survive.
+  const sceneryMeshPass = createSceneryMeshPass({ device, format, frameUniforms });
+  const BOAT_SCULL_PREFIX = 'boat-scull';
+  const boatScullMeshIds: string[] = [];
+  // Per-primitive articulation data for the crewed scull: each primitive's
+  // local-space geometry needs its own node world matrix as the "static"
+  // part of its instance transform, and primitives belonging to an
+  // articulated group (LeftOar / RightOar) also carry a pivot so attach can
+  // swing the whole oar about it each frame.
+  interface BoatScullPrimitive {
+    id: string;
+    nodeWorld: Mat4;
+    group?: string;
+    pivotWorld?: Mat4;
+  }
+  const boatScullPrimitives: BoatScullPrimitive[] = [];
+  const COURSE_FURNITURE_MODELS: SceneryModelId[] = [
+    'a01-buoy-lane-sphere',
+    'a06-finish-tower',
+    'a07-distance-marker-post',
+  ];
+  // Full set of GLB ids this route references: the fixed course furniture
+  // plus everything `computePlacements` + `computeStructurePlacements`
+  // asked for on the adapter side.
+  const sceneryGlbList = isSceneryRoute(opts.route) ? opts.route.sceneryGlbs ?? [] : [];
+  const allModelIds: Set<string> = new Set<string>(COURSE_FURNITURE_MODELS);
+  for (const group of sceneryGlbList) allModelIds.add(group.id);
+  // Fixed per-GLB ceiling. Routes we ship touch at most ~900 instances per
+  // bank for the heaviest category; 1024 keeps the GPU buffer size stable
+  // through a route switch without reallocating.
+  const COURSE_FURNITURE_MAX_INSTANCES = 1024;
+  // Where in the asset tree a given model id lives. All scenery GLBs are
+  // under `public/assets/scenery/tier-{a..g,l}/`; we figure out the folder
+  // from the id's first character.
+  const tierFolderFor = (id: string): string => {
+    const prefix = id[0]?.toLowerCase() ?? 'a';
+    const tier = 'abcdefgl'.includes(prefix) ? prefix : 'a';
+    return `tier-${tier}`;
+  };
+  // Load the scull GLB (one primitive registered per material so the hull's
+  // grey, the rower's warmer tone and the oars' tint all survive). Each
+  // primitive gets the same per-frame instance matrix. The old baked
+  // `shell.bin` stays loaded as the test-mode / load-failure fallback,
+  // mirroring React's Suspense fallback shape.
+  try {
+    // scull-male.glb has the crewed hero (scull + rower + oars + riggers,
+    // 155 KB, 45 meshes); scull.glb is the empty hull (68 KB, no crew).
+    // The rower appearance seam is in `useCrewPreference`/`useRowerAppearance`
+    // but doesn't yet reach the engine attach — default to male; follow-up
+    // slice can read the preference and pick scull-female.glb when set.
+    const res = await fetch(assetUrl('/assets/boat/scull-male.glb'));
+    if (res.ok) {
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      // Preserve node transforms so LeftOar / RightOar descendants come back
+      // in LOCAL space with their pivot world matrix attached. The engine
+      // multiplies through the pivot each frame to swing them.
+      const model = await loadGlb(bytes, { preserveNodeTransforms: true });
+      for (let i = 0; i < model.primitives.length; i += 1) {
+        const prim = model.primitives[i];
+        const id = `${BOAT_SCULL_PREFIX}:${i}`;
+        sceneryMeshPass.register({
+          id,
+          positions: prim.positions,
+          normals: prim.normals,
+          indices: prim.indices,
+          baseColor: prim.baseColor,
+          maxInstances: 1,
+        });
+        boatScullMeshIds.push(id);
+        // Convert the loader's Float32 matrices into the engine's Mat4 type.
+        const nodeWorld = mat4();
+        if (prim.nodeWorldMatrix) {
+          for (let k = 0; k < 16; k += 1) nodeWorld[k] = prim.nodeWorldMatrix[k];
+        } else {
+          mat4Identity(nodeWorld);
+        }
+        let pivotWorld: Mat4 | undefined;
+        if (prim.pivotWorldMatrix) {
+          pivotWorld = mat4();
+          for (let k = 0; k < 16; k += 1) pivotWorld[k] = prim.pivotWorldMatrix[k];
+        }
+        boatScullPrimitives.push({
+          id,
+          nodeWorld,
+          group: prim.groupName,
+          pivotWorld,
+        });
+      }
+    }
+  } catch { /* scull GLB load failed — the old baked boat remains as fallback */ }
+
+  await Promise.all([...allModelIds].map(async (id) => {
+    try {
+      const url = assetUrl(`/assets/scenery/${tierFolderFor(id)}/${id}.glb`);
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const model = await loadGlb(bytes);
+      // Concatenate the model's primitives into one vertex/index set per
+      // registered id — the pass doesn't need per-primitive materials for
+      // course furniture, and reusing one id/one bind group keeps the draw
+      // list short.
+      let posTotal = 0;
+      let nrmTotal = 0;
+      let idxTotal = 0;
+      for (const p of model.primitives) {
+        posTotal += p.positions.length;
+        nrmTotal += p.normals.length;
+        idxTotal += p.indices.length;
+      }
+      const positions = new Float32Array(posTotal);
+      const normals = new Float32Array(nrmTotal);
+      const needs32 = model.primitives.some((p) => p.indices instanceof Uint32Array);
+      const indices = needs32 ? new Uint32Array(idxTotal) : new Uint16Array(idxTotal);
+      let pOff = 0;
+      let nOff = 0;
+      let iOff = 0;
+      let vertBase = 0;
+      for (const p of model.primitives) {
+        positions.set(p.positions, pOff);
+        normals.set(p.normals, nOff);
+        for (let i = 0; i < p.indices.length; i += 1) indices[iOff + i] = p.indices[i] + vertBase;
+        pOff += p.positions.length;
+        nOff += p.normals.length;
+        iOff += p.indices.length;
+        vertBase += p.positions.length / 3;
+      }
+      sceneryMeshPass.register({
+        id,
+        positions,
+        normals,
+        indices,
+        baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
+        maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
+      });
+    } catch {
+      // A fetch or decode failure leaves the model unregistered; the pass
+      // silently skips it rather than taking the engine down.
+    }
+  }));
+
+  // Build the water/bank curve + edges fn FIRST so every geometry pass
+  // that follows the river (water strip, bank strips lit + depth, boat
+  // placement, course furniture, camera) can share one spline.
+  const waterCurveSource = isSceneryRoute(opts.route) && opts.route.curvePoints && opts.route.curvePoints.length >= 2
+    ? opts.route.curvePoints
+    : [[0, 0, 0] as [number, number, number], [0, 0, -200] as [number, number, number]];
+  const waterCurve = new RouteCurve(
+    waterCurveSource.map(([x, y, z]) => vec3(x, y, z)),
+    isSceneryRoute(opts.route) ? !!opts.route.isClosedLoop : false,
+  );
+  const waterEdgesForProgress = isSceneryRoute(opts.route) ? opts.route.waterEdgesForProgress : undefined;
+
   // Shadow stage before anything lit draws. Its own telemetry writes
   // into `telemetry.shadows` so the per-tile atlas size + per-cascade
   // draw count are visible on `window.__ROWER3D_SHADOWS`.
@@ -290,6 +518,8 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     charactersMesh,
     boatPass,
     telemetry: shadowTelemetry,
+    bankCurve: waterCurve,
+    bankEdgesForProgress: waterEdgesForProgress,
   });
 
   // Lit passes build their own shadow bind groups from
@@ -300,8 +530,22 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     atlasView: atlas.view,
     cmpSampler: shadowCmpSampler,
   };
-  const bankPass = createBankPass({ device, format, frameUniforms, shadow: shadowResources });
-  const waterPass = createWaterPass({ device, format, frameUniforms, shadow: shadowResources });
+  const bankPass = createBankPass({
+    device,
+    format,
+    frameUniforms,
+    shadow: shadowResources,
+    curve: waterCurve,
+    edgesForProgress: waterEdgesForProgress,
+  });
+  const waterPass = createWaterPass({
+    device,
+    format,
+    frameUniforms,
+    shadow: shadowResources,
+    curve: waterCurve,
+    edgesForProgress: waterEdgesForProgress,
+  });
   const buildingsPass = createBuildingsPass({
     device,
     format,
@@ -352,6 +596,7 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     floraSolidStage,
     waterPass,
     boatPass,
+    sceneryMeshPass,
     postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
@@ -366,21 +611,13 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     time: 0,
   };
 
-  // Route curve for boat / ghost placement. On a smoke page without a
-  // route this is a 200 m straight line heading −z so the engine still
-  // has a curve to sample (`placeBoat` falls back to origin when the
-  // curve is null, which it never is here).
-  const curvePoints: readonly [number, number, number][] = (() => {
-    if (isSceneryRoute(opts.route) && opts.route.curvePoints && opts.route.curvePoints.length >= 2) {
-      return opts.route.curvePoints;
-    }
-    return [
-      [0, 0, 0],
-      [0, 0, -200],
-    ];
-  })();
-  const curveVec3Points = curvePoints.map(([x, y, z]) => vec3(x, y, z));
-  const routeCurve = new RouteCurve(curveVec3Points, false);
+  // Route curve for boat / ghost placement. Reuses `waterCurve` so boat
+  // and water share one spline, i.e. the boat always rides the water's
+  // centreline. On a smoke page without a route this is a 200 m straight
+  // line heading −z so the engine still has a curve to sample
+  // (`placeBoat` falls back to origin when the curve is null, which it
+  // never is here).
+  const routeCurve = waterCurve;
   const curveLength = routeCurve.approximateLength(32);
   const totalDistanceMeters =
     isSceneryRoute(opts.route) && typeof opts.route.totalDistanceMeters === 'number'
@@ -390,6 +627,74 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   telemetry.route.totalDistance = totalDistanceMeters;
   telemetry.route.curveLength = curveLength;
 
+  // Place course furniture along the real route curve and feed the
+  // per-model instance buffers once at attach — this scene isn't dynamic,
+  // so there's no reason to re-send the mat4s every frame.
+  const furniture: FurniturePlacement[] = placeFurniture({
+    curve: routeCurve,
+    routeMeters: totalDistanceMeters,
+    shoreHalfWidth: (progress, side) => {
+      if (!waterEdgesForProgress) return 10;
+      const edges = waterEdgesForProgress(progress);
+      return side === 'left' ? edges.left : edges.right;
+    },
+  });
+  const byModel = new Map<SceneryModelId, Mat4[]>();
+  for (const model of COURSE_FURNITURE_MODELS) byModel.set(model, []);
+  // Scenery GLBs are authored in millimetres and the loader bakes the
+  // node transform into metres-of-the-mesh; `ASSET_SCALE = 0.001` brings
+  // them back to scene units (matches `sceneryPlacement.ts`'s React path).
+  const ASSET_SCALE = 0.001;
+  for (const place of furniture) {
+    const trs = mat4();
+    const rot = mat4();
+    const t = mat4();
+    mat4FromRotationY(rot, place.rotationY);
+    // Build TRS = T · R · S by hand so the uniform scale lands on the
+    // mesh before the rotation applies — the engine's math/ helpers don't
+    // ship a mat4FromScale yet.
+    rot[0] *= ASSET_SCALE; rot[1] *= ASSET_SCALE; rot[2] *= ASSET_SCALE;
+    rot[4] *= ASSET_SCALE; rot[5] *= ASSET_SCALE; rot[6] *= ASSET_SCALE;
+    rot[8] *= ASSET_SCALE; rot[9] *= ASSET_SCALE; rot[10] *= ASSET_SCALE;
+    mat4Identity(t);
+    t[12] = place.position[0];
+    t[13] = place.position[1];
+    t[14] = place.position[2];
+    mat4Multiply(trs, t, rot);
+    byModel.get(place.id)?.push(trs);
+  }
+  for (const model of COURSE_FURNITURE_MODELS) {
+    sceneryMeshPass.setInstances(model, byModel.get(model) ?? []);
+  }
+
+  // Full-scene GLB scenery (bank-edge, scatter, buildings, trees, landform,
+  // backdrop, bridges, landmarks, finish-area furniture). Instances come
+  // pre-computed from the UI adapter so this is a straight transform-build
+  // + setInstances per model id.
+  for (const group of sceneryGlbList) {
+    const mats: Mat4[] = [];
+    for (const inst of group.instances) {
+      const trs = mat4();
+      const rot = mat4();
+      const t = mat4();
+      mat4FromRotationY(rot, inst.rotationY);
+      // T · (R · S) built by hand — see the course-furniture block above.
+      rot[0] *= inst.scale; rot[1] *= inst.scale; rot[2] *= inst.scale;
+      rot[4] *= inst.scale; rot[5] *= inst.scale; rot[6] *= inst.scale;
+      rot[8] *= inst.scale; rot[9] *= inst.scale; rot[10] *= inst.scale;
+      mat4Identity(t);
+      t[12] = inst.position[0];
+      t[13] = inst.position[1];
+      t[14] = inst.position[2];
+      mat4Multiply(trs, t, rot);
+      mats.push(trs);
+    }
+    sceneryMeshPass.setInstances(group.id, mats);
+  }
+
+  // Chase camera rig state, driven by `cameraTarget` each frame. Allocated
+  // once so the FOV/position/lookAt don't retain stale per-frame GC pressure.
+  const cameraRig = createRigTarget();
   const boatPlacement = createPlacement();
   const ghostPlacement = createPlacement();
   const boatBones = [mat4(), mat4(), mat4(), mat4()];
@@ -441,6 +746,15 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   let lastDistanceMeters = 0;
   let lastSpeedTime = -1;
 
+  // Smoothed boat distance so a slow-ticking `getFrame` (the Svelte ride
+  // session updates distanceMeters at ~4 Hz, where rAF runs at 60 Hz)
+  // doesn't make the boat snap by ~1 m every 250 ms. We track the last
+  // two getFrame samples, derive an instantaneous speed from their
+  // deltas, and extrapolate between them each engine frame.
+  let smoothedDistance = 0;
+  let lastDistSample = { d: 0, t: now() };
+  let prevDistSample = { d: 0, t: now() };
+
   const frameOnce = (): void => {
     if (disposed) return;
     resize();
@@ -449,10 +763,35 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
     // #570 P7 — if the UI shell provided `getFrame`, pull the ride state.
     const rideFrame: RideFrame | null = opts.getFrame ? opts.getFrame() : null;
 
+    // Interpolate the boat distance so the shell's discrete samples turn
+    // into a smooth per-frame position. When the shell's `distanceMeters`
+    // advances, treat it as the newest truth; between advances, keep
+    // extrapolating from the last known speed.
+    if (rideFrame) {
+      const nowMs = now();
+      if (rideFrame.distanceMeters !== lastDistSample.d) {
+        prevDistSample = lastDistSample;
+        lastDistSample = { d: rideFrame.distanceMeters, t: nowMs };
+        smoothedDistance = rideFrame.distanceMeters;
+      } else if (rideFrame.isPlaying && !rideFrame.holdBoat && !rideFrame.finished) {
+        const dtSample = Math.max(1e-3, (lastDistSample.t - prevDistSample.t) / 1000);
+        const speedMps = (lastDistSample.d - prevDistSample.d) / dtSample;
+        const dtExtrap = (nowMs - lastDistSample.t) / 1000;
+        // Cap extrapolation so a stalled getFrame doesn't fling the boat
+        // off the end of the route — half a sample window is enough to
+        // smooth 4 Hz up to 60 FPS.
+        const capped = Math.min(dtExtrap, dtSample * 1.5);
+        smoothedDistance = lastDistSample.d + speedMps * capped;
+      }
+    }
+    const smoothedFrame: RideFrame | null = rideFrame
+      ? { ...rideFrame, distanceMeters: smoothedDistance }
+      : null;
+
     // Boat + ghost placement, run before the camera so the chase camera can
     // follow the boat on later phases (P7 keeps the canned camera; the
     // follow-camera lands in #556).
-    placeBoat(boatPlacement, routeCurve, rideFrame, totalDistanceMeters, curveLength, 0);
+    placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
     const ghostInfo = placeGhost(
       ghostPlacement,
       routeCurve,
@@ -491,8 +830,85 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       mat4Identity(boatBones[BOAT_BONE_ARMS]);
       mat4Identity(boatBones[BOAT_BONE_HEAD]);
     }
-    boatPass.boatVisible.value = true;
+    // The GLB scull takes over the hero draw when it loaded successfully;
+    // the old minimal baked shell stays resident for shadow-casting and the
+    // ghost chaser. If the GLB didn't load, keep the baked boat visible so
+    // the user still sees something.
+    const scullLoaded = boatScullMeshIds.length > 0;
+    boatPass.boatVisible.value = !scullLoaded;
     boatPass.ghostVisible.value = ghostInfo !== null;
+
+    if (scullLoaded) {
+      // Boat body transform (places the hull on the route): translation at
+      // the boat's world position * rotation about Y to face the tangent.
+      // World Y already includes BOAT_HEIGHT_Y so the hull (pivot at the
+      // waterline per `public/assets/boat/README.md`) rides above the
+      // surface.
+      const boatTrs = mat4();
+      const scullRot = mat4();
+      const scullTrans = mat4();
+      mat4FromRotationY(scullRot, boatPlacement.heading);
+      mat4Identity(scullTrans);
+      scullTrans[12] = boatPlacement.world[0];
+      scullTrans[13] = boatPlacement.world[1];
+      scullTrans[14] = boatPlacement.world[2];
+      mat4Multiply(boatTrs, scullTrans, scullRot);
+
+      // Oar sweep: phase ∈ [0,1) wraps once per stroke. Map to a sinusoid
+      // centred on 0 so the oar swings symmetrically through recovery and
+      // drive. Amplitude follows intensity so a cold stop freezes the oars.
+      const cadence = rideFrame?.cadence ?? 0;
+      const elapsed = rideFrame?.elapsedSeconds ?? 0;
+      const playing = rideFrame?.isPlaying ?? false;
+      const phase = strokePhase(cadence, elapsed, playing);
+      const amp = strokeAmplitude(rideFrame);
+      // ±45° peak-to-peak swing matches React `GltfScull` sweep. Half-span
+      // because sin(2π·phase) ∈ [−1, 1].
+      const SWEEP_PEAK_RAD = Math.PI / 4;
+      const sweep = Math.sin(phase * Math.PI * 2) * SWEEP_PEAK_RAD * amp;
+
+      // Scratch matrices reused across primitives to avoid allocations.
+      const nodeAfterSwing = mat4();
+      const toPivot = mat4();
+      const fromPivot = mat4();
+      const rotSweep = mat4();
+      const tmp = mat4();
+      const perInstance = mat4();
+
+      for (const prim of boatScullPrimitives) {
+        if (prim.group && prim.pivotWorld) {
+          // Articulated: rotate the primitive's local vertices about the
+          // pivot's world translation. Left and right oars swing in
+          // opposite phase so the catches alternate — matches a sweep rig
+          // where port and starboard are mirrored about the hull axis.
+          const sign = prim.group === 'RightOar' ? -1 : 1;
+          mat4FromRotationY(rotSweep, sweep * sign);
+
+          const px = prim.pivotWorld[12];
+          const py = prim.pivotWorld[13];
+          const pz = prim.pivotWorld[14];
+          mat4Identity(toPivot);
+          toPivot[12] = -px;
+          toPivot[13] = -py;
+          toPivot[14] = -pz;
+          mat4Identity(fromPivot);
+          fromPivot[12] = px;
+          fromPivot[13] = py;
+          fromPivot[14] = pz;
+
+          // nodeAfterSwing = fromPivot * rotSweep * toPivot * nodeWorld
+          mat4Multiply(tmp, toPivot, prim.nodeWorld);
+          mat4Multiply(nodeAfterSwing, rotSweep, tmp);
+          mat4Multiply(tmp, fromPivot, nodeAfterSwing);
+          // perInstance = boatTrs * tmp (apply the hull placement last).
+          mat4Multiply(perInstance, boatTrs, tmp);
+        } else {
+          // Static primitive: boatTrs × nodeWorld.
+          mat4Multiply(perInstance, boatTrs, prim.nodeWorld);
+        }
+        sceneryMeshPass.setInstances(prim.id, [perInstance]);
+      }
+    }
     boatPass.boat.write(device, {
       model: boatPlacement.modelMatrix,
       bones: boatBones,
@@ -551,12 +967,26 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
       telemetry.ghostMeters.active = false;
     }
 
-    // Build view / proj. Chase camera at a canned offset above the strip.
-    const eye = vec3(0, 2.6, 7);
-    const target = vec3(0, 0.3, -5);
+    // Build view / proj. Chase camera follows the boat along the curve — on
+    // smoke pages where the boat isn't driven, it falls back to the canned
+    // over-the-shoulder stand-in (the fallback goes through `cameraTarget`
+    // too so the rig has one code path).
+    const camBoat = vec3(boatPlacement.world[0], boatPlacement.world[1], boatPlacement.world[2]);
+    const camTangent = vec3();
+    // Tangent at the boat's progress — the chase camera sits −tangent * back.
+    const camSample = routeCurve.sample(boatPlacement.progress);
+    camTangent[0] = camSample.tangent[0];
+    camTangent[1] = camSample.tangent[1];
+    camTangent[2] = camSample.tangent[2];
+    cameraTarget(
+      { boat: camBoat, tangent: camTangent, velocityMps: speedMps, view: 'chase', bendSign: 0 },
+      cameraRig,
+    );
+    const eye = cameraRig.position;
+    const target = cameraRig.lookAt;
     const up = vec3(0, 1, 0);
     mat4LookAt(frame.view, eye, target, up);
-    mat4Perspective(frame.proj, (58 * Math.PI) / 180, width / height, 0.1, 2000);
+    mat4Perspective(frame.proj, (cameraRig.fov * Math.PI) / 180, width / height, 0.1, 2000);
     mat4Multiply(frame.viewProj, frame.proj, frame.view);
     frame.camPos[0] = eye[0];
     frame.camPos[1] = eye[1];

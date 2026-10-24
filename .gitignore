@@ -109,3 +109,11 @@ tools/sample-session*
 # are how a review starts from what the last one learned rather than scratch.
 !.claude/agents/
 !.claude/agents/*.md
+screenshots/webgpu-rower/t000.png
+screenshots/webgpu-rower/t040.png
+screenshots/webgpu-rower/t080.png
+screenshots/webgpu-rower/t120.png
+screenshots/webgpu-rower/t160.png
+screenshots/webgpu-rower/t200.png
+screenshots/webgpu-rower/t240.png
+scripts/screenshot-webgpu-rower.mjs

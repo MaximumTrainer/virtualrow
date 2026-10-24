@@ -28,9 +28,11 @@ struct VSOut {
 
 @vertex
 fn vs_main(@location(0) position: vec3<f32>) -> VSOut {
+  // Larger wave amplitude so the river visibly rolls under the chase
+  // camera; the previous 8/4 cm reads as still water from a 2.6 m cam.
   let k = vec2<f32>(0.9, 0.2);
   let w = dot(k, position.xz) + frame.time * 1.3;
-  let dy = sin(w) * 0.08 + sin(w * 1.9 + 0.4) * 0.04;
+  let dy = sin(w) * 0.18 + sin(w * 1.9 + 0.4) * 0.09;
   let p = vec3<f32>(position.x, position.y + dy, position.z);
 
   var out: VSOut;
@@ -46,9 +48,14 @@ fn vs_main(@location(0) position: vec3<f32>) -> VSOut {
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let shallow = vec3<f32>(0.22, 0.52, 0.58);
   let deep = vec3<f32>(0.07, 0.22, 0.36);
+  // Deeper modulation + a second (orthogonal, lower-freq) ripple so the
+  // water surface reads as moving from the chase camera. Previously
+  // ripple × 0.6 was too subtle to notice during a row.
   let ripple = 0.5 + 0.5 * sin(in.worldXZ.x * 0.6 + frame.time * 2.0)
                    * cos(in.worldXZ.y * 0.5 - frame.time * 1.1);
-  let col = mix(deep, shallow, ripple * 0.6);
+  let secondary = 0.5 + 0.5 * sin(in.worldXZ.x * 0.11 - frame.time * 0.6)
+                      * cos(in.worldXZ.y * 0.09 + frame.time * 0.4);
+  let col = mix(deep, shallow, clamp(ripple * 0.85 + secondary * 0.3 - 0.15, 0.0, 1.0));
   let lit = sampleShadow(in.worldPos, in.viewZ);
   // Water takes a lighter shadow — only the reflection dims.
   let shaded = col * (0.75 + 0.25 * lit);

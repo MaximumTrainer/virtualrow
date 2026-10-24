@@ -1,8 +1,10 @@
 /// <reference types="@webgpu/types" />
 
 import type { FrameContext, Pass } from '../engine/frameGraph';
+import type { RouteCurve } from '../math/curve';
 import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippets';
 import { buildBankStrips } from '../plan/bankStrip';
+import type { WaterEdges } from '../plan/waterStrip';
 import bankWgsl from './bank.wgsl?raw';
 
 export interface ShadowResources {
@@ -16,6 +18,10 @@ export interface BankPassOptions {
   format: GPUTextureFormat;
   frameUniforms: GPUBuffer;
   shadow: ShadowResources;
+  /** Route curve the bank follows. Null → straight-line fallback. */
+  curve?: RouteCurve | null;
+  /** Same per-progress shore widths the water pass uses. */
+  edgesForProgress?: (progress: number) => WaterEdges;
 }
 
 export const createBankPass = ({
@@ -23,6 +29,8 @@ export const createBankPass = ({
   format,
   frameUniforms,
   shadow,
+  curve = null,
+  edgesForProgress,
 }: BankPassOptions): Pass => {
   const code = SHADOW_UNIFORMS_WGSL + SAMPLE_SHADOW_WGSL + bankWgsl;
   const module = device.createShaderModule({ label: 'bank', code });
@@ -65,7 +73,7 @@ export const createBankPass = ({
     ],
   });
 
-  const geom = buildBankStrips();
+  const geom = buildBankStrips({ curve, edgesForProgress });
   const positionBuffer = device.createBuffer({
     label: 'bank-pos',
     size: geom.positions.byteLength,

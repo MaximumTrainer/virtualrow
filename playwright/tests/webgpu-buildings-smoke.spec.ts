@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/crash-watch';
+import { assertCanvasNotBlank } from './helpers/assertCanvasNotBlank';
 
 // `--enable-unsafe-webgpu` so Chromium exposes `navigator.gpu`. On a runner
 // without a WebGPU backend the engine falls back to null and the spec
@@ -70,6 +71,8 @@ test('webgpu buildings smoke', async ({ page }) => {
         }).__ROWER3D_SHADOWS,
     );
     expect(shadows?.draws).toBeGreaterThan(0);
+    // Guards the #549 black-canvas regression (see helper).
+    await assertCanvasNotBlank(page, canvas);
   } else {
     const health = await page.evaluate(
       () =>

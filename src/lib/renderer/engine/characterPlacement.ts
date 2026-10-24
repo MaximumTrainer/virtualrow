@@ -16,7 +16,12 @@ import type { RouteCurve } from '../math/curve';
 import type { RideFrame } from './rideFrame';
 import { ghostDistanceAt, type GhostSource } from '../../../components/rower3d/ghost';
 
-const BOAT_HEIGHT_Y = 0.05;
+// 20 cm above the water line (water surface sits at WATER_SURFACE_Y = −0.1).
+// The GLB scull's local origin is authored at hull-waterline, so lifting
+// the model matrix 20 cm keeps the hull clearly above the water surface
+// however the waves jostle — a shell that dips into its own waterline
+// reads as sinking from the chase camera.
+const BOAT_HEIGHT_Y = 0.2;
 
 export interface PlacementState {
   modelMatrix: Mat4;

@@ -4,6 +4,8 @@ import { createShadowStage } from '../shadowStage';
 import { createShadowAtlas } from '../shadowAtlas';
 import { createInstancePool } from '../../plan/instancePools';
 import { createBuildingPool, buildSmokeBuildings } from '../../plan/buildings';
+import { RouteCurve } from '../../math/curve';
+import { vec3 } from '../../math/vec3';
 
 const makeAtlasOnMock = (device: ReturnType<typeof makeMockDevice>) =>
   createShadowAtlas(device, 512, 2);
@@ -109,6 +111,28 @@ describe('shadowStage (#566 P6 — buildings cast through the same atlas)', () =
       telemetry: emptyTelemetry(),
     });
     expect(stage.characters).toBeNull();
+    stage.dispose();
+  });
+
+  it('passes the bank curve + edges through to the bank depth pipeline (#549)', () => {
+    const device = makeMockDevice();
+    const atlas = makeAtlasOnMock(device);
+    const curve = new RouteCurve(
+      [vec3(0, 0, 0), vec3(0, 0, -500), vec3(0, 0, -1000)],
+      false,
+    );
+    const stage = createShadowStage({
+      device,
+      atlas,
+      scenePools: [],
+      buildingsPool: null,
+      telemetry: emptyTelemetry(),
+      bankCurve: curve,
+      bankEdgesForProgress: () => ({ left: 10, right: 10 }),
+    });
+    // The bank depth pipeline's index count grows with the curve's length
+    // (one quad per ~10 m); without the curve it falls back to 40 divisions.
+    expect(stage.bank.indexCount).toBeGreaterThan(40 * 6 * 2);
     stage.dispose();
   });
 

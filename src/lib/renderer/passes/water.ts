@@ -1,8 +1,9 @@
 /// <reference types="@webgpu/types" />
 
 import type { FrameContext, Pass } from '../engine/frameGraph';
+import type { RouteCurve } from '../math/curve';
 import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippets';
-import { buildWaterStrip } from '../plan/waterStrip';
+import { buildWaterStrip, type WaterEdges } from '../plan/waterStrip';
 import waterWgsl from './water.wgsl?raw';
 
 import type { ShadowResources } from './bank';
@@ -12,6 +13,15 @@ export interface WaterPassOptions {
   format: GPUTextureFormat;
   frameUniforms: GPUBuffer;
   shadow: ShadowResources;
+  /**
+   * Route curve the water follows. Null → straight-line smoke fallback.
+   */
+  curve?: RouteCurve | null;
+  /**
+   * Per-progress shore widths (scene units). Omitted → symmetric fallback
+   * (`halfWidth`), which is the pre-#549 behaviour.
+   */
+  edgesForProgress?: (progress: number) => WaterEdges;
 }
 
 export const createWaterPass = ({
@@ -19,6 +29,8 @@ export const createWaterPass = ({
   format,
   frameUniforms,
   shadow,
+  curve = null,
+  edgesForProgress,
 }: WaterPassOptions): Pass => {
   const code = SHADOW_UNIFORMS_WGSL + SAMPLE_SHADOW_WGSL + waterWgsl;
   const module = device.createShaderModule({ label: 'water', code });
@@ -57,7 +69,7 @@ export const createWaterPass = ({
     ],
   });
 
-  const geom = buildWaterStrip(null);
+  const geom = buildWaterStrip(curve, { edgesForProgress });
   const positionBuffer = device.createBuffer({
     label: 'water-pos',
     size: geom.positions.byteLength,

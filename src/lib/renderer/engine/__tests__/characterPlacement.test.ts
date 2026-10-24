@@ -60,6 +60,19 @@ describe('characterPlacement', () => {
     expect(out.distanceMeters).toBe(500);
   });
 
+  it('lifts the boat above the water surface so the hull keeps a freeboard', () => {
+    const curve = straightCurve();
+    const out = createPlacement();
+    placeBoat(out, curve, makeFrame({ distanceMeters: 500 }), 1000, 200);
+    // The water surface sits at WATER_SURFACE_Y = −0.1. The boat's world Y
+    // must be strictly above it so the GLB scull hull (pivot at hull
+    // waterline per `public/assets/boat/README.md`) doesn't dip under.
+    expect(out.world[1]).toBeGreaterThan(-0.1);
+    // Freeboard target: at least 10 cm clear so wave displacement doesn't
+    // submerge the hull.
+    expect(out.world[1]).toBeGreaterThanOrEqual(0.1);
+  });
+
   it('clamps progress to [0,1]', () => {
     const curve = straightCurve();
     const out = createPlacement();

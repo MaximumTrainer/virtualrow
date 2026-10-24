@@ -10,9 +10,20 @@
  *   sunDir    vec3    3 floats   offset 52, pad to 4
  *   fog       vec4    4 floats   offset 56
  *   time      f32     1 float    offset 60, pad to 4
+ *   _pad2     vec3    3 floats   offset 64, pad to 4   // WGSL struct tail
  *
- * Total 64 vec4-aligned floats = 256 bytes. The pad after `time` keeps the
- * buffer size a multiple of 16, which is a std140 requirement.
+ * The trailing `_pad2: vec3<f32>` is in every pass's WGSL `Frame` struct and
+ * grows the struct's compiler-reported size to 272 bytes (a vec3<f32> aligns
+ * to 16, so starting at offset 244 it occupies 256..268; the whole struct
+ * then rounds up to its own 16-byte alignment = 272). The buffer MUST be at
+ * least that large or Chromium rejects the bind group with
+ *   "Binding size (256) of frame-uniforms is smaller than the minimum
+ *    binding size (272)",
+ * which invalidates every lit pass's command buffer and turns the canvas
+ * entirely black (#570-regression). Shaders don't read `_pad2`; it's just
+ * sized to match.
+ *
+ * Total 68 floats = 272 bytes.
  */
 
 /// <reference types="@webgpu/types" />
@@ -20,7 +31,7 @@
 import type { Mat4 } from '../math/mat4';
 import type { FrameUniforms } from './frameGraph';
 
-export const FRAME_UNIFORMS_FLOATS = 64;
+export const FRAME_UNIFORMS_FLOATS = 68;
 export const FRAME_UNIFORMS_BYTES = FRAME_UNIFORMS_FLOATS * 4;
 
 /**
