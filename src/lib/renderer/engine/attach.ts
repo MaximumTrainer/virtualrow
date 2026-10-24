@@ -132,6 +132,13 @@ export type RideAttachOpts = {
    * once per rendered frame and reads the returned object.
    */
   getFrame?: () => RideFrame;
+  /**
+   * Which crewed scull GLB to load. The shell resolves this against the
+   * athlete's intervals.icu profile `sex` and the stored CrewPreference
+   * (#232 / #443), so the engine stays free of that policy. Defaults to
+   * `male` — the GLB the engine shipped with before the seam reached it.
+   */
+  crew?: 'male' | 'female';
 };
 
 export type RideAttach = (
@@ -399,11 +406,13 @@ export const attach: RideAttach = async (canvas, opts = {}) => {
   // mirroring React's Suspense fallback shape.
   try {
     // scull-male.glb has the crewed hero (scull + rower + oars + riggers,
-    // 155 KB, 45 meshes); scull.glb is the empty hull (68 KB, no crew).
-    // The rower appearance seam is in `useCrewPreference`/`useRowerAppearance`
-    // but doesn't yet reach the engine attach — default to male; follow-up
-    // slice can read the preference and pick scull-female.glb when set.
-    const res = await fetch(assetUrl('/assets/boat/scull-male.glb'));
+    // 155 KB, 45 meshes); scull-female.glb is the mirror. `scull.glb` is the
+    // empty hull (68 KB, no crew) and stays the fallback via the old baked
+    // boat. The shell resolves which crewed GLB to load (profile sex +
+    // stored CrewPreference, #232 / #443) and passes it on `opts.crew`;
+    // default to male to match the engine's pre-seam behaviour.
+    const crewGlb = opts.crew === 'female' ? 'scull-female.glb' : 'scull-male.glb';
+    const res = await fetch(assetUrl(`/assets/boat/${crewGlb}`));
     if (res.ok) {
       const bytes = new Uint8Array(await res.arrayBuffer());
       // Preserve node transforms so LeftOar / RightOar descendants come back

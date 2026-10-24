@@ -32,12 +32,18 @@
     testMode?: boolean;
     /** Live row state the engine pulls each frame (#542 workout slice). */
     getFrame?: () => RideFrame;
+    /**
+     * Which crewed scull GLB to render (#232 / #443). The shell has already
+     * resolved it from the signed-in profile + stored preference; omitted
+     * values default to `male`, matching the engine's pre-seam behaviour.
+     */
+    crew?: 'male' | 'female';
     /** #542 AC11: notify the ride view when the backend state changes so it
      *  can swap in the "needs WebGPU" screen on 'unavailable'. */
     onBackend?: (backend: CanvasBackend) => void;
   }
 
-  let { attach, tier, route, testMode = false, getFrame, onBackend }: Props = $props();
+  let { attach, tier, route, testMode = false, getFrame, crew, onBackend }: Props = $props();
 
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
@@ -71,7 +77,7 @@
     // in the catch path alongside a rejected promise, instead of escaping the
     // effect — AC11 wants the renderer-unavailable telemetry either way.
     Promise.resolve()
-      .then(() => attach(canvas!, { tier, route, testMode, getFrame }))
+      .then(() => attach(canvas!, { tier, route, testMode, getFrame, crew }))
       .then((r) => {
         if (disposed) {
           r?.dispose();

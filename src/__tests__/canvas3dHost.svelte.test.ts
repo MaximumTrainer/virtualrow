@@ -36,7 +36,18 @@ describe('Canvas3DHost', () => {
     expect(attach).toHaveBeenCalledTimes(1);
     const [canvasArg, optsArg] = attach.mock.calls[0];
     expect(canvasArg).toBe(container.querySelector('canvas.rower3d-canvas'));
-    expect(optsArg).toEqual({ tier: 'high', route: { id: 'r1' }, testMode: true });
+    expect(optsArg).toMatchObject({ tier: 'high', route: { id: 'r1' }, testMode: true });
+  });
+
+  it('passes the crew prop through to the engine attach', async () => {
+    const dispose = vi.fn();
+    const attach = vi.fn<RideAttach>(() => ({ dispose }));
+
+    render(Canvas3DHost, { attach, crew: 'female' });
+    await Promise.resolve();
+
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(attach.mock.calls[0][1]).toMatchObject({ crew: 'female' });
   });
 
   it('disposes the engine handle when the host unmounts', async () => {

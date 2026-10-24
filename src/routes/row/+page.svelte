@@ -21,6 +21,9 @@
   import { getSessionStore } from '$lib/ui/sessionContext';
   import { getRideSession } from '$lib/ui/rideSessionContext';
   import { getRoutesStore } from '$lib/ui/routesContext';
+  import { getAuth } from '$lib/ui/authContext';
+  import { CrewPreferenceStore } from '$lib/ui/useCrewPreference.svelte';
+  import { resolveCrew, effectiveCrewPreference } from '../../components/rower3d/crewModel';
   import { FullscreenStore } from '$lib/ui/fullscreen.svelte';
   import Canvas3DHost, { type CanvasBackend } from '$lib/ui/Canvas3DHost.svelte';
   import RouteLoadingBar from '$lib/ui/RouteLoadingBar.svelte';
@@ -34,6 +37,8 @@
   const session = getSessionStore();
   const ride = getRideSession();
   const routes = getRoutesStore();
+  const auth = getAuth();
+  const crewPreference = new CrewPreferenceStore();
 
   const testMode = typeof window !== 'undefined' && !!window.__PLAYWRIGHT_TESTING;
 
@@ -64,6 +69,17 @@
   // throw) the ride view swaps the stage for the "needs WebGPU" screen; the
   // rest of the site stays reachable through the Routes link.
   let canvasBackend = $state<CanvasBackend>('stub');
+
+  // Crewed-scull selection (#232 / #443): a signed-in profile with a `sex`
+  // field wins, otherwise the stored CrewPreference decides, otherwise male.
+  // The engine stays free of this policy — it just loads the GLB url the
+  // shell resolves. See `src/components/rower3d/crewModel.ts` for the rules.
+  const resolvedCrew = $derived(
+    resolveCrew(
+      auth.user?.gender ?? null,
+      effectiveCrewPreference(auth.user?.gender ?? null, crewPreference.preference),
+    ),
+  );
 </script>
 
 <svelte:head>
@@ -84,6 +100,7 @@
             route={engineRoute}
             {testMode}
             getFrame={() => ride.frame()}
+            crew={resolvedCrew}
             onBackend={(b) => (canvasBackend = b)}
           />
 
