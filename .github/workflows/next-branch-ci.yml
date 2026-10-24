@@ -46,11 +46,47 @@ jobs:
         # /virtualrow/app/; this spec asserts the title and base path.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/svelte-scaffold-smoke.spec.ts
 
+  # #542 AC6 / D5-b — the dedicated GPU runner (SwiftShader fallback).
+  #
+  # GitHub's default runners rasterise through SwiftShader, which ships no
+  # WebGPU backend, so the hand-written WebGPU engine's real-GPU paths cannot
+  # run on them. This job runs on a GitHub-hosted GPU larger runner when one is
+  # configured and proves it actually has a hardware WebGPU adapter
+  # (scripts/gpu-runner-smoke.mjs). Later phases run the engine's GPU specs here.
+  #
+  # It is OPT-IN, gated on the `GPU_RUNNER_LABEL` repository variable: until that
+  # variable names a provisioned GPU runner, the job is skipped and every other
+  # job keeps its SwiftShader fallback — so this workflow can never hang waiting
+  # for a runner that does not exist. To turn it on: create the GPU larger runner
+  # in the repo's Actions settings, then set the repository variable
+  # GPU_RUNNER_LABEL to that runner's label.
+  gpu-smoke:
+    name: GPU runner smoke (real WebGPU adapter present)
+    needs: preflight
+    if: ${{ vars.GPU_RUNNER_LABEL != '' }}
+    runs-on: ${{ vars.GPU_RUNNER_LABEL }}
+    env:
+      CI: true
+      REQUIRE_REAL_GPU: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Prove the runner has a hardware WebGPU adapter
+        run: node scripts/gpu-runner-smoke.mjs
+
   webgpu-engine:
     # #550 D8-b: the engine's one Playwright smoke, run on a GPU-backed
     # runner when one is provisioned, with SwiftShader as the fallback. The
     # runner label is picked up from the repo variable `GPU_RUNNER_LABEL`
-    # (same convention as the gpu-smoke job the UI/epic track is adding).
+    # (same convention as the gpu-smoke job this workflow also runs).
     # continue-on-error: true until a real WebGPU adapter is reachable; the
     # smoke still runs with --enable-unsafe-webgpu so we exercise the fallback
     # branches today.
