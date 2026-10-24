@@ -49,6 +49,7 @@ const CRASH_KINDS: readonly CrashKind[] = [
   'crash',
   'oauth-token-exchange',
   'oauth-profile-fetch',
+  'renderer-unavailable',
 ];
 
 /**

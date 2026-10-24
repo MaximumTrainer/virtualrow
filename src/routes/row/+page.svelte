@@ -14,6 +14,7 @@
   finish lands with the next slice.
 -->
 <script lang="ts">
+  import { base } from '$app/paths';
   import { attach } from '$lib/renderer/engine/attach';
   import { toEngineRoute } from '$lib/ui/sceneryRoute';
   import { describeLoadProgress, LOAD_PHASES } from '$lib/utils/loadingProgress';
@@ -21,13 +22,14 @@
   import { getRideSession } from '$lib/ui/rideSessionContext';
   import { getRoutesStore } from '$lib/ui/routesContext';
   import { FullscreenStore } from '$lib/ui/fullscreen.svelte';
-  import Canvas3DHost from '$lib/ui/Canvas3DHost.svelte';
+  import Canvas3DHost, { type CanvasBackend } from '$lib/ui/Canvas3DHost.svelte';
   import RouteLoadingBar from '$lib/ui/RouteLoadingBar.svelte';
   import WorkoutBlockPanel from '$lib/ui/WorkoutBlockPanel.svelte';
   import RouteMap from '$lib/ui/RouteMap.svelte';
   import StartCallout from '$lib/ui/StartCallout.svelte';
   import FinishBanner from '$lib/ui/FinishBanner.svelte';
   import RowHud from '$lib/ui/RowHud.svelte';
+  import WebGpuUnsupported from '$lib/ui/WebGpuUnsupported.svelte';
 
   const session = getSessionStore();
   const ride = getRideSession();
@@ -57,6 +59,11 @@
     routes.selectedRoute ? routes.routeEnrichments[routes.selectedRoute.id] ?? null : null,
   );
   const engineRoute = $derived(toEngineRoute(routes.selectedRoute, selectedEnrichment));
+
+  // #542 AC11: when the engine declines (no WebGPU, software adapter, attach
+  // throw) the ride view swaps the stage for the "needs WebGPU" screen; the
+  // rest of the site stays reachable through the Routes link.
+  let canvasBackend = $state<CanvasBackend>('stub');
 </script>
 
 <svelte:head>
@@ -64,13 +71,21 @@
 </svelte:head>
 
 <main class="app-main">
-  {#if session.sessionActive && ride.currentSession}
+  {#if canvasBackend === 'unavailable'}
+    <WebGpuUnsupported backHref={base + '/'} />
+  {:else if session.sessionActive && ride.currentSession}
     <div class="view-container activity-view{fullscreen.active && !fullscreen.supported ? ' activity-view--fullscreen' : ''}">
       <div class="activity-screen">
         <div class="activity-route-stage" bind:this={stageEl}>
           <RouteLoadingBar progress={routeLoadProgress} />
 
-          <Canvas3DHost {attach} route={engineRoute} {testMode} getFrame={() => ride.frame()} />
+          <Canvas3DHost
+            {attach}
+            route={engineRoute}
+            {testMode}
+            getFrame={() => ride.frame()}
+            onBackend={(b) => (canvasBackend = b)}
+          />
 
           {#if workout.current && workout.progress}
             <WorkoutBlockPanel
@@ -129,7 +144,10 @@
     </div>
   {:else}
     <!-- No active session: the bare canvas host, so a direct visit still shows
-         the `.rower3d-canvas-container` the non-3D specs assert around. -->
+         the `.rower3d-canvas-container` the non-3D specs assert around.
+         We deliberately omit `attach` here — a direct visit without a session
+         should not kick the engine or probe WebGPU; AC11's screen fires only
+         once a ride would actually need to render. -->
     <Canvas3DHost />
   {/if}
 </main>

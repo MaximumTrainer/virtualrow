@@ -17,6 +17,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { RideAttach, RideRenderer, RideFrame } from './rideCanvas';
+  import { crashReporterService } from '../services/crashReporterService';
+
+  export type CanvasBackend = 'stub' | 'live' | 'unavailable';
 
   interface Props {
     /** The engine's `attach` entrypoint. Omitted in P1 → bare canvas. */
@@ -29,31 +32,56 @@
     testMode?: boolean;
     /** Live row state the engine pulls each frame (#542 workout slice). */
     getFrame?: () => RideFrame;
+    /** #542 AC11: notify the ride view when the backend state changes so it
+     *  can swap in the "needs WebGPU" screen on 'unavailable'. */
+    onBackend?: (backend: CanvasBackend) => void;
   }
 
-  let { attach, tier, route, testMode = false, getFrame }: Props = $props();
+  let { attach, tier, route, testMode = false, getFrame, onBackend }: Props = $props();
 
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
   // 'stub' until the engine attaches; 'live' once it does; 'unavailable' if the
   // engine declined (returned null).
-  let backend = $state<'stub' | 'live' | 'unavailable'>('stub');
+  let backend = $state<CanvasBackend>('stub');
+
+  const setBackend = (next: CanvasBackend, reason?: string): void => {
+    const changed = backend !== next;
+    backend = next;
+    if (changed) {
+      onBackend?.(next);
+      // #542 FR11 / AC11: one `renderer-unavailable` telemetry per attach
+      // decline so the triage pipeline sees how often users hit this path.
+      // The reporter's own dedupe window keeps a repeat visit quiet. Fire
+      // and forget — the reporter never throws (NFR2).
+      if (next === 'unavailable') {
+        void crashReporterService.reportCrash({
+          kind: 'renderer-unavailable',
+          verdict: { crashed: true, reason: reason ?? 'engine-declined' },
+        });
+      }
+    }
+  };
 
   onMount(() => {
     if (!attach || !canvas) return;
     let handle: RideRenderer | null = null;
     let disposed = false;
-    Promise.resolve(attach(canvas, { tier, route, testMode, getFrame }))
+    // Wrap in Promise.resolve(fn).then so a sync throw inside `attach` lands
+    // in the catch path alongside a rejected promise, instead of escaping the
+    // effect — AC11 wants the renderer-unavailable telemetry either way.
+    Promise.resolve()
+      .then(() => attach(canvas!, { tier, route, testMode, getFrame }))
       .then((r) => {
         if (disposed) {
           r?.dispose();
           return;
         }
         handle = r;
-        backend = r ? 'live' : 'unavailable';
+        setBackend(r ? 'live' : 'unavailable', r ? undefined : 'attach-returned-null');
       })
-      .catch(() => {
-        backend = 'unavailable';
+      .catch((err: unknown) => {
+        setBackend('unavailable', err instanceof Error ? err.message : 'attach-threw');
       });
     return () => {
       disposed = true;
