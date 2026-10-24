@@ -29,9 +29,15 @@
     testMode?: boolean;
     /** Live row state the engine pulls each frame (#542 workout slice). */
     getFrame?: () => RideFrame;
+    /**
+     * Which crewed scull GLB to render (#232 / #443). The shell has already
+     * resolved it from the signed-in profile + stored preference; omitted
+     * values default to `male`, matching the engine's pre-seam behaviour.
+     */
+    crew?: 'male' | 'female';
   }
 
-  let { attach, tier, route, testMode = false, getFrame }: Props = $props();
+  let { attach, tier, route, testMode = false, getFrame, crew }: Props = $props();
 
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
@@ -43,7 +49,7 @@
     if (!attach || !canvas) return;
     let handle: RideRenderer | null = null;
     let disposed = false;
-    Promise.resolve(attach(canvas, { tier, route, testMode, getFrame }))
+    Promise.resolve(attach(canvas, { tier, route, testMode, getFrame, crew }))
       .then((r) => {
         if (disposed) {
           r?.dispose();

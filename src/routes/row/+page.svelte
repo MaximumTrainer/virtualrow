@@ -20,6 +20,9 @@
   import { getSessionStore } from '$lib/ui/sessionContext';
   import { getRideSession } from '$lib/ui/rideSessionContext';
   import { getRoutesStore } from '$lib/ui/routesContext';
+  import { getAuth } from '$lib/ui/authContext';
+  import { CrewPreferenceStore } from '$lib/ui/useCrewPreference.svelte';
+  import { resolveCrew, effectiveCrewPreference } from '../../components/rower3d/crewModel';
   import { FullscreenStore } from '$lib/ui/fullscreen.svelte';
   import Canvas3DHost from '$lib/ui/Canvas3DHost.svelte';
   import RouteLoadingBar from '$lib/ui/RouteLoadingBar.svelte';
@@ -32,6 +35,8 @@
   const session = getSessionStore();
   const ride = getRideSession();
   const routes = getRoutesStore();
+  const auth = getAuth();
+  const crewPreference = new CrewPreferenceStore();
 
   const testMode = typeof window !== 'undefined' && !!window.__PLAYWRIGHT_TESTING;
 
@@ -57,6 +62,17 @@
     routes.selectedRoute ? routes.routeEnrichments[routes.selectedRoute.id] ?? null : null,
   );
   const engineRoute = $derived(toEngineRoute(routes.selectedRoute, selectedEnrichment));
+
+  // Crewed-scull selection (#232 / #443): a signed-in profile with a `sex`
+  // field wins, otherwise the stored CrewPreference decides, otherwise male.
+  // The engine stays free of this policy — it just loads the GLB url the
+  // shell resolves. See `src/components/rower3d/crewModel.ts` for the rules.
+  const resolvedCrew = $derived(
+    resolveCrew(
+      auth.user?.gender ?? null,
+      effectiveCrewPreference(auth.user?.gender ?? null, crewPreference.preference),
+    ),
+  );
 </script>
 
 <svelte:head>
@@ -70,7 +86,7 @@
         <div class="activity-route-stage" bind:this={stageEl}>
           <RouteLoadingBar progress={routeLoadProgress} />
 
-          <Canvas3DHost {attach} route={engineRoute} {testMode} getFrame={() => ride.frame()} />
+          <Canvas3DHost {attach} route={engineRoute} {testMode} getFrame={() => ride.frame()} crew={resolvedCrew} />
 
           {#if workout.current && workout.progress}
             <WorkoutBlockPanel
