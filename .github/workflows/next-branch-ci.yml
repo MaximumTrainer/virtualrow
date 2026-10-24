@@ -70,18 +70,57 @@ jobs:
       REQUIRE_REAL_GPU: '1'
     steps:
       - uses: actions/checkout@v7
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
-
       - name: Install dependencies
         run: npm ci
-
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-
       - name: Prove the runner has a hardware WebGPU adapter
         run: node scripts/gpu-runner-smoke.mjs
+
+  webgpu-engine:
+    # #550 D8-b: the engine's one Playwright smoke, run on a GPU-backed
+    # runner when one is provisioned, with SwiftShader as the fallback. The
+    # runner label is picked up from the repo variable `GPU_RUNNER_LABEL`
+    # (same convention as the gpu-smoke job this workflow also runs).
+    # continue-on-error: true until a real WebGPU adapter is reachable; the
+    # smoke still runs with --enable-unsafe-webgpu so we exercise the fallback
+    # branches today.
+    name: WebGPU engine smoke (#550)
+    needs: preflight
+    runs-on: ${{ vars.GPU_RUNNER_LABEL || 'ubuntu-latest' }}
+    continue-on-error: ${{ vars.GPU_RUNNER_LABEL == '' }}
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke — attach the engine, draw one frame, read telemetry
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-engine-smoke.spec.ts
+      - name: Smoke — scenery pools + compute cull + drawIndirect (#555)
+        # D7-a / D8-a: scenery runs on the same job as the engine smoke; the
+        # smoke page under /smoke/scenery feeds a canned foliage pool set.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-scenery-smoke.spec.ts
+      - name: Smoke — flora LOD + texture pipeline (#562)
+        # P5-AC4: flora LOD runs on the same job as the engine smoke; the
+        # smoke page under /smoke/flora exercises the solid + sprite passes
+        # and the lazy KTX2/PNG atlas path. SwiftShader is OK since the
+        # decoder currently returns null → PNG fallback.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-flora-smoke.spec.ts
+      - name: Smoke — CSM + flora shadow depth pass (#559)
+        # P4-AC4: shadows run on the same job as the engine smoke; the
+        # smoke page under /smoke/shadows feeds a canned foliage pool
+        # set so the shadow stage has casters.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-shadows-smoke.spec.ts

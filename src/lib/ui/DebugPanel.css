@@ -1,0 +1,267 @@
+/* Developer debug panel (#232/#270/#342). Copied verbatim from the React
+   App.css so the panel renders identically in the Svelte shell. The toggle
+   button lives here too. */
+
+.debug-panel-toggle {
+  position: fixed;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  z-index: 9999;
+}
+
+.btn-debug-toggle {
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-panel);
+}
+
+.btn-debug-toggle.active {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-contrast);
+}
+
+.debug-info-panel {
+  position: fixed;
+  top: 80px;
+  right: var(--space-lg);
+  width: min(320px, calc(100vw - 32px));
+  max-height: calc(100dvh - 96px);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  z-index: 9999;
+  overflow-y: auto;
+  box-shadow: var(--shadow-modal);
+}
+
+.debug-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.debug-info-panel h4 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.debug-close-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  /* 44px touch floor (issue #195, Phase 4). */
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+}
+
+.debug-section {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-divider);
+}
+
+.debug-section:last-child {
+  border-bottom: none;
+}
+
+.debug-section h5 {
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-sm) 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* A switch inside the debug window, for an overlay that should be turnable off
+   without closing the whole panel (#270). 44px tall so it passes the touch
+   target check responsive.spec.ts enforces on this panel. */
+.debug-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+/* The tap target is the input, not the label around it.
+
+   responsive.spec.ts measures every control in this panel and asks for 44px on
+   each one; it measures the input's own box, so a 44px row with an 18px
+   checkbox in it failed on phone portrait. The target is 44px square here and
+   the box the eye sees is drawn inside it at the size it was. */
+.debug-toggle-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.debug-toggle-row input[type='checkbox']::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-inset, 3px);
+  background: var(--color-bg-primary);
+}
+
+.debug-toggle-row input[type='checkbox']:checked::before {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+/* The tick, in the same grid cell as the box. */
+.debug-toggle-row input[type='checkbox']:checked::after {
+  content: '';
+  grid-area: 1 / 1;
+  width: 5px;
+  height: 9px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+/* Inset, because the outline of a 44px target around an 18px box otherwise
+   floats well clear of anything visible. */
+.debug-toggle-row input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -11px;
+}
+
+/* The telemetry log's controls and its tail.
+
+   responsive.spec.ts holds every control in this panel to a 44px target, so
+   these are sized for a thumb rather than a mouse (#270). */
+.debug-telemetry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: var(--space-2xs) 0 var(--space-xs);
+}
+
+.btn-debug-action {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border-input);
+  border-radius: var(--radius-inset);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.btn-debug-action:hover {
+  border-color: var(--color-primary);
+}
+
+.debug-telemetry-log {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-xs);
+  border-radius: var(--radius-inset);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  /* Wrapped rather than scrolled sideways: the panel is narrow and a detail
+     object is long, and a line you cannot see the end of is no use at a
+     glance. Copy and Download give the whole thing unwrapped. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.debug-section p {
+  margin: var(--space-2xs) 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.debug-simulator-section {
+  padding: var(--space-sm);
+}
+
+.debug-simulator-section .pm5-simulator-container {
+  margin: 0;
+  border-radius: var(--radius-inset);
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.debug-table td {
+  padding: var(--space-2xs) 0;
+  border-bottom: 1px solid var(--color-border-divider);
+  font-size: 0.8rem;
+}
+
+.debug-table tr:last-child td {
+  border-bottom: none;
+}
+
+.debug-table td:first-child {
+  color: var(--color-text-muted);
+  width: 50%;
+}
+
+/* A frame over the ceiling CI holds it to (#342). Colour alone would not say
+   so to a reader who cannot see it, hence the marker the row carries too. */
+.debug-table tr.debug-over-budget td {
+  color: var(--color-danger, #d64545);
+  font-weight: 600;
+}
+
+.debug-table tr.debug-over-budget td:last-child::after {
+  content: ' ⚠ over budget';
+  font-weight: 400;
+}
+
+.debug-table td:last-child {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .debug-info-panel {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 70dvh;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  }
+}
