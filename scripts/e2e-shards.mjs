@@ -23,7 +23,10 @@ import { fileURLToPath } from 'node:url';
 /** Seconds assumed for a spec with no measurement yet: about a median unit. */
 export const DEFAULT_UNIT_SECONDS = 60;
 
-const CONFIG = 'playwright/playwright.config.ci.ts';
+// Default is the main CI config; the `next/svelte-webgpu` branch's e2e-shards
+// job sets E2E_SHARDS_CONFIG to playwright/playwright.config.next.ts so a
+// different testIgnore applies while that branch stabilises (#542 AC2).
+const CONFIG = process.env.E2E_SHARDS_CONFIG || 'playwright/playwright.config.ci.ts';
 const WEIGHTS = 'playwright/shard-weights.json';
 const CLI = 'node_modules/@playwright/test/cli.js';
 
