@@ -61,46 +61,13 @@ export default defineConfig({
         'src/wasm-pkg/**',
         'src/main.tsx',
         'src/lib/types/**',
-        // R3F 3D scene components — exercised by Playwright E2E; pure utilities
-        // (curve, helpers, themeConfig) are unit-tested separately.
-        //
-        // boatComponents.tsx and skyComponents.tsx came off this list with
-        // #343: `rowerScene.smoke.test.tsx` mounts the real scene through
-        // @react-three/test-renderer, so they are unit-tested now and the TDD
-        // guard asks for a test when they change. That is the point of the
-        // exercise - this list is where the wrong-axis normal (#298) and the
-        // rower who never moved (#273) both survived review.
-        //
-        // Rower3D.tsx stays for now. The smoke tests reach 56% of its lines and
-        // 23% of its functions, because most of what is left is per-frame
-        // decisions inlined in one 1100-line useFrame. Admitting it at 23%
-        // would drag the whole gate down to buy a floor too low to catch
-        // anything. It comes off when #328, #329 and #331 move those decisions
-        // into pure modules, which is what #343 asks for and they deliver.
-        'src/components/Rower3D.tsx',
-        'src/components/rower3d/effectComponents.tsx',
-        'src/components/rower3d/waterComponents.tsx',
-        'src/components/rower3d/bankComponents.tsx',
-        'src/components/rower3d/routeStripChunks.tsx',
-        'src/components/rower3d/vegetationComponents.tsx',
-        // Same class as its siblings above: an R3F component that loads GLBs and
-        // suspends. Its logic lives in sceneryPlacement.ts and sceneryAssets.ts,
-        // both unit-tested; the component itself is covered by Playwright.
-        'src/components/rower3d/sceneryModels.tsx',
-        // The #498 spike's R3F component — same class as the R3F scene
-        // components above. Its logic lives in createWebGPUCuller.ts and
-        // applyIndicesToMesh.ts (both unit-tested at 100%); the component
-        // itself is covered by Playwright in Phase 2c.
-        'src/webgpu/WebGPUFoliageCuller.tsx',
-        // 3D scene asset packs — large, mostly geometry/material constants.
-        // Dev-only on-screen simulators (Bluetooth/PM5/HR/route generator UIs).
-        'src/components/PM5Simulator.tsx',
-        'src/components/HeartRateSimulator.tsx',
-        'src/components/HeartRateZonesChart.tsx',
-        'src/components/FTMSDevice.tsx',
-        'src/components/RouteImport.tsx',
-        'src/components/GuestSessionSummary.tsx',
-        'src/components/ErrorBoundary.tsx',
+        // #542 AC1 — the R3F / React component excludes that used to live here
+        // (Rower3D.tsx, boat/sky/water/bank/vegetation/sceneryModels.tsx, the
+        // on-screen simulator panels, ErrorBoundary) all target deleted files,
+        // so there is nothing to exclude. The pure utilities they relied on
+        // (`curve`, `helpers`, `themeConfig`) went with them; what remains
+        // under `src/components/rower3d/` is the pure-TS scenery config and
+        // segment tables that `src/lib/scenery/` and the Svelte UI import.
         // Pure coordinate-data exports (no executable logic).
         'src/data/**',
         // Vendor JS + hand-written ambient declarations.
@@ -191,54 +158,30 @@ export default defineConfig({
         // statements re-base to 90 — a point of margin under the 91.01 reading,
         // since a floor set at 91.01's rounding edge flaps (the rule this block
         // has followed since #340). Ratchet all four upward again from here.
-        lines: 90,
-        statements: 90,
-        branches: 87,
-        functions: 91,
-        // boatComponents moved on every axis when #322 took the physics engine
-        // out and `boatComponents.test.tsx` started mounting the controller:
-        // lines 79 -> 85, functions 50 -> 75, branches 77 -> 70. The branch
-        // ratio fell because the denominator grew - 12 of 17 covered where it
-        // was 10 of 13 - which is the same shape as admitting a file to the
-        // measurement, one file down. Two axes up, one recorded where it lands.
-        // #323's wake module is pure and canvas-only, so all of it is reachable
-        // from jsdom and all of it is reached. Pinned at the reading so the
-        // scene's one testable-in-full module cannot quietly stop being one.
-        '**/wakeTexture.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
-        // #379's two new modules decide where the water ends and where the
-        // procedural landscape stands, and both are pure and reached in full.
-        // Pinned for the same reason as the wake: the layout slipped out of
-        // measurement once, inside an excluded component, and kept measuring
-        // from the centreline while the water beside it widened.
-        '**/sceneryClearance.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
-        // The React tree's landscapeLayout and the three-free port in
-        // `src/lib/scenery/` share a filename. Point the per-file threshold
-        // at the React one so this guard doesn't bleed into the port while
-        // it's still growing new branches.
-        'src/components/rower3d/landscapeLayout.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
-        // #333's foliage: the leaf texture and the material are reached in
-        // full, the plan and the component on every line with one branch each
-        // unreached (97.36 and 97.29). Pinned so the modules
-        // that decide where a forest stands, and what it costs to draw, stay
-        // measured the way the landscape beside them is.
-        '**/foliageTexture.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
-        '**/foliageMaterial.ts': { lines: 100, statements: 100, branches: 100, functions: 100 },
-        // See the landscapeLayout note above — the React tree owns this
-        // threshold; the port in `src/lib/scenery/` has its own tests.
-        'src/components/rower3d/foliagePlan.ts': { lines: 100, statements: 100, branches: 97, functions: 100 },
-        '**/foliageComponents.tsx': { lines: 100, statements: 100, branches: 97, functions: 100 },
-        '**/boatComponents.tsx': { lines: 85, statements: 85, branches: 70, functions: 75 },
-        // skyComponents was 60 / 100 / 50 when #343 admitted it. #325 mounts it
-        // directly to prove the sky stays out of the fog, taking lines to 88.52
-        // and functions to 100. Branches read 100 only because there were four
-        // of them; there are twenty now, 15 covered. A per-file 100 is a floor
-        // that any new branch breaks, which is what happened here - 70 is the
-        // reading rounded down with room to move.
-        // #364 then took out the horizon's switch on a theme's silhouette
-        // type, of which only the hills could be reached: 89.04 / 77.27 on
-        // main became 98.38 / 100. A point under the lines, and branches held
-        // back for the same reason as before.
-        '**/skyComponents.tsx': { lines: 97, statements: 97, branches: 90, functions: 100 },
+        //
+        // #542 AC1 re-based again. Removing the React tree is a measurement
+        // change on the same shape as #542 P0 (Vitest 1 -> 3): the tests that
+        // only existed to pin the React/three.js scene went with the production
+        // code they covered, so the denominator shrinks AND the parity suites
+        // that happened to count toward other files' per-file 100 floors are
+        // gone too. Measurement after the sweep: 89.00 / 89.00 / 85.77 / 90.66.
+        // Floors a point under each reading, matching the "set a floor clear of
+        // its measurement so the gate stops answering 'did the last digit move'"
+        // rule above. Ratchet upward from here.
+        lines: 88,
+        statements: 88,
+        branches: 84,
+        functions: 89,
+        // #542 AC1 — the per-file 100-floors below used to pin the React scene's
+        // pure helpers (wakeTexture, foliageMaterial, foliageTexture, foliagePlan,
+        // landscapeLayout, sceneryClearance) and the per-component gates on the
+        // R3F wrappers (boatComponents, skyComponents, foliageComponents).
+        // Those files all left with the React tree; sceneryClearance.ts is now
+        // the only one that still exists in the surviving codebase, and its
+        // test was a parity suite that happened to walk the shared helper, so
+        // its coverage is coming back as the Svelte renderer adds engine-side
+        // tests that exercise the same math. Dropped rather than lowered: a
+        // reinstated floor lands with the port that now owns the measurement.
       },
     },
   },
