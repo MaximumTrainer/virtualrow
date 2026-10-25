@@ -37,7 +37,17 @@ export interface CrashErrorSummary {
  * carries its structured detail in `authFailure` and leaves `errorSummary`
  * as the deduplication signature source.
  */
-export type CrashKind = 'crash' | 'oauth-token-exchange' | 'oauth-profile-fetch';
+export type CrashKind =
+  | 'crash'
+  | 'oauth-token-exchange'
+  | 'oauth-profile-fetch'
+  /**
+   * #542 FR11/AC11: the hand-written WebGPU engine declined to render
+   * (no `navigator.gpu`, software adapter only, or an attach throw). The
+   * ride view falls back to the "needs WebGPU" screen (D11); the rest of
+   * the site stays usable.
+   */
+  | 'renderer-unavailable';
 
 /**
  * Structured intervals.icu OAuth failure context (#486 FR1). Written at the
