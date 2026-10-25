@@ -70,6 +70,35 @@
   // rest of the site stays reachable through the Routes link.
   let canvasBackend = $state<CanvasBackend>('stub');
 
+  // #584 FR1 — on a device loss the engine publishes a user-facing banner on
+  // `window.__ROWER3D_BANNER`. We poll it at 250 ms so a reader sees the
+  // "restoring" state as soon as it lands, without the engine having to
+  // reach into Svelte state. The copy itself lives in attach.ts (D2-a).
+  let banner = $state<{ visible: boolean; message: string; variant: string }>({
+    visible: false,
+    message: '',
+    variant: '',
+  });
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const read = (): void => {
+      const b = (window as unknown as {
+        __ROWER3D_BANNER?: { visible: boolean; message: string; variant: string };
+      }).__ROWER3D_BANNER;
+      if (!b) return;
+      if (
+        b.visible !== banner.visible ||
+        b.message !== banner.message ||
+        b.variant !== banner.variant
+      ) {
+        banner = { visible: b.visible, message: b.message, variant: b.variant };
+      }
+    };
+    read();
+    const id = window.setInterval(read, 250);
+    return () => window.clearInterval(id);
+  });
+
   // Crewed-scull selection (#232 / #443): a signed-in profile with a `sex`
   // field wins, otherwise the stored CrewPreference decides, otherwise male.
   // The engine stays free of this policy — it just loads the GLB url the
@@ -100,6 +129,21 @@
           {#if canvasBackend === 'unavailable'}
             <div class="activity-webgpu-unsupported-overlay">
               <WebGpuUnsupported backHref={base + '/'} />
+            </div>
+          {/if}
+
+          <!-- #584 FR1 — device-lost banner. Shows "restoring…" while the
+               engine attempts a reattach on the same canvas, and
+               "couldn't get it back" if the retry's device also dies.
+               The rower keeps rowing underneath; the row stays recorded
+               because the session is DOM-driven, not render-driven. -->
+          {#if banner.visible}
+            <div
+              class="activity-device-lost-banner activity-device-lost-banner--{banner.variant}"
+              role="status"
+              aria-live="polite"
+            >
+              {banner.message}
             </div>
           {/if}
 
@@ -192,5 +236,31 @@
 
   .activity-webgpu-unsupported-overlay :global(.webgpu-unsupported) {
     flex: 1;
+  }
+
+  /* #584 FR1 — device-lost banner. Sits above the (frozen) scene so the
+     rower sees a reason for the stall; the row underneath stays recorded.
+     Positioned at the top of the stage so the HUD at the bottom stays
+     readable through the loss event. */
+  .activity-device-lost-banner {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    text-align: center;
+    max-width: calc(100% - 32px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  .activity-device-lost-banner--restoring {
+    background: rgba(217, 119, 6, 0.95);
+  }
+  .activity-device-lost-banner--failed {
+    background: rgba(185, 28, 28, 0.95);
   }
 </style>
