@@ -1,4 +1,8 @@
-import '@testing-library/jest-dom';
+// #542 AC1 — the React tests that used `@testing-library/jest-dom` matchers
+// (`toBeInTheDocument`, `toHaveClass`, …) are gone; the Svelte tests use
+// `@testing-library/svelte`'s own matchers plus plain DOM assertions, so
+// the jest-dom shim is no longer loaded here. The follow-up PR drops it
+// from `devDependencies`.
 
 // Polyfill minimal ResizeObserver & IntersectionObserver for tests
 class MockResizeObserver implements ResizeObserver {
