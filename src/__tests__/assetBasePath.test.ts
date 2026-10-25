@@ -84,7 +84,9 @@ describe('every asset URL the app can build is a file that ships', () => {
     }
 
     // One-off structures are constructible URLs too, and are not in any kit.
-    const structures = await import('../components/rower3d/sceneryStructures');
+    // #542 AC1: the Svelte port lives in `src/lib/scenery/sceneryStructures.ts`
+    // now; the three.js version it replaced is gone.
+    const structures = await import('../lib/scenery/sceneryStructures');
     [...structures.COURSE_FURNITURE.start, ...structures.COURSE_FURNITURE.finish].forEach((id) =>
       ids.add(id),
     );

@@ -1,7 +1,5 @@
 import js from '@eslint/js'
 import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
@@ -34,16 +32,6 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-  },
-
-  // React rules apply to the app only. Playwright specs and build scripts are
-  // not React, and the hooks plugin cannot tell Playwright's `use` fixture
-  // callback from React's `use` hook — it reported three rules-of-hooks
-  // violations in an earlier fixture file for ordinary fixture
-  // code.
-  {
-    files: ['src/**/*.{ts,tsx}'],
-    extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
   },
 
   // #550 AC6/NFR: on `next/svelte-webgpu` the WebGPU surface lives in

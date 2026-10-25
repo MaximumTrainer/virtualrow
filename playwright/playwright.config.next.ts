@@ -43,9 +43,10 @@ const EXTRA_IGNORE = [
   '**/oar-clearance.spec.ts',
   '**/quality-tier-endurance.spec.ts',
   '**/route-performance.spec.ts',
-  '**/route-performance-budgets.spec.ts',
+  // #542 AC1: `route-performance-budgets.spec.ts` and `rower-stroke.spec.ts`
+  // read the deleted React render-budget / stroke-pose modules; they go with
+  // the React tree. A new WebGPU equivalent re-lands on the GPU runner.
   '**/rower-slide.spec.ts',
-  '**/rower-stroke.spec.ts',
   '**/scene-context-endurance.spec.ts',
   '**/scene-contrast.spec.ts',
   '**/scene-telemetry.spec.ts',
