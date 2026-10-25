@@ -1,11 +1,17 @@
 name: Next Branch CI (Svelte + WebGPU)
 
-# #542: CI for the long-lived epic branch `next/svelte-webgpu`. Deliberately
-# lighter than the main `Playwright E2E Tests` workflow: it runs the full unit
-# preflight (lint, build, unit suite, shuffled run, coverage gate) plus a
-# single Playwright smoke that boots the SvelteKit scaffold. The 43-spec E2E
-# suite is NOT run here — the served app is the scaffold until P1 ports the
-# screens, so those specs would be red against it. P1 widens this as screens land.
+# #542: CI for the long-lived epic branch `next/svelte-webgpu`. Lighter than
+# the main `Playwright E2E Tests` workflow:
+#   * `preflight` runs lint, build, unit suite, shuffled run, coverage gate.
+#   * `smoke` boots the SvelteKit scaffold.
+#   * `e2e-shards` runs the Playwright specs that pass on SwiftShader today
+#     (the "software-adapter"-safe subset defined in playwright.config.next.ts).
+#   * `webgpu-engine` runs the engine smokes against the shared canvas.
+#   * `gpu-smoke` + the engine job's GPU leg are opt-in on the GPU_RUNNER_LABEL
+#     repository variable; see the job comments below.
+#
+# AC2 widens `e2e-shards` as screens stabilise under WebGPU and specs are
+# ported / scene-health is re-pointed at the WebGPU engine.
 
 on:
   push:
@@ -45,6 +51,48 @@ jobs:
         # The config's webServer builds and previews the app at
         # /virtualrow/app/; this spec asserts the title and base path.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/svelte-scaffold-smoke.spec.ts
+
+  # #542 AC2 — the Playwright e2e suite, restricted to the specs that pass
+  # under SwiftShader on default runners today. See
+  # `playwright/playwright.config.next.ts` for the testIgnore list; the shard
+  # plan is the same measured-time split the main workflow uses, through
+  # `scripts/e2e-shards.mjs`.
+  #
+  # The config is handed in via E2E_SHARDS_CONFIG so the shard planner lists
+  # tests through it (otherwise it still asks `playwright.config.ci.ts`,
+  # which would include specs this branch cannot pass yet).
+  e2e-shards:
+    name: e2e shards ${{ matrix.shard }}/2 (ubuntu, SwiftShader)
+    needs: preflight
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      CI: true
+      E2E_SHARDS_CONFIG: playwright/playwright.config.next.ts
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run shard
+        run: node scripts/e2e-shards.mjs ${{ matrix.shard }}/2 --retries=2
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-branch-playwright-report-shard-${{ matrix.shard }}
+          path: playwright-report
+          retention-days: 7
 
   # #542 AC6 / D5-b — the dedicated GPU runner (SwiftShader fallback).
   #
