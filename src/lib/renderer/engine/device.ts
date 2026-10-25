@@ -102,9 +102,17 @@ export const requestDevice = async (
     // tiers, and the loader itself falls through to the uncompressed PNG when
     // the feature is absent; requesting it is cheap and keeps the device
     // capable of sampling the BC7 flora atlas on hardware that supports it.
+    //
+    // Also opt in to `timestamp-query` when the adapter has it (#584 FR3 /
+    // D6-c): the engine's frame-stats shim then writes `gpuMs` into
+    // `__ROWER3D_FRAME_STATS`. Without the feature `gpuMs` stays `0` and the
+    // engine uses `cpuMs` instead — both match the Rower3DFrameStats shape.
     const requiredFeatures: GPUFeatureName[] = [];
     if (adapter.features.has('texture-compression-bc')) {
       requiredFeatures.push('texture-compression-bc');
+    }
+    if (adapter.features.has('timestamp-query')) {
+      requiredFeatures.push('timestamp-query');
     }
     device = await adapter.requestDevice({ requiredFeatures });
   } catch {

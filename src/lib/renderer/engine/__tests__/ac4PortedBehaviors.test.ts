@@ -34,8 +34,9 @@ import { releaseTelemetry } from '../telemetry';
 
 type WithTest = {
   _frameOnce: () => void;
+  readonly _liveDevice: GPUDevice | undefined;
   _telemetry: {
-    frameStats: { frame: number };
+    frameStats: { frame: number; cpuMs: number; gpuMs: number };
     renderStats: {
       draws: number;
       sceneryDraws: number;
@@ -46,6 +47,7 @@ type WithTest = {
     foliage: { trees: number; meshes: number };
     contextState: { kind: string; backend: string; reason?: string };
     shadows: { cascades: number; atlasSize: number };
+    banner: { visible: boolean; message: string; variant: string };
   };
   dispose(): void;
 };
@@ -109,11 +111,9 @@ describe('AC4 (A) context budget', () => {
 /* --------------------------------------------------------------------------
  * (B) device-lost — ported from `playwright/tests/webgl-context-recovery.spec.ts`.
  *
- * On real hardware the first loss ticks the health counter but doesn't yet
- * trigger a reattach, a `fallbackReason` publish, or a `contextState` flip.
- * These assertions encode the *current* state so a change to recovery
- * cannot slip in silently; the recovery gap itself is tracked in a separate
- * issue and the follow-up test is marked `todo` below.
+ * `requestDevice`'s contract covers the counter + the one-retry drop; attach's
+ * on-loss handler now covers the context state flip, the user-facing banner,
+ * and the one-attempt reattach on the same canvas (#584 FR1 D1-a).
  * ------------------------------------------------------------------------ */
 describe('AC4 (B) device-lost', () => {
   it('publishes deviceLostCount=1 on the first loss', async () => {
@@ -148,21 +148,97 @@ describe('AC4 (B) device-lost', () => {
     expect(readWebGPUHealth()?.fallbackReason).toBe('renderer-unavailable');
   });
 
-  it('contextState goes unavailable only when the retry also fails', async () => {
-    // First-loss path: the attach-level callback leaves contextState as-is
-    // because the engine might still recover. Encoded here so the recovery
-    // fix (tracked in a separate issue) can turn this into a positive
-    // "contextState.kind === 'lost'" test without surprise.
+  it('reattaches and flips contextState to lost on first device loss, then back to ready on retry success', async () => {
     const canvas = makeMockCanvas();
     const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer._telemetry.contextState.kind).toBe('ready');
+
+    // Trigger the current device's `lost` promise. The attach-level
+    // handler should mark the state as 'lost', publish the "restoring"
+    // banner, and kick off a retry.
+    const first = renderer._liveDevice;
+    expect(first, 'expected a live device after the first attach').toBeTruthy();
+    (first as unknown as { __triggerLost(): void }).__triggerLost();
+    await Promise.resolve();
+
+    // Wait for the retry's buildScene to finish — it awaits boatMesh +
+    // the Promise.all over scenery GLBs, so a few microtask ticks are
+    // enough with the mocks (they all 404 instantly).
+    for (let i = 0; i < 100; i += 1) await Promise.resolve();
+
+    // After the retry: contextState is back to ready, banner is clear,
+    // fallbackReason has recorded the loss.
+    expect(renderer._telemetry.contextState.kind).toBe('ready');
     expect(renderer._telemetry.contextState.backend).toBe('webgpu');
+    expect(renderer._telemetry.banner.visible).toBe(false);
+    expect(renderer._telemetry.banner.message).toBe('');
+    expect(readWebGPUHealth()?.fallbackReason).toBe('device-lost');
+    expect(readWebGPUHealth()?.deviceLostCount).toBeGreaterThanOrEqual(1);
+    // The scene now owns a different device than before the loss.
+    expect(renderer._liveDevice).not.toBe(first);
+
     renderer.dispose();
   });
 
-  // Encoded as `todo` so (c) tracks the gap this test will fill once the
-  // engine's device-lost handler reattaches and surfaces a user banner.
-  it.todo('reattaches and flips contextState to lost on first device loss');
+  it('drops to renderer-unavailable + failed banner when the retry device also dies', async () => {
+    const canvas = makeMockCanvas();
+    const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
+    const first = renderer._liveDevice;
+    (first as unknown as { __triggerLost(): void }).__triggerLost();
+    await Promise.resolve();
+    for (let i = 0; i < 100; i += 1) await Promise.resolve();
+    // Now the retry's device is live. Kill it too.
+    const second = renderer._liveDevice;
+    expect(second, 'expected a retry device after the first loss').toBeTruthy();
+    expect(second).not.toBe(first);
+    (second as unknown as { __triggerLost(): void }).__triggerLost();
+    await Promise.resolve();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(renderer._telemetry.contextState.kind).toBe('unavailable');
+    expect(renderer._telemetry.contextState.reason).toBe('renderer-unavailable');
+    expect(renderer._telemetry.contextState.backend).toBe('none');
+    expect(renderer._telemetry.banner.visible).toBe(true);
+    expect(renderer._telemetry.banner.variant).toBe('failed');
+    expect(readWebGPUHealth()?.fallbackReason).toBe('renderer-unavailable');
+
+    renderer.dispose();
+  });
+
+  it('exposes __ROWER3D_FORCE_DEVICE_LOST only under __PLAYWRIGHT_TESTING (FR2 D4-a)', async () => {
+    const win = globalThis as unknown as Record<string, unknown>;
+    try {
+      // Not set: no seam.
+      const canvas1 = makeMockCanvas();
+      const renderer1 = await attach(canvas1, { testMode: true });
+      expect(renderer1).not.toBeNull();
+      expect(win.__ROWER3D_FORCE_DEVICE_LOST).toBeUndefined();
+      (renderer1 as unknown as WithTest).dispose();
+
+      // Set: seam exists and is a function.
+      win.__PLAYWRIGHT_TESTING = true;
+      const canvas2 = makeMockCanvas();
+      const renderer2 = await attach(canvas2, { testMode: true });
+      expect(renderer2).not.toBeNull();
+      expect(typeof win.__ROWER3D_FORCE_DEVICE_LOST).toBe('function');
+      (renderer2 as unknown as WithTest).dispose();
+      // Disposed → seam gone.
+      expect(win.__ROWER3D_FORCE_DEVICE_LOST).toBeUndefined();
+    } finally {
+      delete win.__PLAYWRIGHT_TESTING;
+    }
+  });
+
+  it('writes cpuMs on every frame as the gpuMs fallback (FR3 D6-c)', async () => {
+    const canvas = makeMockCanvas();
+    const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
+    renderer._frameOnce();
+    // cpuMs is always populated and non-negative; gpuMs stays 0 under the
+    // mock device because no pass writes a timestamp yet.
+    expect(renderer._telemetry.frameStats.cpuMs).toBeGreaterThanOrEqual(0);
+    expect(renderer._telemetry.frameStats.gpuMs).toBe(0);
+    renderer.dispose();
+  });
 });
 
 /* --------------------------------------------------------------------------

@@ -28,7 +28,17 @@ export interface Rower3DRenderStats {
 export interface Rower3DFrameStats {
   frame: number;
   dtMs: number;
+  /**
+   * GPU-side frame time read back from the `timestamp-query` feature when
+   * the adapter has it (D6-c of #584 FR3). Zero when the feature is absent.
+   */
   gpuMs: number;
+  /**
+   * CPU-side frame-encode time measured via `performance.now()` around the
+   * engine's command-buffer build + submit. Always populated — the fallback
+   * for `gpuMs: 0` on an adapter without `timestamp-query` (D6-c of #584 FR3).
+   */
+  cpuMs: number;
 }
 
 export interface Rower3DCamera {
@@ -42,9 +52,31 @@ export interface Rower3DCamera {
 }
 
 export interface Rower3DContextState {
-  kind: 'pending' | 'ready' | 'unavailable';
+  /**
+   * `lost` is #584 FR1: the current device has signalled `device.lost` and
+   * the engine is attempting a reattach. The frame loop stops drawing to
+   * the dead device while in `lost`; on retry success it goes back to
+   * `ready`, on retry failure it goes to `unavailable` with
+   * reason `renderer-unavailable`.
+   */
+  kind: 'pending' | 'ready' | 'lost' | 'unavailable';
   backend: 'webgpu' | 'webgl' | 'none';
   reason?: string;
+}
+
+/**
+ * #584 FR1 — user-facing banner the Svelte ride view shows while the engine
+ * is handling a device loss. `visible` + `message` map 1:1 to the retired
+ * WebGL spec's banner copy (D2-a).
+ */
+export interface Rower3DBanner {
+  visible: boolean;
+  message: string;
+  /**
+   * `restoring` while the engine is attempting a reattach; `failed` once the
+   * reattach has run out of tries; empty string outside a loss event.
+   */
+  variant: '' | 'restoring' | 'failed';
 }
 
 export interface Rower3DPos {
@@ -206,6 +238,7 @@ export interface TelemetryHandles {
   crew: Rower3DCrew;
   ghostMeters: Rower3DGhostMetersHandle;
   speed: Rower3DSpeedHandle;
+  banner: Rower3DBanner;
 }
 
 // Keep this a mutable record view of `window`: on `main` these globals carry
@@ -244,7 +277,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
   });
   const handles: TelemetryHandles = {
     renderStats: renderStats as Rower3DRenderStats,
-    frameStats: { frame: 0, dtMs: 0, gpuMs: 0 },
+    frameStats: { frame: 0, dtMs: 0, gpuMs: 0, cpuMs: 0 },
     camera: { x: 0, y: 0, z: 0, lookX: 0, lookY: 0, lookZ: 0, fov: 58 },
     contextState: { kind: 'pending', backend: 'none' },
     pos: { x: 0, y: 0, z: 0, progress: 0 },
@@ -293,6 +326,7 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     crew: { cadenceSpm: 0, strokePhase: 0, amplitude: 0, rowers: 1 },
     ghostMeters: { value: 0, active: false },
     speed: { value: 0 },
+    banner: { visible: false, message: '', variant: '' },
   };
   const w = win();
   if (w) {
@@ -317,6 +351,10 @@ export const createTelemetry = (forceRender: () => void): TelemetryHandles => {
     // read it with a simple compare; the engine re-assigns the global each
     // frame via `publishSpeedMps` below.
     w['__ROWER3D_SPEED_MPS'] = 0;
+    // #584 FR1 — the Svelte ride view reads this to render the user-facing
+    // "lost the graphics context" / "restoring" / "could not get it back"
+    // banner. The engine owns the message copy (D2-a).
+    w['__ROWER3D_BANNER'] = handles.banner;
   }
   return handles;
 };
@@ -329,6 +367,17 @@ export const publishSpeedMps = (handles: TelemetryHandles, speedMps: number): vo
   handles.speed.value = speedMps;
   const w = win();
   if (w) w['__ROWER3D_SPEED_MPS'] = speedMps;
+};
+
+/** #584 FR1 — set the user-facing banner on a device-loss transition. */
+export const publishBanner = (
+  handles: TelemetryHandles,
+  message: string,
+  variant: Rower3DBanner['variant'],
+): void => {
+  handles.banner.visible = message.length > 0;
+  handles.banner.message = message;
+  handles.banner.variant = variant;
 };
 
 export const releaseTelemetry = (): void => {
@@ -353,6 +402,7 @@ export const releaseTelemetry = (): void => {
     '__ROWER3D_CREW',
     '__ROWER3D_GHOST_METERS',
     '__ROWER3D_SPEED_MPS',
+    '__ROWER3D_BANNER',
   ]) {
     delete w[key];
   }
