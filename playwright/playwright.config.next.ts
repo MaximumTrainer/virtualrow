@@ -31,11 +31,12 @@ import { ENDURANCE_SPEC, HEAVY_SPEC, RESPONSIVE_SPEC, VISUAL_SPEC } from './view
 // matrix in `viewports.ts` already sets a project-level `testIgnore`, which
 // *replaces* any top-level one, so patterns there get silently dropped.
 const EXTRA_IGNORE = [
-  // AC4 WebGL-era specs AC4 will port to WebGPU in place.
-  '**/gl-context-budget.spec.ts',
-  '**/webgl-context-recovery.spec.ts',
-  '**/rower3d-postfx.spec.ts',
-  '**/scene-quality-match.spec.ts',
+  // AC4 WebGL-era specs — now deleted on this branch. The four behaviours
+  // they used to check (context budget, device-lost, post-fx tier gates,
+  // scene quality) are covered by
+  // `src/lib/renderer/engine/__tests__/ac4PortedBehaviors.test.ts`. The
+  // integrated boot-and-row verification they also carried re-lands on
+  // the GPU runner — see #584.
   // Need a moving boat / live engine frames (real GPU only).
   '**/crew-model-loading.spec.ts',
   '**/default-route-performance.spec.ts',
