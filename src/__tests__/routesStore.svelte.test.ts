@@ -112,6 +112,57 @@ describe('RoutesStore', () => {
     await Promise.resolve();
     expect(store.routeEnrichmentLoading['1']).toBe(false);
   });
+
+  // #542 AC2 — `rownative-track-attach.spec.ts` reads `window.__SELECTED_ROUTE`
+  // to verify a course's `geometrySource` after an attach / remove. App.tsx
+  // published that under `__PLAYWRIGHT_TESTING`; the Svelte port does it from
+  // the one place the selection is assigned.
+  it('publishes window.__SELECTED_ROUTE under __PLAYWRIGHT_TESTING on select and clear', () => {
+    const original = window.__PLAYWRIGHT_TESTING;
+    window.__PLAYWRIGHT_TESTING = true;
+    try {
+      const services = stubServices([
+        route('1', {
+          distance: 20.5,
+          geometrySource: 'track',
+          externalDistanceMeters: 20500,
+        } as Partial<WaterRoute>),
+      ]);
+      const store = new RoutesStore(services);
+      store.load();
+
+      store.selectRoute(services.routeService.getRouteById('1')!);
+      expect(window.__SELECTED_ROUTE).toEqual({
+        id: '1',
+        name: 'Route 1',
+        distanceKm: 20.5,
+        geometrySource: 'track',
+        externalDistanceMeters: 20500,
+      });
+
+      store.selectRoute(null as unknown as WaterRoute);
+      expect(window.__SELECTED_ROUTE).toBeUndefined();
+    } finally {
+      window.__PLAYWRIGHT_TESTING = original;
+      window.__SELECTED_ROUTE = undefined;
+    }
+  });
+
+  it('does not touch window.__SELECTED_ROUTE outside __PLAYWRIGHT_TESTING', () => {
+    const original = window.__PLAYWRIGHT_TESTING;
+    window.__PLAYWRIGHT_TESTING = undefined;
+    window.__SELECTED_ROUTE = { id: 'untouched', name: '' } as unknown as typeof window.__SELECTED_ROUTE;
+    try {
+      const services = stubServices([route('1')]);
+      const store = new RoutesStore(services);
+      store.load();
+      store.selectRoute(services.routeService.getRouteById('1')!);
+      expect(window.__SELECTED_ROUTE?.id).toBe('untouched');
+    } finally {
+      window.__PLAYWRIGHT_TESTING = original;
+      window.__SELECTED_ROUTE = undefined;
+    }
+  });
 });
 
 // #542 P1: importFile dispatches on the file type (App.tsx handleRouteFileImport,

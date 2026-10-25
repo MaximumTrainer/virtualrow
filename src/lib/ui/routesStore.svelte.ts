@@ -159,6 +159,26 @@ export class RoutesStore {
   #select(route: WaterRoute | null | undefined): void {
     this.selectedRoute = route ?? null;
     if (route) this.#enrich(route);
+    this.#publishSelectedRouteForTests();
+  }
+
+  /** Playwright reads `window.__SELECTED_ROUTE` to verify an attach / remove
+   *  (`rownative-track-attach.spec.ts`), the course badge (#206), and the
+   *  card's distance against the engine's own total. App.tsx did this from a
+   *  `useEffect([selectedRoute])`; the store does it from the one assignment
+   *  point. Never set outside Playwright. */
+  #publishSelectedRouteForTests(): void {
+    if (typeof window === 'undefined' || !window.__PLAYWRIGHT_TESTING) return;
+    const route = this.selectedRoute;
+    window.__SELECTED_ROUTE = route
+      ? {
+          id: route.id,
+          name: route.name,
+          distanceKm: route.distance,
+          geometrySource: route.geometrySource,
+          externalDistanceMeters: route.externalDistanceMeters,
+        }
+      : undefined;
   }
 
   #enrich(route: WaterRoute): void {

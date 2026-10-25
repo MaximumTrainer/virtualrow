@@ -87,12 +87,22 @@
 </svelte:head>
 
 <main class="app-main">
-  {#if canvasBackend === 'unavailable'}
-    <WebGpuUnsupported backHref={base + '/'} />
-  {:else if session.sessionActive && ride.currentSession}
+  {#if session.sessionActive && ride.currentSession}
     <div class="view-container activity-view{fullscreen.active && !fullscreen.supported ? ' activity-view--fullscreen' : ''}">
       <div class="activity-screen">
         <div class="activity-route-stage" bind:this={stageEl}>
+          <!-- #542 AC11: when the engine declines (no WebGPU, software adapter,
+               attach throw) we show the "needs WebGPU" screen as an overlay.
+               The stage below stays mounted so specs that assert around
+               `.rower3d-canvas-container` (crash-detection, crash-telemetry,
+               etc.) still find it, while the overlay carries the user-facing
+               message and the back link. -->
+          {#if canvasBackend === 'unavailable'}
+            <div class="activity-webgpu-unsupported-overlay">
+              <WebGpuUnsupported backHref={base + '/'} />
+            </div>
+          {/if}
+
           <RouteLoadingBar progress={routeLoadProgress} />
 
           <Canvas3DHost
@@ -168,3 +178,19 @@
     <Canvas3DHost />
   {/if}
 </main>
+
+<style>
+  /* The "needs WebGPU" screen sits on top of the stage so the specs that
+     assert around `.rower3d-canvas-container` still find it, and the
+     user still sees the message plus the back link above everything. */
+  .activity-webgpu-unsupported-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+  }
+
+  .activity-webgpu-unsupported-overlay :global(.webgpu-unsupported) {
+    flex: 1;
+  }
+</style>

@@ -72,6 +72,13 @@ jobs:
     env:
       CI: true
       E2E_SHARDS_CONFIG: playwright/playwright.config.next.ts
+      # The auth-related specs call `authService.getClientId()` through
+      # `.auth-button--signin`; Vite reads VITE_* at build time. The main
+      # workflow (playwright-e2e-clean.yml) uses the same placeholder.
+      VITE_INTERVALS_CLIENT_ID: playwright-e2e-client
+      # SwiftShader fallback for WebGL contexts the UI still mounts (e.g. the
+      # route detail map's WebGL leaflet / MapLibre layer).
+      LIBGL_ALWAYS_SOFTWARE: '1'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
