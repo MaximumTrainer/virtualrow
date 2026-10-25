@@ -70,36 +70,10 @@ const EXTRA_IGNORE = [
   '**/kml-projection.spec.ts',
   '**/rownative-course-import.spec.ts',
   '**/rownative-track-geometry.spec.ts',
-  // Pre-existing Svelte-port gaps surfaced by this job's first runs (follow-up
-  // issues will land as AC1 UI rejoin progresses; the e2e-shards ignore list
-  // shrinks as each gap is fixed):
-  //  - `auth.spec.ts` → `.auth-button--signin` does not drive the window to
-  //    intervals.icu/oauth/authorize in the preview build. The Svelte
-  //    AuthButton calls `auth.login() → authService.startLogin()`; the UI
-  //    seam needs the real navigation (2 tests: redirect + PKCE params).
-  //  - `intervals-login-failure.spec.ts` → the Svelte alert does not branch
-  //    the `data-auth-error-class` by OAuth error (invalid_client,
-  //    invalid_grant, 5xx, …) the way the React copy did; 6 AC tests fail
-  //    reading the alert copy and `data-auth-error-class`.
-  //  - `rownative-track-attach.spec.ts` → `window.__SELECTED_ROUTE.geometrySource`
-  //    is not surfaced by the Svelte routes store, so the attach / remove
-  //    verifications read `undefined` (2 tests).
-  //  - `crash-detection.spec.ts` + `crash-telemetry.spec.ts` → both click the
-  //    `.btn-try-demo` CTA to start a demo, which under SwiftShader swaps the
-  //    stage for the "needs WebGPU" screen before the specs can read
-  //    `.rower3d-canvas-container` and the run-start telemetry. The crash
-  //    guard itself is unit-tested, but the e2e path through the demo depends
-  //    on the engine running (4 tests).
-  //  - `login-integration.spec.ts` → three happy-path OAuth callback flows
-  //    time out waiting for `.auth-user-trigger` to become visible after the
-  //    callback: the Svelte port isn't completing the token→profile handshake
-  //    the way the React auth gate did (3 tests).
-  '**/auth.spec.ts',
-  '**/intervals-login-failure.spec.ts',
-  '**/rownative-track-attach.spec.ts',
-  '**/crash-detection.spec.ts',
-  '**/crash-telemetry.spec.ts',
-  '**/login-integration.spec.ts',
+  // The six Svelte-port gaps that the e2e-shards job surfaced on its first
+  // runs have been fixed in this PR — nothing from that batch remains here.
+  // Re-enabled: auth, intervals-login-failure, rownative-track-attach,
+  // crash-detection, crash-telemetry, login-integration.
   // Responsive matrix also drives the workout scene — stays off until the
   // engine runs on SwiftShader or we re-point its scene-alive check.
   // (The viewport projects only match `responsive.spec.ts`; keep them off

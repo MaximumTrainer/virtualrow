@@ -20,6 +20,9 @@
   import { goto } from '$app/navigation';
   import '../index.css';
   import '../App.css';
+  import { startTelemetry } from '$lib/utils/telemetryBoot';
+  import { checkBootCrash, reportFromErrorBoundary } from '$lib/utils/crashBoot';
+  import { crashReporterService } from '$lib/services/crashReporterService';
   import { setServices } from '$lib/ui/servicesContext';
   import { setAuth } from '$lib/ui/authContext';
   import { AuthStore } from '$lib/ui/auth.svelte';
@@ -40,6 +43,28 @@
   import { crashReportsPreferenceStore } from '$lib/services/crashReportsPreferenceStore';
 
   let { children } = $props();
+
+  // Before any component effects run, so an error during the first mount is
+  // recorded too — matches the React main.tsx boot order.
+  if (typeof window !== 'undefined') {
+    startTelemetry();
+    const BUILD_SHA = (import.meta.env.VITE_BUILD_SHA as string | undefined) ?? 'dev';
+    checkBootCrash(crashReporterService, { buildSha: BUILD_SHA });
+    // #473 AC2 test seam: an e2e spec forces an error-boundary trip via this
+    // hook; production boundaries make the same call from their own error path.
+    if (window.__PLAYWRIGHT_TESTING) {
+      (window as unknown as Record<string, unknown>).__VIRTUALROW_SIMULATE_BOUNDARY__ = (
+        message: string,
+      ): void => {
+        reportFromErrorBoundary(
+          crashReporterService,
+          new Error(message),
+          { componentStack: '  at AlwaysThrows\n  at SceneErrorBoundary' },
+          { boundary: 'Canvas3D', buildSha: BUILD_SHA },
+        );
+      };
+    }
+  }
 
   setServices();
   const auth = setAuth(new AuthStore());
