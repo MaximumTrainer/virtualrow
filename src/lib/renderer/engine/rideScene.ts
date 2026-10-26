@@ -72,6 +72,9 @@ import { textureBytes } from './textures';
 import { createFrameGraph, type FrameGraph, type FrameUniforms, type Pass } from './frameGraph';
 import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
+import { shaderGrassStrengthFor } from './shaderGrass';
+import type { PerformanceMode } from '../../scenery/sceneryPlacement';
+import type { SceneryProfile } from '../../services/routeEnrichmentService';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
 import { tierCapsFor } from './tierCaps';
 import { publishSpeedMps, type TelemetryHandles } from './telemetry';
@@ -135,6 +138,12 @@ export interface SceneryRoute {
    * per frame. Omitted → symmetric `WATER_CHANNEL_HALF_WIDTH`.
    */
   waterEdgesForProgress?: (progress: number) => { left: number; right: number };
+  /**
+   * Dominant biome profile along the route — the bank pass's grass-density
+   * tile (#496 Phase 2) is baked from this. One profile per route for now;
+   * per-segment banks are a follow-up.
+   */
+  dominantProfile?: string;
 }
 
 export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
@@ -491,6 +500,14 @@ export const createRideScene = async (
     atlasView: atlas.view,
     cmpSampler: shadowCmpSampler,
   };
+  // Biome-density grass modulation (#496 Phase 2). Default to the route's
+  // dominant profile when the adapter supplied one; strength scales with
+  // the actual device tier, respecting the `__VIRTUALROW_SHADER_GRASS`
+  // kill switch the React scene also honours — see `shaderGrass.ts`.
+  const bankGrassProfile = (
+    isSceneryRoute(opts.route) ? (opts.route.dominantProfile as SceneryProfile | undefined) : undefined
+  ) ?? 'fallback';
+  const bankGrassStrength = shaderGrassStrengthFor((opts.tier ?? 'medium') as PerformanceMode);
   const bankPass = createBankPass({
     device,
     format,
@@ -498,6 +515,7 @@ export const createRideScene = async (
     shadow: shadowResources,
     curve: waterCurve,
     edgesForProgress: waterEdgesForProgress,
+    grass: { profile: bankGrassProfile, strength: bankGrassStrength },
   });
   const waterPass = createWaterPass({
     device,

@@ -127,6 +127,13 @@ export interface EngineRoute {
    * then applies its symmetric fallback.
    */
   waterEdgesForProgress?: (progress: number) => WaterEdges;
+  /**
+   * Dominant biome profile along the route — the first profile the enrichment
+   * mentions, or 'fallback' when there is none. The bank pass uses it to pick
+   * the baked density tile for its grass modulation (#496). One profile per
+   * route for now; the per-segment React approach is a follow-up.
+   */
+  dominantProfile?: SceneryProfile;
 }
 
 /** Default OSM building height when the tags carry neither `height` nor levels. */
@@ -191,10 +198,19 @@ const detectClosedLoop = (route: WaterRoute): boolean => {
  * omitted for a zero-length route so the engine falls back to the curve's own
  * chord length rather than snapping progress to a 1 m course.
  */
+/**
+ * Default tier used when no caller passes one through. Matches React's
+ * `resolvePerformanceMode()` fallback for a browser-less or probe-free
+ * invocation: real users get `'medium'`, which is what unit tests exercise.
+ * The `/row` page always passes a real tier so this only applies to tests
+ * and other callers that don't care about scenery density.
+ */
+export const DEFAULT_SCENERY_TIER: PerformanceMode = 'medium';
+
 export const toEngineRoute = (
   route: WaterRoute | null | undefined,
   enrichment?: RouteEnrichmentData | null,
-  tier: PerformanceMode = 'high',
+  tier: PerformanceMode = DEFAULT_SCENERY_TIER,
 ): EngineRoute | null => {
   if (!route) return null;
 
@@ -254,12 +270,13 @@ export const toEngineRoute = (
     // bridges, landmarks, finish-area furniture). The `/row` adapter is where
     // the layout runs so the engine stays about rendering; this is pure maths
     // on the curve + enrichment + track, matching the React scene's pipeline.
-    // Prior to this change the mode was hard-wired to 'medium', which
-    // suppressed GLB kit trees entirely (`keepsKitTrees` is true only on
-    // high/extra-high) and ran the per-step placement loop at a 0.7 budget.
-    // The React scene used the viewer's own `PerformanceMode`, so most users
-    // actually got 'high'. Making this a parameter (defaulted to 'high')
-    // restores that behaviour without breaking the no-arg callers in tests.
+    // Prior to #591-fu the mode was hard-wired to 'medium', which suppressed
+    // GLB kit trees entirely (`keepsKitTrees` is true only on high/extra-high)
+    // and pinned the per-step placement loop at a 0.7 budget. React resolves
+    // the real device tier via `resolvePerformanceMode()` and hands it to the
+    // scene, so a given rig gets the matching density on both engines. The
+    // `/row` page now plumbs that same tier here; `DEFAULT_SCENERY_TIER` keeps
+    // tests and other no-arg callers deterministic at `'medium'`.
     const mode: PerformanceMode = tier;
     const budget = budgetFor(mode);
     const profiles: SceneryProfile[] = distinctProfiles(enrichment ?? null, track);
@@ -291,6 +308,13 @@ export const toEngineRoute = (
     sceneryGlbsResult = [...grouped.entries()].map(([id, instances]) => ({ id, instances }));
   }
 
+  // Pick the dominant biome profile the bank pass's grass-density chunk
+  // (#496) will key its density tile off. A route may cover several profiles;
+  // one tile per route is good enough for the current single-mesh bank, and
+  // matches the single `fallback` the pass used before this change.
+  const routeProfiles = distinctProfiles(enrichment ?? null, getRouteSceneryTrack(route.id));
+  const dominantProfile: SceneryProfile = routeProfiles[0] ?? 'fallback';
+
   return {
     pools,
     ...(buildings.length > 0 ? { buildings } : {}),
@@ -299,5 +323,6 @@ export const toEngineRoute = (
     ...(totalDistanceMeters !== undefined ? { totalDistanceMeters } : {}),
     ...(isClosedLoop ? { isClosedLoop } : {}),
     waterEdgesForProgress,
+    dominantProfile,
   };
 };
