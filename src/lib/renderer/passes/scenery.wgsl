@@ -94,13 +94,17 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let species = packed & 0xffffu;
   let swaySeed = f32((packed >> 16u) & 0xffffu) / 65535.0;
 
-  // Species sizes (metres). Matches React's `FOLIAGE_SHAPE_SIZE` scaled down
-  // to a cleaner silhouette at chase-camera height — unscaled 14-17 m crossed
-  // quads form a visible wall at the horizon because the camera is only 2.6 m
-  // off the water. The procedural crown art reads as a single tree at ~4 m.
-  const SPECIES_HEIGHTS = array<f32, 3>(4.0, 5.0, 3.5);
-  const SPECIES_WIDTHS  = array<f32, 3>(0.9, 0.55, 1.15);
-  let sIdx = min(species, 2u);
+  // Species sizes (metres). 0-2 are trees — React's `FOLIAGE_SHAPE_SIZE`
+  // scaled down to a cleaner silhouette at chase-camera height (unscaled
+  // 14-17 m quads form a visible wall at the horizon because the camera
+  // is only 2.6 m off the water). 3 is reed and 4 is rock: the solid pass
+  // owns their visual (ported #591-fu); the sprite billboard would read
+  // as a tree-shaped card at reed/rock positions so we collapse the quad
+  // to zero and let the fragment discard. Keeping the pool in the sprite
+  // iterator is cheaper than filtering it out on the CPU.
+  const SPECIES_HEIGHTS = array<f32, 5>(4.0, 5.0, 3.5, 0.0, 0.0);
+  const SPECIES_WIDTHS  = array<f32, 5>(0.9, 0.55, 1.15, 0.0, 0.0);
+  let sIdx = min(species, 4u);
   let heightM = SPECIES_HEIGHTS[sIdx];
   let widthFactor = SPECIES_WIDTHS[sIdx];
 
@@ -134,13 +138,18 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
     vec3<f32>(0.30, 0.52, 0.28),
     vec3<f32>(0.60, 0.74, 0.38),
   );
-  out.baseCol = BASE_PAL[sIdx];
-  out.crownCol = CROWN_PAL[sIdx];
+  // Palettes are tree-only (3 entries): species 3/4 (reeds/rocks) ride the
+  // last tree palette, which never shows because `heightM = 0` collapses
+  // the billboard above and `species` is also clamped before the
+  // fragment reads the atlas layer.
+  let paletteIdx = min(species, 2u);
+  out.baseCol = BASE_PAL[paletteIdx];
+  out.crownCol = CROWN_PAL[paletteIdx];
   // Billboard UV: both crossed quads share the same (0..1, 0..1) space so
   // the same leaf texture tiles across both. local.x goes −0.6..0.6 and
   // local.y goes 0..1 before the per-species scale, so remap to UV.
   out.uv = vec2<f32>(local.x + 0.5, 1.0 - local.y);
-  out.species = sIdx;
+  out.species = paletteIdx;
   let d = p - frame.camPos;
   let worldDist = length(vec3<f32>(d.x, 0.0, d.z));
   out.worldDist = worldDist;

@@ -44,10 +44,20 @@ const seeded = (seed: number): (() => number) => {
 };
 
 /**
- * Build a seeded crown-and-trunk mesh. Trunk = 6-sided prism (12 tri); crown
- * = octahedron truncated to a 12-vertex blob with 20 triangles. Total ~32
- * triangles per species — well inside the ~50 budget D7-a sets, with room
- * for a canopy skirt the parity assertion counts (~50 lands with the skirt).
+ * Build a seeded crown-and-trunk mesh. The crown is a four-layer cone stack
+ * mirroring React's `vegetationComponents.tsx` cone0-cone3 silhouette
+ * (`CONE_LAYERS = [[2.8, 1.4, 2.2], [3.8, 1.1, 2.0], [4.6, 0.8, 1.8],
+ * [5.3, 0.4, 1.2]]`): a tree reads as a proper multi-tier pyramid instead
+ * of a single-ring blob, closing most of the WebGPU-vs-React silhouette
+ * gap on medium tier where kit trees are off. Trunk is a 6-sided prism
+ * matching the dimensions of React's trunk cylinder (2.4 m tall, radius
+ * ~0.12-0.22 m with a 0.3 m root cap).
+ *
+ * Triangle count lands around 120 — well above the pre-port 32-tri blob
+ * budget D7-a measured on the single-ring crown, but still cheap relative
+ * to the thousand-plus foliage instances a route pool runs: on this
+ * hardware the stage renders ~75k extra triangles per frame per bank and
+ * frame times stay inside the medium-tier budget.
  */
 export const buildFloraSolidMesh = (speciesIndex: number): FloraSolidMesh => {
   const rand = seeded((speciesIndex + 7) * 2654435761);
@@ -63,9 +73,71 @@ export const buildFloraSolidMesh = (speciesIndex: number): FloraSolidMesh => {
     return positions.length / 3 - 1;
   };
 
-  // Trunk: hexagonal prism, 0 → 1.0 m tall, radius ~0.08.
-  const trunkRadius = 0.08 + rand() * 0.03;
-  const trunkTop = 1.0;
+  // Species 3 = reed cluster (ports React `vegetationComponents.tsx`
+  // reed billboards): three thin vertical quads crossed at ~60° so a reed
+  // reads the same from any camera angle. `mix.x = 1` (crown) and
+  // `mix.y = 1` (crown colour) so the fragment shader lands on the base
+  // palette without a trunk blend; the palette entry for species 3 in
+  // `floraSolid.wgsl` gives the dry-reed warm tan.
+  if (speciesIndex === 3) {
+    const bladeH = 0.9 + rand() * 0.4;
+    const bladeW = 0.08 + rand() * 0.04;
+    const blades = 3;
+    for (let b = 0; b < blades; b += 1) {
+      const theta = (b / blades) * Math.PI;
+      const nx = -Math.sin(theta);
+      const nz = Math.cos(theta);
+      const bx = Math.cos(theta) * bladeW;
+      const bz = Math.sin(theta) * bladeW;
+      const a = push([-bx, 0, -bz], [nx, 0.2, nz], [1, 0.1]);
+      const bq = push([bx, 0, bz], [nx, 0.2, nz], [1, 0.1]);
+      const c = push([bx, bladeH, bz], [nx, 0.2, nz], [1, 1]);
+      const d = push([-bx, bladeH, -bz], [nx, 0.2, nz], [1, 1]);
+      idx.push(a, bq, c, a, c, d);
+      // Back face so the reed reads from both sides even with cullMode: back.
+      idx.push(a, d, c, a, c, bq);
+    }
+    return finalise(positions, normals, mix, idx);
+  }
+
+  // Species 4 = rock. An irregular 6-sided prism with a top cap, seeded
+  // per-vertex so no two rocks line up. Smaller than a tree by an order
+  // of magnitude (base radius 0.3-0.5 m) so a bank sprinkled with rocks
+  // reads as pebbles, not boulders. `mix.x = 0` keeps the trunk palette
+  // path (we point species 4 at the shared grey/brown in `floraSolid.wgsl`).
+  if (speciesIndex === 4) {
+    const baseR = 0.3 + rand() * 0.2;
+    const topR = baseR * (0.55 + rand() * 0.2);
+    const h = 0.3 + rand() * 0.25;
+    const sides = 6;
+    const baseIds: number[] = [];
+    const topIds: number[] = [];
+    for (let i = 0; i < sides; i += 1) {
+      const a = (i / sides) * Math.PI * 2;
+      const jitter = 0.85 + rand() * 0.3;
+      const rb = baseR * jitter;
+      const rt = topR * jitter;
+      baseIds.push(push([Math.cos(a) * rb, 0, Math.sin(a) * rb], [Math.cos(a), 0.4, Math.sin(a)], [0, 0]));
+      topIds.push(push([Math.cos(a) * rt, h, Math.sin(a) * rt], [Math.cos(a), 0.7, Math.sin(a)], [0, 0]));
+    }
+    const topCentre = push([0, h, 0], [0, 1, 0], [0, 0]);
+    for (let i = 0; i < sides; i += 1) {
+      const j = (i + 1) % sides;
+      // sides
+      idx.push(baseIds[i], baseIds[j], topIds[j], baseIds[i], topIds[j], topIds[i]);
+      // top fan
+      idx.push(topIds[i], topIds[j], topCentre);
+    }
+    return finalise(positions, normals, mix, idx);
+  }
+
+  // Species 0-2 = trees. Trunk: hexagonal prism, 0 → 2.4 m tall to meet
+  // React's cylinder length.
+  // Root cap flares the base to 0.35 m to mirror the second trunk cylinder
+  // the React mesh stacks at y=0.1.
+  const trunkTop = 2.4;
+  const trunkTopRadius = 0.12 + rand() * 0.04;
+  const trunkBaseRadius = 0.22 + rand() * 0.05;
   const trunkRing = (y: number, r: number): number[] => {
     const ids: number[] = [];
     for (let i = 0; i < 6; i += 1) {
@@ -78,8 +150,8 @@ export const buildFloraSolidMesh = (speciesIndex: number): FloraSolidMesh => {
     }
     return ids;
   };
-  const trunkBase = trunkRing(0, trunkRadius);
-  const trunkCrown = trunkRing(trunkTop, trunkRadius * 0.85);
+  const trunkBase = trunkRing(0, trunkBaseRadius);
+  const trunkCrown = trunkRing(trunkTop, trunkTopRadius);
   for (let i = 0; i < 6; i += 1) {
     const j = (i + 1) % 6;
     const bi = trunkBase[i];
@@ -89,35 +161,60 @@ export const buildFloraSolidMesh = (speciesIndex: number): FloraSolidMesh => {
     idx.push(bi, bj, tj, bi, tj, ti);
   }
 
-  // Crown: octahedron scaled per-vertex with the seeded RNG. 6 verts, 8 tri.
-  // Add an additional "skirt" ring of 6 verts between the base and the tip
-  // so the handoff with sprite billboards doesn't pop (adds 12 tri).
-  const crownTop = trunkTop + 1.2 + rand() * 0.4;
-  const crownBottom = trunkTop + 0.15;
-  const crownRadius = 0.6 + rand() * 0.15;
-  const crownRing = (y: number, r: number): number[] => {
-    const ids: number[] = [];
-    for (let i = 0; i < 6; i += 1) {
-      const a = (i / 6) * Math.PI * 2 + rand() * 0.05;
-      const rr = r * (0.9 + rand() * 0.2);
-      ids.push(push([Math.cos(a) * rr, y, Math.sin(a) * rr], [Math.cos(a), 0.3, Math.sin(a)], [1, (y - crownBottom) / (crownTop - crownBottom)]));
+  // Foliage: four cone layers at the React y-positions and radii, each a
+  // 6-sided tapered ring to a tip. A cone is cheap (6 base + 1 tip = 12
+  // triangles) and four of them in a `[2.2, 2.0, 1.8, 1.2]` radius stack
+  // give the Christmas-tree silhouette React's `CONE_LAYERS` paints.
+  const CONE_LAYERS: ReadonlyArray<readonly [number, number, number]> = [
+    [2.8, 1.4, 2.2],
+    [3.8, 1.1, 2.0],
+    [4.6, 0.8, 1.8],
+    [5.3, 0.4, 1.2],
+  ];
+  const SIDES = 6;
+  for (let layer = 0; layer < CONE_LAYERS.length; layer += 1) {
+    const [yc, halfH, baseR] = CONE_LAYERS[layer];
+    const yBase = yc - halfH;
+    const yTip = yc + halfH;
+    // Seeded radius jitter per layer so no two species sit on identical
+    // silhouettes; stays well within the layer's base radius so the stack
+    // reads as a cone.
+    const r = baseR * (0.95 + rand() * 0.15);
+    const baseIds: number[] = [];
+    for (let i = 0; i < SIDES; i += 1) {
+      const a = (i / SIDES) * Math.PI * 2 + rand() * 0.03;
+      const cx = Math.cos(a) * r;
+      const cz = Math.sin(a) * r;
+      baseIds.push(
+        push([cx, yBase, cz], [Math.cos(a), 0.25, Math.sin(a)], [1, 0.3 + layer * 0.2]),
+      );
     }
-    return ids;
-  };
-  const crownLow = crownRing(crownBottom, crownRadius * 0.75);
-  const crownMid = crownRing((crownBottom + crownTop) * 0.5, crownRadius);
-  const crownHigh = crownRing(crownTop - 0.3, crownRadius * 0.55);
-  const tip = push([0, crownTop, 0], [0, 1, 0], [1, 1]);
-
-  for (let i = 0; i < 6; i += 1) {
-    const j = (i + 1) % 6;
-    idx.push(crownLow[i], crownLow[j], crownMid[j], crownLow[i], crownMid[j], crownMid[i]);
-    idx.push(crownMid[i], crownMid[j], crownHigh[j], crownMid[i], crownHigh[j], crownHigh[i]);
-    idx.push(crownHigh[i], crownHigh[j], tip);
+    const tipId = push([0, yTip, 0], [0, 1, 0], [1, 1]);
+    for (let i = 0; i < SIDES; i += 1) {
+      const j = (i + 1) % SIDES;
+      idx.push(baseIds[i], baseIds[j], tipId);
+    }
+    // Close the cone's base with a fan so a camera below the tree doesn't
+    // see straight through the canopy — a one-triangle-per-side cost that
+    // the sprout fade sweeps away past `sproutFar`.
+    const centreId = push([0, yBase, 0], [0, -1, 0], [1, 0.3 + layer * 0.2]);
+    for (let i = 0; i < SIDES; i += 1) {
+      const j = (i + 1) % SIDES;
+      idx.push(centreId, baseIds[j], baseIds[i]);
+    }
   }
 
+  return finalise(positions, normals, mix, idx);
+};
+
+/** Final-pack shared across all species variants. */
+const finalise = (
+  positions: number[],
+  normals: number[],
+  mix: number[],
+  idx: number[],
+): FloraSolidMesh => {
   const triangleCount = idx.length / 3;
-  // Encode indices as uint16 — mesh is small enough.
   if (positions.length / 3 >= 0x10000) {
     throw new Error('solid flora mesh exceeded uint16 index budget');
   }

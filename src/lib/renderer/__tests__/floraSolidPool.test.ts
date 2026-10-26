@@ -2,12 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { buildFloraSolidMesh } from '../plan/floraSolidPool';
 
 describe('floraSolidPool', () => {
-  it('builds a mesh under the ~50 triangle budget (D7-a #562)', () => {
-    for (let species = 0; species < 8; species += 1) {
+  it('builds trees (species 0-2) as a four-cone-stack mesh in the triangle budget', () => {
+    // The pre-#591-fu single-ring crown ran at ~32 tris / tree with a 60-tri
+    // cap; the four-cone stack (`CONE_LAYERS` from React
+    // `vegetationComponents.tsx`) raises the per-tree cost accordingly. The
+    // lower bound stays well above the old single-blob count so a future
+    // simplification can't silently regress the silhouette.
+    for (let species = 0; species < 3; species += 1) {
       const mesh = buildFloraSolidMesh(species);
-      expect(mesh.triangleCount).toBeGreaterThan(20);
-      expect(mesh.triangleCount).toBeLessThanOrEqual(60);
+      expect(mesh.triangleCount).toBeGreaterThanOrEqual(48);
+      expect(mesh.triangleCount).toBeLessThanOrEqual(120);
     }
+  });
+
+  it('builds reed clusters (species 3) with crossed-blade triangles', () => {
+    // Reeds are three crossed thin quads with both faces so they read from
+    // either side under `cullMode: back` — that's 3 blades × 2 tris × 2
+    // faces = 12 triangles.
+    const mesh = buildFloraSolidMesh(3);
+    expect(mesh.triangleCount).toBe(12);
+  });
+
+  it('builds rocks (species 4) as a 6-sided prism with a top fan', () => {
+    // 6 sides × 2 tris + 6 top-fan tris = 18 triangles.
+    const mesh = buildFloraSolidMesh(4);
+    expect(mesh.triangleCount).toBe(18);
   });
 
   it('positions, normals, mix are same length (xyz vs xyz vs xy per vert)', () => {

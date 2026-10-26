@@ -84,23 +84,38 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
 
   // Per-species palettes mirror the sprite pass's BASE_PAL/CROWN_PAL in
   // `scenery.wgsl` so the near-tree solid handoff keeps the same green as
-  // the distant billboards. Trunk is a shared warm brown.
-  const TRUNK = vec3<f32>(0.33, 0.22, 0.14);
-  const BASE_PAL = array<vec3<f32>, 3>(
+  // the distant billboards. Trunk is a shared warm brown. Species 3 and 4
+  // carry reeds and rocks (ported from React `vegetationComponents.tsx`):
+  // the mesh builder gives reeds `mix = (1, …)` so they land on the base
+  // palette (dry warm reed) and rocks `mix = (0, …)` so they land on the
+  // trunk-swap colour — a plain mid-grey piped through `TRUNK_PAL`.
+  const TRUNK_PAL = array<vec3<f32>, 5>(
+    vec3<f32>(0.33, 0.22, 0.14),
+    vec3<f32>(0.33, 0.22, 0.14),
+    vec3<f32>(0.33, 0.22, 0.14),
+    vec3<f32>(0.60, 0.52, 0.32),
+    vec3<f32>(0.42, 0.42, 0.44),
+  );
+  const BASE_PAL = array<vec3<f32>, 5>(
     vec3<f32>(0.20, 0.34, 0.18),
     vec3<f32>(0.18, 0.26, 0.16),
     vec3<f32>(0.32, 0.45, 0.22),
+    vec3<f32>(0.68, 0.60, 0.32),
+    vec3<f32>(0.46, 0.45, 0.46),
   );
-  const CROWN_PAL = array<vec3<f32>, 3>(
+  const CROWN_PAL = array<vec3<f32>, 5>(
     vec3<f32>(0.42, 0.60, 0.30),
     vec3<f32>(0.30, 0.52, 0.28),
     vec3<f32>(0.60, 0.74, 0.38),
+    vec3<f32>(0.82, 0.74, 0.38),
+    vec3<f32>(0.56, 0.55, 0.54),
   );
-  let sIdx = min(in.species, 2u);
+  let sIdx = min(in.species, 4u);
+  let trunk = TRUNK_PAL[sIdx];
   let base = BASE_PAL[sIdx];
   let crown = CROWN_PAL[sIdx];
   let foliage = mix(base, crown, clamp(in.mix.y, 0.0, 1.0));
-  let col = mix(TRUNK, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
+  let col = mix(trunk, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
   let near = frame.fog.x;
   let far = frame.fog.y;
   let density = near + far * in.worldDist;

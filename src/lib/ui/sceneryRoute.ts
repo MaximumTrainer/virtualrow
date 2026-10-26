@@ -46,6 +46,7 @@ import {
   FOLIAGE_SHAPES,
   layoutFoliage,
 } from '../scenery/foliagePlan';
+import { layoutReeds, layoutRocks, ROCK_SPECIES } from '../scenery/reedRockPlan';
 import { layoutLandscape, layoutToBuildingSpecs } from '../scenery/landscapeLayout';
 import {
   getRouteSceneryTrack,
@@ -250,8 +251,17 @@ export const toEngineRoute = (
       track,
       speciesTypes: FOLIAGE_SHAPES,
     });
+    // #591-fu: reeds + rocks go through the same pool-batching path as the
+    // tree layouts (same `FoliageTree` shape, species indices 3/4). The
+    // solid-flora stage switches geometry on `speciesIndex` and the sprite
+    // pass collapses the billboard to zero for 3/4, so no new pool kind is
+    // needed.
+    const reeds = layoutReeds({ curve, enrichment: enrichment ?? null, track });
+    const rocks = layoutRocks({ curve, enrichment: enrichment ?? null, track });
+    const groundProps = [...trees, ...reeds, ...rocks];
+    const speciesCount = Math.max(FOLIAGE_SHAPES.length, ROCK_SPECIES + 1);
     const routeLength = (totalDistanceMeters ?? curve.approximateLength(32)) || 1;
-    pools.push(...batchFoliagePools(trees, FOLIAGE_SHAPES.length, routeLength, FOLIAGE_CHUNK_METRES));
+    pools.push(...batchFoliagePools(groundProps, speciesCount, routeLength, FOLIAGE_CHUNK_METRES));
 
     const landscape = layoutLandscape({ curve, enrichment: enrichment ?? null, track });
     buildings = layoutToBuildingSpecs(landscape, SCENERY_PROFILES);
