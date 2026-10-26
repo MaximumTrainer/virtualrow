@@ -58,6 +58,7 @@ import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
+import { mergeSceneryPrimitives } from './sceneryMeshBuffers';
 import { paintFoliage, FOLIAGE_SHAPES } from '../../scenery/foliageTexture';
 import { createSceneryCuller } from '../passes/sceneryCull';
 import { createFloraSolidStage } from './floraSolidStage';
@@ -431,36 +432,16 @@ export const createRideScene = async (
       if (!res.ok) return;
       const bytes = new Uint8Array(await res.arrayBuffer());
       const model = await loadGlb(bytes);
-      let posTotal = 0;
-      let nrmTotal = 0;
-      let idxTotal = 0;
-      for (const p of model.primitives) {
-        posTotal += p.positions.length;
-        nrmTotal += p.normals.length;
-        idxTotal += p.indices.length;
-      }
-      const positions = new Float32Array(posTotal);
-      const normals = new Float32Array(nrmTotal);
-      const needs32 = model.primitives.some((p) => p.indices instanceof Uint32Array);
-      const indices = needs32 ? new Uint32Array(idxTotal) : new Uint16Array(idxTotal);
-      let pOff = 0;
-      let nOff = 0;
-      let iOff = 0;
-      let vertBase = 0;
-      for (const p of model.primitives) {
-        positions.set(p.positions, pOff);
-        normals.set(p.normals, nOff);
-        for (let i = 0; i < p.indices.length; i += 1) indices[iOff + i] = p.indices[i] + vertBase;
-        pOff += p.positions.length;
-        nOff += p.normals.length;
-        iOff += p.indices.length;
-        vertBase += p.positions.length / 3;
-      }
+      // Merge the model's primitives, baking each primitive's base colour per
+      // vertex so a multi-material model (trunk/leaves, walls/roof/windows)
+      // keeps its parts distinct instead of collapsing to primitive-0's colour.
+      const merged = mergeSceneryPrimitives(model.primitives);
       sceneryMeshPass.register({
         id,
-        positions,
-        normals,
-        indices,
+        positions: merged.positions,
+        normals: merged.normals,
+        indices: merged.indices,
+        colors: merged.colors,
         baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
         maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
       });

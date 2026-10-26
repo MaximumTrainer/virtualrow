@@ -34,7 +34,7 @@ const makePass = () => {
   const drawIndexed = vi.fn();
   const end = vi.fn();
   const pass = { setBindGroup, setPipeline, setVertexBuffer, setIndexBuffer, drawIndexed, end } as unknown as GPURenderPassEncoder;
-  return { pass, setBindGroup, setPipeline, drawIndexed, setIndexBuffer, end };
+  return { pass, setBindGroup, setPipeline, setVertexBuffer, drawIndexed, setIndexBuffer, end };
 };
 
 const makeDevice = () => {
@@ -61,6 +61,7 @@ const makeInput = (over: Partial<SceneryMeshInput> = {}): SceneryMeshInput => ({
   normals: over.normals ?? new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0]),
   indices: over.indices ?? new Uint16Array([0, 1, 2]),
   baseColor: over.baseColor ?? [0.3, 0.5, 0.4, 1],
+  ...(over.colors ? { colors: over.colors } : {}),
   maxInstances: over.maxInstances ?? 4,
 });
 
@@ -141,6 +142,46 @@ describe('createSceneryMeshPass', () => {
     expect(drawIndexed.mock.calls[0][1]).toBe(2);
     expect(drawIndexed.mock.calls[1][1]).toBe(1);
     expect(end).toHaveBeenCalled();
+  });
+
+  it('uploads a supplied per-vertex colour buffer verbatim', () => {
+    const { device, queue } = makeDevice();
+    const p = createSceneryMeshPass({ device, format: 'bgra8unorm', frameUniforms: makeBuffer() });
+    // 3 vertices → 12 colour floats: part A brown, parts B/C green.
+    const colors = new Float32Array([0.4, 0.26, 0.13, 1, 0.1, 0.6, 0.15, 1, 0.1, 0.6, 0.15, 1]);
+    p.register(makeInput({ id: 'tree', colors }));
+    const calls = (queue.writeBuffer as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    // The colour buffer is written with the exact array we supplied.
+    expect(calls.some((c) => c[2] === colors)).toBe(true);
+  });
+
+  it('synthesizes a per-vertex colour buffer from baseColor when colors omitted', () => {
+    const { device, queue } = makeDevice();
+    const p = createSceneryMeshPass({ device, format: 'bgra8unorm', frameUniforms: makeBuffer() });
+    // Default input has 3 vertices (9 position floats) and no colors.
+    p.register(makeInput({ id: 'block', baseColor: [0.5, 0.25, 0.75, 1] }));
+    const calls = (queue.writeBuffer as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    // The only length-12 Float32Array write is the synthesized colour buffer.
+    const colourWrite = calls.find((c) => c[2] instanceof Float32Array && (c[2] as Float32Array).length === 12);
+    expect(colourWrite).toBeTruthy();
+    const arr = colourWrite![2] as Float32Array;
+    expect(Array.from(arr.slice(0, 4))).toEqual([0.5, 0.25, 0.75, 1]);
+    expect(Array.from(arr.slice(8, 12))).toEqual([0.5, 0.25, 0.75, 1]);
+  });
+
+  it('encode binds the colour vertex buffer at slot 2', () => {
+    const { device } = makeDevice();
+    const p = createSceneryMeshPass({ device, format: 'bgra8unorm', frameUniforms: makeBuffer() });
+    p.register(makeInput({ id: 'buoy' }));
+    p.setInstances('buoy', [mat4Identity(mat4())]);
+    const { pass, setVertexBuffer } = makePass();
+    const beginRenderPass = vi.fn(() => pass);
+    p.encode({
+      encoder: { beginRenderPass },
+      swapView: {},
+      depthView: {},
+    } as unknown as Parameters<typeof p.encode>[0]);
+    expect(setVertexBuffer.mock.calls.some((c) => c[0] === 2)).toBe(true);
   });
 
   it('dispose destroys every registered mesh buffer and clears the registry', () => {
