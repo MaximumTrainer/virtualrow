@@ -59,6 +59,11 @@ import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
 import { mergeSceneryPrimitives } from './sceneryMeshBuffers';
+import {
+  planSceneryStream,
+  sceneryModelsToLoad,
+  type CurveDistanceSample,
+} from './sceneryStreamPlan';
 import { paintFoliage, FOLIAGE_SHAPES } from '../../scenery/foliageTexture';
 import { createSceneryCuller } from '../passes/sceneryCull';
 import { createFloraSolidStage } from './floraSolidStage';
@@ -378,8 +383,6 @@ export const createRideScene = async (
     'a07-distance-marker-post',
   ];
   const sceneryGlbList = isSceneryRoute(opts.route) ? opts.route.sceneryGlbs ?? [] : [];
-  const allModelIds: Set<string> = new Set<string>(COURSE_FURNITURE_MODELS);
-  for (const group of sceneryGlbList) allModelIds.add(group.id);
   const COURSE_FURNITURE_MAX_INSTANCES = 1024;
   const tierFolderFor = (id: string): string => {
     const prefix = id[0]?.toLowerCase() ?? 'a';
@@ -425,11 +428,16 @@ export const createRideScene = async (
     }
   } catch { /* scull GLB load failed — the old baked boat remains as fallback */ }
 
-  await Promise.all([...allModelIds].map(async (id) => {
+  // Scenery GLBs load lazily as the route progresses (see sceneryStreamPlan):
+  // this fetches + registers one model on demand, returning whether it
+  // registered. The streaming controller built after placement drives it from
+  // the boat's distance, so distant scenery isn't fetched until the boat nears
+  // it — no up-front burst that blocks the first frame or trips a host 503.
+  const loadSceneryModel = async (id: string): Promise<boolean> => {
     try {
       const url = assetUrl(`/assets/scenery/${tierFolderFor(id)}/${id}.glb`);
       const res = await fetch(url);
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const bytes = new Uint8Array(await res.arrayBuffer());
       const model = await loadGlb(bytes);
       // Merge the model's primitives, baking each primitive's base colour per
@@ -445,11 +453,13 @@ export const createRideScene = async (
         baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
         maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
       });
+      return true;
     } catch {
       // A fetch or decode failure leaves the model unregistered; the pass
       // silently skips it rather than taking the engine down.
+      return false;
     }
-  }));
+  };
 
   // Build the water/bank curve + edges fn FIRST so every geometry pass
   // that follows the river (water strip, bank strips lit + depth, boat
@@ -591,10 +601,13 @@ export const createRideScene = async (
     mat4Multiply(trs, t, rot);
     byModel.get(place.id)?.push(trs);
   }
+  // Combine course-furniture + GLB-scenery instance transforms into one map,
+  // keyed by model id. The streaming controller calls `setInstances` for a
+  // model only once its GLB has registered.
+  const sceneryInstanceMats = new Map<string, Mat4[]>();
   for (const model of COURSE_FURNITURE_MODELS) {
-    sceneryMeshPass.setInstances(model, byModel.get(model) ?? []);
+    sceneryInstanceMats.set(model, byModel.get(model) ?? []);
   }
-
   for (const group of sceneryGlbList) {
     const mats: Mat4[] = [];
     for (const inst of group.instances) {
@@ -612,8 +625,54 @@ export const createRideScene = async (
       mat4Multiply(trs, t, rot);
       mats.push(trs);
     }
-    sceneryMeshPass.setInstances(group.id, mats);
+    sceneryInstanceMats.set(group.id, mats);
   }
+
+  // Progressive loading plan: sample the route for along-route distances, work
+  // out where each model first appears, and load models as the boat comes
+  // within the look-ahead window (driven from the frame loop below).
+  const SCENERY_STREAM_SAMPLES = 128;
+  const SCENERY_LOOKAHEAD_M = 400;
+  const SCENERY_MAX_PER_TICK = 3;
+  const streamSamples: CurveDistanceSample[] = [];
+  for (let i = 0; i <= SCENERY_STREAM_SAMPLES; i += 1) {
+    const p = i / SCENERY_STREAM_SAMPLES;
+    const cp = routeCurve.sample(p);
+    streamSamples.push({
+      position: [cp.position[0], cp.position[1], cp.position[2]],
+      distanceMeters: p * totalDistanceMeters,
+    });
+  }
+  const sceneryPlan = planSceneryStream(
+    [...sceneryInstanceMats].map(([id, mats]) => ({
+      id,
+      instancePositions: mats.map((m) => [m[12], m[13], m[14]] as [number, number, number]),
+    })),
+    streamSamples,
+  );
+  const sceneryLoaded = new Set<string>();
+  const sceneryLoading = new Set<string>();
+  const streamScenery = (boatDistanceMeters: number): void => {
+    const pending = sceneryModelsToLoad(
+      sceneryPlan,
+      new Set<string>([...sceneryLoaded, ...sceneryLoading]),
+      boatDistanceMeters,
+      SCENERY_LOOKAHEAD_M,
+      SCENERY_MAX_PER_TICK,
+    );
+    for (const id of pending) {
+      sceneryLoading.add(id);
+      void loadSceneryModel(id)
+        .then((ok) => {
+          sceneryLoading.delete(id);
+          sceneryLoaded.add(id);
+          if (ok) sceneryMeshPass.setInstances(id, sceneryInstanceMats.get(id) ?? []);
+        })
+        .catch(() => {
+          sceneryLoading.delete(id);
+        });
+    }
+  };
 
   const cameraRig = createRigTarget();
   const boatPlacement = createPlacement();
@@ -699,6 +758,9 @@ export const createRideScene = async (
       : null;
 
     placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
+    // Stream scenery that has come within the look-ahead window as the boat
+    // advances; already-loaded / in-flight models are skipped.
+    streamScenery(boatPlacement.progress * totalDistanceMeters);
     const ghostInfo = placeGhost(
       ghostPlacement,
       routeCurve,
