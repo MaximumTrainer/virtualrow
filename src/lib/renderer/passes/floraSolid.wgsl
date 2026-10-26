@@ -35,6 +35,7 @@ struct VSOut {
   @location(1) mix: vec2<f32>,
   @location(2) worldDist: f32,
   @location(3) fade: f32,
+  @location(4) @interpolate(flat) species: u32,
 };
 
 @vertex
@@ -52,6 +53,11 @@ fn vs_main(
   // Solid fades to zero ABOVE `sproutFar`; peak at `sproutNear`.
   let span = max(1.0, sprout.far - sprout.near);
   let fade = clamp(1.0 - (worldDist - sprout.near) / span, 0.0, 1.0);
+  // Species index rides in the bottom 16 bits of the centres.w metadata the
+  // foliage planner packs (see `foliagePlan.ts` `batchFoliagePools`), so we
+  // can tint each pool's trees without an extra bind group.
+  let metaBits = bitcast<u32>(instance.w);
+  let species = metaBits & 0xffffu;
 
   var out: VSOut;
   out.pos = frame.viewProj * vec4<f32>(world, 1.0);
@@ -59,6 +65,7 @@ fn vs_main(
   out.mix = mixAttr;
   out.worldDist = worldDist;
   out.fade = fade;
+  out.species = species;
   return out;
 }
 
@@ -66,12 +73,34 @@ fn vs_main(
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   if (in.fade <= 0.001) { discard; }
   let sun = normalize(frame.sunDir);
-  let shade = clamp(dot(in.normal, sun) * 0.5 + 0.6, 0.3, 1.0);
-  let trunk = vec3<f32>(0.33, 0.22, 0.14);
-  let base = vec3<f32>(0.26, 0.42, 0.22);
-  let crown = vec3<f32>(0.42, 0.56, 0.26);
+  // Half-lambert + sky/ground ambient: a sun-lit face reads bright, a
+  // down-facing face picks up a touch of ground bounce, and up-facing
+  // leaves pick up sky — the old `*0.5+0.6` clamp was flat enough that
+  // trees looked like painted cardboard.
+  let halfLambert = clamp(dot(in.normal, sun) * 0.5 + 0.5, 0.0, 1.0);
+  let sky = clamp(in.normal.y * 0.5 + 0.5, 0.0, 1.0);
+  let ambient = mix(vec3<f32>(0.20, 0.19, 0.17), vec3<f32>(0.42, 0.46, 0.52), sky);
+  let shade = ambient + halfLambert * halfLambert * 0.9;
+
+  // Per-species palettes mirror the sprite pass's BASE_PAL/CROWN_PAL in
+  // `scenery.wgsl` so the near-tree solid handoff keeps the same green as
+  // the distant billboards. Trunk is a shared warm brown.
+  const TRUNK = vec3<f32>(0.33, 0.22, 0.14);
+  const BASE_PAL = array<vec3<f32>, 3>(
+    vec3<f32>(0.20, 0.34, 0.18),
+    vec3<f32>(0.18, 0.26, 0.16),
+    vec3<f32>(0.32, 0.45, 0.22),
+  );
+  const CROWN_PAL = array<vec3<f32>, 3>(
+    vec3<f32>(0.42, 0.60, 0.30),
+    vec3<f32>(0.30, 0.52, 0.28),
+    vec3<f32>(0.60, 0.74, 0.38),
+  );
+  let sIdx = min(in.species, 2u);
+  let base = BASE_PAL[sIdx];
+  let crown = CROWN_PAL[sIdx];
   let foliage = mix(base, crown, clamp(in.mix.y, 0.0, 1.0));
-  let col = mix(trunk, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
+  let col = mix(TRUNK, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
   let near = frame.fog.x;
   let far = frame.fog.y;
   let density = near + far * in.worldDist;

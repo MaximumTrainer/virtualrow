@@ -52,8 +52,15 @@ fn vs_main(in: VsIn, @builtin(instance_index) ii: u32) -> VsOut {
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
   let sun = normalize(frame.sunDir);
   let n = normalize(in.worldNormal);
-  let diffuse = max(dot(n, sun), 0.0);
-  let shade = 0.35 + 0.65 * diffuse;
+  // Hemisphere ambient (sky above, ground below) + half-lambert for the
+  // sun: the old `0.35 + 0.65*diffuse` had no sky/ground bias, so GLB
+  // kit trees and buildings read as uniformly flat and foliage lost its
+  // depth. The ambient magnitudes keep an unlit face above the old 0.35
+  // floor so nothing goes muddy.
+  let halfLambert = clamp(dot(n, sun) * 0.5 + 0.5, 0.0, 1.0);
+  let sky = clamp(n.y * 0.5 + 0.5, 0.0, 1.0);
+  let ambient = mix(vec3<f32>(0.22, 0.20, 0.18), vec3<f32>(0.42, 0.46, 0.52), sky);
+  let shade = ambient + halfLambert * halfLambert * 0.75;
   let col = in.color.rgb * shade;
   // Fog with the frame's exponential density.
   let density = frame.fog.x + frame.fog.y * in.worldDist;

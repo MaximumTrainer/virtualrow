@@ -113,20 +113,25 @@ export const packSproutUniforms = (
   return out;
 };
 
-/** Per-tier sprout fade window metres (D6-b). */
+/** Per-tier sprout fade window metres (D6-b). Pre-#591 the solid near-tree
+ * mesh faded out between ~6 and 15 m, which made the frame mostly sprite
+ * cards past arm's length — a near-bank treeline on medium was visibly
+ * card-flat. Pushing `far` out ~60% keeps the hybrid LOD but lets the
+ * low-poly solid mesh carry the mid-range where silhouette matters most;
+ * the sprite pass still owns everything beyond. */
 export const sproutWindowFor = (tier?: string): { near: number; far: number } => {
   switch (tier) {
     case 'basic':
-      return { near: 0, far: 6 };
+      return { near: 0, far: 10 };
     case 'low':
-      return { near: 0, far: 8 };
-    case 'high':
       return { near: 0, far: 12 };
+    case 'high':
+      return { near: 0, far: 20 };
     case 'extra-high':
-      return { near: 0, far: 15 };
+      return { near: 0, far: 26 };
     case 'medium':
     default:
-      return { near: 0, far: 10 };
+      return { near: 0, far: 16 };
   }
 };
 

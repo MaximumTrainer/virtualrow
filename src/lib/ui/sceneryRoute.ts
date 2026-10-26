@@ -54,6 +54,7 @@ import {
 import { SCENERY_PROFILES } from '../../components/rower3d/sceneryConfig';
 import type { BuildingSpec } from '../renderer/plan/buildings';
 import {
+  budgetFor,
   computePlacements,
   distinctProfiles,
   keepsKitTrees,
@@ -193,6 +194,7 @@ const detectClosedLoop = (route: WaterRoute): boolean => {
 export const toEngineRoute = (
   route: WaterRoute | null | undefined,
   enrichment?: RouteEnrichmentData | null,
+  tier: PerformanceMode = 'high',
 ): EngineRoute | null => {
   if (!route) return null;
 
@@ -252,8 +254,14 @@ export const toEngineRoute = (
     // bridges, landmarks, finish-area furniture). The `/row` adapter is where
     // the layout runs so the engine stays about rendering; this is pure maths
     // on the curve + enrichment + track, matching the React scene's pipeline.
-    const mode: PerformanceMode = 'medium';
-    const budget = 0.7;
+    // Prior to this change the mode was hard-wired to 'medium', which
+    // suppressed GLB kit trees entirely (`keepsKitTrees` is true only on
+    // high/extra-high) and ran the per-step placement loop at a 0.7 budget.
+    // The React scene used the viewer's own `PerformanceMode`, so most users
+    // actually got 'high'. Making this a parameter (defaulted to 'high')
+    // restores that behaviour without breaking the no-arg callers in tests.
+    const mode: PerformanceMode = tier;
+    const budget = budgetFor(mode);
     const profiles: SceneryProfile[] = distinctProfiles(enrichment ?? null, track);
     const region = resolveRegion(route.coordinates ?? null);
     const resolvedByProfile = new Map<SceneryProfile, ResolvedScenery>();
