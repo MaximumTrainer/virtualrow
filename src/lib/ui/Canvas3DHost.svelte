@@ -24,8 +24,14 @@
   interface Props {
     /** The engine's `attach` entrypoint. Omitted in P1 → bare canvas. */
     attach?: RideAttach;
-    /** Resolved performance tier, passed through to the engine. */
+    /** Resolved performance tier (quality axis), passed through to the engine. */
     tier?: string;
+    /**
+     * #591-fu P2c: resolved "view distance" tier, passed through alongside
+     * `tier` so the engine can gate LOD / sprout window independently. Omit
+     * to default to `tier`.
+     */
+    distanceTier?: string;
     /** The selected route the ride draws, passed through to the engine. */
     route?: unknown;
     /** True under Playwright. */
@@ -43,7 +49,7 @@
     onBackend?: (backend: CanvasBackend) => void;
   }
 
-  let { attach, tier, route, testMode = false, getFrame, crew, onBackend }: Props = $props();
+  let { attach, tier, distanceTier, route, testMode = false, getFrame, crew, onBackend }: Props = $props();
 
   let container = $state<HTMLDivElement | undefined>(undefined);
   let canvas = $state<HTMLCanvasElement | undefined>(undefined);
@@ -77,7 +83,7 @@
     // in the catch path alongside a rejected promise, instead of escaping the
     // effect — AC11 wants the renderer-unavailable telemetry either way.
     Promise.resolve()
-      .then(() => attach(canvas!, { tier, route, testMode, getFrame, crew }))
+      .then(() => attach(canvas!, { tier, distanceTier, route, testMode, getFrame, crew }))
       .then((r) => {
         if (disposed) {
           r?.dispose();

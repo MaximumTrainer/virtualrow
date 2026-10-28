@@ -17,6 +17,7 @@
   import { base } from '$app/paths';
   import { attach } from '$lib/renderer/engine/attach';
   import { resolvePerformanceMode } from '../../components/rower3d/constants';
+  import { getGraphicsStore } from '$lib/ui/graphicsContext';
   import { toEngineRoute } from '$lib/ui/sceneryRoute';
   import { describeLoadProgress, LOAD_PHASES } from '$lib/utils/loadingProgress';
   import { getSessionStore } from '$lib/ui/sessionContext';
@@ -64,18 +65,22 @@
   const selectedEnrichment = $derived(
     routes.selectedRoute ? routes.routeEnrichments[routes.selectedRoute.id] ?? null : null,
   );
-  // Resolve the real device/user tier once per page and hand the SAME value to
-  // both the scenery builder and the engine so density knobs (kit trees,
-  // placement budget, sprite/solid LOD) and the frame uniforms can't diverge.
-  // Matches React's path: `__VIRTUALROW_PERFORMANCE_MODE` override wins;
-  // otherwise `basic` under Playwright and `medium` for real users. The engine
-  // itself still runs device probing from inside `attach`, but giving the
-  // scenery builder the same seed means a given rig gets the same tree density
-  // the React scene drew (keepsKitTrees now trips on high/extra-high as
-  // intended, not on the branch's old hard-wired 'high').
+  // #591-fu P2c: two-axis quality. Each axis prefers the user's explicit
+  // choice from the GraphicsQualityStore when they've moved either slider
+  // off 'auto'; otherwise falls back to the device-probed tier
+  // (`resolvePerformanceMode()`), which honours `__VIRTUALROW_PERFORMANCE_MODE`
+  // and the Playwright flag. The scenery builder sees ONE tier (quality) —
+  // it governs kit trees, placement budget, palette gates — and the engine
+  // sees BOTH (quality + distance) so sprout window / fog look-ahead can be
+  // scaled independently.
+  const graphics = getGraphicsStore();
   const resolvedTier = $derived.by(() => {
     if (typeof window === 'undefined') return undefined;
-    return resolvePerformanceMode();
+    return graphics?.performanceMode ?? resolvePerformanceMode();
+  });
+  const resolvedDistance = $derived.by(() => {
+    if (typeof window === 'undefined') return undefined;
+    return graphics?.distanceMode ?? resolvedTier;
   });
   const engineRoute = $derived(toEngineRoute(routes.selectedRoute, selectedEnrichment, resolvedTier));
 
@@ -166,6 +171,7 @@
           <Canvas3DHost
             {attach}
             tier={resolvedTier}
+            distanceTier={resolvedDistance}
             route={engineRoute}
             {testMode}
             getFrame={() => ride.frame()}

@@ -69,7 +69,8 @@ describe('DebugPanel (#542 port of the App debug window)', () => {
     expect(screen.getByText('🔧 Debug Mode')).toBeTruthy();
     for (const heading of [
       'Session',
-      'Graphics',
+      'Graphics quality',
+      'View distance',
       'PM5 Simulator',
       'Heart Rate Simulator',
       'Overlays',
