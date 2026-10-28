@@ -12,6 +12,7 @@
 
 import type { FloraSolidPoolResources } from '../plan/floraSolidPool';
 import type { PoolCullResources } from './sceneryCull';
+import { LEAF_ATLAS_SIZE, paintLeafAtlas } from '../../scenery/leafAtlas';
 import floraSolidWgsl from './floraSolid.wgsl?raw';
 
 export interface FloraSolidSignature {
@@ -19,6 +20,10 @@ export interface FloraSolidSignature {
   pipeline: GPURenderPipeline;
   frameLayout: GPUBindGroupLayout;
   poolLayout: GPUBindGroupLayout;
+  /** Leaf atlas texture — one per signature, shared across every pool. */
+  leafAtlasView: GPUTextureView;
+  /** Sampler used by the fragment shader on `leafAtlasView`. */
+  leafSampler: GPUSampler;
   dispose(): void;
 }
 
@@ -32,6 +37,8 @@ export const createFloraSolidSignature = (
     entries: [
       { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
     ],
   });
   const poolLayout = device.createBindGroupLayout({
@@ -71,15 +78,42 @@ export const createFloraSolidSignature = (
     primitive: { topology: 'triangle-list', cullMode: 'back' },
     depthStencil: { depthWriteEnabled: true, depthCompare: 'less', format: 'depth32float' },
   });
+  // #591-fu P1a: leaf atlas uploaded once per signature. 128×128 rgba8unorm-
+  // srgb, under 64 KB. Fragment multiplies the sampled texel into the
+  // per-species crown palette so trees read as leafy, not flat cones.
+  const leafPixels = paintLeafAtlas();
+  const leafTexture = device.createTexture({
+    label: 'floraSolid-leaf-atlas',
+    size: { width: LEAF_ATLAS_SIZE, height: LEAF_ATLAS_SIZE },
+    format: 'rgba8unorm-srgb',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture: leafTexture },
+    leafPixels as BufferSource,
+    { bytesPerRow: LEAF_ATLAS_SIZE * 4, rowsPerImage: LEAF_ATLAS_SIZE },
+    { width: LEAF_ATLAS_SIZE, height: LEAF_ATLAS_SIZE },
+  );
+  const leafSampler = device.createSampler({
+    label: 'floraSolid-leaf-sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+  });
+
   let disposed = false;
   return {
     module,
     pipeline,
     frameLayout,
     poolLayout,
+    leafAtlasView: leafTexture.createView(),
+    leafSampler,
     dispose() {
       if (disposed) return;
       disposed = true;
+      leafTexture.destroy();
     },
   };
 };
@@ -102,6 +136,8 @@ export const createFloraSolidBindGroups = (
     entries: [
       { binding: 0, resource: { buffer: frameUniforms } },
       { binding: 1, resource: { buffer: sproutUniforms } },
+      { binding: 2, resource: signature.leafAtlasView },
+      { binding: 3, resource: signature.leafSampler },
     ],
   }),
   pool: device.createBindGroup({

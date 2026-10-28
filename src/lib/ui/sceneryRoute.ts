@@ -46,6 +46,7 @@ import {
   FOLIAGE_SHAPES,
   layoutFoliage,
 } from '../scenery/foliagePlan';
+import { layoutReeds, layoutRocks, ROCK_SPECIES } from '../scenery/reedRockPlan';
 import { layoutLandscape, layoutToBuildingSpecs } from '../scenery/landscapeLayout';
 import {
   getRouteSceneryTrack,
@@ -54,6 +55,7 @@ import {
 import { SCENERY_PROFILES } from '../../components/rower3d/sceneryConfig';
 import type { BuildingSpec } from '../renderer/plan/buildings';
 import {
+  budgetFor,
   computePlacements,
   distinctProfiles,
   keepsKitTrees,
@@ -126,6 +128,13 @@ export interface EngineRoute {
    * then applies its symmetric fallback.
    */
   waterEdgesForProgress?: (progress: number) => WaterEdges;
+  /**
+   * Dominant biome profile along the route — the first profile the enrichment
+   * mentions, or 'fallback' when there is none. The bank pass uses it to pick
+   * the baked density tile for its grass modulation (#496). One profile per
+   * route for now; the per-segment React approach is a follow-up.
+   */
+  dominantProfile?: SceneryProfile;
 }
 
 /** Default OSM building height when the tags carry neither `height` nor levels. */
@@ -190,9 +199,19 @@ const detectClosedLoop = (route: WaterRoute): boolean => {
  * omitted for a zero-length route so the engine falls back to the curve's own
  * chord length rather than snapping progress to a 1 m course.
  */
+/**
+ * Default tier used when no caller passes one through. Matches React's
+ * `resolvePerformanceMode()` fallback for a browser-less or probe-free
+ * invocation: real users get `'medium'`, which is what unit tests exercise.
+ * The `/row` page always passes a real tier so this only applies to tests
+ * and other callers that don't care about scenery density.
+ */
+export const DEFAULT_SCENERY_TIER: PerformanceMode = 'medium';
+
 export const toEngineRoute = (
   route: WaterRoute | null | undefined,
   enrichment?: RouteEnrichmentData | null,
+  tier: PerformanceMode = DEFAULT_SCENERY_TIER,
 ): EngineRoute | null => {
   if (!route) return null;
 
@@ -232,8 +251,17 @@ export const toEngineRoute = (
       track,
       speciesTypes: FOLIAGE_SHAPES,
     });
+    // #591-fu: reeds + rocks go through the same pool-batching path as the
+    // tree layouts (same `FoliageTree` shape, species indices 3/4). The
+    // solid-flora stage switches geometry on `speciesIndex` and the sprite
+    // pass collapses the billboard to zero for 3/4, so no new pool kind is
+    // needed.
+    const reeds = layoutReeds({ curve, enrichment: enrichment ?? null, track });
+    const rocks = layoutRocks({ curve, enrichment: enrichment ?? null, track });
+    const groundProps = [...trees, ...reeds, ...rocks];
+    const speciesCount = Math.max(FOLIAGE_SHAPES.length, ROCK_SPECIES + 1);
     const routeLength = (totalDistanceMeters ?? curve.approximateLength(32)) || 1;
-    pools.push(...batchFoliagePools(trees, FOLIAGE_SHAPES.length, routeLength, FOLIAGE_CHUNK_METRES));
+    pools.push(...batchFoliagePools(groundProps, speciesCount, routeLength, FOLIAGE_CHUNK_METRES));
 
     const landscape = layoutLandscape({ curve, enrichment: enrichment ?? null, track });
     buildings = layoutToBuildingSpecs(landscape, SCENERY_PROFILES);
@@ -252,8 +280,15 @@ export const toEngineRoute = (
     // bridges, landmarks, finish-area furniture). The `/row` adapter is where
     // the layout runs so the engine stays about rendering; this is pure maths
     // on the curve + enrichment + track, matching the React scene's pipeline.
-    const mode: PerformanceMode = 'medium';
-    const budget = 0.7;
+    // Prior to #591-fu the mode was hard-wired to 'medium', which suppressed
+    // GLB kit trees entirely (`keepsKitTrees` is true only on high/extra-high)
+    // and pinned the per-step placement loop at a 0.7 budget. React resolves
+    // the real device tier via `resolvePerformanceMode()` and hands it to the
+    // scene, so a given rig gets the matching density on both engines. The
+    // `/row` page now plumbs that same tier here; `DEFAULT_SCENERY_TIER` keeps
+    // tests and other no-arg callers deterministic at `'medium'`.
+    const mode: PerformanceMode = tier;
+    const budget = budgetFor(mode);
     const profiles: SceneryProfile[] = distinctProfiles(enrichment ?? null, track);
     const region = resolveRegion(route.coordinates ?? null);
     const resolvedByProfile = new Map<SceneryProfile, ResolvedScenery>();
@@ -283,6 +318,13 @@ export const toEngineRoute = (
     sceneryGlbsResult = [...grouped.entries()].map(([id, instances]) => ({ id, instances }));
   }
 
+  // Pick the dominant biome profile the bank pass's grass-density chunk
+  // (#496) will key its density tile off. A route may cover several profiles;
+  // one tile per route is good enough for the current single-mesh bank, and
+  // matches the single `fallback` the pass used before this change.
+  const routeProfiles = distinctProfiles(enrichment ?? null, getRouteSceneryTrack(route.id));
+  const dominantProfile: SceneryProfile = routeProfiles[0] ?? 'fallback';
+
   return {
     pools,
     ...(buildings.length > 0 ? { buildings } : {}),
@@ -291,5 +333,6 @@ export const toEngineRoute = (
     ...(totalDistanceMeters !== undefined ? { totalDistanceMeters } : {}),
     ...(isClosedLoop ? { isClosedLoop } : {}),
     waterEdgesForProgress,
+    dominantProfile,
   };
 };

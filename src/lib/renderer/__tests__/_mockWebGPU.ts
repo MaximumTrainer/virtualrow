@@ -177,6 +177,7 @@ export const makeMockDevice = (): MockDevice => {
     destroy: () => undefined,
     queue: {
       writeBuffer: () => undefined,
+      writeTexture: () => undefined,
       submit: () => {
         log.submits += 1;
       },

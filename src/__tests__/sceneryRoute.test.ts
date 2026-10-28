@@ -50,6 +50,26 @@ describe('toEngineRoute (#570 AC2)', () => {
     expect(route?.pools).toHaveLength(0);
   });
 
+  it('scales GLB scenery with the device tier (kit trees arrive at high)', () => {
+    // Low/basic/medium: `keepsKitTrees` is false, so the GLB kit-tree species
+    // are suppressed in `computePlacements`. High/extra-high flips both the
+    // budget (0.85 vs 0.5-0.7) and `kitTrees` to true, giving a larger
+    // sceneryGlbs set. The invariant we assert is "high >= medium >= low" so
+    // the test keeps working if the scenery catalogue grows.
+    const base = makeRoute();
+    const low = toEngineRoute(base, undefined, 'low');
+    const medium = toEngineRoute(base, undefined, 'medium');
+    const high = toEngineRoute(base, undefined, 'high');
+    const count = (r: ReturnType<typeof toEngineRoute>) =>
+      (r?.sceneryGlbs ?? []).reduce((n, g) => n + g.instances.length, 0);
+    expect(count(high)).toBeGreaterThanOrEqual(count(medium));
+    expect(count(medium)).toBeGreaterThanOrEqual(count(low));
+    expect(count(high)).toBeGreaterThan(count(low));
+    // Foliage pools (sprite + solid tree layout) come from `foliagePlan`
+    // which is deterministic regardless of tier, so pool counts match.
+    expect((high?.pools ?? []).length).toBe((low?.pools ?? []).length);
+  });
+
   it('places more foliage on a longer route (deterministic density scales with length)', () => {
     const short = toEngineRoute(makeRoute({
       coordinates: [

@@ -58,6 +58,12 @@ import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
+import { mergeSceneryPrimitives } from './sceneryMeshBuffers';
+import {
+  planSceneryStream,
+  sceneryModelsToLoad,
+  type CurveDistanceSample,
+} from './sceneryStreamPlan';
 import { paintFoliage, FOLIAGE_SHAPES } from '../../scenery/foliageTexture';
 import { createSceneryCuller } from '../passes/sceneryCull';
 import { createFloraSolidStage } from './floraSolidStage';
@@ -66,6 +72,9 @@ import { textureBytes } from './textures';
 import { createFrameGraph, type FrameGraph, type FrameUniforms, type Pass } from './frameGraph';
 import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
+import { shaderGrassStrengthFor } from './shaderGrass';
+import type { PerformanceMode } from '../../scenery/sceneryPlacement';
+import type { SceneryProfile } from '../../services/routeEnrichmentService';
 import { createShadowStage, type ShadowTelemetry } from './shadowStage';
 import { tierCapsFor } from './tierCaps';
 import { publishSpeedMps, type TelemetryHandles } from './telemetry';
@@ -129,6 +138,12 @@ export interface SceneryRoute {
    * per frame. Omitted → symmetric `WATER_CHANNEL_HALF_WIDTH`.
    */
   waterEdgesForProgress?: (progress: number) => { left: number; right: number };
+  /**
+   * Dominant biome profile along the route — the bank pass's grass-density
+   * tile (#496 Phase 2) is baked from this. One profile per route for now;
+   * per-segment banks are a follow-up.
+   */
+  dominantProfile?: string;
 }
 
 export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
@@ -377,8 +392,6 @@ export const createRideScene = async (
     'a07-distance-marker-post',
   ];
   const sceneryGlbList = isSceneryRoute(opts.route) ? opts.route.sceneryGlbs ?? [] : [];
-  const allModelIds: Set<string> = new Set<string>(COURSE_FURNITURE_MODELS);
-  for (const group of sceneryGlbList) allModelIds.add(group.id);
   const COURSE_FURNITURE_MAX_INSTANCES = 1024;
   const tierFolderFor = (id: string): string => {
     const prefix = id[0]?.toLowerCase() ?? 'a';
@@ -424,51 +437,38 @@ export const createRideScene = async (
     }
   } catch { /* scull GLB load failed — the old baked boat remains as fallback */ }
 
-  await Promise.all([...allModelIds].map(async (id) => {
+  // Scenery GLBs load lazily as the route progresses (see sceneryStreamPlan):
+  // this fetches + registers one model on demand, returning whether it
+  // registered. The streaming controller built after placement drives it from
+  // the boat's distance, so distant scenery isn't fetched until the boat nears
+  // it — no up-front burst that blocks the first frame or trips a host 503.
+  const loadSceneryModel = async (id: string): Promise<boolean> => {
     try {
       const url = assetUrl(`/assets/scenery/${tierFolderFor(id)}/${id}.glb`);
       const res = await fetch(url);
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const bytes = new Uint8Array(await res.arrayBuffer());
       const model = await loadGlb(bytes);
-      let posTotal = 0;
-      let nrmTotal = 0;
-      let idxTotal = 0;
-      for (const p of model.primitives) {
-        posTotal += p.positions.length;
-        nrmTotal += p.normals.length;
-        idxTotal += p.indices.length;
-      }
-      const positions = new Float32Array(posTotal);
-      const normals = new Float32Array(nrmTotal);
-      const needs32 = model.primitives.some((p) => p.indices instanceof Uint32Array);
-      const indices = needs32 ? new Uint32Array(idxTotal) : new Uint16Array(idxTotal);
-      let pOff = 0;
-      let nOff = 0;
-      let iOff = 0;
-      let vertBase = 0;
-      for (const p of model.primitives) {
-        positions.set(p.positions, pOff);
-        normals.set(p.normals, nOff);
-        for (let i = 0; i < p.indices.length; i += 1) indices[iOff + i] = p.indices[i] + vertBase;
-        pOff += p.positions.length;
-        nOff += p.normals.length;
-        iOff += p.indices.length;
-        vertBase += p.positions.length / 3;
-      }
+      // Merge the model's primitives, baking each primitive's base colour per
+      // vertex so a multi-material model (trunk/leaves, walls/roof/windows)
+      // keeps its parts distinct instead of collapsing to primitive-0's colour.
+      const merged = mergeSceneryPrimitives(model.primitives);
       sceneryMeshPass.register({
         id,
-        positions,
-        normals,
-        indices,
+        positions: merged.positions,
+        normals: merged.normals,
+        indices: merged.indices,
+        colors: merged.colors,
         baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
         maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
       });
+      return true;
     } catch {
       // A fetch or decode failure leaves the model unregistered; the pass
       // silently skips it rather than taking the engine down.
+      return false;
     }
-  }));
+  };
 
   // Build the water/bank curve + edges fn FIRST so every geometry pass
   // that follows the river (water strip, bank strips lit + depth, boat
@@ -493,6 +493,16 @@ export const createRideScene = async (
     telemetry: shadowTelemetry,
     bankCurve: waterCurve,
     bankEdgesForProgress: waterEdgesForProgress,
+    // #591-fu P1c: tier-gated flora + GLB-scenery shadow casters. Each
+    // input stays null below medium so the depth stage adds nothing on
+    // basic/low; at medium+ the stage picks up every solid-flora pool
+    // and every registered GLB mesh (populated asynchronously as scenery
+    // GLBs load) and renders their depth into the cascade atlas.
+    floraSolidResources: tierCaps.castFloraShadows ? floraSolidStage.resources : null,
+    floraLeafAtlas: tierCaps.castFloraShadows
+      ? { view: floraSolidStage.signature.leafAtlasView, sampler: floraSolidStage.signature.leafSampler }
+      : null,
+    sceneryMeshPass: tierCaps.castSceneryShadows ? sceneryMeshPass : null,
   });
 
   const shadowResources = {
@@ -500,6 +510,14 @@ export const createRideScene = async (
     atlasView: atlas.view,
     cmpSampler: shadowCmpSampler,
   };
+  // Biome-density grass modulation (#496 Phase 2). Default to the route's
+  // dominant profile when the adapter supplied one; strength scales with
+  // the actual device tier, respecting the `__VIRTUALROW_SHADER_GRASS`
+  // kill switch the React scene also honours — see `shaderGrass.ts`.
+  const bankGrassProfile = (
+    isSceneryRoute(opts.route) ? (opts.route.dominantProfile as SceneryProfile | undefined) : undefined
+  ) ?? 'fallback';
+  const bankGrassStrength = shaderGrassStrengthFor((opts.tier ?? 'medium') as PerformanceMode);
   const bankPass = createBankPass({
     device,
     format,
@@ -507,6 +525,7 @@ export const createRideScene = async (
     shadow: shadowResources,
     curve: waterCurve,
     edgesForProgress: waterEdgesForProgress,
+    grass: { profile: bankGrassProfile, strength: bankGrassStrength },
   });
   const waterPass = createWaterPass({
     device,
@@ -610,10 +629,13 @@ export const createRideScene = async (
     mat4Multiply(trs, t, rot);
     byModel.get(place.id)?.push(trs);
   }
+  // Combine course-furniture + GLB-scenery instance transforms into one map,
+  // keyed by model id. The streaming controller calls `setInstances` for a
+  // model only once its GLB has registered.
+  const sceneryInstanceMats = new Map<string, Mat4[]>();
   for (const model of COURSE_FURNITURE_MODELS) {
-    sceneryMeshPass.setInstances(model, byModel.get(model) ?? []);
+    sceneryInstanceMats.set(model, byModel.get(model) ?? []);
   }
-
   for (const group of sceneryGlbList) {
     const mats: Mat4[] = [];
     for (const inst of group.instances) {
@@ -631,8 +653,54 @@ export const createRideScene = async (
       mat4Multiply(trs, t, rot);
       mats.push(trs);
     }
-    sceneryMeshPass.setInstances(group.id, mats);
+    sceneryInstanceMats.set(group.id, mats);
   }
+
+  // Progressive loading plan: sample the route for along-route distances, work
+  // out where each model first appears, and load models as the boat comes
+  // within the look-ahead window (driven from the frame loop below).
+  const SCENERY_STREAM_SAMPLES = 128;
+  const SCENERY_LOOKAHEAD_M = 400;
+  const SCENERY_MAX_PER_TICK = 3;
+  const streamSamples: CurveDistanceSample[] = [];
+  for (let i = 0; i <= SCENERY_STREAM_SAMPLES; i += 1) {
+    const p = i / SCENERY_STREAM_SAMPLES;
+    const cp = routeCurve.sample(p);
+    streamSamples.push({
+      position: [cp.position[0], cp.position[1], cp.position[2]],
+      distanceMeters: p * totalDistanceMeters,
+    });
+  }
+  const sceneryPlan = planSceneryStream(
+    [...sceneryInstanceMats].map(([id, mats]) => ({
+      id,
+      instancePositions: mats.map((m) => [m[12], m[13], m[14]] as [number, number, number]),
+    })),
+    streamSamples,
+  );
+  const sceneryLoaded = new Set<string>();
+  const sceneryLoading = new Set<string>();
+  const streamScenery = (boatDistanceMeters: number): void => {
+    const pending = sceneryModelsToLoad(
+      sceneryPlan,
+      new Set<string>([...sceneryLoaded, ...sceneryLoading]),
+      boatDistanceMeters,
+      SCENERY_LOOKAHEAD_M,
+      SCENERY_MAX_PER_TICK,
+    );
+    for (const id of pending) {
+      sceneryLoading.add(id);
+      void loadSceneryModel(id)
+        .then((ok) => {
+          sceneryLoading.delete(id);
+          sceneryLoaded.add(id);
+          if (ok) sceneryMeshPass.setInstances(id, sceneryInstanceMats.get(id) ?? []);
+        })
+        .catch(() => {
+          sceneryLoading.delete(id);
+        });
+    }
+  };
 
   const cameraRig = createRigTarget();
   const boatPlacement = createPlacement();
@@ -718,6 +786,9 @@ export const createRideScene = async (
       : null;
 
     placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
+    // Stream scenery that has come within the look-ahead window as the boat
+    // advances; already-loaded / in-flight models are skipped.
+    streamScenery(boatPlacement.progress * totalDistanceMeters);
     const ghostInfo = placeGhost(
       ghostPlacement,
       routeCurve,

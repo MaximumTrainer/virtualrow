@@ -20,6 +20,18 @@ export interface BuildingTierCaps {
   drawCrew: boolean;
   /** #570 D7-c: crew only casts a shadow on medium+. */
   castCharacterShadows: boolean;
+  /**
+   * #591-fu P1c: the solid flora stage registers its pools with the depth
+   * stage so near-camera trees cast shadows on the bank. Billboards/sprites
+   * don't cast — their depth would carve rectangles into the atlas.
+   */
+  castFloraShadows: boolean;
+  /**
+   * #591-fu P1c: GLB kit scenery (kit trees, buildings, structures,
+   * finish-line furniture) registers with the depth stage too, so a tall
+   * ship or a bridge drops a real shadow onto the bank.
+   */
+  castSceneryShadows: boolean;
   /** #573 D8 — post-processing gates. Bloom/tone/vignette/LUT are universal;
    *  SSAO is high+ only; DOF is extra-high only (and off behind a flag). */
   drawBloom: boolean;
@@ -36,6 +48,8 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     castBuildingShadows: false,
     drawCrew: false,
     castCharacterShadows: false,
+    castFloraShadows: false,
+    castSceneryShadows: false,
     drawBloom: true,
     drawVignette: true,
     drawLut: true,
@@ -48,6 +62,8 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     castBuildingShadows: false,
     drawCrew: true,
     castCharacterShadows: false,
+    castFloraShadows: false,
+    castSceneryShadows: false,
     drawBloom: true,
     drawVignette: true,
     drawLut: true,
@@ -60,6 +76,8 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     castBuildingShadows: true,
     drawCrew: true,
     castCharacterShadows: true,
+    castFloraShadows: true,
+    castSceneryShadows: true,
     drawBloom: true,
     drawVignette: true,
     drawLut: true,
@@ -72,6 +90,8 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     castBuildingShadows: true,
     drawCrew: true,
     castCharacterShadows: true,
+    castFloraShadows: true,
+    castSceneryShadows: true,
     drawBloom: true,
     drawVignette: true,
     drawLut: true,
@@ -84,6 +104,8 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     castBuildingShadows: true,
     drawCrew: true,
     castCharacterShadows: true,
+    castFloraShadows: true,
+    castSceneryShadows: true,
     drawBloom: true,
     drawVignette: true,
     drawLut: true,

@@ -113,20 +113,31 @@ export const packSproutUniforms = (
   return out;
 };
 
-/** Per-tier sprout fade window metres (D6-b). */
+/** Per-tier sprout fade window metres (D6-b). Pre-#591 the solid near-tree
+ * mesh faded out between ~6 and 15 m, which made the whole visible bank
+ * read as sprite cards and lost most of each tree's silhouette. React's
+ * scene has no sprite handoff at all — its trees draw as real geometry
+ * to the clipping plane — so the WebGPU hybrid LOD has to push the solid
+ * `far` well past the bank's own distance (~10–30 m from the chase
+ * camera on a typical river) to match that look. These values widen the
+ * window again (medium 16 → 60 m, high 20 → 100 m) so the cone-stack
+ * tree mesh carries the near AND mid bank; the sprite pass continues to
+ * fill in from `far` out to the fog. Solid rendering stays cheap: at ~1k
+ * instances per pool × ~60 tri/tree that's ~60k tris, well inside the
+ * engine's per-frame budget on Intel Gen-9. */
 export const sproutWindowFor = (tier?: string): { near: number; far: number } => {
   switch (tier) {
     case 'basic':
-      return { near: 0, far: 6 };
+      return { near: 0, far: 24 };
     case 'low':
-      return { near: 0, far: 8 };
+      return { near: 0, far: 40 };
     case 'high':
-      return { near: 0, far: 12 };
+      return { near: 0, far: 100 };
     case 'extra-high':
-      return { near: 0, far: 15 };
+      return { near: 0, far: 160 };
     case 'medium':
     default:
-      return { near: 0, far: 10 };
+      return { near: 0, far: 60 };
   }
 };
 

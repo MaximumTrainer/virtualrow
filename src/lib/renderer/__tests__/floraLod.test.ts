@@ -3,12 +3,17 @@ import { packSproutUniforms, sproutWindowFor } from '../engine/uniforms';
 
 describe('sprout fade window (#562 FR6 / D6-b)', () => {
   it('selects per-tier fade distances in metres', () => {
-    expect(sproutWindowFor('basic').far).toBe(6);
-    expect(sproutWindowFor('low').far).toBe(8);
-    expect(sproutWindowFor('medium').far).toBe(10);
-    expect(sproutWindowFor('high').far).toBe(12);
-    expect(sproutWindowFor('extra-high').far).toBe(15);
-    expect(sproutWindowFor(undefined).far).toBe(10);
+    // Widened again in #591-followup: React's scene has no sprite handoff
+    // at all (its trees are real geometry to the clip plane), so the
+    // WebGPU hybrid LOD has to carry solid trees well past the river bank's
+    // own distance to match the look. Monotonic-with-tier invariant below
+    // still holds.
+    expect(sproutWindowFor('basic').far).toBe(24);
+    expect(sproutWindowFor('low').far).toBe(40);
+    expect(sproutWindowFor('medium').far).toBe(60);
+    expect(sproutWindowFor('high').far).toBe(100);
+    expect(sproutWindowFor('extra-high').far).toBe(160);
+    expect(sproutWindowFor(undefined).far).toBe(60);
   });
 
   it('fades near is zero at every tier (sprites fade in from the camera)', () => {

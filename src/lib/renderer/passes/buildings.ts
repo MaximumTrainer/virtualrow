@@ -12,10 +12,15 @@ import type { FrameContext, Pass } from '../engine/frameGraph';
 import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippets';
 import type { ShadowResources } from './bank';
 import type { BuildingPool } from '../plan/buildings';
+import { BUILDING_ATLAS_SIZE, paintBuildingAtlas } from '../../scenery/buildingAtlas';
 import buildingsWgsl from './buildings.wgsl?raw';
 
-/** 36 vertices per instance — six faces × two triangles × three verts. */
-export const BUILDINGS_VERTEX_COUNT = 36;
+/**
+ * 48 vertices per instance: 36 for the box prism (six faces × two tris ×
+ * three verts) + 12 for the pyramid roof (four triangle slopes × three verts).
+ * Changed in #591-fu P0a; was 36 pre-pitched-roof.
+ */
+export const BUILDINGS_VERTEX_COUNT = 48;
 
 export interface BuildingsPassOptions {
   device: GPUDevice;
@@ -64,6 +69,31 @@ export const createBuildingsPass = (opts: BuildingsPassOptions): BuildingsPass =
       { binding: 2, resource: shadow.cmpSampler },
     ],
   });
+  // #591-fu P0a: shared albedo atlas (brick wall + roof tile) uploaded once
+  // per pass. The texture is tiny (`BUILDING_ATLAS_SIZE` square, rgba8unorm-
+  // srgb, under 64 KB) and the shader samples with `addressModeU/V = repeat`
+  // so one atlas covers every building.
+  const atlasPixels = paintBuildingAtlas();
+  const atlasTexture = device.createTexture({
+    label: 'buildings-atlas',
+    size: { width: BUILDING_ATLAS_SIZE, height: BUILDING_ATLAS_SIZE },
+    format: 'rgba8unorm-srgb',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture: atlasTexture },
+    atlasPixels as BufferSource,
+    { bytesPerRow: BUILDING_ATLAS_SIZE * 4, rowsPerImage: BUILDING_ATLAS_SIZE },
+    { width: BUILDING_ATLAS_SIZE, height: BUILDING_ATLAS_SIZE },
+  );
+  const atlasSampler = device.createSampler({
+    label: 'buildings-atlas-sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+  });
+
   const poolBindGroup = pool
     ? device.createBindGroup({
         label: 'buildings-pool',
@@ -71,6 +101,8 @@ export const createBuildingsPass = (opts: BuildingsPassOptions): BuildingsPass =
         entries: [
           { binding: 0, resource: { buffer: pool.centresBuffer } },
           { binding: 1, resource: { buffer: pool.sizesBuffer } },
+          { binding: 2, resource: atlasTexture.createView() },
+          { binding: 3, resource: atlasSampler },
         ],
       })
     : null;
@@ -104,6 +136,7 @@ export const createBuildingsPass = (opts: BuildingsPassOptions): BuildingsPass =
     dispose() {
       if (disposed) return;
       disposed = true;
+      atlasTexture.destroy();
     },
   };
 };

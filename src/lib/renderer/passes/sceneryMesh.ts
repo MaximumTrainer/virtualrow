@@ -14,8 +14,6 @@ import sceneryMeshWgsl from './sceneryMesh.wgsl?raw';
 
 /** One mat4 (16 floats = 64 B) per instance. */
 const BYTES_PER_INSTANCE = 64;
-/** Per-mesh uniform: `baseColor: vec4<f32>`, 16 bytes. */
-const MESH_UNIFORM_BYTES = 16;
 
 export interface SceneryMeshInput {
   /** Stable id so the registry can be queried + instance buffers updated by id. */
@@ -23,7 +21,16 @@ export interface SceneryMeshInput {
   positions: Float32Array; // interleaved vec3
   normals: Float32Array;   // interleaved vec3
   indices: Uint16Array | Uint32Array;
+  /** Fallback colour used for every vertex when `colors` is omitted. */
   baseColor: [number, number, number, number];
+  /**
+   * Per-vertex colour (vec4 each, matching `positions`). glTF splits a model
+   * into one primitive per material, so this carries each primitive's own
+   * `baseColor` baked per vertex — otherwise the whole mesh would render in a
+   * single colour. Omit it for a genuinely single-colour mesh (e.g. one boat
+   * primitive); the pass then fills every vertex with `baseColor`.
+   */
+  colors?: Float32Array;
   /** Upper bound on the per-mesh instance count, so the buffer is allocated once. */
   maxInstances: number;
 }
@@ -32,14 +39,30 @@ interface RegisteredMesh {
   id: string;
   positionBuffer: GPUBuffer;
   normalBuffer: GPUBuffer;
+  colorBuffer: GPUBuffer;
   indexBuffer: GPUBuffer;
   indexFormat: 'uint16' | 'uint32';
   indexCount: number;
   instanceBuffer: GPUBuffer;
   maxInstances: number;
   instanceCount: number;
-  meshUniforms: GPUBuffer;
   bindGroup: GPUBindGroup;
+}
+
+/**
+ * Snapshot of a registered mesh's GPU buffers + instance state, as the
+ * shadow stage needs it to render depth-only (#591-fu P1c). Keeping this
+ * read-only so the shadow stage can borrow buffers without reaching into
+ * the lit pass's internals.
+ */
+export interface SceneryMeshSnapshot {
+  readonly id: string;
+  readonly positionBuffer: GPUBuffer;
+  readonly indexBuffer: GPUBuffer;
+  readonly indexFormat: 'uint16' | 'uint32';
+  readonly indexCount: number;
+  readonly instanceBuffer: GPUBuffer;
+  readonly instanceCount: number;
 }
 
 export interface SceneryMeshPass extends Pass {
@@ -47,6 +70,13 @@ export interface SceneryMeshPass extends Pass {
   /** Write `instances.length` mat4s for `id`; clamps to the registered maxInstances. */
   setInstances(id: string, instances: readonly Mat4[]): void;
   readonly meshCount: number;
+  /**
+   * Iterate every registered mesh with a non-zero instance count. The
+   * shadow stage uses this to run its own depth-only pipeline over the
+   * same buffers (#591-fu P1c). Callback-based so the pass keeps buffer
+   * ownership and the shadow stage can't accidentally mutate state.
+   */
+  forEachActiveMesh(cb: (snapshot: SceneryMeshSnapshot) => void): void;
 }
 
 export interface CreateSceneryMeshPassOptions {
@@ -70,6 +100,7 @@ export const createSceneryMeshPass = ({
       buffers: [
         { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
         { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
+        { arrayStride: 16, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x4' }] },
       ],
     },
     fragment: { module, entryPoint: 'fs_main', targets: [{ format }] },
@@ -102,6 +133,26 @@ export const createSceneryMeshPass = ({
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(normalBuffer, 0, input.normals as BufferSource);
+    const vertexCount = input.positions.length / 3;
+    // Per-vertex colour: use the supplied buffer when it matches the vertex
+    // count, otherwise fill every vertex with the single `baseColor`.
+    let colors = input.colors;
+    if (!colors || colors.length !== vertexCount * 4) {
+      colors = new Float32Array(vertexCount * 4);
+      const [r, g, b, a] = input.baseColor;
+      for (let v = 0; v < vertexCount; v += 1) {
+        colors[v * 4] = r;
+        colors[v * 4 + 1] = g;
+        colors[v * 4 + 2] = b;
+        colors[v * 4 + 3] = a;
+      }
+    }
+    const colorBuffer = device.createBuffer({
+      label: `sceneryMesh:${input.id}-col`,
+      size: Math.max(16, colors.byteLength),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(colorBuffer, 0, colors as BufferSource);
     const indexBuffer = device.createBuffer({
       label: `sceneryMesh:${input.id}-idx`,
       size: input.indices.byteLength,
@@ -113,17 +164,10 @@ export const createSceneryMeshPass = ({
       size: Math.max(1, input.maxInstances) * BYTES_PER_INSTANCE,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    const meshUniforms = device.createBuffer({
-      label: `sceneryMesh:${input.id}-u`,
-      size: MESH_UNIFORM_BYTES,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(meshUniforms, 0, new Float32Array(input.baseColor) as BufferSource);
     const bindGroup = device.createBindGroup({
       label: `sceneryMesh:${input.id}-bg`,
       layout: meshLayout,
       entries: [
-        { binding: 0, resource: { buffer: meshUniforms } },
         { binding: 1, resource: { buffer: instanceBuffer } },
       ],
     });
@@ -131,13 +175,13 @@ export const createSceneryMeshPass = ({
       id: input.id,
       positionBuffer,
       normalBuffer,
+      colorBuffer,
       indexBuffer,
       indexFormat: input.indices instanceof Uint32Array ? 'uint32' : 'uint16',
       indexCount: input.indices.length,
       instanceBuffer,
       maxInstances: Math.max(1, input.maxInstances),
       instanceCount: 0,
-      meshUniforms,
       bindGroup,
     });
   };
@@ -159,6 +203,20 @@ export const createSceneryMeshPass = ({
     register,
     setInstances,
     get meshCount() { return registry.size; },
+    forEachActiveMesh(cb) {
+      for (const mesh of registry.values()) {
+        if (mesh.instanceCount === 0) continue;
+        cb({
+          id: mesh.id,
+          positionBuffer: mesh.positionBuffer,
+          indexBuffer: mesh.indexBuffer,
+          indexFormat: mesh.indexFormat,
+          indexCount: mesh.indexCount,
+          instanceBuffer: mesh.instanceBuffer,
+          instanceCount: mesh.instanceCount,
+        });
+      }
+    },
     encode(ctx: FrameContext) {
       if (disposed || registry.size === 0) return;
       let anyVisible = false;
@@ -182,6 +240,7 @@ export const createSceneryMeshPass = ({
         pass.setBindGroup(1, mesh.bindGroup);
         pass.setVertexBuffer(0, mesh.positionBuffer);
         pass.setVertexBuffer(1, mesh.normalBuffer);
+        pass.setVertexBuffer(2, mesh.colorBuffer);
         pass.setIndexBuffer(mesh.indexBuffer, mesh.indexFormat);
         pass.drawIndexed(mesh.indexCount, mesh.instanceCount);
       }
@@ -193,9 +252,9 @@ export const createSceneryMeshPass = ({
       for (const mesh of registry.values()) {
         mesh.positionBuffer.destroy();
         mesh.normalBuffer.destroy();
+        mesh.colorBuffer.destroy();
         mesh.indexBuffer.destroy();
         mesh.instanceBuffer.destroy();
-        mesh.meshUniforms.destroy();
       }
       registry.clear();
     },
