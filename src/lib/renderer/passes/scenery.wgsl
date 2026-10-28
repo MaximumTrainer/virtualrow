@@ -51,6 +51,10 @@ struct VSOut {
   @location(6) uv: vec2<f32>,
   // Species index (flat), 0..2 — selects the atlas layer in fs_main.
   @location(7) @interpolate(flat) species: u32,
+  // #591-fu P1b: per-instance tint seed in [0, 1); used in the fragment
+  // to jitter hue + lightness so a stand of billboard trees doesn't read
+  // as the same stamp repeated. Reuses the sway seed.
+  @location(8) tintSeed: f32,
 };
 
 // Four verts per billboard pair (two crossed quads, 6 indices each via a
@@ -150,6 +154,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   // local.y goes 0..1 before the per-species scale, so remap to UV.
   out.uv = vec2<f32>(local.x + 0.5, 1.0 - local.y);
   out.species = paletteIdx;
+  out.tintSeed = swaySeed;
   let d = p - frame.camPos;
   let worldDist = length(vec3<f32>(d.x, 0.0, d.z));
   out.worldDist = worldDist;
@@ -171,7 +176,17 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   if (tex.a < 0.05) { discard; }
   let sun = normalize(frame.sunDir);
   let shade = clamp(dot(in.normal, sun) * 0.5 + 0.6, 0.3, 1.0);
-  let paletteCol = mix(in.baseCol, in.crownCol, clamp(in.worldY, 0.0, 1.0));
+  // #591-fu P1b: jitter the sprite's palette per-instance so distant
+  // billboards don't read as a line of clones. Smaller delta than the
+  // solid pass because sprites already share the atlas texture.
+  let tj = (in.tintSeed - 0.5) * 2.0;
+  let tintMul = clamp(vec3<f32>(
+    1.0 + tj * 0.08,
+    1.0 + tj * 0.05,
+    1.0 - tj * 0.05,
+  ), vec3<f32>(0.75), vec3<f32>(1.25));
+  let lightMul = 1.0 + tj * 0.10;
+  let paletteCol = mix(in.baseCol, in.crownCol, clamp(in.worldY, 0.0, 1.0)) * tintMul * lightMul;
   // Leaf texture's RGB is a grey leaf tone; multiply by the species palette.
   let col = paletteCol * tex.rgb * shade;
   // Fog with the frame's exponential density.

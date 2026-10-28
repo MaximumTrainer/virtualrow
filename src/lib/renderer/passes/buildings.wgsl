@@ -33,6 +33,10 @@ struct VSOut {
   @location(3) @interpolate(flat) paletteIndex: u32,
   @location(4) uv: vec2<f32>,
   @location(5) @interpolate(flat) isRoof: u32,
+  // #591-fu P1 (buildings colour variety): per-instance tint seed in
+  // [0, 1); fragment jitters wall + roof hue + lightness so a row of
+  // residential buildings doesn't collapse into one repeated colour.
+  @location(6) @interpolate(flat) tintSeed: f32,
 };
 
 // 48 vertices total: 36 box (6 faces × 2 tris × 3 verts) + 12 pyramid roof
@@ -155,6 +159,10 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   }
   out.uv = uv;
   out.isRoof = isRoof;
+  // Hash the instance id into a stable [0, 1) seed — cheap LCG using the
+  // two low bytes of `ii`, enough variety for a ~1k-instance pool.
+  let seed = (f32((ii * 2654435769u) & 0xffffu) / 65536.0);
+  out.tintSeed = seed;
   return out;
 }
 
@@ -199,6 +207,16 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   } else {
     surface = wall;
   }
+
+  // Per-instance tint jitter: shift the surface hue slightly cooler or
+  // warmer and ±8% in lightness so a row of ~20 buildings reads as its
+  // own set of houses rather than one stamp repeated. The wall gets a
+  // bigger lightness delta than the roof so the eye doesn't lock onto the
+  // roof's tile pattern as the de-facto tiling.
+  let tj = (in.tintSeed - 0.5) * 2.0;
+  let hue = vec3<f32>(1.0 + tj * 0.09, 1.0 + tj * 0.04, 1.0 - tj * 0.07);
+  let lightMul = select(1.0 + tj * 0.10, 1.0 + tj * 0.06, in.isRoof == 1u);
+  surface = surface * clamp(hue, vec3<f32>(0.75), vec3<f32>(1.25)) * lightMul;
 
   // Sample the shared albedo atlas (brick/stone wall on the LEFT half, tile
   // on the RIGHT). The texture is neutral grey so `tint * texel` reads as a

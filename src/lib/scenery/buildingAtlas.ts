@@ -69,6 +69,11 @@ const paintBrick = (
     const row = Math.floor(y / brickH);
     const stagger = (row % 2) * (brickW / 2);
     const inMortarRow = y % brickH < 2; // 2-texel-thick horizontal mortar
+    // #591-fu P1 (buildings colour variety): a dark horizontal "window
+    // course" every ~20 texels — reads as a stripe of windows at building
+    // scale, breaking a long wall out of a flat brick stamp.
+    const windowBandY = y % 20;
+    const inWindowBand = windowBandY > 7 && windowBandY < 13;
     for (let x = 0; x < width; x += 1) {
       const localX = (x + stagger) % brickW;
       const inMortarCol = localX < 2;
@@ -79,6 +84,18 @@ const paintBrick = (
       // Per-brick seed from (row, column) so adjacent bricks differ.
       const col = Math.floor((x + stagger) / brickW);
       const n = (h(row * 73 + col * 19) - 0.5) * 30;
+      if (inWindowBand) {
+        // Window pane: dark rectangle every two bricks, with a highlight
+        // on the frame edge. The horizontal band + per-pane spacing read
+        // as windows at ride-view distance.
+        const paneSlot = Math.floor(((x + stagger) % (brickW * 2)) / brickW);
+        const inPane = paneSlot === 0 && localX > 1 && localX < brickW - 1;
+        if (inPane) {
+          const pane = 70 + h(col * 29 + row * 53) * 25;
+          putPixel(pixels, size, x0 + x, y, pane, pane * 1.05, pane * 1.15);
+          continue;
+        }
+      }
       const r = base + n * 1.05;
       const g = base + n * 1.0;
       const b = base + n * 0.9;

@@ -26,6 +26,8 @@ struct Sprout {
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var<uniform> sprout: Sprout;
+@group(0) @binding(2) var leafAtlas: texture_2d<f32>;
+@group(0) @binding(3) var leafSampler: sampler;
 @group(1) @binding(0) var<storage, read> centres: array<vec4<f32>>;
 @group(1) @binding(1) var<storage, read> indices: array<u32>;
 
@@ -36,6 +38,15 @@ struct VSOut {
   @location(2) worldDist: f32,
   @location(3) fade: f32,
   @location(4) @interpolate(flat) species: u32,
+  // #591-fu P1b: per-instance tint seed in [0, 1). Derived from the
+  // instance id (sway seed in metaBits >> 16) and read in the fragment to
+  // jitter crown hue + lightness so a stand of trees doesn't read as the
+  // same stamp repeated.
+  @location(5) tintSeed: f32,
+  // #591-fu P1a: 2D UV into the leaf atlas, from (species-column offset +
+  // angle-around-trunk, crown-height). The angle makes the texture wrap
+  // smoothly around a cone without a visible seam at the back.
+  @location(6) leafUv: vec2<f32>,
 };
 
 @vertex
@@ -58,6 +69,20 @@ fn vs_main(
   // can tint each pool's trees without an extra bind group.
   let metaBits = bitcast<u32>(instance.w);
   let species = metaBits & 0xffffu;
+  // Sway seed in the top 16 bits — reused as the per-instance tint seed so
+  // crown hue + leaf-atlas sampling vary across a pool. Normalised to [0, 1).
+  let tintSeed = f32((metaBits >> 16u) & 0xffffu) / 65536.0;
+
+  // Leaf-atlas UV. Species column is 1/3 of the atlas wide so each entry
+  // of SPECIES_COL_OFFSET lines up with `paintLeafAtlas`'s column edges.
+  // Angle around the local trunk gives horizontal wrap; mix.y is the
+  // vertex-shader's crown-height proxy from `buildFloraSolidMesh`.
+  let SPECIES_COL_WIDTH = 1.0 / 3.0;
+  let colIdx = min(species, 2u);
+  let colStart = f32(colIdx) * SPECIES_COL_WIDTH;
+  let angle = atan2(position.z, position.x);
+  let u = colStart + (angle * 0.1591549 + 0.5) * SPECIES_COL_WIDTH;
+  let v = clamp(mixAttr.y, 0.0, 1.0);
 
   var out: VSOut;
   out.pos = frame.viewProj * vec4<f32>(world, 1.0);
@@ -66,6 +91,8 @@ fn vs_main(
   out.worldDist = worldDist;
   out.fade = fade;
   out.species = species;
+  out.tintSeed = tintSeed;
+  out.leafUv = vec2<f32>(u, v);
   return out;
 }
 
@@ -114,8 +141,36 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let trunk = TRUNK_PAL[sIdx];
   let base = BASE_PAL[sIdx];
   let crown = CROWN_PAL[sIdx];
-  let foliage = mix(base, crown, clamp(in.mix.y, 0.0, 1.0));
-  let col = mix(trunk, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
+
+  // Per-instance jitter (#591-fu P1b). `tintSeed` is a stable [0, 1) hash
+  // of the instance id; shift the crown slightly cooler/warmer and ±10%
+  // in lightness so a stand of trees doesn't read as the same stamp. The
+  // trunk takes a smaller jitter so trunks stay recognisably brown.
+  let tintJitter = (in.tintSeed - 0.5) * 2.0;
+  let crownTint = clamp(vec3<f32>(
+    1.0 + tintJitter * 0.08,
+    1.0 + tintJitter * 0.05,
+    1.0 - tintJitter * 0.06,
+  ), vec3<f32>(0.7), vec3<f32>(1.3));
+  let lightJitter = 1.0 + tintJitter * 0.10;
+  let crownVar = crown * crownTint * lightJitter;
+  let baseVar = base * crownTint * lightJitter;
+  let trunkVar = trunk * (1.0 + tintJitter * 0.05);
+
+  // Leaf-atlas modulation (#591-fu P1a). WGSL requires `textureSample`
+  // under uniform control flow, so always sample and gate the effect with
+  // a `select()` instead of branching: trees (species 0-2) take the leaf
+  // modulation; reeds (3) and rocks (4) take the plain foliage colour
+  // because their atlas region would read as broadleaf and the geometry
+  // already carries their silhouette. Fragment stays depth-opaque; the
+  // alpha channel feeds a soft under-canopy darken, no alpha-test.
+  let leaf = textureSample(leafAtlas, leafSampler, in.leafUv);
+  let leafMul = 0.55 + 0.9 * leaf.r;
+  let underCanopy = 0.6 + 0.4 * leaf.a;
+  let plainFoliage = mix(baseVar, crownVar, clamp(in.mix.y, 0.0, 1.0));
+  let leafyFoliage = plainFoliage * leafMul * underCanopy;
+  let foliage = select(plainFoliage, leafyFoliage, in.species < 3u);
+  let col = mix(trunkVar, foliage, clamp(in.mix.x, 0.0, 1.0)) * shade;
   let near = frame.fog.x;
   let far = frame.fog.y;
   let density = near + far * in.worldDist;

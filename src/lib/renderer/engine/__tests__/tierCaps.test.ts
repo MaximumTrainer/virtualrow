@@ -9,6 +9,8 @@ const basic = {
   castBuildingShadows: false,
   drawCrew: false,
   castCharacterShadows: false,
+  castFloraShadows: false,
+  castSceneryShadows: false,
   drawBloom: true,
   drawVignette: true,
   drawLut: true,
@@ -21,6 +23,8 @@ const low = {
   castBuildingShadows: false,
   drawCrew: true,
   castCharacterShadows: false,
+  castFloraShadows: false,
+  castSceneryShadows: false,
   drawBloom: true,
   drawVignette: true,
   drawLut: true,
@@ -33,6 +37,8 @@ const medium = {
   castBuildingShadows: true,
   drawCrew: true,
   castCharacterShadows: true,
+  castFloraShadows: true,
+  castSceneryShadows: true,
   drawBloom: true,
   drawVignette: true,
   drawLut: true,
@@ -45,6 +51,8 @@ const high = {
   castBuildingShadows: true,
   drawCrew: true,
   castCharacterShadows: true,
+  castFloraShadows: true,
+  castSceneryShadows: true,
   drawBloom: true,
   drawVignette: true,
   drawLut: true,
@@ -57,6 +65,8 @@ const extraHigh = {
   castBuildingShadows: true,
   drawCrew: true,
   castCharacterShadows: true,
+  castFloraShadows: true,
+  castSceneryShadows: true,
   drawBloom: true,
   drawVignette: true,
   drawLut: true,
@@ -91,5 +101,16 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
 
   it('undefined falls back to the default caps', () => {
     expect(tierCapsFor(undefined)).toEqual(tierCapsFor('medium'));
+  });
+
+  it('flora + scenery shadow casts turn on at medium and stay on above (#591-fu P1c)', () => {
+    for (const t of ['basic', 'low'] as const) {
+      expect(tierCapsFor(t).castFloraShadows, t).toBe(false);
+      expect(tierCapsFor(t).castSceneryShadows, t).toBe(false);
+    }
+    for (const t of ['medium', 'high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).castFloraShadows, t).toBe(true);
+      expect(tierCapsFor(t).castSceneryShadows, t).toBe(true);
+    }
   });
 });
