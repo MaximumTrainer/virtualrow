@@ -83,8 +83,16 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   const GRASS_U_OFFSET: f32 = 0.0;
   const EARTH_U_OFFSET: f32 = 0.5;
   const HALF_U: f32 = 0.5;
-  let grassUv = vec2<f32>(GRASS_U_OFFSET + fract(in.worldXZ.x * 0.25) * HALF_U, fract(in.worldXZ.y * 0.25));
-  let earthUv = vec2<f32>(EARTH_U_OFFSET + fract(in.worldXZ.x * 0.25) * HALF_U, fract(in.worldXZ.y * 0.25));
+  // #591-fu P2b: coarsen the tiling so grass/earth patches read as
+  // metres-scale blobs at ride-view distance rather than averaging to a
+  // soft gradient. 0.08 u/m means one atlas half covers ~12 m of bank,
+  // close to Biketerra's visible patch size on medium chase cam. Both
+  // UVs use the same world-space step so the two halves register.
+  const BANK_TILE_FREQ: f32 = 0.08;
+  let tileU = fract(in.worldXZ.x * BANK_TILE_FREQ) * HALF_U;
+  let tileV = fract(in.worldXZ.y * BANK_TILE_FREQ);
+  let grassUv = vec2<f32>(GRASS_U_OFFSET + tileU, tileV);
+  let earthUv = vec2<f32>(EARTH_U_OFFSET + tileU, tileV);
   let grassTex = textureSample(bankAtlas, bankAtlasSampler, grassUv).rgb;
   let earthTex = textureSample(bankAtlas, bankAtlasSampler, earthUv).rgb;
 
@@ -115,10 +123,20 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let boost = mix(1.0, 0.72 + 0.56 * density, grass.strength);
   col = col * boost;
 
+  // #591-fu P2a: sky/ground hemisphere ambient + half-lambert, mirroring
+  // the term `floraSolid.wgsl` and `sceneryMesh.wgsl` already use. The
+  // bank is flat, so the geometric normal is (0, 1, 0) — `sky` always
+  // reads 1 and the ground tint drops out, which is the right answer for
+  // a horizontal surface facing up at the sky. The sun contribution is
+  // half-lambert squared, modulated by the cascade shadow factor so a
+  // fully-shadowed bank fragment carries just the hemisphere ambient.
+  let n = vec3<f32>(0.0, 1.0, 0.0);
+  let sun = normalize(frame.sunDir);
+  let halfLambert = clamp(dot(n, sun) * 0.5 + 0.5, 0.0, 1.0);
+  let sky = clamp(n.y * 0.5 + 0.5, 0.0, 1.0);
+  let ambient = mix(vec3<f32>(0.22, 0.20, 0.18), vec3<f32>(0.42, 0.46, 0.52), sky);
   let lit = sampleShadow(in.worldPos, in.viewZ);
-  // Soft hemisphere ambient so a fully-shadowed fragment still reads as
-  // ground, with a touch of sky bias to echo the hemisphere-ambient
-  // follow-up on floraSolid / sceneryMesh.
-  let shaded = col * (0.42 + 0.58 * lit);
+  let shade = ambient + halfLambert * halfLambert * 0.75 * lit;
+  let shaded = col * shade;
   return vec4<f32>(shaded, 1.0);
 }
