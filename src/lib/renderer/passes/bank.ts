@@ -6,6 +6,7 @@ import { SAMPLE_SHADOW_WGSL, SHADOW_UNIFORMS_WGSL } from '../engine/shaderSnippe
 import { buildBankStrips } from '../plan/bankStrip';
 import type { WaterEdges } from '../plan/waterStrip';
 import { paintBiomeDensityR8 } from '../../scenery/biomeDensity';
+import { BANK_ATLAS_SIZE, paintBankAtlas } from '../../scenery/bankAtlas';
 import type { SceneryProfile } from '../../services/routeEnrichmentService';
 import bankWgsl from './bank.wgsl?raw';
 
@@ -62,8 +63,11 @@ export const createBankPass = ({
           attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }],
         },
         {
-          arrayStride: 4,
-          attributes: [{ shaderLocation: 1, offset: 0, format: 'float32' }],
+          // #591-fu P0b: 2 floats per vertex, (sign, shoreDist). The sign
+          // kept its old ±1 meaning (left vs right strip); shoreDist is
+          // metres from the water edge for the triplanar grass/earth mix.
+          arrayStride: 8,
+          attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }],
         },
       ],
     },
@@ -128,6 +132,30 @@ export const createBankPass = ({
     0,
     new Float32Array([grassStrength, grassTileMetres, 0, 0]),
   );
+  // #591-fu P0b: shared grass+earth albedo atlas (left half grass, right
+  // half earth). One tile per pass, `rgba8unorm-srgb`. Sampled twice in the
+  // fragment and mixed by shore distance.
+  const bankAtlasPixels = paintBankAtlas();
+  const bankAtlasTexture = device.createTexture({
+    label: 'bank-atlas',
+    size: { width: BANK_ATLAS_SIZE, height: BANK_ATLAS_SIZE },
+    format: 'rgba8unorm-srgb',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture: bankAtlasTexture },
+    bankAtlasPixels as BufferSource,
+    { bytesPerRow: BANK_ATLAS_SIZE * 4, rowsPerImage: BANK_ATLAS_SIZE },
+    { width: BANK_ATLAS_SIZE, height: BANK_ATLAS_SIZE },
+  );
+  const bankAtlasSampler = device.createSampler({
+    label: 'bank-atlas-sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+  });
+
   const grassBindGroup = device.createBindGroup({
     label: 'bank-grass',
     layout: pipeline.getBindGroupLayout(2),
@@ -135,6 +163,8 @@ export const createBankPass = ({
       { binding: 0, resource: { buffer: grassUniforms } },
       { binding: 1, resource: grassTexture.createView() },
       { binding: 2, resource: grassSampler },
+      { binding: 3, resource: bankAtlasTexture.createView() },
+      { binding: 4, resource: bankAtlasSampler },
     ],
   });
 
@@ -196,6 +226,7 @@ export const createBankPass = ({
       indexBuffer.destroy();
       grassTexture.destroy();
       grassUniforms.destroy();
+      bankAtlasTexture.destroy();
     },
   };
 };

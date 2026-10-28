@@ -16,7 +16,14 @@ import { WATER_SURFACE_Y, type WaterEdges } from './waterStrip';
 
 export interface BankStripGeometry {
   positions: Float32Array; // x,y,z
-  sides: Float32Array; // 1 attribute per vertex: -1 or +1
+  /**
+   * Per-vertex (sign, shoreDist) pair. `sign` is ±1 as before (left vs right
+   * strip, kept for compatibility). `shoreDist` is metres from the water
+   * edge: 0 at the inner (shore-side) row of the strip, `bankWidth` at the
+   * outer row. The bank pass's triplanar grass/earth blend (#591-fu P0b)
+   * reads it to pick wet earth near the shore and lush grass further in.
+   */
+  sides: Float32Array;
   indices: Uint16Array;
 }
 
@@ -55,7 +62,9 @@ export const buildBankStrips = (
 
   const vertsPerStrip = (divisions + 1) * 2;
   const positions = new Float32Array(vertsPerStrip * 2 * 3);
-  const sides = new Float32Array(vertsPerStrip * 2);
+  // `sides` now packs TWO floats per vertex (sign, shoreDist). Each strip
+  // (2 strips total) has `vertsPerStrip` verts, each needing 2 floats.
+  const sides = new Float32Array(vertsPerStrip * 2 * 2);
   const indices = new Uint16Array(divisions * 6 * 2);
 
   const sampleCurve = (
@@ -101,8 +110,14 @@ export const buildBankStrips = (
       positions[vo + 3] = outerX;
       positions[vo + 4] = WATER_SURFACE_Y + 0.1;
       positions[vo + 5] = outerZ;
-      sides[vertOffset + i * 2] = sign;
-      sides[vertOffset + i * 2 + 1] = sign;
+      // `sides` lane layout: 2 floats per vertex → (sign, shoreDistMetres).
+      // Inner vertex rides at shoreDist=0; outer vertex at shoreDist=bankWidth.
+      // bank.wgsl mixes grass vs earth / wet-shore vs lush-mid off this value.
+      const si = (vertOffset + i * 2) * 2;
+      sides[si] = sign;
+      sides[si + 1] = 0;
+      sides[si + 2] = sign;
+      sides[si + 3] = bankWidth;
     }
     for (let i = 0; i < divisions; i += 1) {
       const base = vertOffset + i * 2;

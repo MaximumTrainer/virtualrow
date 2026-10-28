@@ -1,8 +1,10 @@
-// Buildings pass (#566 FR1-FR4). Draws extruded OSM-footprint prisms.
+// Buildings pass (#566 FR1-FR4, #591-fu P0a textured walls + pitched roof).
+// Draws extruded OSM-footprint prisms with a pyramid roof cap and samples a
+// shared albedo atlas (brick wall on the left half, tile roof on the right).
 // Reads per-instance `(x, z, height, bitcast<u32>(paletteIndex))` from
-// `centres`, half-sizes from `sizes`, and emits a 36-vertex unit box
-// scaled to that footprint and height. Receives CSM via the shared
-// `sampleShadow` snippet from `shaderSnippets.ts`.
+// `centres`, half-sizes from `sizes`, and synthesises a 48-vertex geometry
+// (36 box + 12 pyramid roof) scaled to that footprint and height. Receives
+// CSM via the shared `sampleShadow` snippet from `shaderSnippets.ts`.
 
 struct Frame {
   view: mat4x4<f32>,
@@ -20,6 +22,8 @@ struct Frame {
 
 @group(2) @binding(0) var<storage, read> centres: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read> sizes: array<vec2<f32>>;
+@group(2) @binding(2) var atlasTex: texture_2d<f32>;
+@group(2) @binding(3) var atlasSampler: sampler;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -27,13 +31,14 @@ struct VSOut {
   @location(1) normal: vec3<f32>,
   @location(2) viewZ: f32,
   @location(3) @interpolate(flat) paletteIndex: u32,
-  @location(4) faceSeed: f32,
+  @location(4) uv: vec2<f32>,
+  @location(5) @interpolate(flat) isRoof: u32,
 };
 
-// 36 vertices for a unit box centred on origin in XZ, spanning [0, 1] in Y.
-// Positions are normalised corner picks; the vertex shader scales them.
-// `corners` give (sx, sy, sz) where each component is -1, 0 or +1.
-const CORNERS = array<vec3<f32>, 36>(
+// 48 vertices total: 36 box (6 faces × 2 tris × 3 verts) + 12 pyramid roof
+// (4 triangle faces, 3 verts each). `corner.y` of `2.0` is a sentinel the
+// vertex shader reads as "roof apex" — see vs_main.
+const CORNERS = array<vec3<f32>, 48>(
   // -X face
   vec3<f32>(-1.0, 0.0, -1.0), vec3<f32>(-1.0, 0.0,  1.0), vec3<f32>(-1.0, 1.0,  1.0),
   vec3<f32>(-1.0, 0.0, -1.0), vec3<f32>(-1.0, 1.0,  1.0), vec3<f32>(-1.0, 1.0, -1.0),
@@ -46,22 +51,38 @@ const CORNERS = array<vec3<f32>, 36>(
   // +Z face
   vec3<f32>(-1.0, 0.0,  1.0), vec3<f32>( 1.0, 0.0,  1.0), vec3<f32>( 1.0, 1.0,  1.0),
   vec3<f32>(-1.0, 0.0,  1.0), vec3<f32>( 1.0, 1.0,  1.0), vec3<f32>(-1.0, 1.0,  1.0),
-  // Roof (+Y)
+  // Ceiling at building top (+Y) — kept so a camera looking down from above
+  // sees a filled interior under the pyramid roof.
   vec3<f32>(-1.0, 1.0,  1.0), vec3<f32>( 1.0, 1.0,  1.0), vec3<f32>( 1.0, 1.0, -1.0),
   vec3<f32>(-1.0, 1.0,  1.0), vec3<f32>( 1.0, 1.0, -1.0), vec3<f32>(-1.0, 1.0, -1.0),
   // Floor (-Y) — rarely visible but closes the volume for depth casts.
   vec3<f32>(-1.0, 0.0, -1.0), vec3<f32>( 1.0, 0.0, -1.0), vec3<f32>( 1.0, 0.0,  1.0),
   vec3<f32>(-1.0, 0.0, -1.0), vec3<f32>( 1.0, 0.0,  1.0), vec3<f32>(-1.0, 0.0,  1.0),
+  // Pyramid roof (4 triangles). The apex uses the sentinel y = 2.0 so the
+  // vertex shader can lift it to `height + roofHeight` instead of
+  // `height * 2`. Winding is CCW seen from outside each slope.
+  //   -X slope
+  vec3<f32>(-1.0, 1.0, -1.0), vec3<f32>(-1.0, 1.0,  1.0), vec3<f32>( 0.0, 2.0,  0.0),
+  //   +X slope
+  vec3<f32>( 1.0, 1.0,  1.0), vec3<f32>( 1.0, 1.0, -1.0), vec3<f32>( 0.0, 2.0,  0.0),
+  //   -Z slope
+  vec3<f32>( 1.0, 1.0, -1.0), vec3<f32>(-1.0, 1.0, -1.0), vec3<f32>( 0.0, 2.0,  0.0),
+  //   +Z slope
+  vec3<f32>(-1.0, 1.0,  1.0), vec3<f32>( 1.0, 1.0,  1.0), vec3<f32>( 0.0, 2.0,  0.0),
 );
 
-// One normal per triangle — six faces, six triangles each.
-const NORMALS = array<vec3<f32>, 6>(
-  vec3<f32>(-1.0, 0.0, 0.0),
-  vec3<f32>( 1.0, 0.0, 0.0),
-  vec3<f32>( 0.0, 0.0,-1.0),
-  vec3<f32>( 0.0, 0.0, 1.0),
-  vec3<f32>( 0.0, 1.0, 0.0),
-  vec3<f32>( 0.0,-1.0, 0.0),
+// One normal per triangle — six box faces, then one per pyramid slope.
+const NORMALS = array<vec3<f32>, 10>(
+  vec3<f32>(-1.0, 0.0, 0.0),       // -X wall
+  vec3<f32>( 1.0, 0.0, 0.0),       // +X wall
+  vec3<f32>( 0.0, 0.0,-1.0),       // -Z wall
+  vec3<f32>( 0.0, 0.0, 1.0),       // +Z wall
+  vec3<f32>( 0.0, 1.0, 0.0),       // ceiling (under the roof)
+  vec3<f32>( 0.0,-1.0, 0.0),       // floor
+  vec3<f32>(-0.7071, 0.7071, 0.0), // -X pyramid slope
+  vec3<f32>( 0.7071, 0.7071, 0.0), // +X pyramid slope
+  vec3<f32>( 0.0, 0.7071,-0.7071), // -Z pyramid slope
+  vec3<f32>( 0.0, 0.7071, 0.7071), // +Z pyramid slope
 );
 
 @vertex
@@ -71,22 +92,69 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> 
   let height = max(0.1, instance.z);
   let half = sizes[ii];
   let corner = CORNERS[vi];
-  let world = vec3<f32>(origin.x + corner.x * half.x, corner.y * height, origin.y + corner.z * half.y);
+
+  // The pyramid-roof apex is encoded as corner.y = 2.0: lift it to
+  // `height + roofHeight` instead of the box's `height * 2`. Roof height
+  // scales with footprint so a tall slender tower doesn't get a tiny
+  // pointed hat, with a floor so very small cottages keep a visible pitch.
+  let isApex = corner.y > 1.5;
+  let roofHeight = clamp(min(half.x, half.y) * 0.9, 1.0, 4.0);
+  var worldY: f32;
+  if (isApex) {
+    worldY = height + roofHeight;
+  } else {
+    worldY = corner.y * height;
+  }
+  let world = vec3<f32>(origin.x + corner.x * half.x, worldY, origin.y + corner.z * half.y);
 
   var out: VSOut;
   out.pos = frame.viewProj * vec4<f32>(world, 1.0);
   out.worldPos = world;
-  // 6 vertices per face → faceIndex = vi / 6.
-  let faceIndex = vi / 6u;
+  // The CORNERS array is: 6 box faces × 6 verts = 36, then 4 pyramid slopes
+  // × 3 verts = 12. Normals follow the same order.
+  var faceIndex: u32;
+  if (vi < 36u) {
+    faceIndex = vi / 6u;
+  } else {
+    faceIndex = 6u + (vi - 36u) / 3u;
+  }
   out.normal = NORMALS[faceIndex];
   let viewPos = frame.view * vec4<f32>(world, 1.0);
   out.viewZ = -viewPos.z;
-  // The palette index is in the fourth lane of `centres[ii]`, reinterpreted
-  // from the pre-packed u32.
   let packed = bitcast<u32>(instance.w);
   out.paletteIndex = packed;
-  // Per-instance seed for the facade stripe pattern.
-  out.faceSeed = f32(ii & 0xffu) * 0.3719;
+
+  // Atlas UV: walls land on the LEFT half (u in [0, 0.5]) and the roof
+  // slopes on the RIGHT (u in [0.5, 1.0]). The upload-time atlas constants
+  // in `buildingAtlas.ts` have to match these offsets. We tile the UV so
+  // bricks are 2 m tall and roof tiles ~1 m wide at ride-view scale.
+  const WALL_U_OFFSET: f32 = 0.0;
+  const ROOF_U_OFFSET: f32 = 0.5;
+  const HALF: f32 = 0.5;
+  var uv: vec2<f32>;
+  var isRoof: u32 = 0u;
+  if (faceIndex >= 6u) {
+    // Pyramid roof — project world (x, z) through atlas-right tiling.
+    isRoof = 1u;
+    uv = vec2<f32>(ROOF_U_OFFSET + fract(world.x * 0.5) * HALF, fract(world.z * 0.5));
+  } else if (faceIndex == 4u || faceIndex == 5u) {
+    // Interior ceiling / floor — hidden in normal play; cheap wall UV so
+    // the depth cast at least ships a value.
+    uv = vec2<f32>(WALL_U_OFFSET + fract(world.x * 0.5) * HALF, fract(world.z * 0.5));
+  } else {
+    // Side walls — U wraps around the perimeter (x on -Z/+Z walls, z on
+    // -X/+X walls), V goes up the building. 0.3 m per brick vertically
+    // keeps bricks reading at camera-close distance without jarring tiling.
+    var perim: f32;
+    if (faceIndex == 0u || faceIndex == 1u) {
+      perim = world.z;
+    } else {
+      perim = world.x;
+    }
+    uv = vec2<f32>(WALL_U_OFFSET + fract(perim * 0.5) * HALF, fract(world.y * 0.33));
+  }
+  out.uv = uv;
+  out.isRoof = isRoof;
   return out;
 }
 
@@ -119,9 +187,12 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let wall = PALETTE_WALL[idx];
   let roof = PALETTE_ROOF[idx];
 
-  // Pick base / wall / roof by the dominant normal component.
+  // Pick the palette tint by surface: roof slopes land on `roof`, the base
+  // course (lower 0.5 m of the walls) on `base`, everything else on `wall`.
+  // `in.isRoof` is set per-vertex for the pyramid slopes so interior ceiling
+  // triangles don't accidentally pick up the roof tint.
   var surface: vec3<f32>;
-  if (in.normal.y > 0.5) {
+  if (in.isRoof == 1u) {
     surface = roof;
   } else if (in.worldPos.y < 0.5) {
     surface = base;
@@ -129,13 +200,17 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
     surface = wall;
   }
 
-  // Soft facade stripe (window band) along Y, cheap and texture-free.
-  let band = 0.5 + 0.5 * sin(in.worldPos.y * 1.2 + in.faceSeed * 6.2831);
-  let shaded = surface * (0.85 + 0.15 * band);
+  // Sample the shared albedo atlas (brick/stone wall on the LEFT half, tile
+  // on the RIGHT). The texture is neutral grey so `tint * texel` reads as a
+  // palette-tinted brick/tile rather than a wholly new colour.
+  let texel = textureSample(atlasTex, atlasSampler, in.uv).rgb;
+  let shaded = surface * texel * 1.1;
 
-  // Lambertian-ish with the global sun direction.
-  let ndotl = max(dot(in.normal, normalize(frame.sunDir)), 0.0);
+  // Half-lambert against the global sun direction, scaled by the shadow map,
+  // with a soft hemisphere ambient so a face in shadow still carries hue.
+  let n = normalize(in.normal);
+  let ndotl = max(dot(n, normalize(frame.sunDir)), 0.0);
   let lit = sampleShadow(in.worldPos, in.viewZ);
-  let diffuse = shaded * (0.3 + 0.7 * ndotl * lit);
+  let diffuse = shaded * (0.28 + 0.72 * ndotl * lit);
   return vec4<f32>(diffuse, 1.0);
 }
