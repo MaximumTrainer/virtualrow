@@ -493,6 +493,16 @@ export const createRideScene = async (
     telemetry: shadowTelemetry,
     bankCurve: waterCurve,
     bankEdgesForProgress: waterEdgesForProgress,
+    // #591-fu P1c: tier-gated flora + GLB-scenery shadow casters. Each
+    // input stays null below medium so the depth stage adds nothing on
+    // basic/low; at medium+ the stage picks up every solid-flora pool
+    // and every registered GLB mesh (populated asynchronously as scenery
+    // GLBs load) and renders their depth into the cascade atlas.
+    floraSolidResources: tierCaps.castFloraShadows ? floraSolidStage.resources : null,
+    floraLeafAtlas: tierCaps.castFloraShadows
+      ? { view: floraSolidStage.signature.leafAtlasView, sampler: floraSolidStage.signature.leafSampler }
+      : null,
+    sceneryMeshPass: tierCaps.castSceneryShadows ? sceneryMeshPass : null,
   });
 
   const shadowResources = {

@@ -49,11 +49,34 @@ interface RegisteredMesh {
   bindGroup: GPUBindGroup;
 }
 
+/**
+ * Snapshot of a registered mesh's GPU buffers + instance state, as the
+ * shadow stage needs it to render depth-only (#591-fu P1c). Keeping this
+ * read-only so the shadow stage can borrow buffers without reaching into
+ * the lit pass's internals.
+ */
+export interface SceneryMeshSnapshot {
+  readonly id: string;
+  readonly positionBuffer: GPUBuffer;
+  readonly indexBuffer: GPUBuffer;
+  readonly indexFormat: 'uint16' | 'uint32';
+  readonly indexCount: number;
+  readonly instanceBuffer: GPUBuffer;
+  readonly instanceCount: number;
+}
+
 export interface SceneryMeshPass extends Pass {
   register(input: SceneryMeshInput): void;
   /** Write `instances.length` mat4s for `id`; clamps to the registered maxInstances. */
   setInstances(id: string, instances: readonly Mat4[]): void;
   readonly meshCount: number;
+  /**
+   * Iterate every registered mesh with a non-zero instance count. The
+   * shadow stage uses this to run its own depth-only pipeline over the
+   * same buffers (#591-fu P1c). Callback-based so the pass keeps buffer
+   * ownership and the shadow stage can't accidentally mutate state.
+   */
+  forEachActiveMesh(cb: (snapshot: SceneryMeshSnapshot) => void): void;
 }
 
 export interface CreateSceneryMeshPassOptions {
@@ -180,6 +203,20 @@ export const createSceneryMeshPass = ({
     register,
     setInstances,
     get meshCount() { return registry.size; },
+    forEachActiveMesh(cb) {
+      for (const mesh of registry.values()) {
+        if (mesh.instanceCount === 0) continue;
+        cb({
+          id: mesh.id,
+          positionBuffer: mesh.positionBuffer,
+          indexBuffer: mesh.indexBuffer,
+          indexFormat: mesh.indexFormat,
+          indexCount: mesh.indexCount,
+          instanceBuffer: mesh.instanceBuffer,
+          instanceCount: mesh.instanceCount,
+        });
+      }
+    },
     encode(ctx: FrameContext) {
       if (disposed || registry.size === 0) return;
       let anyVisible = false;
