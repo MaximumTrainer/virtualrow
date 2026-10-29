@@ -69,10 +69,51 @@ describe('createPostFx', () => {
     const w = 1920;
     const h = 1080;
     const sceneBytes = w * h * 8;
-    const caps = { bloom: true, tone: true, vignette: true, lut: true, ssao: true, dof: false };
+    const caps = { bloom: true, tone: true, vignette: true, lut: true, ssao: true, dof: false, autoExposure: true };
     const total = postFxBytes(w, h, caps);
     const addedOverScene = (total - sceneBytes) / sceneBytes;
     expect(addedOverScene).toBeLessThanOrEqual(1.3);
+  });
+
+  it('creates the luminance pipeline when autoExposure is on, skips it when off (#574)', () => {
+    const makeHandle = (autoExposure: boolean): ReturnType<typeof createPostFx> => {
+      const device = makeMockDevice();
+      const handle = createPostFx({
+        device,
+        sceneFormat: 'rgba16float',
+        outputFormat: 'bgra8unorm',
+        caps: { ...DEFAULT_POSTFX_CAPS, autoExposure },
+      });
+      handle.setInputs({
+        sceneView: makeViewRef(),
+        sceneTexture: makeTextureRef(),
+        depthView: makeViewRef(),
+        width: 320,
+        height: 240,
+      });
+      return handle;
+    };
+    const device1 = makeMockDevice();
+    const h1 = createPostFx({
+      device: device1,
+      sceneFormat: 'rgba16float',
+      outputFormat: 'bgra8unorm',
+      caps: { ...DEFAULT_POSTFX_CAPS, autoExposure: true },
+    });
+    h1.setInputs({
+      sceneView: makeViewRef(),
+      sceneTexture: makeTextureRef(),
+      depthView: makeViewRef(),
+      width: 320,
+      height: 240,
+    });
+    expect(device1.__log.createdPipelines).toContain('luminance');
+    h1.dispose();
+
+    const device2 = makeMockDevice();
+    const h2 = makeHandle(false);
+    expect(device2.__log.createdPipelines).not.toContain('luminance');
+    h2.dispose();
   });
 
   it('bloom pyramid is BLOOM_MIP_LEVELS mips', () => {

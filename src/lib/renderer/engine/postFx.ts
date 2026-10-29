@@ -22,6 +22,7 @@ import bloomUpWgsl from '../passes/bloomUp.wgsl?raw';
 import compositeWgsl from '../passes/composite.wgsl?raw';
 import ssaoWgsl from '../passes/ssao.wgsl?raw';
 import dofWgsl from '../passes/dofBlur.wgsl?raw';
+import luminanceWgsl from '../passes/luminance.wgsl?raw';
 import { buildNeutralLutPixels } from './postFxMath';
 
 export interface PostFxCaps {
@@ -31,6 +32,11 @@ export interface PostFxCaps {
   lut: boolean;
   ssao: boolean;
   dof: boolean;
+  /** #574 — auto-exposure. A 1×1 R32F render target carries the log-
+   *  luminance of the previous composite's input; the composite shader
+   *  divides by it before the ACES tone-map so bright and dark scenes
+   *  self-correct toward middle grey. */
+  autoExposure: boolean;
 }
 
 export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
@@ -40,6 +46,7 @@ export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
   lut: true,
   ssao: false,
   dof: false,
+  autoExposure: false,
 };
 
 export interface PostFxOptions {
@@ -137,17 +144,52 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
     fragment: { module: compositeModule, entryPoint: 'fs_main', targets: [{ format: outputFormat }] },
     primitive: { topology: 'triangle-list' },
   });
+  // 32-byte uniform block = vec4<f32> (bloom/vignette/lutSize/aoEnabled) +
+  // vec4<f32> (autoExposureEnabled + 3 pads). Grown from 16 bytes to carry
+  // the #574 auto-exposure gate — the composite shader has four more
+  // declared floats and WGSL requires the uniform binding size to match.
   const compositeUniforms = device.createBuffer({
     label: 'composite-u',
-    size: 16,
+    size: 32,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  const compositeScratch = new Float32Array(4);
+  const compositeScratch = new Float32Array(8);
   compositeScratch[0] = bloomStrength;
   compositeScratch[1] = vignetteStrength;
   compositeScratch[2] = 32; // LUT size
   compositeScratch[3] = caps.ssao ? 1 : 0;
+  compositeScratch[4] = caps.autoExposure ? 1 : 0;
+  // 5, 6, 7 pad.
   device.queue.writeBuffer(compositeUniforms, 0, compositeScratch as BufferSource);
+
+  // --- Auto-exposure ---
+  // 1×1 r32float render target that `luminance.wgsl` writes each frame
+  // and the composite shader samples via `textureLoad`. Falls back to a
+  // dummy no-ops texture when the cap is off so the composite's bind
+  // group still has something to point at.
+  const luminanceFormat: GPUTextureFormat = 'r32float';
+  const exposureTexture = device.createTexture({
+    label: 'auto-exposure-1x1',
+    size: { width: 1, height: 1 },
+    format: luminanceFormat,
+    usage:
+      GPUTextureUsage.RENDER_ATTACHMENT |
+      GPUTextureUsage.TEXTURE_BINDING,
+  });
+  const exposureView = exposureTexture.createView();
+  const luminanceModule = caps.autoExposure
+    ? device.createShaderModule({ label: 'luminance', code: luminanceWgsl })
+    : null;
+  const luminancePipeline =
+    luminanceModule
+      ? device.createRenderPipeline({
+          label: 'luminance',
+          layout: 'auto',
+          vertex: { module: luminanceModule, entryPoint: 'vs_main' },
+          fragment: { module: luminanceModule, entryPoint: 'fs_main', targets: [{ format: luminanceFormat }] },
+          primitive: { topology: 'triangle-list' },
+        })
+      : null;
 
   // --- SSAO ---
   const ssaoModule = caps.ssao ? device.createShaderModule({ label: 'ssao', code: ssaoWgsl }) : null;
@@ -366,7 +408,36 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
       stats.encoded += 1;
     }
 
-    // Composite. Reads scene + brightest bloom mip (level 0) + LUT + AO.
+    // Auto-exposure measurement. Runs BEFORE the composite so the
+    // single-pixel luminance texture is up-to-date when composite reads
+    // it. The composite always binds `exposureView` (even when the cap is
+    // off) so the bind-group layout stays identical across tiers; when
+    // off, the texel is whatever was last written (or zero on the first
+    // frame) and the composite shader's `autoExposureEnabled` branch
+    // ignores it.
+    if (caps.autoExposure && luminancePipeline) {
+      const bind = device.createBindGroup({
+        layout: luminancePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: currentInputs.sceneView },
+          { binding: 1, resource: linearSampler },
+        ],
+      });
+      const pass = encoder.beginRenderPass({
+        label: 'luminance',
+        colorAttachments: [
+          { view: exposureView, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 0 } },
+        ],
+      });
+      pass.setPipeline(luminancePipeline);
+      pass.setBindGroup(0, bind);
+      pass.draw(3);
+      pass.end();
+      stats.encoded += 1;
+    }
+
+    // Composite. Reads scene + brightest bloom mip (level 0) + LUT + AO +
+    // the 1×1 log-luminance texture written above (#574).
     {
       const bloomView = caps.bloom && bloomMips.length > 0 ? bloomMips[0].view : currentInputs.sceneView;
       const aoView = ssaoTarget?.view ?? lutView; // reuse LUT view as a 1x1 fallback when SSAO off
@@ -379,6 +450,7 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
           { binding: 3, resource: lutView },
           { binding: 4, resource: aoView },
           { binding: 5, resource: { buffer: compositeUniforms } },
+          { binding: 6, resource: exposureView },
         ],
       });
       const target = caps.dof && dofTarget ? dofTarget.view : ctx.outputView;
@@ -433,6 +505,7 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
       compositeUniforms.destroy();
       ssaoUniforms?.destroy();
       dofUniforms?.destroy();
+      exposureTexture.destroy();
     },
   };
 

@@ -39,6 +39,10 @@ export interface BuildingTierCaps {
   drawLut: boolean;
   drawSsao: boolean;
   drawDof: boolean;
+  /** #574 — auto-exposure (1×1 luminance render + composite divisor).
+   *  On at `high` + `extra-high`; off below so a weaker GPU doesn't take
+   *  the extra render pass per frame. */
+  drawAutoExposure: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -55,6 +59,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawAutoExposure: false,
   },
   low: {
     drawBuildings: true,
@@ -69,6 +74,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawAutoExposure: false,
   },
   medium: {
     drawBuildings: true,
@@ -83,6 +89,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawAutoExposure: false,
   },
   high: {
     drawBuildings: true,
@@ -97,6 +104,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: false,
+    drawAutoExposure: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -111,6 +119,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: true,
+    drawAutoExposure: true,
   },
 };
 
