@@ -32,6 +32,8 @@ import { createBankPass } from '../passes/bank';
 import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
+import { createWakeParticlesPass } from '../passes/wakeParticles';
+import { createWakeState, updateWake } from './wakeParticles';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -556,6 +558,13 @@ export const createRideScene = async (
   const cloudsPass = tierCaps.drawClouds
     ? createCloudsPass({ device, format, frameUniforms })
     : null;
+  // #571 — hull wake foam. Shared state lives here; the ride loop below
+  // calls `updateWake` each frame, and the pass uploads the pool to its
+  // storage buffer before drawing.
+  const wakeState = createWakeState();
+  const wakePass = tierCaps.drawWakeParticles
+    ? createWakeParticlesPass({ device, format, frameUniforms, wakeState })
+    : null;
 
   const postCaps: PostFxCaps = {
     bloom: tierCaps.drawBloom,
@@ -588,6 +597,7 @@ export const createRideScene = async (
     waterPass,
     boatPass,
     sceneryMeshPass,
+    ...(wakePass ? [wakePass] : []),
     postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
@@ -767,6 +777,7 @@ export const createRideScene = async (
 
   let lastDistanceMeters = 0;
   let lastSpeedTime = -1;
+  let lastWakeTime = 0; // seconds since start — matches `frame.time` units
   let smoothedDistance = 0;
   let lastDistSample = { d: 0, t: now() };
   let prevDistSample = { d: 0, t: now() };
@@ -803,6 +814,21 @@ export const createRideScene = async (
       : null;
 
     placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
+    // #571 wake foam: run the CPU particle sim before the pass encodes.
+    // `isMoving` gates on both `isPlaying` AND the holdBoat/finished state
+    // so no spawns happen during countdown or post-finish review.
+    const wakeMoving = !!rideFrame?.isPlaying && !rideFrame.holdBoat && !rideFrame.finished;
+    const wakeDt = Math.max(0, frame.time - lastWakeTime);
+    updateWake(
+      wakeState,
+      boatPlacement.world[0],
+      boatPlacement.world[1],
+      boatPlacement.world[2],
+      boatPlacement.heading,
+      wakeMoving,
+      wakeDt,
+    );
+    lastWakeTime = frame.time;
     // Stream scenery that has come within the look-ahead window as the boat
     // advances; already-loaded / in-flight models are skipped.
     streamScenery(boatPlacement.progress * totalDistanceMeters);

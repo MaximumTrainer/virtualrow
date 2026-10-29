@@ -39,6 +39,10 @@ export interface BuildingTierCaps {
   drawLut: boolean;
   drawSsao: boolean;
   drawDof: boolean;
+  /** #571 — hull wake / foam billboards. Off on `basic` (CPU particle
+   *  update is cheap but the extra draw costs an upload per frame); on
+   *  for `low` and up so even a modest tier sees the trail. */
+  drawWakeParticles: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -55,6 +59,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawWakeParticles: false,
   },
   low: {
     drawBuildings: true,
@@ -69,6 +74,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawWakeParticles: true,
   },
   medium: {
     drawBuildings: true,
@@ -83,6 +89,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawWakeParticles: true,
   },
   high: {
     drawBuildings: true,
@@ -97,6 +104,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: false,
+    drawWakeParticles: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -111,6 +119,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: true,
+    drawWakeParticles: true,
   },
 };
 
