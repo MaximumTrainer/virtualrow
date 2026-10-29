@@ -110,6 +110,23 @@ export const mat4FromRotationY = (out: Mat4, radians: number): Mat4 => {
   return out;
 };
 
+/** Rotation about +Z (right-hand rule, column-major). Used by #571 boat
+ * roll — the boat's local forward is +Z (`curve.sample` sets angle = 0 for
+ * a +Z tangent and `mat4FromRotationY` is applied before this), so rotating
+ * around +Z is a lean around the boat's longitudinal axis. */
+export const mat4FromRotationZ = (out: Mat4, radians: number): Mat4 => {
+  const c = Math.cos(radians);
+  const s = Math.sin(radians);
+  out.fill(0);
+  out[0] = c;
+  out[1] = s;
+  out[4] = -s;
+  out[5] = c;
+  out[10] = 1;
+  out[15] = 1;
+  return out;
+};
+
 export const mat4Multiply = (out: Mat4, a: Mat4, b: Mat4): Mat4 => {
   const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
   const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];

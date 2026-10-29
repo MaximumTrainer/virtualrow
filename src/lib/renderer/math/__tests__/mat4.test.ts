@@ -2,12 +2,45 @@ import { describe, expect, it } from 'vitest';
 import {
   mat4,
   mat4Copy,
+  mat4FromRotationZ,
   mat4Identity,
   mat4LookAt,
   mat4Multiply,
   mat4Perspective,
 } from '../mat4';
 import { vec3 } from '../vec3';
+
+describe('mat4FromRotationZ (#571 boat roll axis)', () => {
+  it('maps (1, 0, 0) to (0, 1, 0) at +π/2 (right-hand rule about +Z)', () => {
+    const m = mat4FromRotationZ(mat4(), Math.PI / 2);
+    // Column-major: m applied to (1,0,0,1) via m[col*4+row].
+    const x = m[0] * 1 + m[4] * 0 + m[8] * 0;
+    const y = m[1] * 1 + m[5] * 0 + m[9] * 0;
+    const z = m[2] * 1 + m[6] * 0 + m[10] * 0;
+    expect(x).toBeCloseTo(0, 10);
+    expect(y).toBeCloseTo(1, 10);
+    expect(z).toBeCloseTo(0, 10);
+  });
+
+  it('leaves +Z unchanged (the rotation axis)', () => {
+    const m = mat4FromRotationZ(mat4(), 0.7);
+    const x = m[0] * 0 + m[4] * 0 + m[8] * 1;
+    const y = m[1] * 0 + m[5] * 0 + m[9] * 1;
+    const z = m[2] * 0 + m[6] * 0 + m[10] * 1;
+    expect(x).toBeCloseTo(0, 10);
+    expect(y).toBeCloseTo(0, 10);
+    expect(z).toBeCloseTo(1, 10);
+  });
+
+  it('is identity at angle 0', () => {
+    const m = mat4FromRotationZ(mat4(), 0);
+    expect([m[0], m[5], m[10], m[15]]).toEqual([1, 1, 1, 1]);
+    // sin(0) can be ±0 depending on the FPU; both are "no rotation".
+    for (const idx of [1, 2, 4, 6, 8, 9]) {
+      expect(Math.abs(m[idx]!)).toBe(0);
+    }
+  });
+});
 
 describe('mat4', () => {
   it('constructs identity', () => {

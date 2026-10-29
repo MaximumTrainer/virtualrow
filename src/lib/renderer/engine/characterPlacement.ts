@@ -10,11 +10,12 @@
  */
 
 import { vec3, type Vec3 } from '../math/vec3';
-import { mat4, mat4FromRotationY, mat4Multiply } from '../math/mat4';
+import { mat4, mat4FromRotationY, mat4FromRotationZ, mat4Multiply } from '../math/mat4';
 import type { Mat4 } from '../math/mat4';
 import type { RouteCurve } from '../math/curve';
 import type { RideFrame } from './rideFrame';
 import { ghostDistanceAt, type GhostSource } from '../../../components/rower3d/ghost';
+import { boatRollRadians, routeCurvatureAt } from './boatRoll';
 
 // 20 cm above the water line (water surface sits at WATER_SURFACE_Y = −0.1).
 // The GLB scull's local origin is authored at hull-waterline, so lifting
@@ -87,8 +88,18 @@ export const placeBoat = (
   const px = (-point.tangent[2] / tangentLen) * lateralOffsetX;
   const pz = (point.tangent[0] / tangentLen) * lateralOffsetX;
 
+  const rotY = mat4();
+  mat4FromRotationY(rotY, point.angle ?? 0);
+  // #571 boat lean: sample curvature at the current progress and heel the
+  // boat into the turn. `rot_Z` applied on the right of `rot_Y` is a
+  // rotation around the boat's local forward +Z, which is the longitudinal
+  // axis after the yaw. The combined rotation is `rot_Y * rot_Z`.
+  const curvature = routeCurvatureAt(curve, progress, total);
+  const roll = boatRollRadians(curvature);
+  const rotZ = mat4();
+  mat4FromRotationZ(rotZ, roll);
   const rot = mat4();
-  mat4FromRotationY(rot, point.angle ?? 0);
+  mat4Multiply(rot, rotY, rotZ);
   const trans = mat4();
   makeTranslation(trans, point.position[0] + px, point.position[1] + BOAT_HEIGHT_Y, point.position[2] + pz);
   mat4Multiply(out.modelMatrix, trans, rot);

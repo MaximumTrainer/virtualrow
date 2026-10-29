@@ -60,6 +60,39 @@ describe('characterPlacement', () => {
     expect(out.distanceMeters).toBe(500);
   });
 
+  it('keeps the boat flat (no roll) on a straight route (#571)', () => {
+    // On a zero-curvature polyline, the model matrix is `trans * rot_Y`
+    // with no roll component — row 1 (local Y) should still point along
+    // world +Y. Entries m[1], m[9] are the X,Z components of local Y; both
+    // should be 0.
+    const curve = straightCurve();
+    const out = createPlacement();
+    placeBoat(out, curve, makeFrame({ distanceMeters: 500 }), 1000, 200);
+    expect(out.modelMatrix[1]).toBeCloseTo(0, 10);
+    expect(out.modelMatrix[9]).toBeCloseTo(0, 10);
+    expect(out.modelMatrix[5]).toBeCloseTo(1, 10); // local Y stays +Y
+  });
+
+  it('leans the boat into a left-hand bend (#571)', () => {
+    // A quarter-arc polyline that turns counter-clockwise. At the midpoint
+    // the curvature is positive, so the roll about +Z is negative — the
+    // local Y axis tips toward -X. Entry m[1] (X component of local Y) is
+    // the signed sine of the roll angle; it must be strictly < 0 here.
+    const curve = new RouteCurve([
+      vec3(0, 0, 0),
+      vec3(0, 0, 5),
+      vec3(5, 0, 10),
+      vec3(10, 0, 10),
+    ]);
+    const out = createPlacement();
+    placeBoat(out, curve, makeFrame({ distanceMeters: 10 }), 20, 20);
+    expect(out.modelMatrix[1]).toBeLessThan(0);
+    // And the roll stays reasonable — the clamp allows up to 8°, so sin(8°)
+    // is the ceiling with a small floating-point buffer.
+    const maxSinRoll = Math.sin((8 * Math.PI) / 180);
+    expect(Math.abs(out.modelMatrix[1])).toBeLessThanOrEqual(maxSinRoll + 1e-5);
+  });
+
   it('lifts the boat above the water surface so the hull keeps a freeboard', () => {
     const curve = straightCurve();
     const out = createPlacement();
