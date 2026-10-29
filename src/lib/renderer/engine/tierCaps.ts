@@ -39,6 +39,10 @@ export interface BuildingTierCaps {
   drawLut: boolean;
   drawSsao: boolean;
   drawDof: boolean;
+  /** #574 — subtle chromatic aberration in the composite pass: 3-tap radial
+   *  colour-channel offset. Off below `high`; keep it below ~0.5% of the
+   *  frame width so it reads as a lens feel, not a defect. */
+  drawChromaticAberration: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -55,6 +59,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawChromaticAberration: false,
   },
   low: {
     drawBuildings: true,
@@ -69,6 +74,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawChromaticAberration: false,
   },
   medium: {
     drawBuildings: true,
@@ -83,6 +89,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawChromaticAberration: false,
   },
   high: {
     drawBuildings: true,
@@ -97,6 +104,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: false,
+    drawChromaticAberration: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -111,6 +119,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: true,
+    drawChromaticAberration: true,
   },
 };
 

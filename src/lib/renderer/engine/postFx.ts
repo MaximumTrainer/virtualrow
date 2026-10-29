@@ -31,6 +31,10 @@ export interface PostFxCaps {
   lut: boolean;
   ssao: boolean;
   dof: boolean;
+  /** #574 — subtle radial chromatic aberration in the composite pass.
+   *  Off below `high`; the shader uses a hard-coded offset of ~0.0035 UV
+   *  (0.35% of the frame) which reads as a lens feel. */
+  chromaticAberration: boolean;
 }
 
 export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
@@ -40,6 +44,7 @@ export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
   lut: true,
   ssao: false,
   dof: false,
+  chromaticAberration: false,
 };
 
 export interface PostFxOptions {
@@ -137,16 +142,25 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
     fragment: { module: compositeModule, entryPoint: 'fs_main', targets: [{ format: outputFormat }] },
     primitive: { topology: 'triangle-list' },
   });
+  // 32-byte uniform block = vec4<f32> (bloom/vignette/lutSize/aoEnabled) +
+  // vec4<f32> (caOffset + 3 pads). WGSL requires the struct size to be a
+  // multiple of its biggest member's alignment, so the pads stay. #574.
   const compositeUniforms = device.createBuffer({
     label: 'composite-u',
-    size: 16,
+    size: 32,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  const compositeScratch = new Float32Array(4);
+  const compositeScratch = new Float32Array(8);
   compositeScratch[0] = bloomStrength;
   compositeScratch[1] = vignetteStrength;
   compositeScratch[2] = 32; // LUT size
   compositeScratch[3] = caps.ssao ? 1 : 0;
+  // Radial CA offset in UV units at the frame corner. 0.0035 = ~3.5 px on a
+  // 1000-px-wide canvas; subtle, reads as lens feel, never as a defect.
+  compositeScratch[4] = caps.chromaticAberration ? 0.0035 : 0;
+  compositeScratch[5] = 0;
+  compositeScratch[6] = 0;
+  compositeScratch[7] = 0;
   device.queue.writeBuffer(compositeUniforms, 0, compositeScratch as BufferSource);
 
   // --- SSAO ---
