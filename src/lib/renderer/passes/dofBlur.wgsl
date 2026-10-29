@@ -39,7 +39,8 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VSOut {
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
-  let d = textureSampleLevel(depthTex, samp, in.uv, 0.0);
+  // texture_depth_2d's textureSampleLevel takes i32 level, not f32 (#592).
+  let d = textureSampleLevel(depthTex, samp, in.uv, 0i);
   let dist = abs(d - u.focusDepth);
   let coc = clamp((dist - u.focusRange) / max(u.focusRange, 1e-4), 0.0, 1.0);
   let dims = vec2<f32>(textureDimensions(colour, 0));
