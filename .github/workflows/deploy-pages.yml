@@ -13,6 +13,11 @@ on:
       - 'vite.config.ts'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
+    inputs:
+      include_preview:
+        description: 'Also build & publish the next/svelte-webgpu preview at /virtualrow/next/'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -33,8 +38,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_try_2.outputs.page_url || steps.deployment_try_1.outputs.page_url }}
     steps:
-      - name: Checkout repository
+      # The live app at /virtualrow/app/ is always the main-branch build, even
+      # when this run is dispatched from the next/svelte-webgpu branch to refresh
+      # the preview — so pin the app source to `main` rather than taking the
+      # triggering ref. (At the #542 AC12 cutover, when `next` replaces `main`,
+      # this deploy is reworked to build the Svelte app as the app; until then
+      # `main` is still the React/Vite build this step expects.)
+      - name: Checkout repository (live app source)
         uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -65,6 +78,49 @@ jobs:
         run: |
           mkdir -p docs/app
           cp -r dist/. docs/app/
+
+      # #543 P0-AC5 / D13-a — the next/svelte-webgpu preview at /virtualrow/next/.
+      #
+      # Manual until the epic branch is on `main`: a `workflow_dispatch` run
+      # (with `include_preview`, the default) checks out the epic branch, builds
+      # the SvelteKit app under its own base path, and drops it into docs/next/
+      # so the single Pages artifact carries both the live app (/app/) and the
+      # preview (/next/). A plain push to `main` does not rebuild the preview,
+      # so re-dispatch this workflow after a `main` deploy to refresh /next/.
+      # Once `next` merges to `main` (AC12 cutover) the preview becomes the app
+      # and these steps retire.
+      #
+      # svelte.config.js reads BASE_PATH (default /virtualrow/app) for the base;
+      # adapter-static writes the static site to build/.
+      - name: Checkout next/svelte-webgpu (preview source)
+        if: github.event_name == 'workflow_dispatch' && inputs.include_preview
+        uses: actions/checkout@v7
+        with:
+          ref: next/svelte-webgpu
+          path: next-preview
+
+      - name: Install preview dependencies
+        if: github.event_name == 'workflow_dispatch' && inputs.include_preview
+        working-directory: next-preview
+        run: npm ci
+
+      - name: Build next preview at /virtualrow/next/
+        if: github.event_name == 'workflow_dispatch' && inputs.include_preview
+        working-directory: next-preview
+        run: npm run build
+        env:
+          NODE_ENV: production
+          BASE_PATH: /virtualrow/next
+          VITE_INTERVALS_CLIENT_ID: ${{ secrets.INTERVALS_OAUTH_CLIENT_ID }}
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_CRASH_REPORT_ENDPOINT: ${{ secrets.CRASH_REPORT_ENDPOINT }}
+          VITE_CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
+
+      - name: Copy preview build into docs/next/
+        if: github.event_name == 'workflow_dispatch' && inputs.include_preview
+        run: |
+          mkdir -p docs/next
+          cp -r next-preview/build/. docs/next/
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
