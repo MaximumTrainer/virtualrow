@@ -25,6 +25,11 @@ export interface FrameUniforms {
   sunDir: Float32Array; // vec3
   fog: Float32Array; // (nearDensity, farDensity, _, _)
   time: number;
+  /** #567 "Animated cloud flow": a 2D wind vector in UV / second (world
+   * stays zero on Y). Packed into the previously-pad slot after `time` so
+   * the uniform-buffer size does not change. Optional — callers that don't
+   * set it pack zero and the cloud shader reads a static sky. */
+  wind?: Float32Array; // vec2 (x, z)
 }
 
 export interface FrameContext {

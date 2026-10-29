@@ -600,6 +600,12 @@ export const createRideScene = async (
     sunDir: vec3(0.3, 0.8, 0.5),
     fog: new Float32Array([0.001, 0.0005, 0, 0]),
     time: 0,
+    // #567 "Animated cloud flow": prevailing wind in UV / second. Slightly
+    // livelier than the pre-#567 hard-coded (0.012, 0.004) so the sky reads
+    // as a moving overcast rather than a static backdrop. Direction has a
+    // small bias so the two components aren't equal — looks like real wind
+    // rather than a diagonal sweep.
+    wind: new Float32Array([0.018, 0.006]),
   };
   // #596 follow-up: the view-distance axis also shapes the fog curtain, so a
   // wider distance tier reveals the longer sprout window instead of ending in
