@@ -88,6 +88,15 @@ const EXTRA_IGNORE = [
   '**/webgpu-postfx-smoke.spec.ts',
   '**/webgpu-scenery-smoke.spec.ts',
   '**/webgpu-shadows-smoke.spec.ts',
+  // #570 AC2 / #584 AC5 — the integrated ride e2e specs. They drive the real
+  // `/row` flow and launch with real WebGPU (Vulkan), so they only exercise
+  // their motion assertions on the GPU runner; the `webgpu-engine` job in
+  // next-branch-ci.yml runs them. On SwiftShader they'd only ever hit the
+  // fallback branch, so keep them off the shard plan.
+  '**/webgpu-ride-boat-moves.spec.ts',
+  '**/webgpu-ride-ghost.spec.ts',
+  '**/webgpu-ride-world-scale.spec.ts',
+  '**/webgpu-ride-route-loading.spec.ts',
   // The `smoke` job in next-branch-ci.yml runs this one.
   '**/svelte-scaffold-smoke.spec.ts',
 ];
