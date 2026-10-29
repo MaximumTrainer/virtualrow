@@ -249,3 +249,11 @@ jobs:
         # smoke page under /smoke/shadows feeds a canned foliage pool
         # set so the shadow stage has casters.
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-shadows-smoke.spec.ts
+      - name: Ride e2e — boot & row on the engine (#570 AC2 / #584 AC5)
+        # The integrated ride specs: they drive the real /row flow and launch
+        # with real WebGPU (Vulkan), so on a GPU-attached runner they assert the
+        # boat actually moves, the ghost advances, world scale holds, and the
+        # route curve draws. On a runner without a hardware adapter the engine
+        # declines and each spec asserts the well-formed fallback instead of a
+        # silent SwiftShader pass (#542 NFR5).
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-ride-boat-moves.spec.ts playwright/tests/webgpu-ride-ghost.spec.ts playwright/tests/webgpu-ride-world-scale.spec.ts playwright/tests/webgpu-ride-route-loading.spec.ts
