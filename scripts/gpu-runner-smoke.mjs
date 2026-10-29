@@ -42,6 +42,10 @@ function classify(result) {
 const browser = await chromium.launch({
   args: [
     '--enable-unsafe-webgpu',
+    // Linux Chromium gates WebGPU behind the Vulkan backend feature; the
+    // unsafe-webgpu flag alone doesn't flip it on headless. Pair them so
+    // requestAdapter() reaches the NVIDIA Vulkan device on the GPU runner.
+    '--enable-features=Vulkan',
     '--no-sandbox',
     '--disable-dev-shm-usage',
   ],
