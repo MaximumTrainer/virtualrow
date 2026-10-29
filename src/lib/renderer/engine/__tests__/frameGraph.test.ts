@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFrameGraph, type FrameUniforms, type Pass } from '../frameGraph';
+import type { GpuFrameTimer } from '../gpuFrameTimer';
 import { mat4 } from '../../math/mat4';
 import { vec3 } from '../../math/vec3';
 import { makeMockDevice } from '../../__tests__/_mockWebGPU';
@@ -36,6 +37,32 @@ describe('frameGraph', () => {
     expect(device.__log.submits).toBe(1);
     graph.dispose();
     expect(calls).toContain('sky:dispose');
+  });
+
+  it('brackets the pass loop with the GPU timer and reads back after submit (#584 AC3)', () => {
+    const device = makeMockDevice();
+    const calls: string[] = [];
+    const timer: GpuFrameTimer = {
+      writeBegin: () => calls.push('timer:begin'),
+      writeEnd: () => calls.push('timer:end'),
+      resolve: () => calls.push('timer:resolve'),
+      readback: () => calls.push('timer:readback'),
+      gpuMs: 0,
+      dispose: () => calls.push('timer:dispose'),
+    };
+    const graph = createFrameGraph([makePass('sky', calls), makePass('postfx', calls)], timer);
+    graph.run(device, {} as GPUTextureView, {} as GPUTextureView, 10, 10, frame());
+    // begin stamps before the first pass; end + resolve after the last pass
+    // (both before submit); readback kicks after the single submit.
+    expect(calls).toEqual([
+      'timer:begin',
+      'sky',
+      'postfx',
+      'timer:end',
+      'timer:resolve',
+      'timer:readback',
+    ]);
+    expect(device.__log.submits).toBe(1);
   });
 
   it('ignores runs after dispose', () => {

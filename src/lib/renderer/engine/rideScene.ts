@@ -70,6 +70,7 @@ import { createFloraSolidStage } from './floraSolidStage';
 import { loadFloraAtlas } from './textureLoader';
 import { textureBytes } from './textures';
 import { createFrameGraph, type FrameGraph, type FrameUniforms, type Pass } from './frameGraph';
+import { createGpuFrameTimer } from './gpuFrameTimer';
 import { createShadowAtlas } from './shadowAtlas';
 import { shadowConfigFor } from './shadowConfig';
 import { shaderGrassStrengthFor } from './shaderGrass';
@@ -590,7 +591,11 @@ export const createRideScene = async (
     sceneryMeshPass,
     postFx.pass,
   ];
-  const graph: FrameGraph = createFrameGraph(passes);
+  // #584 AC3: GPU frame-time timer. null on adapters without `timestamp-query`
+  // (CI's SwiftShader among them), where gpuMs stays 0 and the frame is
+  // unchanged.
+  const gpuTimer = createGpuFrameTimer(device);
+  const graph: FrameGraph = createFrameGraph(passes, gpuTimer);
 
   const frame: FrameUniforms = {
     view: mat4Identity(mat4()),
@@ -1007,8 +1012,9 @@ export const createRideScene = async (
     telemetry.frameStats.frame += 1;
     telemetry.frameStats.dtMs = 0;
     telemetry.frameStats.cpuMs = now() - cpuStart;
-    // gpuMs is set by the timestamp-query readback path once pass instrumenting
-    // lands (follow-up on #584 AC3); it stays 0 here otherwise.
+    // #584 AC3: the GPU-side frame time, read back one frame behind by the
+    // timer's bracket passes. Stays 0 when the adapter has no `timestamp-query`.
+    telemetry.frameStats.gpuMs = gpuTimer?.gpuMs ?? 0;
     let draws = 0;
     for (const p of graph.passes) {
       if (p.name.startsWith('shadow')) continue;
@@ -1082,6 +1088,7 @@ export const createRideScene = async (
       if (disposed) return;
       disposed = true;
       graph.dispose();
+      gpuTimer?.dispose();
       for (const pool of scenePools) pool.dispose();
       buildingsPool?.dispose();
       floraSolidCuller.dispose();

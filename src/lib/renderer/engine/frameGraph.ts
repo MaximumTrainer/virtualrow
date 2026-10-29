@@ -15,6 +15,7 @@
 /// <reference types="@webgpu/types" />
 
 import type { Mat4 } from '../math/mat4';
+import type { GpuFrameTimer } from './gpuFrameTimer';
 
 /** Shared uniform block uploaded once per frame. */
 export interface FrameUniforms {
@@ -74,7 +75,12 @@ export interface FrameGraph {
   dispose(): void;
 }
 
-export const createFrameGraph = (passes: Pass[]): FrameGraph => {
+/**
+ * @param timer optional GPU frame timer (#584 AC3). When present its bracket
+ *   passes wrap the pass loop so `gpuMs` can be read back; `null`/omitted
+ *   leaves the frame exactly as before.
+ */
+export const createFrameGraph = (passes: Pass[], timer?: GpuFrameTimer | null): FrameGraph => {
   let disposed = false;
   return {
     get passes() {
@@ -95,10 +101,16 @@ export const createFrameGraph = (passes: Pass[]): FrameGraph => {
         colorCleared: false,
         depthCleared: false,
       };
+      // #584 AC3: stamp the GPU clock before the first pass and after the last,
+      // so the resolved delta is the whole frame's GPU time.
+      timer?.writeBegin(encoder, swapView);
       for (const pass of passes) {
         pass.encode(ctx);
       }
+      timer?.writeEnd(encoder, swapView);
+      timer?.resolve(encoder);
       device.queue.submit([encoder.finish()]);
+      timer?.readback();
     },
     dispose() {
       if (disposed) return;
