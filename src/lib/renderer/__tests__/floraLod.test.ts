@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packSproutUniforms, sproutWindowFor } from '../engine/uniforms';
+import { fogDistanceScaleFor, packSproutUniforms, sproutWindowFor } from '../engine/uniforms';
 
 describe('sprout fade window (#562 FR6 / D6-b)', () => {
   it('selects per-tier fade distances in metres', () => {
@@ -35,5 +35,34 @@ describe('sprout fade window (#562 FR6 / D6-b)', () => {
     expect(out[1]).toBe(10);
     expect(out[2]).toBe(0);
     expect(out[3]).toBe(0);
+  });
+});
+
+describe('fog distance scale (#596 follow-up)', () => {
+  it('leaves medium / undefined at the unscaled baseline', () => {
+    expect(fogDistanceScaleFor('medium')).toBe(1);
+    expect(fogDistanceScaleFor(undefined)).toBe(1);
+  });
+
+  it('thickens fog below medium and thins it above', () => {
+    // < medium → factor > 1 (curtain closes in); > medium → factor < 1 (see further).
+    expect(fogDistanceScaleFor('basic')).toBeGreaterThan(1);
+    expect(fogDistanceScaleFor('low')).toBeGreaterThan(1);
+    expect(fogDistanceScaleFor('high')).toBeLessThan(1);
+    expect(fogDistanceScaleFor('extra-high')).toBeLessThan(1);
+  });
+
+  it('decreases monotonically with tier (further view distance ⇒ less fog)', () => {
+    const tiers = ['basic', 'low', 'medium', 'high', 'extra-high'];
+    for (let i = 1; i < tiers.length; i += 1) {
+      expect(fogDistanceScaleFor(tiers[i])).toBeLessThan(fogDistanceScaleFor(tiers[i - 1]));
+    }
+  });
+
+  it('moves the same direction as the sprout window it reveals', () => {
+    // A wider sprout window (more distant trees) should come with thinner fog,
+    // so the longer window ends in air, not a grey wall.
+    expect(sproutWindowFor('extra-high').far).toBeGreaterThan(sproutWindowFor('basic').far);
+    expect(fogDistanceScaleFor('extra-high')).toBeLessThan(fogDistanceScaleFor('basic'));
   });
 });

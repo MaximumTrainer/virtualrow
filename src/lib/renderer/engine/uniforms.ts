@@ -141,6 +141,32 @@ export const sproutWindowFor = (tier?: string): { near: number; far: number } =>
   }
 };
 
+/** Per-tier multiplier on the exponential fog density (#596 follow-up).
+ * The fog model is `density = fog.x + fog.y * worldDist`, so scaling both
+ * terms by one factor shifts the whole curtain: a factor < 1 thins the fog
+ * (you see further), a factor > 1 thickens it (the horizon closes in).
+ * This rides the independent "view distance" axis, not the quality axis —
+ * a higher view distance pushes the fog out to reveal the wider sprout
+ * window `sproutWindowFor` already grants that tier, and a lower one pulls
+ * the curtain in so the shorter window ends in fog rather than a hard pop.
+ * Medium / undefined is the unscaled baseline (1.0) so a single-tier caller
+ * keeps today's look. Monotonic-decreasing with tier. */
+export const fogDistanceScaleFor = (tier?: string): number => {
+  switch (tier) {
+    case 'basic':
+      return 1.6;
+    case 'low':
+      return 1.3;
+    case 'high':
+      return 0.7;
+    case 'extra-high':
+      return 0.5;
+    case 'medium':
+    default:
+      return 1.0;
+  }
+};
+
 export const packFrameUniforms = (
   frame: FrameUniforms,
   out = new Float32Array(FRAME_UNIFORMS_FLOATS),
