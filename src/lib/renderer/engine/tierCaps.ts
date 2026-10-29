@@ -39,6 +39,11 @@ export interface BuildingTierCaps {
   drawLut: boolean;
   drawSsao: boolean;
   drawDof: boolean;
+  /** #574 — procedural rain overlay (screen-space streaks). Opt-in via
+   *  `window.__VIRTUALROW_RAIN=true` even on tiers that allow it; the
+   *  cap just says "the tier can afford the extra fullscreen draw".
+   *  Off on `basic`; on from `low` upward. */
+  drawRainOverlay: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -55,6 +60,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawRainOverlay: false,
   },
   low: {
     drawBuildings: true,
@@ -69,6 +75,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawRainOverlay: true,
   },
   medium: {
     drawBuildings: true,
@@ -83,6 +90,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawRainOverlay: true,
   },
   high: {
     drawBuildings: true,
@@ -97,6 +105,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: false,
+    drawRainOverlay: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -111,6 +120,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: true,
+    drawRainOverlay: true,
   },
 };
 
