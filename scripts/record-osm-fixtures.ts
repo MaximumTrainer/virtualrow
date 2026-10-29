@@ -69,7 +69,7 @@ const fetchElements = async (query: string): Promise<OverpassElement[]> => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'User-Agent': 'virtualrow-fixture-recorder (github.com/MaximumTrainer/virtualrow)',
+        'User-Agent': 'virtualrow-fixture-recorder (github.com/maximum-trainer/virtualrow)',
       },
       body: `data=${encodeURIComponent(query)}`,
     });

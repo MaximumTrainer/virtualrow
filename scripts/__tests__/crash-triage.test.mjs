@@ -94,7 +94,7 @@ describe('crash-triage (#473 Phase 4, AC14)', () => {
     const outcome = await triageCrashReport({
       payload: basePayload({ verdict: { crashed: false, reason: 'ok' } }),
       octokit: api,
-      owner: 'MaximumTrainer',
+      owner: 'maximum-trainer',
       repo: 'virtualrow',
       nowMs: Date.now(),
     });
