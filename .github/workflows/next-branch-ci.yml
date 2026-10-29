@@ -7,8 +7,9 @@ name: Next Branch CI (Svelte + WebGPU)
 #   * `e2e-shards` runs the Playwright specs that pass on SwiftShader today
 #     (the "software-adapter"-safe subset defined in playwright.config.next.ts).
 #   * `webgpu-engine` runs the engine smokes against the shared canvas.
-#   * `gpu-smoke` + the engine job's GPU leg are opt-in on the GPU_RUNNER_LABEL
-#     repository variable; see the job comments below.
+#   * `gpu-smoke` + `webgpu-engine` run on the self-hosted
+#     `linux-nvidia-gpu-runner` (kill-switch: repo var GPU_RUNNER_DISABLED=true);
+#     see the job comments below.
 #
 # AC2 widens `e2e-shards` as screens stabilise under WebGPU and specs are
 # ported / scene-health is re-pointed at the WebGPU engine.
@@ -109,17 +110,19 @@ jobs:
   # configured and proves it actually has a hardware WebGPU adapter
   # (scripts/gpu-runner-smoke.mjs). Later phases run the engine's GPU specs here.
   #
-  # It is OPT-IN, gated on the `GPU_RUNNER_LABEL` repository variable: until that
-  # variable names a provisioned GPU runner, the job is skipped and every other
-  # job keeps its SwiftShader fallback — so this workflow can never hang waiting
-  # for a runner that does not exist. To turn it on: create the GPU larger runner
-  # in the repo's Actions settings, then set the repository variable
-  # GPU_RUNNER_LABEL to that runner's label.
+  # The runner is the self-hosted `linux-nvidia-gpu-runner` registered against
+  # this repo (a real Nvidia GPU). `runs-on` names that label directly so the
+  # job always targets it — the earlier `${{ vars.GPU_RUNNER_LABEL }}`
+  # indirection silently resolved to an empty/mismatched label whenever the repo
+  # variable wasn't set to exactly the runner's label, which is why jobs never
+  # got picked up. Kill-switch: set the repo variable `GPU_RUNNER_DISABLED` to
+  # `true` to skip the GPU jobs entirely (e.g. while the runner is offline) so
+  # the branch never hangs waiting on an absent runner.
   gpu-smoke:
     name: GPU runner smoke (real WebGPU adapter present)
     needs: preflight
-    if: ${{ vars.GPU_RUNNER_LABEL != '' }}
-    runs-on: ${{ vars.GPU_RUNNER_LABEL }}
+    if: ${{ vars.GPU_RUNNER_DISABLED != 'true' }}
+    runs-on: linux-nvidia-gpu-runner
     env:
       CI: true
       REQUIRE_REAL_GPU: '1'
@@ -138,17 +141,17 @@ jobs:
         run: node scripts/gpu-runner-smoke.mjs
 
   webgpu-engine:
-    # #550 D8-b: the engine's one Playwright smoke, run on a GPU-backed
-    # runner when one is provisioned, with SwiftShader as the fallback. The
-    # runner label is picked up from the repo variable `GPU_RUNNER_LABEL`
-    # (same convention as the gpu-smoke job this workflow also runs).
-    # continue-on-error: true until a real WebGPU adapter is reachable; the
-    # smoke still runs with --enable-unsafe-webgpu so we exercise the fallback
-    # branches today.
+    # #550 D8-b: the engine's Playwright smokes, run on the self-hosted
+    # `linux-nvidia-gpu-runner` (same runner as gpu-smoke). Now that a real
+    # WebGPU adapter is reachable there, this targets the runner directly and
+    # reports a real pass/fail instead of the old SwiftShader fallback leg.
+    # Gated by the same `GPU_RUNNER_DISABLED` kill-switch so it skips (rather
+    # than hangs) when the runner is deliberately offline.
     name: WebGPU engine smoke (#550)
     needs: preflight
-    runs-on: ${{ vars.GPU_RUNNER_LABEL || 'ubuntu-latest' }}
-    continue-on-error: ${{ vars.GPU_RUNNER_LABEL == '' }}
+    if: ${{ vars.GPU_RUNNER_DISABLED != 'true' }}
+    runs-on: linux-nvidia-gpu-runner
+    continue-on-error: false
     env:
       CI: true
     steps:
