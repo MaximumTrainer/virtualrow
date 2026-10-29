@@ -24,7 +24,7 @@ jobs:
   contract-upload:
     # Forks don't get the secrets; skip so the job doesn't fail red on every
     # fork PR's schedule inheritance.
-    if: github.repository == 'MaximumTrainer/virtualrow'
+    if: github.repository == 'maximum-trainer/virtualrow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -33,7 +33,7 @@ describe('makeRepositoryDispatchTransport (#473 Phase 3, FR5)', () => {
       .mockResolvedValue(new Response(null, { status: 204 }));
 
     const transport = makeRepositoryDispatchTransport(
-      'https://api.github.com/repos/MaximumTrainer/virtualrow/dispatches',
+      'https://api.github.com/repos/maximum-trainer/virtualrow/dispatches',
       'ghp_fake-token',
     );
     await transport(payload);

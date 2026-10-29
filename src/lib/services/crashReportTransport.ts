@@ -4,7 +4,7 @@
  * Phase 1 shipped a stub that only `console.info`d the payload; Phase 3 adds
  * this factory, which the composition root uses when
  * `VITE_CRASH_REPORT_ENDPOINT` is baked into the build. The endpoint is
- * `https://api.github.com/repos/MaximumTrainer/virtualrow/dispatches`
+ * `https://api.github.com/repos/maximum-trainer/virtualrow/dispatches`
  * (`repository_dispatch`), and the token is a fine-grained GitHub token with
  * `repo:dispatch` scope on this repository only (NFR5): it is baked at build
  * time via `VITE_CRASH_REPORT_TOKEN` and NEVER logged.
