@@ -30,7 +30,7 @@ jobs:
   smoke:
     name: Scaffold smoke (SvelteKit boots at base path)
     needs: preflight
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CI: true
     steps:
@@ -65,7 +65,7 @@ jobs:
   e2e-shards:
     name: e2e shards ${{ matrix.shard }}/2 (ubuntu, SwiftShader)
     needs: preflight
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +137,23 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Install Vulkan runtime for the NVIDIA GPU
+        # The "NVIDIA GPU-Optimized Image for AI and HPC" ships the CUDA
+        # stack but not the Vulkan graphics userspace that Chromium's WebGPU
+        # (Dawn) backend needs on Linux. Install the Vulkan loader + tools and
+        # the NVIDIA Vulkan ICD matching the running driver so
+        # requestAdapter() sees the hardware adapter instead of returning
+        # undefined. Non-fatal on the ICD line so the diagnostic below still
+        # reports what landed.
+        run: |
+          set -x
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools libgl1 libegl1
+          DRV_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1)
+          if [ -n "$DRV_MAJOR" ]; then
+            sudo apt-get install -y --no-install-recommends "libnvidia-gl-$DRV_MAJOR" \
+              || echo "libnvidia-gl-$DRV_MAJOR not available via apt — relying on the image's own ICD"
+          fi
       # Diagnostic probe — the smoke that follows reports
       # `navigator.gpu is undefined`, which can come from a missing Vulkan
       # loader, a missing DRI node, or Chromium gating WebGPU because it
@@ -190,6 +207,20 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Install Vulkan runtime for the NVIDIA GPU
+        # Same as gpu-smoke: the AI/HPC image lacks the Vulkan graphics
+        # userspace Chromium's WebGPU backend needs, so install the loader +
+        # tools + the NVIDIA ICD matching the running driver. Without it the
+        # engine smokes fall back to SwiftShader instead of the real GPU.
+        run: |
+          set -x
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools libgl1 libegl1
+          DRV_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1)
+          if [ -n "$DRV_MAJOR" ]; then
+            sudo apt-get install -y --no-install-recommends "libnvidia-gl-$DRV_MAJOR" \
+              || echo "libnvidia-gl-$DRV_MAJOR not available via apt — relying on the image's own ICD"
+          fi
       - name: Smoke — attach the engine, draw one frame, read telemetry
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-engine-smoke.spec.ts
       - name: Smoke — scenery pools + compute cull + drawIndirect (#555)
