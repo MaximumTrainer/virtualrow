@@ -36,14 +36,15 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VSOut {
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
-  let centre = textureSampleLevel(depthTex, samp, in.uv, 0.0);
+  // texture_depth_2d's textureSampleLevel takes i32 level, not f32 (#592).
+  let centre = textureSampleLevel(depthTex, samp, in.uv, 0i);
   var occlusion = 0.0;
   // 8 taps on a disc.
   let TAU = 6.2831853;
   for (var i = 0u; i < 8u; i = i + 1u) {
     let a = (f32(i) / 8.0) * TAU;
     let o = vec2<f32>(cos(a), sin(a)) * u.radiusUV;
-    let d = textureSampleLevel(depthTex, samp, in.uv + o, 0.0);
+    let d = textureSampleLevel(depthTex, samp, in.uv + o, 0i);
     if (d < centre) {
       occlusion = occlusion + (centre - d);
     }
