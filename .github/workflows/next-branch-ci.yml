@@ -135,6 +135,17 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      # The NVIDIA GPU-Optimized Image for AI and HPC ships CUDA and the
+      # NVIDIA Vulkan ICD config (/usr/share/vulkan/icd.d/nvidia_icd.json),
+      # but NOT the Vulkan loader or tools. Chromium looks up `libvulkan.so.1`
+      # at runtime to initialise WebGPU on Linux; without that library the
+      # whole `navigator.gpu` API stays undefined (confirmed by the probe
+      # step below on a prior run). `vulkan-tools` adds `vulkaninfo` so the
+      # probe can report what the ICD actually sees.
+      - name: Install Vulkan runtime (loader + tools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       # Diagnostic probe — the smoke that follows reports
@@ -188,6 +199,12 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      # Same reason as gpu-smoke above — the NVIDIA image is missing the
+      # Vulkan loader Chromium needs to expose `navigator.gpu` on Linux.
+      - name: Install Vulkan runtime (loader + tools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Smoke — attach the engine, draw one frame, read telemetry

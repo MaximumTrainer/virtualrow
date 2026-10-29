@@ -42,6 +42,11 @@ function classify(result) {
 const browser = await chromium.launch({
   args: [
     '--enable-unsafe-webgpu',
+    // Linux Chromium gates WebGPU behind the Vulkan feature flag; the
+    // runner provides libvulkan1 + the NVIDIA ICD at `/usr/share/vulkan/
+    // icd.d/nvidia_icd.json`, but Chromium still won't surface the API
+    // without this flag opt-in (#567-follow-up: NVIDIA image needs it).
+    '--enable-features=Vulkan',
     '--no-sandbox',
     '--disable-dev-shm-usage',
   ],
