@@ -164,6 +164,17 @@ jobs:
       - name: Diagnose runner GPU + Vulkan + Chromium
         run: |
           set +e
+          echo "::group::PCI devices (GPU hardware present?)"
+          # Distinguishes "no GPU attached to this VM SKU" (empty output)
+          # from "GPU present but driver/kernel-module missing" (NVIDIA PCI
+          # device listed). This decides whether the fix is a workflow
+          # change or a runner Size change.
+          lspci -nn 2>&1 | grep -iE "nvidia|vga|3d |display" || echo "(lspci: no NVIDIA/VGA/3D/Display device)"
+          echo "::endgroup::"
+          echo "::group::Kernel + /dev nodes"
+          lsmod 2>&1 | grep -iE "^nvidia|^nouveau" || echo "(no nvidia/nouveau kernel modules loaded)"
+          ls -l /dev/nvidia* 2>&1 || echo "(no /dev/nvidia* nodes)"
+          echo "::endgroup::"
           echo "::group::nvidia-smi"
           nvidia-smi || echo "(nvidia-smi missing or GPU not exposed)"
           echo "::endgroup::"
