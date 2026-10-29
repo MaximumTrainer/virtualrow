@@ -140,8 +140,13 @@
     </div>
 
     <div class="debug-section">
-      <h5>Graphics</h5>
+      <h5>Graphics quality</h5>
       <GraphicsQualityPicker quality={graphics.quality} onChange={graphics.setQuality} />
+    </div>
+
+    <div class="debug-section">
+      <h5>View distance</h5>
+      <GraphicsQualityPicker quality={graphics.distance} onChange={graphics.setDistance} />
     </div>
 
     <div class="debug-section debug-simulator-section">

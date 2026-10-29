@@ -40,6 +40,7 @@
   import CrashReportedBanner from '$lib/ui/CrashReportedBanner.svelte';
   import DebugPanel from '$lib/ui/DebugPanel.svelte';
   import { GraphicsQualityStore } from '$lib/ui/graphicsQuality.svelte';
+  import { provideGraphicsStore } from '$lib/ui/graphicsContext';
   import { crashReportsPreferenceStore } from '$lib/services/crashReportsPreferenceStore';
 
   let { children } = $props();
@@ -173,8 +174,11 @@
   // The developer debug panel (App's `debugMode`), global behind the 🐛 toggle.
   let debugMode = $state(false);
   // The rower's graphics-quality choice (App's `useGraphicsQuality`); the engine
-  // reads `graphics.performanceMode` once it consumes the tier.
+  // reads `graphics.performanceMode` and `graphics.distanceMode` once it
+  // consumes the tiers. #591-fu P2c: two independent axes (quality + distance),
+  // provided via context so /row can pull them without a prop-drill.
   const graphics = new GraphicsQualityStore();
+  provideGraphicsStore(graphics);
 </script>
 
 <svelte:head>

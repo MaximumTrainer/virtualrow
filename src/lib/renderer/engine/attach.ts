@@ -54,6 +54,12 @@ export const BANNER_LOST_FAILED =
 
 export type RideAttachOpts = {
   tier?: string;
+  /**
+   * #591-fu P2c: separate "view distance" tier (LOD / fog / sprout
+   * window / stream look-ahead), independent of the quality tier above.
+   * Omitted falls back to `tier`.
+   */
+  distanceTier?: string;
   route?: unknown;
   testMode?: boolean;
   /**

@@ -151,6 +151,13 @@ export const isSceneryRoute = (route: unknown): route is SceneryRoute =>
 
 export interface RideSceneOpts {
   tier?: string;
+  /**
+   * #591-fu P2c: a separate "view distance" tier that caps LOD / fog /
+   * sprout window / scenery stream look-ahead independently of the main
+   * quality tier. Omitted falls back to `tier` so a single-tier caller
+   * keeps the pre-split behaviour.
+   */
+  distanceTier?: string;
   route?: unknown;
   getFrame?: () => RideFrame;
   crew?: 'male' | 'female';
@@ -256,10 +263,12 @@ export const createRideScene = async (
     minFilter: 'linear',
   });
 
-  // Sprout fade uniform (#562 FR6 / D6-b). The window metres are per-tier.
+  // Sprout fade uniform (#562 FR6 / D6-b). The window metres are per-tier
+  // and read from the DISTANCE tier when the caller split the two axes
+  // (#591-fu P2c); falls back to the main tier otherwise.
   const sproutUniforms = createSproutUniformBuffer(device);
   const sproutScratch = new Float32Array(4);
-  const sprout = sproutWindowFor(opts.tier);
+  const sprout = sproutWindowFor(opts.distanceTier ?? opts.tier);
   packSproutUniforms(sprout.near, sprout.far, sproutScratch);
   device.queue.writeBuffer(sproutUniforms, 0, sproutScratch as BufferSource);
 

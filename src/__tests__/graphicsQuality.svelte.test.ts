@@ -67,4 +67,51 @@ describe('GraphicsQualityStore (#542 port of useGraphicsQuality)', () => {
     });
     cleanup();
   });
+
+  it('exposes an independent distance axis defaulting to auto (#591-fu P2c)', () => {
+    const store = new GraphicsQualityStore();
+    expect(store.distance).toBe('auto');
+    expect(store.quality).toBe('auto');
+  });
+
+  it('each axis persists under its own storage key', () => {
+    const store = new GraphicsQualityStore();
+    store.setQuality('high');
+    store.setDistance('medium');
+    expect(localStorage.getItem('virtualrow:graphics-quality')).toBe('high');
+    expect(localStorage.getItem('virtualrow:graphics-distance')).toBe('medium');
+    expect(store.quality).toBe('high');
+    expect(store.distance).toBe('medium');
+  });
+
+  it('setDistance ignores invalid values just like setQuality', () => {
+    const store = new GraphicsQualityStore();
+    store.setDistance('bogus' as never);
+    expect(store.distance).toBe('auto');
+  });
+
+  it('distance seeds from a migrated legacy value stored under the distance key', () => {
+    localStorage.setItem('virtualrow:graphics-distance', 'low');
+    expect(new GraphicsQualityStore().distance).toBe('basic');
+  });
+
+  it('distanceMode mirrors performanceMode auto → undefined mapping', () => {
+    const cleanup = $effect.root(() => {
+      const store = new GraphicsQualityStore();
+      flushSync();
+      expect(store.distanceMode).toBeUndefined();
+      store.setDistance('high');
+      flushSync();
+      expect(store.distanceMode).toBe('high');
+    });
+    cleanup();
+  });
+
+  it('the two axes are independent — moving one leaves the other alone', () => {
+    const store = new GraphicsQualityStore();
+    store.setQuality('low');
+    expect(store.distance).toBe('auto');
+    store.setDistance('extra-high');
+    expect(store.quality).toBe('low');
+  });
 });
