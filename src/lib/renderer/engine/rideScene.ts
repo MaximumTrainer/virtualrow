@@ -83,6 +83,7 @@ import {
   createFrameUniformBuffer,
   createShadowUniformBuffer,
   createSproutUniformBuffer,
+  fogDistanceScaleFor,
   FRAME_UNIFORMS_FLOATS,
   packFrameUniforms,
   packShadowUniforms,
@@ -600,6 +601,13 @@ export const createRideScene = async (
     fog: new Float32Array([0.001, 0.0005, 0, 0]),
     time: 0,
   };
+  // #596 follow-up: the view-distance axis also shapes the fog curtain, so a
+  // wider distance tier reveals the longer sprout window instead of ending in
+  // fog, and a narrower one pulls the curtain in. Scales both density terms by
+  // one factor; medium/undefined leaves the baseline untouched.
+  const fogScale = fogDistanceScaleFor(opts.distanceTier ?? opts.tier);
+  frame.fog[0] *= fogScale;
+  frame.fog[1] *= fogScale;
 
   const routeCurve = waterCurve;
   const curveLength = routeCurve.approximateLength(32);
