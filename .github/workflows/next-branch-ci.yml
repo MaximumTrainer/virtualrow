@@ -137,6 +137,31 @@ jobs:
         run: npm ci
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      # Diagnostic probe — the smoke that follows reports
+      # `navigator.gpu is undefined`, which can come from a missing Vulkan
+      # loader, a missing DRI node, or Chromium gating WebGPU because it
+      # cannot see the hardware. These commands show what the runner image
+      # actually has, so a failure in the next step is actionable instead of
+      # guesswork. All lines are non-fatal so a missing binary never blocks
+      # the real smoke that follows.
+      - name: Diagnose runner GPU + Vulkan + Chromium
+        run: |
+          set +e
+          echo "::group::nvidia-smi"
+          nvidia-smi || echo "(nvidia-smi missing or GPU not exposed)"
+          echo "::endgroup::"
+          echo "::group::DRI nodes"
+          ls -l /dev/dri 2>&1 || echo "(no /dev/dri)"
+          echo "::endgroup::"
+          echo "::group::Vulkan ICDs"
+          ls /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
+          vulkaninfo --summary 2>&1 | head -60 || echo "(vulkaninfo missing — install vulkan-tools)"
+          echo "::endgroup::"
+          echo "::group::Chromium"
+          CHROME=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
+          echo "path: $CHROME"
+          "$CHROME" --version 2>&1 || true
+          echo "::endgroup::"
       - name: Prove the runner has a hardware WebGPU adapter
         run: node scripts/gpu-runner-smoke.mjs
 
