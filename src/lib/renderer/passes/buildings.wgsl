@@ -188,6 +188,36 @@ const PALETTE_ROOF = array<vec3<f32>, 4>(
   vec3<f32>(0.45, 0.45, 0.45), // fallback mid grey
 );
 
+// #567 follow-up: per-palette window stripe profile. MUST stay in lockstep
+// with `src/lib/scenery/buildingWindowProfile.ts` — a drift there means
+// the shader and the unit tests disagree on where windows land. The four
+// vec4s pack (spacingU, spacingV, baseOffsetV, _pad); the paneUV + frame +
+// band arrays pack the remaining fields. Index 3 (fallback) sets
+// minHeight > maxHeight to disable windows.
+const WINDOW_SPACING = array<vec4<f32>, 4>(
+  vec4<f32>(1.8, 3.0, 1.5, 0.0),  // 0 residential
+  vec4<f32>(1.8, 3.0, 1.5, 0.0),  // 1 commercial
+  vec4<f32>(3.0, 10.0, 1.5, 0.0), // 2 industrial
+  vec4<f32>(1.0, 1.0, 0.0, 0.0),  // 3 fallback (unused)
+);
+const WINDOW_PANE = array<vec4<f32>, 4>(
+  vec4<f32>(1.0, 1.6, 0.15, 0.0), // 0 res: paneU, paneV, frameThickness
+  vec4<f32>(1.4, 2.0, 0.15, 0.0), // 1 com
+  vec4<f32>(2.0, 1.0, 0.20, 0.0), // 2 ind
+  vec4<f32>(0.0, 0.0, 0.0, 0.0),  // 3 fallback
+);
+const WINDOW_BAND = array<vec2<f32>, 4>(
+  vec2<f32>(1.0, 60.0),   // 0 res: minHeight, maxHeight
+  vec2<f32>(1.0, 120.0),  // 1 com
+  vec2<f32>(6.0, 9.0),    // 2 ind: clerestory band
+  vec2<f32>(1e9, -1e9),   // 3 fallback: band empty → always wall
+);
+// Glass + frame colour, applied before the atlas texel so a window pixel
+// doesn't inherit the brick stamp. Glass is cool and dark (reads as a
+// mirror on an overcast river); frame is a warm cream.
+const GLASS_COLOUR: vec3<f32> = vec3<f32>(0.14, 0.17, 0.22);
+const FRAME_COLOUR: vec3<f32> = vec3<f32>(0.86, 0.84, 0.78);
+
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let idx = min(in.paletteIndex, 3u);
@@ -221,8 +251,35 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   // Sample the shared albedo atlas (brick/stone wall on the LEFT half, tile
   // on the RIGHT). The texture is neutral grey so `tint * texel` reads as a
   // palette-tinted brick/tile rather than a wholly new colour.
-  let texel = textureSample(atlasTex, atlasSampler, in.uv).rgb;
-  let shaded = surface * texel * 1.1;
+  var shaded = surface * textureSample(atlasTex, atlasSampler, in.uv).rgb * 1.1;
+
+  // #567 follow-up: wall faces (not roof, not the base course) get a
+  // per-profile window grid overlay. The classifier mirrors
+  // `classifyWindowCell` in `buildingWindowProfile.ts`.
+  if (in.isRoof == 0u && in.worldPos.y >= 0.5) {
+    let band = WINDOW_BAND[idx];
+    if (in.worldPos.y >= band.x && in.worldPos.y <= band.y) {
+      // Walls perpendicular to X use `worldPos.z` as the perimeter axis,
+      // Z-perpendicular walls use `worldPos.x`. Normal picks one.
+      let perim = select(in.worldPos.z, in.worldPos.x, abs(in.normal.z) > 0.5);
+      let spacing = WINDOW_SPACING[idx];
+      let pane = WINDOW_PANE[idx];
+      let halfPaneU = pane.x * 0.5;
+      let halfPaneV = pane.y * 0.5;
+      let vRel = in.worldPos.y - band.x - spacing.z;
+      let localU = perim - round(perim / spacing.x) * spacing.x;
+      let localV = vRel - round(vRel / spacing.y) * spacing.y;
+      let absU = abs(localU);
+      let absV = abs(localV);
+      let inPane = absU < halfPaneU && absV < halfPaneV;
+      let inFrame = (absU <= halfPaneU + pane.z) && (absV <= halfPaneV + pane.z);
+      if (inPane) {
+        shaded = GLASS_COLOUR;
+      } else if (inFrame) {
+        shaded = FRAME_COLOUR;
+      }
+    }
+  }
 
   // Half-lambert against the global sun direction, scaled by the shadow map,
   // with a soft hemisphere ambient so a face in shadow still carries hue.
