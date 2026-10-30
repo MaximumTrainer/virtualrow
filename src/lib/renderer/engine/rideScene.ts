@@ -32,6 +32,8 @@ import { createBankPass } from '../passes/bank';
 import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
+import { createOarSplashPass } from '../passes/oarSplashParticles';
+import { createOarSplashState, updateOarSplash } from './oarSplashParticles';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -556,6 +558,13 @@ export const createRideScene = async (
   const cloudsPass = tierCaps.drawClouds
     ? createCloudsPass({ device, format, frameUniforms })
     : null;
+  // #571 oar-blade splash: shared CPU state + a billboard pass. The
+  // update loop below detects the catch (phase 0) and finish (phase 0.5)
+  // crossings and bursts particles at both blade tips.
+  const oarSplashState = createOarSplashState();
+  const oarSplashPass = tierCaps.drawOarSplash
+    ? createOarSplashPass({ device, format, frameUniforms, state: oarSplashState })
+    : null;
 
   const postCaps: PostFxCaps = {
     bloom: tierCaps.drawBloom,
@@ -588,6 +597,7 @@ export const createRideScene = async (
     waterPass,
     boatPass,
     sceneryMeshPass,
+    ...(oarSplashPass ? [oarSplashPass] : []),
     postFx.pass,
   ];
   const graph: FrameGraph = createFrameGraph(passes);
@@ -767,6 +777,7 @@ export const createRideScene = async (
 
   let lastDistanceMeters = 0;
   let lastSpeedTime = -1;
+  let lastOarSplashTime = 0;
   let smoothedDistance = 0;
   let lastDistSample = { d: 0, t: now() };
   let prevDistSample = { d: 0, t: now() };
@@ -817,6 +828,20 @@ export const createRideScene = async (
     );
 
     const phase = strokePhase(rideFrame?.cadence ?? 0, frame.time, rideFrame?.isPlaying ?? false);
+    // #571 oar-blade splash: fire a burst at catch (phase 0 crossing) and
+    // finish (phase 0.5 crossing). `isMoving` matches the wake-pass gate.
+    const oarSplashMoving = !!rideFrame?.isPlaying && !rideFrame.holdBoat && !rideFrame.finished;
+    const oarSplashDt = Math.max(0, frame.time - lastOarSplashTime);
+    updateOarSplash(
+      oarSplashState,
+      boatPlacement.world[0],
+      boatPlacement.world[2],
+      boatPlacement.heading,
+      phase,
+      oarSplashMoving,
+      oarSplashDt,
+    );
+    lastOarSplashTime = frame.time;
     const amp = strokeAmplitude(rideFrame);
     const torsoLean = Math.sin(phase * Math.PI * 2) * 0.35 * amp;
     const armPull = Math.sin(phase * Math.PI * 2 + 0.5) * 0.6 * amp;

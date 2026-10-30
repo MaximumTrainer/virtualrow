@@ -39,6 +39,10 @@ export interface BuildingTierCaps {
   drawLut: boolean;
   drawSsao: boolean;
   drawDof: boolean;
+  /** #571 — oar-blade splash puddles at the catch and finish of each
+   *  stroke. Pairs with the hull wake pass. Off on `basic`, on from
+   *  `low` upward — the sim is tiny (~16 particles per second). */
+  drawOarSplash: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -55,6 +59,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawOarSplash: false,
   },
   low: {
     drawBuildings: true,
@@ -69,6 +74,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawOarSplash: true,
   },
   medium: {
     drawBuildings: true,
@@ -83,6 +89,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: false,
     drawDof: false,
+    drawOarSplash: true,
   },
   high: {
     drawBuildings: true,
@@ -97,6 +104,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: false,
+    drawOarSplash: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -111,6 +119,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawLut: true,
     drawSsao: true,
     drawDof: true,
+    drawOarSplash: true,
   },
 };
 

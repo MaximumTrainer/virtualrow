@@ -16,6 +16,7 @@ const basic = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawOarSplash: false,
 };
 const low = {
   drawBuildings: true,
@@ -30,6 +31,7 @@ const low = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawOarSplash: true,
 };
 const medium = {
   drawBuildings: true,
@@ -44,6 +46,7 @@ const medium = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawOarSplash: true,
 };
 const high = {
   drawBuildings: true,
@@ -58,6 +61,7 @@ const high = {
   drawLut: true,
   drawSsao: true,
   drawDof: false,
+  drawOarSplash: true,
 };
 const extraHigh = {
   drawBuildings: true,
@@ -72,6 +76,7 @@ const extraHigh = {
   drawLut: true,
   drawSsao: true,
   drawDof: true,
+  drawOarSplash: true,
 };
 
 describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
@@ -101,6 +106,13 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
 
   it('undefined falls back to the default caps', () => {
     expect(tierCapsFor(undefined)).toEqual(tierCapsFor('medium'));
+  });
+
+  it('oar splash is off on basic but on from low upward (#571)', () => {
+    expect(tierCapsFor('basic').drawOarSplash).toBe(false);
+    for (const t of ['low', 'medium', 'high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).drawOarSplash, t).toBe(true);
+    }
   });
 
   it('flora + scenery shadow casts turn on at medium and stay on above (#591-fu P1c)', () => {

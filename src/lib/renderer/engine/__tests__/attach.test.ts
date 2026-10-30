@@ -74,10 +74,11 @@ describe('attach', () => {
     const renderer = (await attach(canvas, { testMode: true })) as unknown as WithTest;
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
-    // sky, clouds, bank, buildings, scenery, floraSolid, water, boat, sceneryMesh
-    // (#566 added clouds + buildings on medium+; #570 added boat; #549 scenery
-    // slice added sceneryMesh for GLB course furniture / structures).
-    expect(renderer._telemetry.renderStats.draws).toBe(9);
+    // sky, clouds, bank, buildings, scenery, floraSolid, water, boat,
+    // sceneryMesh, oarSplash (#566 added clouds + buildings on medium+;
+    // #570 added boat; #549 scenery slice added sceneryMesh; #571 oar
+    // splash added at low+).
+    expect(renderer._telemetry.renderStats.draws).toBe(10);
     renderer.dispose();
   });
 
