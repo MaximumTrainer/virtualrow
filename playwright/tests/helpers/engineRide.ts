@@ -59,6 +59,43 @@ export interface RideTelemetry {
   frame?: { frame: number; dtMs: number; gpuMs: number; cpuMs: number };
 }
 
+/** The device-lost banner the ride view shows (#584 FR1), published on
+ * `__ROWER3D_BANNER`. Mirrors `Rower3DBanner` in the engine's telemetry.ts. */
+export interface RideBanner {
+  visible: boolean;
+  message: string;
+  variant: string;
+}
+
+/** The engine's draw accounting, published on `__ROWER3D_RENDER_STATS`.
+ * `drawCalls` is a read-only alias of `draws` kept for the legacy harness. */
+export interface RideRenderStats {
+  draws: number;
+  drawCalls: number;
+  sceneryDraws?: number;
+}
+
+/** Shadow-atlas accounting, published on `__ROWER3D_SHADOWS`. */
+export interface RideShadows {
+  cascades: number;
+  atlasSize: number;
+}
+
+/** WebGPU health, published on `__VIRTUALROW_WEBGPU_HEALTH`. */
+export interface RideHealth {
+  fallbackReason?: string;
+  isSoftware?: boolean;
+  deviceLostCount?: number;
+}
+
+/** Counts the engine makes on the real WebGPU + canvas APIs, recorded by
+ * {@link installGpuProbe} before navigation (#584 AC5 context budget). */
+export interface GpuProbe {
+  adapters: number;
+  devices: number;
+  contextKinds: string[];
+}
+
 type RideWindow = Window & typeof globalThis & {
   __ROWER3D_POS?: RideTelemetry['pos'];
   __ROWER3D_BOAT?: RideTelemetry['boat'];
@@ -68,9 +105,101 @@ type RideWindow = Window & typeof globalThis & {
   __ROWER3D_ROUTE?: RideTelemetry['route'];
   __ROWER3D_CONTEXT_STATE?: RideTelemetry['context'];
   __ROWER3D_FRAME_STATS?: RideTelemetry['frame'];
+  __ROWER3D_RENDER_STATS?: RideRenderStats;
+  __ROWER3D_SHADOWS?: RideShadows;
+  __ROWER3D_BANNER?: RideBanner;
   __ROWER3D_FORCE_RENDER?: () => void;
-  __VIRTUALROW_WEBGPU_HEALTH?: { fallbackReason?: string; isSoftware?: boolean };
+  __ROWER3D_FORCE_DEVICE_LOST?: () => void;
+  __VIRTUALROW_WEBGPU_HEALTH?: RideHealth;
+  __VIRTUALROW_PERFORMANCE_MODE?: 'basic' | 'low' | 'medium' | 'high' | 'extra-high' | 'auto';
+  __GPU_PROBE?: GpuProbe;
 };
+
+/** Pin the engine's tier before the app loads. `/row` resolves its tier from
+ * `resolvePerformanceMode()`, which honours `__VIRTUALROW_PERFORMANCE_MODE`,
+ * so this must run as an init script (before navigation). */
+export async function pinTier(
+  page: Page,
+  tier: 'basic' | 'low' | 'medium' | 'high' | 'extra-high',
+): Promise<void> {
+  await page.addInitScript((t) => {
+    (window as RideWindow).__VIRTUALROW_PERFORMANCE_MODE = t;
+  }, tier);
+}
+
+/**
+ * Wrap `navigator.gpu.requestAdapter`, `GPUAdapter.prototype.requestDevice`,
+ * and `HTMLCanvasElement.prototype.getContext` before navigation so a spec can
+ * assert the engine's context budget — one adapter, one device, and zero WebGL
+ * probes — from the real browser APIs (not engine telemetry). Safe when WebGPU
+ * is absent: it only wraps what exists.
+ */
+export async function installGpuProbe(page: Page): Promise<void> {
+  // The callback runs in the browser; it avoids the `@webgpu/types` global
+  // names (GPU, GPUAdapter, …) because the Playwright tsconfig doesn't load
+  // them. Everything is reached structurally through `unknown` casts.
+  await page.addInitScript(() => {
+    const w = window as RideWindow;
+    const probe: GpuProbe = { adapters: 0, devices: 0, contextKinds: [] };
+    w.__GPU_PROBE = probe;
+
+    type Fn = (...args: unknown[]) => unknown;
+    const gpu = (navigator as unknown as { gpu?: Record<string, unknown> }).gpu;
+    if (gpu && typeof gpu.requestAdapter === 'function') {
+      const origAdapter = (gpu.requestAdapter as Fn).bind(gpu);
+      gpu.requestAdapter = (...args: unknown[]) => {
+        probe.adapters += 1;
+        return origAdapter(...args);
+      };
+    }
+    const AdapterCtor = (globalThis as unknown as { GPUAdapter?: { prototype: Record<string, unknown> } })
+      .GPUAdapter;
+    if (AdapterCtor?.prototype && typeof AdapterCtor.prototype.requestDevice === 'function') {
+      const origDevice = AdapterCtor.prototype.requestDevice as Fn;
+      AdapterCtor.prototype.requestDevice = function patched(this: unknown, ...args: unknown[]) {
+        probe.devices += 1;
+        return origDevice.apply(this, args);
+      };
+    }
+    const canvasProto = HTMLCanvasElement.prototype as unknown as { getContext: Fn };
+    const origGetContext = canvasProto.getContext;
+    canvasProto.getContext = function patched(this: unknown, ...args: unknown[]) {
+      if (typeof args[0] === 'string') probe.contextKinds.push(args[0]);
+      return origGetContext.apply(this, args);
+    };
+  });
+}
+
+/** Read the context-budget probe installed by {@link installGpuProbe}. */
+export function readGpuProbe(page: Page): Promise<GpuProbe | undefined> {
+  return page.evaluate(() => (window as RideWindow).__GPU_PROBE);
+}
+
+/** Force a device loss via the `__PLAYWRIGHT_TESTING`-gated engine seam
+ * (#584 FR2). No-op when the seam is absent (fallback / no device). */
+export async function forceDeviceLost(page: Page): Promise<void> {
+  await page.evaluate(() => (window as RideWindow).__ROWER3D_FORCE_DEVICE_LOST?.());
+}
+
+/** Read the device-lost banner the ride view shows (#584 FR1). */
+export function readBanner(page: Page): Promise<RideBanner | undefined> {
+  return page.evaluate(() => (window as RideWindow).__ROWER3D_BANNER);
+}
+
+/** Read the WebGPU health block. */
+export function readHealth(page: Page): Promise<RideHealth | undefined> {
+  return page.evaluate(() => (window as RideWindow).__VIRTUALROW_WEBGPU_HEALTH);
+}
+
+/** Read the engine's draw accounting. */
+export function readRenderStats(page: Page): Promise<RideRenderStats | undefined> {
+  return page.evaluate(() => (window as RideWindow).__ROWER3D_RENDER_STATS);
+}
+
+/** Read the shadow-atlas accounting. */
+export function readShadows(page: Page): Promise<RideShadows | undefined> {
+  return page.evaluate(() => (window as RideWindow).__ROWER3D_SHADOWS);
+}
 
 /** Install the Playwright harness: sets `__PLAYWRIGHT_TESTING`, mocks
  * `navigator.bluetooth`, and exposes `__simulator` + `__workoutService`. Must

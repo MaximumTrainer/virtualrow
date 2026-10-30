@@ -257,3 +257,11 @@ jobs:
         # declines and each spec asserts the well-formed fallback instead of a
         # silent SwiftShader pass (#542 NFR5).
         run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-ride-boat-moves.spec.ts playwright/tests/webgpu-ride-ghost.spec.ts playwright/tests/webgpu-ride-world-scale.spec.ts playwright/tests/webgpu-ride-route-loading.spec.ts
+      - name: AC5 ports e2e — context budget, device-lost, post-fx, scene quality (#584 AC5)
+        # The four retired WebGL specs ported to the WebGPU engine: one
+        # adapter + one device and zero WebGL probes; a forced device loss
+        # recovers on the same canvas with the banner; post-fx draws + gpuMs>0
+        # per tier; and a higher tier builds a richer scene than basic. Like
+        # the ride specs they launch with real WebGPU and branch to the
+        # well-formed decline on a runner without a hardware adapter (#542 NFR5).
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-device-budget.spec.ts playwright/tests/webgpu-device-lost-recovery.spec.ts playwright/tests/webgpu-postfx.spec.ts playwright/tests/webgpu-scene-quality-match.spec.ts
