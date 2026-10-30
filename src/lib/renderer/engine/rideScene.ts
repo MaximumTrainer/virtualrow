@@ -53,6 +53,7 @@ import {
 import { loadBoatMesh } from '../plan/boatMeshLoader';
 import { computeCascades } from './cascadedShadows';
 import { createPlacement, placeBoat, placeGhost, strokePhase, strokeAmplitude } from './characterPlacement';
+import { createDistanceSmoother } from './distanceSmoother';
 import type { RideFrame } from './rideFrame';
 import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
@@ -767,9 +768,11 @@ export const createRideScene = async (
 
   let lastDistanceMeters = 0;
   let lastSpeedTime = -1;
-  let smoothedDistance = 0;
-  let lastDistSample = { d: 0, t: now() };
-  let prevDistSample = { d: 0, t: now() };
+  // Smooths the boat's distance between the ~2 Hz PM5 samples that drive it so
+  // the hull glides instead of holding then jumping at each sample boundary
+  // (see distanceSmoother.ts). The ghost is already continuous via
+  // `ghostDistanceAt(elapsedSeconds)`; this gives the player boat the same.
+  const distanceSmoother = createDistanceSmoother();
 
   const frameOnce = (): void => {
     if (disposed) return;
@@ -784,22 +787,15 @@ export const createRideScene = async (
 
     const rideFrame: RideFrame | null = opts.getFrame ? opts.getFrame() : null;
 
-    if (rideFrame) {
-      const nowMs = now();
-      if (rideFrame.distanceMeters !== lastDistSample.d) {
-        prevDistSample = lastDistSample;
-        lastDistSample = { d: rideFrame.distanceMeters, t: nowMs };
-        smoothedDistance = rideFrame.distanceMeters;
-      } else if (rideFrame.isPlaying && !rideFrame.holdBoat && !rideFrame.finished) {
-        const dtSample = Math.max(1e-3, (lastDistSample.t - prevDistSample.t) / 1000);
-        const speedMps = (lastDistSample.d - prevDistSample.d) / dtSample;
-        const dtExtrap = (nowMs - lastDistSample.t) / 1000;
-        const capped = Math.min(dtExtrap, dtSample * 1.5);
-        smoothedDistance = lastDistSample.d + speedMps * capped;
-      }
-    }
     const smoothedFrame: RideFrame | null = rideFrame
-      ? { ...rideFrame, distanceMeters: smoothedDistance }
+      ? {
+          ...rideFrame,
+          distanceMeters: distanceSmoother.update(
+            rideFrame.distanceMeters,
+            rideFrame.isPlaying && !rideFrame.holdBoat && !rideFrame.finished,
+            now(),
+          ),
+        }
       : null;
 
     placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
