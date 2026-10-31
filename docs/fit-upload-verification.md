@@ -14,11 +14,11 @@ touches the FIT / upload path.
 
 Before merging any PR whose diff touches:
 
-- `src/services/fitEncoderService.ts` or anything it imports.
-- `src/services/intervalsIcuActivityService.ts`, `src/services/authService.ts`,
+- `src/lib/services/fitEncoderService.ts` or anything it imports.
+- `src/lib/services/intervalsIcuActivityService.ts`, `src/lib/services/authService.ts`,
   the `PROXY_BASE` constant, or the token-refresh path.
-- `src/utils/exporters.ts::activityFileName`.
-- The `SessionSummary` upload button flow in `src/components/SessionSummary.tsx`.
+- `src/lib/utils/exporters.ts::activityFileName`.
+- The `SessionSummary` upload button flow in `src/lib/ui/SessionSummary.svelte`.
 
 ## Prerequisites
 
@@ -46,18 +46,18 @@ Open DevTools → Network before clicking **Save to intervals.icu**. You
 should see one request:
 
 - **URL**: `${PROXY_BASE}/api/v1/athlete/0/activities?name=...&description=...&external_id=virtualrow-<session id>`
-  — see the `uploadUrl` helper at `src/services/intervalsIcuActivityService.ts:59`.
+  — see the `uploadUrl` helper at `src/lib/services/intervalsIcuActivityService.ts:59`.
 - **Method**: `POST`.
 - **Request headers**: `Authorization: Bearer <access token>` (the token is
   never logged elsewhere). No explicit `Content-Type` — the browser sets it
   so the multipart boundary matches the body.
 - **Request payload**: multipart `form-data` with a single `file` part named
   `<route slug>-<session id>.fit` (see `activityFileName` in
-  `src/utils/exporters.ts:125`).
+  `src/lib/utils/exporters.ts:125`).
 - **Response**: `200` (or `201`) with a JSON body whose top-level `id`
   parses as a numeric activity id.
 - **Repeat click**: a second click should show no new request — the service
-  short-circuits duplicates (`intervalsIcuActivityService.ts:108`).
+  short-circuits duplicates (`src/lib/services/intervalsIcuActivityService.ts:108`).
 
 If the token is expired the client retries once through
 `authService.refreshAccessToken()`; you'll see a `401` followed by a fresh
@@ -69,7 +69,7 @@ Open the URL the summary card links to. On the activity page, verify:
 
 - **Title**: the route name (Willowbrook River, in this checklist).
 - **Description**: `Rowed in VirtualRow on Willowbrook River.` — see
-  `intervalsIcuActivityService.ts:62`.
+  `src/lib/services/intervalsIcuActivityService.ts:62`.
 - **External id**: `virtualrow-<session id>` under the row's metadata.
   This is what dedupes a re-upload of the same session.
 - **Sport / sub-sport**: Rowing / Indoor Rowing.
@@ -87,9 +87,10 @@ Open the URL the summary card links to. On the activity page, verify:
 ## GPS polyline check (issue #466, AC8)
 
 The FIT encoder writes `positionLat` / `positionLong` as sint32 semicircles
-on every record (`src/services/fitEncoderService.ts` — `buildRecords`,
-`toSemicircles`), fed by `activitySampler.ts` interpolating lat/lng along
-the route polyline via `interpolateAlong` in `src/utils/polylineGeometry.ts`.
+on every record (`src/lib/services/fitEncoderService.ts` — `buildRecords`,
+`toSemicircles`), fed by `src/lib/services/activitySampler.ts` interpolating
+lat/lng along the route polyline via `interpolateAlong` in
+`src/lib/utils/polylineGeometry.ts`.
 On the intervals.icu activity page, that chain renders as a map polyline.
 This is the last leg the automated tests cannot run — a visual check that
 the polyline matches the real-water route, not a straight line through
@@ -106,7 +107,7 @@ is the default and works well — it curves):
 3. Click any point on the polyline. The point-info popup SHOULD show a
    lat/lng that lands on the source route to roughly a metre.
 4. **Gate-chain routes only** (`geometrySource: 'gate-chain'` —
-   `src/types/index.ts`): the polyline is a straight line between the
+   `src/lib/types/index.ts`): the polyline is a straight line between the
    start and finish gates by design. SessionSummary surfaces a notice
    that the GPS trace is schematic — expected, not a regression.
 5. **Demo rows** (`▶ Try a demo row`): the demo passes a route, so a

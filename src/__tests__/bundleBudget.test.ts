@@ -97,6 +97,49 @@ describe('#472 AC9 — what the signed-out demo workout costs to download', () =
   });
 });
 
+/**
+ * #466 AC9 / NFR2 — the FIT encoder chunk, dynamically imported by
+ * `SessionSummary.svelte`'s save/download buttons, is the row's own writer
+ * for the Garmin wire format. Any growth lands in the save-flow latency a
+ * rower feels at the end of their row, and `@garmin/fitsdk` sits in
+ * devDependencies precisely to keep this chunk small (see
+ * `fitSdkNotShipped.test.ts`). NFR2 caps the chunk's growth at +1 KB
+ * gzipped against the branch point; this test locks that in.
+ *
+ * Baseline captured at the time this gate landed. If a legitimate change
+ * (new fields on `record`, a new message type, a different scale) raises
+ * the baseline, bump both numbers together, in the same commit, so the
+ * delta reviewers see is exactly the width of the change.
+ */
+const FIT_ENCODER_MODULE = 'src/lib/services/fitEncoderService.ts';
+
+/** Measured at ~1.7 kB (1722 B) when this gate landed on #466 Phase 1. */
+const FIT_ENCODER_BASELINE_BYTES = 1722;
+
+/** NFR2 — the chunk MUST NOT grow by more than 1 KB gzipped vs. the branch point. */
+const FIT_ENCODER_DELTA_BUDGET_BYTES = 1024;
+
+describe('#466 AC9 — what the FIT encoder costs to download', () => {
+  it('keeps the encoder chunk inside its NFR2 delta budget', () => {
+    const absolute = path.resolve(process.cwd(), FIT_ENCODER_MODULE);
+    const source = fs.readFileSync(absolute, 'utf8');
+    const minified = transformSync(source, {
+      loader: 'ts',
+      minify: true,
+      target: 'es2022',
+    }).code;
+    const gzippedBytes = gzipSync(minified).byteLength;
+    const ceiling = FIT_ENCODER_BASELINE_BYTES + FIT_ENCODER_DELTA_BUDGET_BYTES;
+
+    expect(
+      gzippedBytes,
+      `the FIT encoder is ${gzippedBytes} B gzipped, over the ` +
+        `${ceiling} B ceiling (baseline ${FIT_ENCODER_BASELINE_BYTES} B + ${FIT_ENCODER_DELTA_BUDGET_BYTES} B NFR2 budget) — ` +
+        `if the growth is intentional, bump both constants together`,
+    ).toBeLessThanOrEqual(ceiling);
+  });
+});
+
 describe.skipIf(chunks.length === 0)('what the scene costs to download', () => {
   it('ships no physics engine', () => {
     const carrying = chunks.filter((file) =>
