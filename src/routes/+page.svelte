@@ -42,12 +42,34 @@
   import CrewPicker from '$lib/ui/CrewPicker.svelte';
   import RowerAppearancePicker from '$lib/ui/RowerAppearancePicker.svelte';
   import LoadTodaysWorkoutButton from '$lib/ui/LoadTodaysWorkoutButton.svelte';
+  import { decideAutoSeedAction } from '$lib/ui/demoWorkoutAutoSeed.svelte';
 
   const auth = getAuth();
   const services = getServices();
   const routes = getRoutesStore();
   const session = getSessionStore();
   const deepLink = getDeepLink();
+
+  // #472 FR3 + FR6: a guest on the demo route gets the bundled placeholder
+  // workout seeded; a sign-in while the placeholder is active clears it. The
+  // decision is in a pure function so every negative case is tested without a
+  // Svelte $effect harness; this effect is the thin wiring.
+  let demoSeeded = $state(false);
+  $effect(() => {
+    const action = decideAutoSeedAction({
+      activeRouteId: routes.selectedRoute?.id ?? null,
+      isAuthenticated: auth.isAuthenticated,
+      currentWorkout: session.currentWorkout.current,
+      seeded: demoSeeded,
+    });
+    if (action.kind === 'seed') {
+      session.currentWorkout.set(services.demoWorkoutService.getDemoWorkout());
+      demoSeeded = true;
+    } else if (action.kind === 'clear') {
+      session.currentWorkout.set(null);
+      demoSeeded = false;
+    }
+  });
 
   // Per-row mood controls (#346 / #443 / #474): local to this screen and
   // persisted, so they survive a navigation without being session state.

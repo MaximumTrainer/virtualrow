@@ -46,6 +46,14 @@
      * target" tick does not read as truth.
      */
     deviceConnected: boolean;
+    /**
+     * `true` when the loaded workout is the signed-out demo-route placeholder
+     * (#472 D8a). Shows a visible "Sample workout" prefix and lower-opacity
+     * current-block card so the guest can tell this is a sample, not a plan
+     * their coach pushed. Defaults false so every existing caller keeps the
+     * verbatim DOM Playwright specs assert against.
+     */
+    isDemo?: boolean;
   }
 
   let {
@@ -55,6 +63,7 @@
     currentPaceSecondsPer500,
     currentPowerWatts,
     deviceConnected,
+    isDemo = false,
   }: Props = $props();
 
   const NO_TARGET_LABEL = '—';
@@ -111,10 +120,15 @@
      with a label is implicitly a region, so Svelte flags it as redundant. -->
 <!-- svelte-ignore a11y_no_redundant_roles -->
 <section
-  class="workout-block-panel"
+  class="workout-block-panel{isDemo ? ' workout-block-panel--demo' : ''}"
   role="region"
-  aria-label={`Workout block panel — ${workout.name}`}
+  aria-label={`Workout block panel — ${isDemo ? 'Sample workout — ' : ''}${workout.name}`}
 >
+  {#if isDemo}
+    <p class="workout-block-sample-prefix" data-testid="workout-block-sample-prefix">
+      Sample workout
+    </p>
+  {/if}
   <ol class="workout-block-timeline" aria-label="Workout timeline">
     {#each segments as step, index (`${step.id}-${index}`)}
       <li
@@ -134,7 +148,7 @@
   </ol>
 
   <div class="workout-block-body">
-    <div class="workout-block-card">
+    <div class="workout-block-card{isDemo ? ' workout-block-card--demo' : ''}">
       <div class="workout-block-card-head">
         <span class="workout-block-zone" style="background-color: {intensityColor(segment.intensity)};">
           {intensityLabel(segment.intensity)}

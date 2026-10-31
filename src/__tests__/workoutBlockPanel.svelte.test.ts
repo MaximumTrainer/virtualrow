@@ -75,6 +75,7 @@ function renderPanel(over: PanelOverrides = {}) {
       currentPaceSecondsPer500: over.currentPaceSecondsPer500 ?? 112,
       currentPowerWatts: over.currentPowerWatts ?? 235,
       deviceConnected: over.deviceConnected ?? true,
+      isDemo: (over as PanelOverrides & { isDemo?: boolean }).isDemo ?? false,
       ...over,
     },
   });
@@ -209,6 +210,33 @@ describe('WorkoutBlockPanel', () => {
     renderPanel({ workout: workout([segment()]) });
     expect(
       screen.getByRole('region', { name: 'Workout block panel — Threshold 3×' }),
+    ).toBeTruthy();
+  });
+
+  it('is unchanged for a signed-in rower (isDemo defaults false)', () => {
+    const { container } = renderPanel();
+    expect(container.querySelector('[data-testid="workout-block-sample-prefix"]')).toBeNull();
+    expect(container.querySelector('.workout-block-card--demo')).toBeNull();
+    expect(container.querySelector('.workout-block-panel--demo')).toBeNull();
+  });
+
+  it('AC4/D8a: `isDemo` shows a visible "Sample workout" prefix and dims the current-block card', () => {
+    const { container } = renderPanel({
+      // The cast keeps the override map's shape readable while isDemo is still
+      // forwarded through `renderPanel`'s rest spread.
+      ...( { isDemo: true } as Record<string, unknown> ),
+    });
+    const prefix = container.querySelector('[data-testid="workout-block-sample-prefix"]');
+    expect(prefix?.textContent?.trim()).toBe('Sample workout');
+    expect(container.querySelector('.workout-block-card--demo')).toBeTruthy();
+    expect(container.querySelector('.workout-block-panel--demo')).toBeTruthy();
+
+    // AC4: aria-label is prefixed too so a screen-reader hears the sample
+    // framing before the workout name.
+    expect(
+      screen.getByRole('region', {
+        name: 'Workout block panel — Sample workout — Threshold 3×',
+      }),
     ).toBeTruthy();
   });
 });
