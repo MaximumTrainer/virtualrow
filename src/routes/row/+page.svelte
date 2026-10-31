@@ -27,6 +27,7 @@
   import { CrewPreferenceStore } from '$lib/ui/useCrewPreference.svelte';
   import { resolveCrew, effectiveCrewPreference } from '../../components/rower3d/crewModel';
   import { FullscreenStore } from '$lib/ui/fullscreen.svelte';
+  import { CameraViewStore } from '$lib/ui/cameraView.svelte';
   import Canvas3DHost, { type CanvasBackend } from '$lib/ui/Canvas3DHost.svelte';
   import RouteLoadingBar from '$lib/ui/RouteLoadingBar.svelte';
   import WorkoutBlockPanel from '$lib/ui/WorkoutBlockPanel.svelte';
@@ -55,6 +56,11 @@
   const fullscreen = new FullscreenStore();
   let stageEl = $state<HTMLDivElement | undefined>(undefined);
   $effect(() => fullscreen.bind(stageEl ?? null));
+
+  // Camera view, cycled on V (#328). The store owns persistence; the page owns
+  // the window listener so it leaves with the ride view.
+  const cameraView = new CameraViewStore();
+  $effect(() => cameraView.bindKeyboard());
 
   const workout = $derived(session.currentWorkout);
 
@@ -175,7 +181,7 @@
             distanceTier={resolvedDistance}
             route={engineRoute}
             {testMode}
-            getFrame={() => ride.frame()}
+            getFrame={() => ({ ...ride.frame(), view: cameraView.view })}
             crew={resolvedCrew}
             onBackend={(b) => (canvasBackend = b)}
           />
