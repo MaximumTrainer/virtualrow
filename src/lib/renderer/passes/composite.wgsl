@@ -81,6 +81,30 @@ fn vignetteStrength(uv: vec2<f32>) -> f32 {
   return max(0.0, 1.0 - r * r * u.vignetteStrength);
 }
 
+// #574 lens-dirt: a procedural speckle pattern that modulates the bloom
+// contribution. Adds "character" to the glow at zero asset cost — the
+// bright highlights read as though the lens has a few specks of dust
+// smearing light out, rather than the clean mathematical bloom of the
+// bare composite. Four octaves of hash noise, dot-product-combined so
+// the pattern is non-repeating across the frame. Peak modulation is
+// ±15 % of the bloom (so a highlight-less scene stays visually
+// identical).
+fn lensDirtMul(uv: vec2<f32>) -> f32 {
+  let p = uv * vec2<f32>(13.0, 7.0);
+  let n1 = fract(sin(dot(p, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+  let p2 = uv * vec2<f32>(27.0, 19.0) + vec2<f32>(0.37, 0.91);
+  let n2 = fract(sin(dot(p2, vec2<f32>(39.3468, 11.135))) * 24634.6345);
+  let p3 = uv * vec2<f32>(53.0, 41.0) + vec2<f32>(0.73, 0.29);
+  let n3 = fract(sin(dot(p3, vec2<f32>(68.1123, 52.981))) * 15731.743);
+  let p4 = uv * vec2<f32>(97.0, 83.0) + vec2<f32>(0.17, 0.62);
+  let n4 = fract(sin(dot(p4, vec2<f32>(21.6342, 93.871))) * 9876.5432);
+  let avg = n1 * 0.4 + n2 * 0.3 + n3 * 0.2 + n4 * 0.1; // ∈ [0, 1]
+  // Centre on 1.0, keep swing within ±0.15 so bloom-less fragments stay
+  // visually identical (shaded colour comes from the scene, bloom goes
+  // through this multiplier so a 15 % jitter on near-zero is invisible).
+  return 0.85 + avg * 0.3;
+}
+
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   // #574 chromatic aberration: offset the R and B samples along a radial
@@ -93,7 +117,8 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   let sG = textureSample(scene, samp, in.uv).g;
   let sB = textureSample(scene, samp, in.uv - caShift).b;
   let s = vec3<f32>(sR, sG, sB);
-  let bl = textureSample(bloom, samp, in.uv).rgb;
+  // #574 lens-dirt: modulate the bloom by a procedural dirt pattern.
+  let bl = textureSample(bloom, samp, in.uv).rgb * lensDirtMul(in.uv);
   var combined = s + bl * u.bloomStrength;
   if (u.aoEnabled > 0.5) {
     let aoV = textureSample(ao, samp, in.uv).r;
