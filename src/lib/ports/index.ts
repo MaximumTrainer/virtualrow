@@ -31,6 +31,7 @@ import type { AudioService } from '../services/audioService';
 import type { CrashReporterService } from '../services/crashReporterService';
 import type { CrashReportsPreferenceStore } from '../services/crashReportsPreferenceStore';
 import type { RowerAppearanceService } from '../services/rowerAppearanceService';
+import type { DemoWorkoutService } from '../services/demoWorkoutService';
 
 /** Port for the PM5 Bluetooth integration. */
 export type PM5BluetoothPort = Pick<
@@ -235,6 +236,17 @@ export type CrashReportsPreferencePort = Pick<
 export type RowerAppearancePort = Pick<RowerAppearanceService, 'read' | 'write'>;
 
 /**
+ * Port for the signed-out demo-route placeholder workout (#472 FR2).
+ *
+ * Returns a bundled `StructuredWorkout` so a guest on the Willowbrook demo
+ * route sees the block-strip overlay without an intervals.icu round-trip.
+ * The port exists so unit tests and the Playwright signed-out smoke can
+ * swap the demo workout for a stub through the DI, rather than monkey-patch
+ * `IntervalsIcuWorkoutService` or leak a test seam onto `window`.
+ */
+export type DemoWorkoutPort = Pick<DemoWorkoutService, 'getDemoWorkout'>;
+
+/**
  * Aggregate of every port the app composition root needs. Consumed by the
  * React `ServicesProvider` and the `useServices()` hook.
  */
@@ -254,4 +266,5 @@ export interface Services {
   audioService: AudioPort;
   crashReporterService: CrashReporterPort;
   crashReportsPreferenceStore: CrashReportsPreferencePort;
+  demoWorkoutService: DemoWorkoutPort;
 }
