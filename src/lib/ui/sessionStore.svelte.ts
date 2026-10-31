@@ -209,6 +209,11 @@ export class SessionStore {
         isGuestSession,
         route.coordinates,
       );
+      // #472 FR4 — a signed-out guest's auto-seeded placeholder (and a
+      // signed-in rower's manually-loaded one) run during the demo too, so
+      // `WorkoutBlockPanel` paints its block image over the demo row. No-op
+      // when no workout is loaded (`start()` returns false).
+      this.currentWorkout.start();
       this.sessionState = 'active';
     } finally {
       this.#starting = false;
