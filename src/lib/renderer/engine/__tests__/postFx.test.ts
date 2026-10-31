@@ -69,7 +69,7 @@ describe('createPostFx', () => {
     const w = 1920;
     const h = 1080;
     const sceneBytes = w * h * 8;
-    const caps = { bloom: true, tone: true, vignette: true, lut: true, ssao: true, dof: false, autoExposure: true };
+    const caps = { bloom: true, tone: true, vignette: true, lut: true, ssao: true, dof: false, autoExposure: true, chromaticAberration: true };
     const total = postFxBytes(w, h, caps);
     const addedOverScene = (total - sceneBytes) / sceneBytes;
     expect(addedOverScene).toBeLessThanOrEqual(1.3);
@@ -114,6 +114,36 @@ describe('createPostFx', () => {
     const h2 = makeHandle(false);
     expect(device2.__log.createdPipelines).not.toContain('luminance');
     h2.dispose();
+  });
+
+  it('chromatic aberration is shader-only — no extra GPU-side textures (#574)', () => {
+    // Turning CA on or off must not change postFxBytes; the shader costs
+    // three samples per fragment but zero new intermediates.
+    const w = 1280;
+    const h = 720;
+    const base = { bloom: true, tone: true, vignette: true, lut: true, ssao: true, dof: true, autoExposure: false };
+    expect(postFxBytes(w, h, { ...base, chromaticAberration: false })).toBe(
+      postFxBytes(w, h, { ...base, chromaticAberration: true }),
+    );
+  });
+
+  it('still creates the composite pipeline when chromaticAberration is on (#574)', () => {
+    const device = makeMockDevice();
+    const handle = createPostFx({
+      device,
+      sceneFormat: 'rgba16float',
+      outputFormat: 'bgra8unorm',
+      caps: { ...DEFAULT_POSTFX_CAPS, chromaticAberration: true },
+    });
+    handle.setInputs({
+      sceneView: makeViewRef(),
+      sceneTexture: makeTextureRef(),
+      depthView: makeViewRef(),
+      width: 320,
+      height: 240,
+    });
+    expect(device.__log.createdPipelines).toContain('composite');
+    handle.dispose();
   });
 
   it('bloom pyramid is BLOOM_MIP_LEVELS mips', () => {

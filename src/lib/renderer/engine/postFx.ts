@@ -37,6 +37,10 @@ export interface PostFxCaps {
    *  divides by it before the ACES tone-map so bright and dark scenes
    *  self-correct toward middle grey. */
   autoExposure: boolean;
+  /** #574 — subtle radial chromatic aberration in the composite pass.
+   *  Off below `high`; the shader uses a hard-coded offset of ~0.0035 UV
+   *  (0.35% of the frame) which reads as a lens feel. */
+  chromaticAberration: boolean;
 }
 
 export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
@@ -47,6 +51,7 @@ export const DEFAULT_POSTFX_CAPS: PostFxCaps = {
   ssao: false,
   dof: false,
   autoExposure: false,
+  chromaticAberration: false,
 };
 
 export interface PostFxOptions {
@@ -145,9 +150,9 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
     primitive: { topology: 'triangle-list' },
   });
   // 32-byte uniform block = vec4<f32> (bloom/vignette/lutSize/aoEnabled) +
-  // vec4<f32> (autoExposureEnabled + 3 pads). Grown from 16 bytes to carry
-  // the #574 auto-exposure gate — the composite shader has four more
-  // declared floats and WGSL requires the uniform binding size to match.
+  // vec4<f32> (autoExposureEnabled + caOffset + 2 pads). Grown from 16 bytes
+  // to carry the #574 auto-exposure gate and the chromatic-aberration offset;
+  // WGSL requires the uniform binding size to match the declared struct.
   const compositeUniforms = device.createBuffer({
     label: 'composite-u',
     size: 32,
@@ -159,7 +164,11 @@ export const createPostFx = (opts: PostFxOptions): PostFxHandle => {
   compositeScratch[2] = 32; // LUT size
   compositeScratch[3] = caps.ssao ? 1 : 0;
   compositeScratch[4] = caps.autoExposure ? 1 : 0;
-  // 5, 6, 7 pad.
+  // Radial CA offset in UV units at the frame corner. 0.0035 = ~3.5 px on a
+  // 1000-px-wide canvas; subtle, reads as lens feel, never as a defect.
+  compositeScratch[5] = caps.chromaticAberration ? 0.0035 : 0;
+  compositeScratch[6] = 0;
+  compositeScratch[7] = 0;
   device.queue.writeBuffer(compositeUniforms, 0, compositeScratch as BufferSource);
 
   // --- Auto-exposure ---

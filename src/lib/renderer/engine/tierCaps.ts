@@ -43,6 +43,10 @@ export interface BuildingTierCaps {
    *  On at `high` + `extra-high`; off below so a weaker GPU doesn't take
    *  the extra render pass per frame. */
   drawAutoExposure: boolean;
+  /** #574 — subtle chromatic aberration in the composite pass: 3-tap radial
+   *  colour-channel offset. Off below `high`; keep it below ~0.5% of the
+   *  frame width so it reads as a lens feel, not a defect. */
+  drawChromaticAberration: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -60,6 +64,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawSsao: false,
     drawDof: false,
     drawAutoExposure: false,
+    drawChromaticAberration: false,
   },
   low: {
     drawBuildings: true,
@@ -75,6 +80,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawSsao: false,
     drawDof: false,
     drawAutoExposure: false,
+    drawChromaticAberration: false,
   },
   medium: {
     drawBuildings: true,
@@ -90,6 +96,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawSsao: false,
     drawDof: false,
     drawAutoExposure: false,
+    drawChromaticAberration: false,
   },
   high: {
     drawBuildings: true,
@@ -105,6 +112,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawSsao: true,
     drawDof: false,
     drawAutoExposure: true,
+    drawChromaticAberration: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -120,6 +128,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawSsao: true,
     drawDof: true,
     drawAutoExposure: true,
+    drawChromaticAberration: true,
   },
 };
 

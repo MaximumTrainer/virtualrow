@@ -585,6 +585,7 @@ export const createRideScene = async (
       !!(globalThis as unknown as { window?: { __VIRTUALROW_POSTFX_DOF?: boolean } }).window
         ?.__VIRTUALROW_POSTFX_DOF,
     autoExposure: tierCaps.drawAutoExposure,
+    chromaticAberration: tierCaps.drawChromaticAberration,
   };
   const postFx = createPostFx({ device, sceneFormat: format, outputFormat, caps: postCaps });
   postFx.setInputs({

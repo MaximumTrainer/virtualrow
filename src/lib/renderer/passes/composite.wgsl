@@ -12,9 +12,10 @@ struct CompositeUniforms {
   // (middle-grey target key) before tonemap. The 1-pixel `exposureTex`
   // carries the measured log-luminance of the last-encoded scene.
   autoExposureEnabled: f32,
+  // #574: radial chromatic aberration offset (UV units at corner). 0 = off.
+  caOffset: f32,
   _pad0: f32,
   _pad1: f32,
-  _pad2: f32,
 };
 
 @group(0) @binding(0) var scene: texture_2d<f32>;
@@ -82,7 +83,16 @@ fn vignetteStrength(uv: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
-  let s = textureSample(scene, samp, in.uv).rgb;
+  // #574 chromatic aberration: offset the R and B samples along a radial
+  // direction from the centre; keep G at the centre so the perceived image
+  // sharpness is preserved. The offset scales with distance from centre so
+  // the frame centre stays crisp and the edges carry the lens feel.
+  let dir = in.uv - vec2<f32>(0.5, 0.5);
+  let caShift = dir * u.caOffset;
+  let sR = textureSample(scene, samp, in.uv + caShift).r;
+  let sG = textureSample(scene, samp, in.uv).g;
+  let sB = textureSample(scene, samp, in.uv - caShift).b;
+  let s = vec3<f32>(sR, sG, sB);
   let bl = textureSample(bloom, samp, in.uv).rgb;
   var combined = s + bl * u.bloomStrength;
   if (u.aoEnabled > 0.5) {
