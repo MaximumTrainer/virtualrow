@@ -303,9 +303,10 @@ when standing up a *new* application (a fork, or a separate environment):
 
 1. Log in to [intervals.icu](https://intervals.icu) and go to **Settings → API** (or [intervals.icu/settings/api](https://intervals.icu/settings/api))
 2. Create a new OAuth application with:
-   - **Redirect URIs** — add both:
+   - **Redirect URIs** — add all three:
      - `http://localhost:5173/auth/callback/` — local dev
-     - `https://maximumtrainer.github.io/virtualrow/app/auth/callback/` — GitHub Pages production
+     - `https://maximum-trainer.github.io/virtualrow/app/auth/callback/` — GitHub Pages production (current, repo was transferred to the `maximum-trainer` org)
+     - `https://maximumtrainer.github.io/virtualrow/app/auth/callback/` — pre-transfer Pages host (keep registered so links shared before the 2026-10-29 org transfer still complete the OAuth flow)
 3. Copy the **Client ID** that intervals.icu generates
 4. Add it to `.env.local`:
    ```
@@ -332,7 +333,8 @@ OAuth token requests must pass `client_id` both in the form-encoded POST body an
 ```js
 'http://localhost:5173',    // Vite default dev port
 'http://127.0.0.1:5173',
-'https://maximumtrainer.github.io',
+'https://maximum-trainer.github.io',    // current GitHub Pages origin (post 2026-10-29 org transfer)
+'https://maximumtrainer.github.io',     // pre-transfer origin, kept so old shared links still work
 ```
 
 Then redeploy: `cd workers/intervals-cors-proxy && npx wrangler deploy`.
