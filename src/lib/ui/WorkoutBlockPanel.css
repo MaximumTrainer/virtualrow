@@ -168,3 +168,22 @@
     grid-column: 1 / -1;
   }
 }
+
+/*
+ * #472 D8a — signed-out "Sample workout" gate. The panel keeps its full layout
+ * so the Playwright DOM contract is unchanged, but a visible prefix sits above
+ * the timeline and the current-block card drops its opacity so the guest can
+ * tell this is a demo, not a plan their coach pushed.
+ */
+.workout-block-sample-prefix {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(247, 249, 251, 0.75);
+}
+
+.workout-block-card--demo {
+  opacity: 0.72;
+}

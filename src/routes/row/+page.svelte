@@ -30,6 +30,7 @@
   import Canvas3DHost, { type CanvasBackend } from '$lib/ui/Canvas3DHost.svelte';
   import RouteLoadingBar from '$lib/ui/RouteLoadingBar.svelte';
   import WorkoutBlockPanel from '$lib/ui/WorkoutBlockPanel.svelte';
+  import { DEMO_WORKOUT_ID } from '$lib/data/demoWorkout';
   import RouteMap from '$lib/ui/RouteMap.svelte';
   import StartCallout from '$lib/ui/StartCallout.svelte';
   import FinishBanner from '$lib/ui/FinishBanner.svelte';
@@ -187,6 +188,7 @@
               currentPaceSecondsPer500={ride.pm5Data?.pace ?? null}
               currentPowerWatts={ride.pm5Data?.power ?? null}
               deviceConnected={session.selectedRowerConnected}
+              isDemo={workout.current.id === DEMO_WORKOUT_ID}
             />
           {/if}
 
