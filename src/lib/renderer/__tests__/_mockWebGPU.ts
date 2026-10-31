@@ -42,6 +42,12 @@ if (!g['GPUShaderStage']) {
     COMPUTE: 0x4,
   };
 }
+if (!g['GPUMapMode']) {
+  g['GPUMapMode'] = {
+    READ: 0x0001,
+    WRITE: 0x0002,
+  };
+}
 
 export interface MockGPULog {
   submits: number;
@@ -152,6 +158,9 @@ export const makeMockDevice = (): MockDevice => {
       resolveLost({ reason: 'unknown', message } as GPUDeviceLostInfo);
     },
     lost,
+    // No optional features by default, so the GPU frame timer (#584 AC3) and
+    // anything else gated on `device.features.has(...)` takes its absent path.
+    features: new Set() as unknown as GPUSupportedFeatures,
     createBuffer: () => makeBuffer(),
     createShaderModule: () => ({ label: '' }) as unknown as GPUShaderModule,
     createBindGroupLayout: () => ({}) as unknown as GPUBindGroupLayout,
