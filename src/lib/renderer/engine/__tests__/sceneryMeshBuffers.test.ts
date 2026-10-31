@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mergeSceneryPrimitives } from '../sceneryMeshBuffers';
+import {
+  mergeSceneryPrimitives,
+  scaleMeshColors,
+  VEGETATION_ALBEDO_GAIN,
+} from '../sceneryMeshBuffers';
 import type { GlbPrimitive } from '../../../scenery/glbLoader';
 
 const prim = (over: Partial<GlbPrimitive>): GlbPrimitive => ({
@@ -62,6 +66,31 @@ describe('mergeSceneryPrimitives', () => {
     const b = prim({ indices: new Uint32Array([0]) });
     const merged = mergeSceneryPrimitives([a, b]);
     expect(merged.indices).toBeInstanceOf(Uint32Array);
+  });
+
+  it('scaleMeshColors lifts RGB by the gain and leaves alpha untouched', () => {
+    // A GLB oak leaf (physically-dark linear green) and its trunk.
+    const colors = new Float32Array([
+      0.048, 0.147, 0.032, 1, // leaf
+      0.102, 0.068, 0.042, 1, // trunk
+    ]);
+    const lifted = scaleMeshColors(colors, VEGETATION_ALBEDO_GAIN);
+    // RGB scaled by the gain …
+    expect(lifted[0]).toBeCloseTo(0.048 * VEGETATION_ALBEDO_GAIN, 6);
+    expect(lifted[1]).toBeCloseTo(0.147 * VEGETATION_ALBEDO_GAIN, 6);
+    expect(lifted[2]).toBeCloseTo(0.032 * VEGETATION_ALBEDO_GAIN, 6);
+    expect(lifted[4]).toBeCloseTo(0.102 * VEGETATION_ALBEDO_GAIN, 6);
+    // … alpha preserved exactly.
+    expect(lifted[3]).toBe(1);
+    expect(lifted[7]).toBe(1);
+    // Leaf stays greenest channel; trunk stays reddest — hue is preserved.
+    expect(lifted[1]).toBeGreaterThan(lifted[0]);
+    expect(lifted[1]).toBeGreaterThan(lifted[2]);
+    expect(lifted[4]).toBeGreaterThan(lifted[5]);
+    // The gain actually brightens (so trees aren't crushed to near-black).
+    expect(VEGETATION_ALBEDO_GAIN).toBeGreaterThan(1);
+    // Original buffer is untouched (pure).
+    expect(colors[0]).toBeCloseTo(0.048, 6);
   });
 
   it('handles a single primitive', () => {
