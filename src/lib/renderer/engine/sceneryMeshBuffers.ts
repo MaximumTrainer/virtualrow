@@ -24,6 +24,43 @@ export interface MergedSceneryMesh {
   colors: Float32Array;
 }
 
+/**
+ * Brightness gain applied to the tier-E vegetation GLBs' albedos.
+ *
+ * The kit's tree/ground-cover GLBs carry physically-correct LINEAR base
+ * colours (leaf ≈ [0.05, 0.15, 0.03], trunk ≈ [0.10, 0.07, 0.04]). The scene
+ * renders to an HDR target and the composite's ACES tone-map has a shallow
+ * slope near zero, so those low linear values are crushed toward black — a
+ * sunlit GLB oak leaf lands around g ≈ 0.21 and a shadowed one near g ≈ 0.06,
+ * so the detailed kit trees read as dark muddy blobs next to the procedural
+ * flora, whose palettes are authored ~6–10× brighter (crown ≈ [0.42, 0.60,
+ * 0.30]) and tone-map to a clear green. Lifting the vegetation albedos into
+ * the same effective range makes the two tree systems match: green leaves +
+ * brown trunks instead of near-black.
+ *
+ * Scoped to tier-E (vegetation/ground-cover) only — buildings (tier-D) carry
+ * a mix of already-bright surfaces (clapboard walls ≈ 0.78–0.91) that a
+ * blanket gain would blow out.
+ */
+export const VEGETATION_ALBEDO_GAIN = 3.5;
+
+/**
+ * Scale a merged mesh's per-vertex RGB by `gain`, leaving alpha untouched.
+ * Pure — returns a new buffer so callers can keep the raw colours for the
+ * depth/shadow path. Values may exceed 1; the HDR target carries them and the
+ * tone-map brings them back into range.
+ */
+export const scaleMeshColors = (colors: Float32Array, gain: number): Float32Array => {
+  const out = new Float32Array(colors.length);
+  for (let i = 0; i + 3 < colors.length; i += 4) {
+    out[i] = colors[i] * gain;
+    out[i + 1] = colors[i + 1] * gain;
+    out[i + 2] = colors[i + 2] * gain;
+    out[i + 3] = colors[i + 3];
+  }
+  return out;
+};
+
 export const mergeSceneryPrimitives = (
   primitives: readonly GlbPrimitive[],
 ): MergedSceneryMesh => {

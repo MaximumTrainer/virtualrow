@@ -58,7 +58,7 @@ import { RouteCurve } from '../math/curve';
 import { GHOST_LANE_OFFSET_M } from '../../../components/rower3d/ghost';
 import { assetUrl } from '../../utils/assetUrl';
 import { createSceneryPass } from './sceneryPass';
-import { mergeSceneryPrimitives } from './sceneryMeshBuffers';
+import { mergeSceneryPrimitives, scaleMeshColors, VEGETATION_ALBEDO_GAIN } from './sceneryMeshBuffers';
 import {
   planSceneryStream,
   sceneryModelsToLoad,
@@ -463,12 +463,22 @@ export const createRideScene = async (
       // vertex so a multi-material model (trunk/leaves, walls/roof/windows)
       // keeps its parts distinct instead of collapsing to primitive-0's colour.
       const merged = mergeSceneryPrimitives(model.primitives);
+      // Tier-E is the vegetation/ground-cover kit. Its GLBs carry physically-
+      // dark LINEAR albedos that the HDR + ACES composite crushes toward
+      // black, so the detailed kit trees read far darker than the procedural
+      // flora. Lift them into the same effective range so leaves stay green
+      // and trunks brown; buildings (tier-D) are left alone (see
+      // VEGETATION_ALBEDO_GAIN).
+      const colors =
+        tierFolderFor(id) === 'tier-e'
+          ? scaleMeshColors(merged.colors, VEGETATION_ALBEDO_GAIN)
+          : merged.colors;
       sceneryMeshPass.register({
         id,
         positions: merged.positions,
         normals: merged.normals,
         indices: merged.indices,
-        colors: merged.colors,
+        colors,
         baseColor: model.primitives[0]?.baseColor ?? [1, 1, 1, 1],
         maxInstances: COURSE_FURNITURE_MAX_INSTANCES,
       });
