@@ -9,7 +9,7 @@
 // and sizing buildings.
 // ============================================================================
 
-import type { SceneryProfile } from '../../services/routeEnrichmentService';
+import type { SceneryProfile } from '../../lib/services/routeEnrichmentService';
 
 export interface SceneryProfileConfig {
   trees: {

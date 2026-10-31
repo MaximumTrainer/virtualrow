@@ -7,8 +7,9 @@ on:
     paths:
       - 'docs/**'
       - 'src/**'
+      - 'static/**'
       - 'public/**'
-      - 'index.html'
+      - 'svelte.config.js'
       - 'package*.json'
       - 'vite.config.ts'
       - '.github/workflows/deploy-pages.yml'
@@ -28,11 +29,15 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to GitHub Pages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment_try_2.outputs.page_url || steps.deployment_try_1.outputs.page_url }}
     steps:
+      # #542 AC12 cutover: the live app at /virtualrow/app/ is now the
+      # SvelteKit + hand-written-WebGPU build (adapter-static, SPA fallback).
+      # This replaced the React/Vite build and the separate /virtualrow/next/
+      # preview, both retired with the React scene when `next` merged to `main`.
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -45,10 +50,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Vite app for GitHub Pages
-        run: npx vite build --base=/virtualrow/app/
+      - name: Build the WebGPU app for GitHub Pages
+        # svelte.config.js reads BASE_PATH (default /virtualrow/app) for
+        # `paths.base`; adapter-static writes the static SPA to build/.
+        run: npm run build
         env:
           NODE_ENV: production
+          BASE_PATH: /virtualrow/app
           VITE_INTERVALS_CLIENT_ID: ${{ secrets.INTERVALS_OAUTH_CLIENT_ID }}
           # #473 FR4/FR5: bake the deploy's commit SHA into the client so a
           # crash report says which build crashed. `github.sha` is the full
@@ -64,40 +72,7 @@ jobs:
       - name: Copy app build into docs/app/
         run: |
           mkdir -p docs/app
-          cp -r dist/. docs/app/
-
-      # #542: publish the next/svelte-webgpu epic branch as a preview at
-      # /virtualrow/next/, alongside the production app at /virtualrow/app/.
-      # GitHub Pages serves one site, so the preview rides this deploy's
-      # artifact rather than a second deploy that would clobber /app — it
-      # refreshes whenever main deploys (the epic branch is cherry-picked
-      # forward). Both steps are continue-on-error: a broken epic branch
-      # leaves last good /next (or none) and never blocks the /app deploy.
-      # Removed at the AC12 cutover, when the branch replaces main.
-      - name: Checkout next/svelte-webgpu
-        id: next_checkout
-        continue-on-error: true
-        uses: actions/checkout@v7
-        with:
-          ref: next/svelte-webgpu
-          path: next-preview
-
-      - name: Build next/svelte-webgpu preview into docs/next/
-        if: steps.next_checkout.outcome == 'success'
-        continue-on-error: true
-        working-directory: next-preview
-        env:
-          NODE_ENV: production
-          BASE_PATH: /virtualrow/next
-          VITE_INTERVALS_CLIENT_ID: ${{ secrets.INTERVALS_OAUTH_CLIENT_ID }}
-          VITE_BUILD_SHA: ${{ github.sha }}
-          VITE_CRASH_REPORT_ENDPOINT: ${{ secrets.CRASH_REPORT_ENDPOINT }}
-          VITE_CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
-        run: |
-          npm ci
-          npm run build
-          mkdir -p "$GITHUB_WORKSPACE/docs/next"
-          cp -r build/. "$GITHUB_WORKSPACE/docs/next/"
+          cp -r build/. docs/app/
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

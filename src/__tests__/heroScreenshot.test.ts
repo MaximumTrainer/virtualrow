@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { decodePng } from '../utils/pngDecode';
-import { isBlankImage, describeImageContent, type RgbImage } from '../utils/imageContent';
+import { decodePng } from '../lib/utils/pngDecode';
+import { isBlankImage, describeImageContent, type RgbImage } from '../lib/utils/imageContent';
 
 /**
  * The hero screenshot on the public site must show a rowing scene.

@@ -1,4 +1,4 @@
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 
 // Willowbrook River - a fictional 5km meandering river route
 export const willowbrookRiverCoordinates: Coordinate[] = [

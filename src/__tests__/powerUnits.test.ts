@@ -21,8 +21,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import PM5 from '../vendor/pm5-base.js';
-import { FTMSBluetoothService } from '../services/ftmsBluetoothService';
+import PM5 from '../lib/vendor/pm5-base.js';
+import { FTMSBluetoothService } from '../lib/services/ftmsBluetoothService';
 
 /** A number a club rower holds and would notice the absence of. */
 const STEADY_WATTS = 180;

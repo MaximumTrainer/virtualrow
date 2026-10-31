@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { workoutService } from '../services/workoutService';
+import { workoutService } from '../lib/services/workoutService';
 
 /**
  * A short row still has an average pace.

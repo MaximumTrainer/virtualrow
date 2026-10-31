@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { assetUrl } from '../utils/assetUrl';
+import { assetUrl } from '../lib/utils/assetUrl';
 
 /**
  * The deploy builds with `--base=/virtualrow/app/`, so everything in public/ is

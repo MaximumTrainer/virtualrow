@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { sanitizeAppearance } from '../services/rowerAppearanceService';
-import { genderFromSex } from '../services/authService';
+import { sanitizeAppearance } from '../lib/services/rowerAppearanceService';
+import { genderFromSex } from '../lib/services/authService';
 
 /**
  * D8 on #474: the rower appearance is a user choice, not derived from the
@@ -14,7 +14,7 @@ import { genderFromSex } from '../services/authService';
 describe('rower appearance is user-chosen, not profile-derived (D8)', () => {
   it('authService does not export any appearance resolver', () => {
     const source = readFileSync(
-      resolve(process.cwd(), 'src/services/authService.ts'),
+      resolve(process.cwd(), 'src/lib/services/authService.ts'),
       'utf8',
     );
     expect(source).not.toMatch(/appearance/i);

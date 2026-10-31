@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { useSimServer, releaseSimServer, emitPm5 } from '../utils/sim-server';
-import { describeSceneHealth } from '../../src/utils/sceneHealth';
+import { describeSceneHealth } from '../../src/lib/utils/sceneHealth';
 
 /**
  * Issue #301 — find out whether the tab really does die on a heavy traverse.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AudioService } from '../services/audioService';
+import { AudioService } from '../lib/services/audioService';
 
 /**
  * Issue #339 — sound, synthesised rather than downloaded.

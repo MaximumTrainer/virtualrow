@@ -78,7 +78,7 @@ describe('classifyStagedFiles', () => {
 describe('auditPairing', () => {
   const routeServiceTest = {
     path: 'src/__tests__/routeService.test.ts',
-    content: "import { routeService } from '../services/routeService';",
+    content: "import { routeService } from '../lib/services/routeService';",
   };
 
   it('passes a new module that arrives with a test naming it', () => {

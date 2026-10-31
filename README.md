@@ -1,9 +1,9 @@
 # VirtualRow — Row Anywhere on Real Water Routes
 
-[![Deploy Landing Page](https://github.com/MaximumTrainer/virtualrow/actions/workflows/pages.yml/badge.svg)](https://github.com/MaximumTrainer/virtualrow/actions/workflows/pages.yml)
-[![Playwright E2E Tests](https://github.com/MaximumTrainer/virtualrow/actions/workflows/playwright-e2e-clean.yml/badge.svg)](https://github.com/MaximumTrainer/virtualrow/actions/workflows/playwright-e2e-clean.yml)
+[![Deploy Landing Page](https://github.com/maximum-trainer/virtualrow/actions/workflows/pages.yml/badge.svg)](https://github.com/maximum-trainer/virtualrow/actions/workflows/pages.yml)
+[![Playwright E2E Tests](https://github.com/maximum-trainer/virtualrow/actions/workflows/playwright-e2e-clean.yml/badge.svg)](https://github.com/maximum-trainer/virtualrow/actions/workflows/playwright-e2e-clean.yml)
 
-**[🌐 Website](https://maximumtrainer.github.io/virtualrow/) · [📦 GitHub](https://github.com/MaximumTrainer/virtualrow)**
+**[🌐 Website](https://maximumtrainer.github.io/virtualrow/) · [📦 GitHub](https://github.com/maximum-trainer/virtualrow)**
 
 VirtualRow is a web-based fitness application that lets you row on virtual water routes while connected to your Concept2 PM5 indoor rower via Bluetooth. Experience immersive 3D rowing visualization from your home.
 

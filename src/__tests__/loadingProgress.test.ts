@@ -3,7 +3,7 @@ import {
   LOAD_PHASES,
   describeLoadProgress,
   type LoadPhaseKey,
-} from '../utils/loadingProgress';
+} from '../lib/utils/loadingProgress';
 
 /**
  * How much of the wait is done (#318).

@@ -1,7 +1,5 @@
 import js from '@eslint/js'
 import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
@@ -12,6 +10,10 @@ export default defineConfig([
   // CI gate below unmeasurable.
   globalIgnores([
     'dist',
+    'build',
+    // #542 P0: SvelteKit's generated output and type files (`.svelte-kit/`) are
+    // not hand-written source and do not follow the project's lint rules.
+    '.svelte-kit',
     'coverage',
     'test-results',
     'playwright-report',
@@ -32,23 +34,13 @@ export default defineConfig([
     },
   },
 
-  // React rules apply to the app only. Playwright specs and build scripts are
-  // not React, and the hooks plugin cannot tell Playwright's `use` fixture
-  // callback from React's `use` hook — it reported three rules-of-hooks
-  // violations in an earlier fixture file for ordinary fixture
-  // code.
+  // #550 AC6/NFR: on `next/svelte-webgpu` the WebGPU surface lives in
+  // `src/lib/renderer/` (the hand-written engine). `@webgpu/types` is allowed
+  // there and nowhere else; `three` is forbidden there, which is what makes
+  // the engine framework-free.
   {
     files: ['src/**/*.{ts,tsx}'],
-    extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
-  },
-
-  // AC5 of #498: `@webgpu/types` lives inside `src/webgpu/` only. The rest of
-  // the codebase depends on the small `WebGPUCullPort` interface instead, so
-  // the ambient `GPUDevice`/`GPUAdapter` names don't leak into app files. The
-  // module itself is exempt below.
-  {
-    files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/webgpu/**'],
+    ignores: ['src/lib/renderer/**'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -57,10 +49,28 @@ export default defineConfig([
             {
               name: '@webgpu/types',
               message:
-                "Import from 'src/webgpu/types' (the WebGPUCullPort shim) instead. " +
-                "AC5 of #498 keeps `@webgpu/types` inside `src/webgpu/` only.",
+                "Import from 'src/lib/renderer/engine/health' or add new types under src/lib/renderer. " +
+                '#550 NFR keeps `@webgpu/types` inside the renderer.',
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/lib/renderer/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'three',
+              message:
+                "The engine is framework-free (#550 NFR). Port the math you need into src/lib/renderer/math instead of importing three.",
+            },
+          ],
+          patterns: ['three/*'],
         },
       ],
     },

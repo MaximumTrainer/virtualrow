@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { WorkoutService, SPLIT_DISTANCE_METERS } from '../services/workoutService';
-import type { PM5Data } from '../types/index';
+import { WorkoutService, SPLIT_DISTANCE_METERS } from '../lib/services/workoutService';
+import type { PM5Data } from '../lib/types/index';
 
 /**
  * Regression + bug-spec tests for activity distance handling.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getWaterWidthSceneUnitsForProgress } from '../services/routeEnrichmentService';
-import type { RouteSegmentEnrichment } from '../services/routeEnrichmentService';
+import { getWaterWidthSceneUnitsForProgress } from '../lib/services/routeEnrichmentService';
+import type { RouteSegmentEnrichment } from '../lib/services/routeEnrichmentService';
 import { OAR_REACH_METERS, bladeClearanceMeters } from '../components/rower3d/navigableWidth';
 import { SCENE_SCALE } from '../components/rower3d/constants';
 

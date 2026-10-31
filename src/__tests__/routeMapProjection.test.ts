@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { RouteService } from '../services/routeService';
-import { latLngToMeters } from '../utils/geoUtils';
+import { RouteService } from '../lib/services/routeService';
+import { latLngToMeters } from '../lib/utils/geoUtils';
 import {
   computeRouteMapPadding,
   createRouteMapTransform,
   type RouteMetreBounds,
 } from '../components/routeMapProjection';
-import type { Coordinate } from '../types/index';
+import type { Coordinate } from '../lib/types/index';
 
 /**
  * KV-2.3 (#191) — an imported route draws inside the map, at any size.

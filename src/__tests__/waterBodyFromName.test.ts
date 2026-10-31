@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { waterBodyFromName } from '../utils/waterBodyFromName';
+import { waterBodyFromName } from '../lib/utils/waterBodyFromName';
 
 /**
  * Issue #413 — a rownative course rowed on a lake is drawn as a river because

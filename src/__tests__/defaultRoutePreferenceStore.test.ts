@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   defaultRoutePreferenceStore,
   DEFAULT_ROUTE_KEY_PREFIX,
-} from '../services/defaultRoutePreferenceStore';
+} from '../lib/services/defaultRoutePreferenceStore';
 
 /**
  * Issue #219, R6 — a signed-in athlete can make a route their default.

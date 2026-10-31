@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RownativeService } from '../services/rownativeService';
+import { RownativeService } from '../lib/services/rownativeService';
 
 const service = new RownativeService();
 const resolve = (input: string) => service.resolveCourseId(input);

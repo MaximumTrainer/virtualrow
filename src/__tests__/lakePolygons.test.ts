@@ -1,17 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
-import type { OverpassElement } from '../services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
 import {
   clipRingToBox,
   LAKE_POLYGON_STORE_VERTICES,
   lakePolygonsFor,
   simplifyRing,
   vertexCount,
-} from '../utils/lakePolygons';
-import { polygonsFromElement, type MaskBounds, type MaskFeature } from '../utils/osmWaterMask';
-import { runRouteDetection } from '../utils/routeDetection';
+} from '../lib/utils/lakePolygons';
+import { polygonsFromElement, type MaskBounds, type MaskFeature } from '../lib/utils/osmWaterMask';
+import { runRouteDetection } from '../lib/utils/routeDetection';
 
 /**
  * #493 Phase 3 (FR1, D2 a, D4 c): the lake outlines a lake route keeps, clipped

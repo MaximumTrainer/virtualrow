@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { OverpassElement } from '../services/routeEnrichmentService';
-import type { Coordinate } from '../types/index';
-import { buildWaterMask } from '../utils/osmWaterMask';
-import { detectRoute, localProjection } from '../utils/shoreDetection';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
+import type { Coordinate } from '../lib/types/index';
+import { buildWaterMask } from '../lib/utils/osmWaterMask';
+import { detectRoute, localProjection } from '../lib/utils/shoreDetection';
 
 // Synthetic water laid out in metres east (x) and north (y) of an origin, so
 // expected distances can be read straight off the fixture.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WorkoutService } from '../services/workoutService';
+import { WorkoutService } from '../lib/services/workoutService';
 
 describe('WorkoutService guest mode', () => {
   it('excludes guest sessions from getAllSessions()', () => {

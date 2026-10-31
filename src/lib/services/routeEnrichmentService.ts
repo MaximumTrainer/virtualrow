@@ -1,0 +1,1465 @@
+import { MIN_NAVIGABLE_WIDTH_METERS } from '../../components/rower3d/navigableWidth';
+import type { Coordinate, WaterRoute } from '../types/index';
+import {
+  calculateBearing,
+  distanceBetweenLatLng,
+  normalizeBearingDelta,
+  routeTotalDistanceMeters,
+} from '../utils/geoUtils';
+
+export const OPEN_TOPO_DATA_BATCH_LIMIT = 100;
+export const ROUTE_SEGMENT_LENGTH_METERS = 50;
+export const ROUTE_ENRICHMENT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const OPEN_TOPO_DATA_URL = 'https://api.opentopodata.org/v1/srtm30m';
+import { findCrossings, type Crossing } from '../utils/bridgeCrossings';
+import { mapOsmTagsToSceneryProfile } from '../utils/sceneryFromTags';
+import { SHORE_RAY_LIMIT_METERS, type DetectedSample } from '../utils/shoreDetection';
+import type { RouteWaterClass } from '../utils/waterClassification';
+import { createWorkerDetectionRunner, type RouteDetectionRunner } from './routeDetectionRunner';
+import { LAKE_POLYGON_STORE_VERTICES, lakePolygonsForTier, type LakePolygon } from '../utils/lakePolygons';
+import { SCENE_SCALE } from '../utils/worldScale';
+import { waterBodyFromName } from '../utils/waterBodyFromName';
+
+export const OVERPASS_API_URL = 'https://overpass-api.de/api/interpreter';
+const ROUTE_ENRICHMENT_CACHE_ROOT = 'virtualrow:route-enrichment:';
+/**
+ * v2: the water type comes from OSM detection (#493). v3: each segment also
+ * carries the measured shore on each side (FR16) and each bank's land (FR18).
+ * v4: a lake route carries its lake's outline (Phase 3) and each segment says
+ * whether it is on it. v5: a segment with a sample on land is no longer on the
+ * lake, and the lake keeps those samples (Phase 4, FR8).
+ * Entries under the bare root or an older version are pruned on start-up (D9 b).
+ */
+const ROUTE_ENRICHMENT_CACHE_PREFIX = `${ROUTE_ENRICHMENT_CACHE_ROOT}v5:`;
+
+export type SceneryProfile =
+  | 'forest'
+  | 'residential'
+  | 'commercial'
+  | 'farmland'
+  | 'beach'
+  | 'wetland'
+  | 'fallback';
+
+export type WaterBodyType =
+  | 'river'
+  | 'canal'
+  | 'stream'
+  | 'lake'
+  | 'reservoir'
+  /** Sea, bays, straits, and lakes too wide to see across (#493 D12 c, D13). */
+  | 'open_water'
+  | 'unknown';
+
+export interface RouteSegmentEnrichment {
+  index: number;
+  startMeters: number;
+  endMeters: number;
+  sceneryProfile: SceneryProfile;
+  treeDensity: number;
+  vegetationDensity: number;
+  buildingDensity: number;
+  objectScale: number;
+  waterWidthMeters: number;
+  dragMultiplier: number;
+  bearing: number;
+  bearingDelta: number;
+  /**
+   * Metres from the route to the mapped shore (or an island) on each side,
+   * from OSM detection (#493 FR16). `null` is open water: no shore within
+   * `SHORE_RAY_LIMIT_METERS`. Absent where nothing was measured, which keeps
+   * the water centred on the route at `waterWidthMeters`.
+   */
+  leftShoreMeters?: number | null;
+  rightShoreMeters?: number | null;
+  /**
+   * The land beyond each bank's shore (#493 FR18), where detection found a
+   * mapped area there. Absent on a side with none, which then shows
+   * `sceneryProfile` like both banks used to.
+   */
+  leftSceneryProfile?: SceneryProfile;
+  rightSceneryProfile?: SceneryProfile;
+  /**
+   * The segment is on the lake whose outline `RouteEnrichmentData.lakes`
+   * carries (#493 Phase 3, D5 a): the lake is drawn there instead of the
+   * ribbon. Absent everywhere else.
+   */
+  onLake?: true;
+}
+
+export interface RouteEnrichmentData {
+  routeId: string;
+  elevations: number[];
+  segmentProfiles: RouteSegmentEnrichment[];
+  waterBodyType: WaterBodyType;
+  /** Bridges over the route, in route order (#232). Absent on cached data written before it existed. */
+  crossings?: Crossing[];
+  waterWidthMeters: number;
+  waterColor: string;
+  waveIntensity: number;
+  /**
+   * What OSM detection found along the route (#493 FR22): each water type's share
+   * of the on-water samples, and the sample counts. Absent on fallback data.
+   */
+  waterDetection?: WaterDetectionSummary;
+  /**
+   * The lake a lake or reservoir route is on, drawn by its real outline
+   * (#493 Phase 3, D2 a): the rings around the route with their islands, and
+   * the one height its flat surface sits at (D11 a). Absent on every other
+   * route, and on a lake route OSM has no outline for.
+   */
+  lakes?: LakeSurface;
+  /**
+   * OSM buildings near the route (#549 slice 4). Absent on fallback data,
+   * on cached entries written before this field, and when Overpass returned
+   * no building ways near the route. Each entry's `footprint` is the raw
+   * lat/lng polygon from `way["building"]` or the outer ring of a
+   * `relation["building"]`; the shell/engine convert to scene metres and
+   * build axis-aligned prisms through the `BuildingsPass`.
+   */
+  buildings?: OsmBuilding[];
+  fetchedAt: number;
+  source: 'network' | 'cache' | 'fallback';
+}
+
+/** OSM building footprint pulled from Overpass. */
+export interface OsmBuilding {
+  /** Lat/lng polygon vertices in Overpass order (closed if the source closed). */
+  footprint: Coordinate[];
+  /** Height in metres from `height` or `building:levels` × 3 m; absent → caller's default. */
+  heightMeters?: number;
+  /** The raw `building` tag value — handy for optional palette picking. */
+  kind?: string;
+}
+
+export interface LakeSurface {
+  polygons: LakePolygon[];
+  /** The median route elevation over the lake segments, in metres. */
+  elevationMeters: number;
+  /** Route samples on land where the route is otherwise on the lake (FR8); absent when none. */
+  offWater?: Coordinate[];
+}
+
+export interface WaterDetectionSummary {
+  shares: RouteWaterClass['shares'];
+  water: number;
+  land: number;
+  unknown: number;
+}
+
+interface CachedRouteEnrichment {
+  savedAt: number;
+  data: RouteEnrichmentData;
+}
+
+interface BoundingBox {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
+interface OverpassGeometryPoint {
+  lat: number;
+  lon: number;
+}
+
+export interface OverpassElement {
+  type: string;
+  id?: number;
+  lat?: number;
+  lon?: number;
+  bounds?: {
+    minlat: number;
+    minlon: number;
+    maxlat: number;
+    maxlon: number;
+  };
+  geometry?: OverpassGeometryPoint[];
+  tags?: Record<string, string>;
+  /** Relation members, each with its own geometry under `out geom` (#493). */
+  members?: Array<{
+    type: string;
+    ref: number;
+    role: string;
+    geometry?: OverpassGeometryPoint[];
+  }>;
+}
+
+interface OverpassResponse {
+  elements?: OverpassElement[];
+}
+
+interface OpenTopoDataResponse {
+  results?: Array<{ elevation: number | null }>;
+}
+
+interface CacheLookupResult {
+  data: RouteEnrichmentData | null;
+  stale: boolean;
+}
+
+export const SCENERY_PROFILE_CONFIG: Record<
+  SceneryProfile,
+  Pick<
+    RouteSegmentEnrichment,
+    'treeDensity' | 'vegetationDensity' | 'buildingDensity' | 'objectScale'
+  >
+> = {
+  forest: {
+    treeDensity: 1,
+    vegetationDensity: 0.85,
+    buildingDensity: 0.05,
+    objectScale: 1.15,
+  },
+  residential: {
+    treeDensity: 0.55,
+    vegetationDensity: 0.55,
+    buildingDensity: 0.4,
+    objectScale: 1,
+  },
+  commercial: {
+    treeDensity: 0.15,
+    vegetationDensity: 0.2,
+    buildingDensity: 0.8,
+    objectScale: 1.05,
+  },
+  farmland: {
+    treeDensity: 0.22,
+    vegetationDensity: 0.45,
+    buildingDensity: 0.08,
+    objectScale: 0.9,
+  },
+  beach: {
+    treeDensity: 0.18,
+    vegetationDensity: 0.35,
+    buildingDensity: 0.04,
+    objectScale: 0.95,
+  },
+  wetland: {
+    treeDensity: 0.3,
+    vegetationDensity: 0.8,
+    buildingDensity: 0.03,
+    objectScale: 0.92,
+  },
+  fallback: {
+    treeDensity: 0.45,
+    vegetationDensity: 0.5,
+    buildingDensity: 0.1,
+    objectScale: 1,
+  },
+};
+
+const defaultStorage = () => {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+};
+
+/**
+ * Diagnostic logging for the enrichment pipeline.
+ *
+ * Gated on `DEV` *and* a non-test mode: Vitest runs with `DEV === true`, so a
+ * bare `DEV` check turned every unit-test run into a wall of `stdout` blocks
+ * that masked real diagnostics. Dev-browser behaviour is unchanged.
+ */
+const debugLog = (message: string) => {
+  const env = import.meta.env;
+  if (env?.DEV && env.MODE !== 'test') {
+    console.debug(message);
+  }
+};
+
+/**
+ * Constrain an upstream elevation payload to exactly one finite number per
+ * route coordinate.
+ *
+ * OpenTopoData is untrusted input: it can return fewer results than requested
+ * (partial batch), more than requested, or `null` for no-data cells. Any of
+ * those would silently misalign `elevations` against `route.coordinates`.
+ * Short payloads are padded with the last known value (0 if there is none),
+ * long payloads are truncated, and `null`/non-finite entries become 0.
+ */
+export const normalizeElevations = (
+  elevations: ReadonlyArray<number | null | undefined>,
+  expectedCount: number,
+): number[] => {
+  const normalized: number[] = [];
+  let lastKnown = 0;
+
+  for (let index = 0; index < expectedCount; index++) {
+    if (index < elevations.length) {
+      const value = elevations[index];
+      lastKnown = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    }
+    normalized.push(lastKnown);
+  }
+
+  return normalized;
+};
+
+export const getRouteEnrichmentCacheKey = (routeId: string) =>
+  `${ROUTE_ENRICHMENT_CACHE_PREFIX}${routeId}`;
+
+export const splitCoordinatesIntoElevationBatches = (
+  coordinates: Coordinate[],
+  batchSize: number = OPEN_TOPO_DATA_BATCH_LIMIT,
+) => {
+  const batches: Coordinate[][] = [];
+  for (let index = 0; index < coordinates.length; index += batchSize) {
+    batches.push(coordinates.slice(index, index + batchSize));
+  }
+  return batches;
+};
+
+export const inferWaterBodyType = (
+  tags: Record<string, string> = {},
+): WaterBodyType => {
+  if (tags.waterway === 'river') return 'river';
+  if (tags.waterway === 'canal') return 'canal';
+  if (tags.waterway === 'stream') return 'stream';
+  if (tags.natural === 'water') {
+    if (tags.water === 'reservoir' || tags.water === 'basin') return 'reservoir';
+    return 'lake';
+  }
+  return 'unknown';
+};
+
+export const getDefaultWaterWidthMeters = (waterBodyType: WaterBodyType) => {
+  switch (waterBodyType) {
+    case 'river':
+      return 55;
+    case 'canal':
+      return 15;
+    case 'stream':
+      return 7;
+    case 'lake':
+    case 'reservoir':
+      return 45;
+    case 'open_water':
+      return 120;
+    default:
+      return 30;
+  }
+};
+
+const parseWidthMeters = (widthValue?: string) => {
+  if (!widthValue) return null;
+  const parsed = Number.parseFloat(widthValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getWaterAppearance = (waterBodyType: WaterBodyType) => {
+  switch (waterBodyType) {
+    case 'canal':
+      return { waterColor: '#537a94', waveIntensity: 0.78 };
+    case 'stream':
+      return { waterColor: '#487d88', waveIntensity: 0.92 };
+    case 'lake':
+    case 'reservoir':
+      return { waterColor: '#3f7ea8', waveIntensity: 0.88 };
+    case 'river':
+      return { waterColor: '#2f6f93', waveIntensity: 1.1 };
+    case 'open_water':
+      return { waterColor: '#2c6a8f', waveIntensity: 1.35 };
+    default:
+      return { waterColor: '#3a7aa2', waveIntensity: 1 };
+  }
+};
+
+export const calculateBearingDragModifier = (bearingDelta: number) => {
+  if (bearingDelta <= 5) return 1;
+  const clamped = Math.min(45, Math.max(5, bearingDelta));
+  return 1 + ((clamped - 5) / 40) * 0.05;
+};
+
+export const calculateBearingDeltaForSegments = (bearings: number[]) =>
+  bearings.map((bearing, index) =>
+    index === 0 ? 0 : normalizeBearingDelta(bearings[index - 1], bearing),
+  );
+
+const interpolateCoordinateAtDistance = (
+  coordinates: Coordinate[],
+  distanceMeters: number,
+): Coordinate => {
+  if (coordinates.length === 0) return { lat: 0, lng: 0 };
+  if (coordinates.length === 1 || distanceMeters <= 0) return coordinates[0];
+
+  let travelled = 0;
+  for (let index = 1; index < coordinates.length; index++) {
+    const start = coordinates[index - 1];
+    const end = coordinates[index];
+    const segmentDistance = distanceBetweenLatLng(
+      start.lat,
+      start.lng,
+      end.lat,
+      end.lng,
+    );
+    if (travelled + segmentDistance >= distanceMeters && segmentDistance > 0) {
+      const t = (distanceMeters - travelled) / segmentDistance;
+      return {
+        lat: start.lat + (end.lat - start.lat) * t,
+        lng: start.lng + (end.lng - start.lng) * t,
+      };
+    }
+    travelled += segmentDistance;
+  }
+
+  return coordinates[coordinates.length - 1];
+};
+
+export const buildBoundingBox = (
+  coordinates: Coordinate[],
+  marginMeters = 200,
+): BoundingBox => {
+  if (coordinates.length === 0) {
+    throw new Error('Cannot calculate bounding box for empty coordinates');
+  }
+
+  const lats = coordinates.map((coordinate) => coordinate.lat);
+  const lngs = coordinates.map((coordinate) => coordinate.lng);
+  const centerLat =
+    lats.reduce((total, lat) => total + lat, 0) / Math.max(1, coordinates.length);
+  const latMargin = marginMeters / 111320;
+  const lngMargin =
+    marginMeters / (111320 * Math.max(Math.cos((centerLat * Math.PI) / 180), 0.1));
+
+  return {
+    minLat: Math.min(...lats) - latMargin,
+    minLng: Math.min(...lngs) - lngMargin,
+    maxLat: Math.max(...lats) + latMargin,
+    maxLng: Math.max(...lngs) + lngMargin,
+  };
+};
+
+export const osmTagsToSceneryProfile = mapOsmTagsToSceneryProfile;
+export const osmTagsToWaterBodyType = inferWaterBodyType;
+export const calculateBoundingBox = buildBoundingBox;
+
+export const getDefaultBankWidth = (
+  waterBodyType: WaterBodyType,
+  osmWidth?: string,
+) => {
+  const parsedWidth = parseWidthMeters(osmWidth);
+  if (parsedWidth !== null) return parsedWidth;
+
+  switch (waterBodyType) {
+    case 'river':
+      return 55;
+    case 'canal':
+      return 15;
+    case 'stream':
+      return 7.5;
+    case 'lake':
+    case 'reservoir':
+      return 100;
+    default:
+      return 40;
+  }
+};
+
+/**
+ * How far out water and islands are fetched (#493 FR20). Shore detection casts
+ * rays as far as the rower can see (the fog's far plane, ~550 m, plus the cull
+ * margin), so the water has to be mapped at least that far from the route or
+ * every ray stops at the edge of the data and reads as open water.
+ */
+export const SHORE_QUERY_MARGIN_METERS = 650;
+
+/** Island relations with more members than this are landmasses, left to the coastline (#493). */
+export const ISLAND_RELATION_MAX_MEMBERS = 500;
+
+const bboxString = (bounds: BoundingBox) =>
+  `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
+
+export const buildOverpassQuery = (coordinates: Coordinate[]) => {
+  const bbox = bboxString(buildBoundingBox(coordinates));
+  // Only water and land-in-water get the wide box; land use and buildings stay
+  // near the route, where a wide margin would be a city's worth of data.
+  const wide = bboxString(buildBoundingBox(coordinates, SHORE_QUERY_MARGIN_METERS));
+
+  return `
+[out:json][timeout:25];
+(
+  way["landuse"](${bbox});
+  way["natural"](${wide});
+  way["waterway"](${wide});
+  way["building"](${bbox});
+  // Bridges over the route, for Tier C placement (#232).
+  way["bridge"](${bbox});
+  way["leisure"](${bbox});
+  relation["landuse"](${bbox});
+  relation["natural"](${wide});
+  relation["waterway"](${wide});
+  relation["building"](${bbox});
+  relation["leisure"](${bbox});
+  node["natural"](${bbox});
+  node["waterway"](${bbox});
+  // Reservoirs, islands and piers for the water/land mask (#493).
+  way["landuse"~"^(reservoir|basin)$"](${wide});
+  way["place"~"^(island|islet)$"](${wide});
+  // Capped by size: on a coast the landmass itself (Great Britain: 5,727 members) is a
+  // place=island relation, and the coastline already says where its land is.
+  relation["place"~"^(island|islet)$"](${wide})(if:count_members() < ${ISLAND_RELATION_MAX_MEMBERS});
+  // Islets mapped only as a point, drawn as a disc (D17 c).
+  node["place"~"^(island|islet)$"](${wide});
+  way["man_made"~"^(pier|breakwater|groyne)$"](${wide});
+);
+out geom;
+`;
+};
+
+const getElementBounds = (element: OverpassElement): BoundingBox | null => {
+  if (element.bounds) {
+    return {
+      minLat: element.bounds.minlat,
+      minLng: element.bounds.minlon,
+      maxLat: element.bounds.maxlat,
+      maxLng: element.bounds.maxlon,
+    };
+  }
+
+  if (element.geometry && element.geometry.length > 0) {
+    return buildBoundingBox(
+      element.geometry.map((point) => ({ lat: point.lat, lng: point.lon })),
+      0,
+    );
+  }
+
+  if (Number.isFinite(element.lat) && Number.isFinite(element.lon)) {
+    return {
+      minLat: element.lat!,
+      minLng: element.lon!,
+      maxLat: element.lat!,
+      maxLng: element.lon!,
+    };
+  }
+
+  return null;
+};
+
+const boundsOverlap = (a: BoundingBox, b: BoundingBox) =>
+  a.minLat <= b.maxLat && a.maxLat >= b.minLat && a.minLng <= b.maxLng && a.maxLng >= b.minLng;
+
+/**
+ * The elements inside the original 200 m query box. Water and islands are now
+ * fetched further out for shore detection (#493); the bbox-based segment
+ * profiles and crossings keep seeing only what they saw before.
+ */
+export const elementsNearRoute = (coordinates: Coordinate[], elements: OverpassElement[]) => {
+  const near = buildBoundingBox(coordinates);
+  return elements.filter((element) => {
+    const bounds = getElementBounds(element);
+    return bounds !== null && boundsOverlap(bounds, near);
+  });
+};
+
+const pointInBounds = (coordinate: Coordinate, bounds: BoundingBox) =>
+  coordinate.lat >= bounds.minLat &&
+  coordinate.lat <= bounds.maxLat &&
+  coordinate.lng >= bounds.minLng &&
+  coordinate.lng <= bounds.maxLng;
+
+const findNearestFeature = (
+  coordinate: Coordinate,
+  elements: OverpassElement[],
+): OverpassElement | null => {
+  let nearest: OverpassElement | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const element of elements) {
+    const bounds = getElementBounds(element);
+    if (!bounds) continue;
+    if (pointInBounds(coordinate, bounds)) return element;
+
+    const center = {
+      lat: (bounds.minLat + bounds.maxLat) / 2,
+      lng: (bounds.minLng + bounds.maxLng) / 2,
+    };
+    const distance = distanceBetweenLatLng(
+      coordinate.lat,
+      coordinate.lng,
+      center.lat,
+      center.lng,
+    );
+    if (distance < nearestDistance) {
+      nearest = element;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestDistance <= 250 ? nearest : null;
+};
+
+const inferFallbackSceneryProfile = (route: WaterRoute): SceneryProfile => {
+  if (route.tags.includes('forest')) return 'forest';
+  if (route.tags.includes('lake')) return 'beach';
+  if (route.tags.includes('urban')) return 'commercial';
+  if (route.tags.includes('meadow')) return 'farmland';
+  return 'fallback';
+};
+
+const inferRouteWaterBodyType = (route: WaterRoute): WaterBodyType => {
+  // Tags are the curated signal: an explicit tag always wins over the name
+  // (AC5.2). rownative writes the classified type as a tag at import time
+  // (#413, AC4.1), so a course imported before this change reaches the name
+  // fallback below and is corrected in place — no re-import needed (AC5.1).
+  if (route.tags.includes('canal')) return 'canal';
+  if (route.tags.includes('stream')) return 'stream';
+  if (route.tags.includes('lake')) return 'lake';
+  if (route.tags.includes('reservoir')) return 'reservoir';
+  if (route.tags.includes('river')) return 'river';
+  return waterBodyFromName(route.name);
+};
+
+/**
+ * Pull OSM building footprints out of the elements returned by Overpass
+ * (#549 slice 4). Both `way["building"]` and the outer ring of
+ * `relation["building"]` are handled; relations use the member tagged
+ * `outer`. Returned footprints are filtered to at least 4 points and a
+ * sensible square-metre area so a stub way or a 1 m sliver doesn't
+ * dominate the pool.
+ */
+export const buildingsFromElements = (
+  elements: OverpassElement[],
+): OsmBuilding[] => {
+  const parseHeight = (tags: Record<string, string> | undefined): number | undefined => {
+    if (!tags) return undefined;
+    const raw = tags.height ?? tags['building:height'];
+    if (raw) {
+      const n = Number.parseFloat(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    const levels = tags['building:levels'] ?? tags.levels;
+    if (levels) {
+      const n = Number.parseFloat(levels);
+      if (Number.isFinite(n) && n > 0) return n * 3;
+    }
+    return undefined;
+  };
+  const toFootprint = (points: OverpassGeometryPoint[] | undefined): Coordinate[] => {
+    if (!points || points.length < 3) return [];
+    return points.map((p) => ({ lat: p.lat, lng: p.lon }));
+  };
+  const out: OsmBuilding[] = [];
+  for (const element of elements) {
+    const kind = element.tags?.building;
+    if (!kind) continue;
+    if (element.type === 'way') {
+      const footprint = toFootprint(element.geometry);
+      if (footprint.length >= 3) out.push({ footprint, heightMeters: parseHeight(element.tags), kind });
+    } else if (element.type === 'relation') {
+      for (const member of element.members ?? []) {
+        if (member.role !== 'outer') continue;
+        const footprint = toFootprint(member.geometry);
+        if (footprint.length >= 3) {
+          out.push({ footprint, heightMeters: parseHeight(element.tags), kind });
+        }
+      }
+    }
+  }
+  return out;
+};
+
+export const createFallbackRouteEnrichment = (
+  route: WaterRoute,
+): RouteEnrichmentData => {
+  const waterBodyType = inferRouteWaterBodyType(route);
+  const sceneryProfile = inferFallbackSceneryProfile(route);
+  const totalDistance = routeTotalDistanceMeters(route.coordinates);
+  const segmentCount = Math.max(1, Math.ceil(totalDistance / ROUTE_SEGMENT_LENGTH_METERS));
+  const widthMeters = getDefaultWaterWidthMeters(waterBodyType);
+  const profileConfig = SCENERY_PROFILE_CONFIG[sceneryProfile];
+  const segmentProfiles: RouteSegmentEnrichment[] = [];
+
+  for (let index = 0; index < segmentCount; index++) {
+    const startMeters = index * ROUTE_SEGMENT_LENGTH_METERS;
+    const endMeters = Math.min(totalDistance, startMeters + ROUTE_SEGMENT_LENGTH_METERS);
+    const startCoord = interpolateCoordinateAtDistance(route.coordinates, startMeters);
+    const endCoord = interpolateCoordinateAtDistance(route.coordinates, endMeters);
+    const bearing = calculateBearing(
+      startCoord.lat,
+      startCoord.lng,
+      endCoord.lat,
+      endCoord.lng,
+    );
+    const previousBearing =
+      segmentProfiles[segmentProfiles.length - 1]?.bearing ?? bearing;
+    const bearingDelta =
+      index === 0 ? 0 : normalizeBearingDelta(previousBearing, bearing);
+
+    segmentProfiles.push({
+      index,
+      startMeters,
+      endMeters,
+      sceneryProfile,
+      waterWidthMeters: widthMeters,
+      dragMultiplier: calculateBearingDragModifier(bearingDelta),
+      bearing,
+      bearingDelta,
+      ...profileConfig,
+    });
+  }
+
+  return {
+    routeId: route.id,
+    elevations: route.coordinates.map(() => 0),
+    segmentProfiles,
+    waterBodyType,
+    waterWidthMeters: widthMeters,
+    ...getWaterAppearance(waterBodyType),
+    fetchedAt: Date.now(),
+    source: 'fallback',
+  };
+};
+
+/** NFR3: the most one route's cache entry may take, in UTF-16 code units. */
+export const ROUTE_ENRICHMENT_STORAGE_BUDGET = 128 * 1024;
+
+const roundTo = (value: number, places: number) => {
+  const scale = 10 ** places;
+  return Math.round(value * scale) / scale;
+};
+
+const roundShore = (value: number | null | undefined) =>
+  typeof value === 'number' ? roundTo(value, 1) : value;
+
+/**
+ * The stored form of a route's enrichment (#493 NFR3). Each segment drops the
+ * densities its scenery profile already gives (restored on load), and its
+ * bearings and widths keep a hundredth of a degree and a tenth of a metre, far
+ * finer than anything drawn from them. A 22 km river was over budget without it.
+ */
+const DERIVED_SEGMENT_FIELDS = ['treeDensity', 'vegetationDensity', 'buildingDensity', 'objectScale'] as const;
+
+const compactForStorage = (data: RouteEnrichmentData): RouteEnrichmentData => ({
+  ...data,
+  segmentProfiles: data.segmentProfiles.map((segment) => {
+    const compact: Partial<RouteSegmentEnrichment> = {
+      ...segment,
+      waterWidthMeters: roundTo(segment.waterWidthMeters, 1),
+      bearing: roundTo(segment.bearing, 2),
+      bearingDelta: roundTo(segment.bearingDelta, 2),
+      ...('leftShoreMeters' in segment && { leftShoreMeters: roundShore(segment.leftShoreMeters) }),
+      ...('rightShoreMeters' in segment && { rightShoreMeters: roundShore(segment.rightShoreMeters) }),
+    };
+    for (const key of DERIVED_SEGMENT_FIELDS) delete compact[key];
+    return compact as RouteSegmentEnrichment;
+  }),
+});
+
+const LAKE_STORE_FLOOR_VERTICES = 256;
+
+/**
+ * The entry as JSON, within `ROUTE_ENRICHMENT_STORAGE_BUDGET` where it can be:
+ * a route over budget keeps fewer lake outlines, the ones farthest from the
+ * route going first, then slims the ones left, rather than lose detection
+ * (NFR3). An entry still over budget is written whole; the browser's own quota
+ * decides whether it fits.
+ */
+const serializeWithinBudget = (savedAt: number, data: RouteEnrichmentData, route: Coordinate[]) => {
+  const serialize = (candidate: RouteEnrichmentData) =>
+    JSON.stringify({ savedAt, data: candidate } satisfies CachedRouteEnrichment);
+  let json = serialize(data);
+  const lakes = data.lakes;
+  if (json.length <= ROUTE_ENRICHMENT_STORAGE_BUDGET || !lakes) return json;
+
+  const metres = (a: Coordinate, b: Coordinate) =>
+    Math.hypot((a.lat - b.lat) * 110_574, (a.lng - b.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180));
+  const distanceToRoute = (lake: LakePolygon) =>
+    route.length === 0 ? 0 : Math.min(...lake.outer.map((vertex) => Math.min(...route.map((point) => metres(vertex, point)))));
+  const nearestFirst = lakes.polygons
+    .map((lake) => ({ lake, distance: distanceToRoute(lake) }))
+    .sort((a, b) => a.distance - b.distance)
+    .map(({ lake }) => lake);
+  let polygons = nearestFirst;
+  let cap = LAKE_POLYGON_STORE_VERTICES;
+  while (json.length > ROUTE_ENRICHMENT_STORAGE_BUDGET) {
+    if (polygons.length > 1) {
+      polygons = polygons.slice(0, -1);
+    } else if (cap > LAKE_STORE_FLOOR_VERTICES) {
+      cap /= 2;
+      polygons = lakePolygonsForTier(polygons, cap, route);
+    } else {
+      break;
+    }
+    json = serialize({ ...data, lakes: { ...lakes, polygons } });
+  }
+  return json;
+};
+
+export const loadCachedRouteEnrichment = (
+  routeId: string,
+  storage: Storage | null = defaultStorage(),
+): CacheLookupResult => {
+  if (!storage) {
+    return { data: null, stale: false };
+  }
+
+  try {
+    const raw = storage.getItem(getRouteEnrichmentCacheKey(routeId));
+    if (!raw) return { data: null, stale: false };
+    const parsed = JSON.parse(raw) as CachedRouteEnrichment;
+    if (!parsed?.data || typeof parsed.savedAt !== 'number') {
+      return { data: null, stale: false };
+    }
+    const stale = Date.now() - parsed.savedAt > ROUTE_ENRICHMENT_CACHE_TTL_MS;
+    return {
+      data: {
+        ...parsed.data,
+        segmentProfiles: parsed.data.segmentProfiles.map((segment) => ({
+          ...SCENERY_PROFILE_CONFIG[segment.sceneryProfile],
+          ...segment,
+        })),
+        source: 'cache',
+      },
+      stale,
+    };
+  } catch {
+    return { data: null, stale: false };
+  }
+};
+
+export const saveCachedRouteEnrichment = (
+  routeId: string,
+  data: RouteEnrichmentData,
+  storage: Storage | null = defaultStorage(),
+  route: Coordinate[] = [],
+) => {
+  if (!storage) return;
+  const savedAt = Date.now();
+  try {
+    storage.setItem(getRouteEnrichmentCacheKey(routeId), serializeWithinBudget(savedAt, compactForStorage(data), route));
+  } catch {
+    return;
+  }
+};
+
+export const getDragMultiplierForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  progress: number,
+) => {
+  if (!segmentProfiles || segmentProfiles.length === 0) return 1;
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const lastIndex = segmentProfiles.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+
+  const lower = segmentProfiles[lowerIndex];
+  const upper = segmentProfiles[upperIndex];
+  return lower.dragMultiplier + (upper.dragMultiplier - lower.dragMultiplier) * blend;
+};
+
+// ============================================================================
+// TERRAIN RELIEF (#202)
+// ----------------------------------------------------------------------------
+// `elevations` holds one metre value per route coordinate, straight from
+// OpenTopoData. These helpers turn that into the height the 3D scene draws so
+// that a lowland river and an alpine course no longer render identically.
+// ============================================================================
+
+/**
+ * Real metres of elevation per scene unit of height.
+ *
+ * The scene renders horizontal distance at `SCENE_SCALE` (1 unit = 1 m). Using
+ * that same factor vertically would put a 60 m valley side 6 units above a boat
+ * that is half a unit wide, walling the rower into a trench. Relief is
+ * therefore compressed relative to the horizontal scale — the goal is for the
+ * shape of the terrain to read as the route's own, not to be survey-accurate.
+ */
+/**
+ * Confirmed (#214 A4): at 0.02 a 100 m river drop becomes 2 scene units
+ * against banks that are 60 units wide — a gentle ~1.9 degree slope. The
+ * ceiling kicks in at 400 m of real-world relief, which is well beyond any
+ * navigable waterway. Tested against the Danube gorge profile (290 m range)
+ * and the Cam (< 10 m range); both look plausible.
+ */
+export const TERRAIN_RELIEF_SCALE = 0.02;
+
+/**
+ * Ceiling on relief, in scene units, so a mountain course stays rowable.
+ * At RIVERBANK_WIDTH = 60, 8 scene units is a ~7.6 degree incline — enough
+ * to read as hilly without walling in the rower.
+ */
+export const MAX_TERRAIN_RELIEF_SCENE_UNITS = 8;
+
+export interface TerrainProfile {
+  /**
+   * Height above the route's own lowest point, in scene units, one entry per
+   * elevation sample. Anchored to the route minimum rather than sea level so a
+   * course at 1,500 m does not float the whole scene into the sky.
+   */
+  relief: number[];
+  /** Raw elevation span of the route, in metres, before compression. */
+  rangeMeters: number;
+}
+
+/** A route with no usable elevation data renders exactly as it did before. */
+export const FLAT_TERRAIN_PROFILE: TerrainProfile = { relief: [], rangeMeters: 0 };
+
+export const buildTerrainProfile = (
+  elevations: ReadonlyArray<number> | undefined | null,
+): TerrainProfile => {
+  if (!elevations || elevations.length === 0) return FLAT_TERRAIN_PROFILE;
+
+  const finite = elevations.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) return FLAT_TERRAIN_PROFILE;
+
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const rangeMeters = max - min;
+
+  // The fallback enrichment fills `elevations` with zeros, and OpenTopoData
+  // returns a flat profile for genuinely flat water. Both mean "no relief to
+  // draw", which keeps those scenes byte-for-byte what they were before.
+  if (rangeMeters === 0) return FLAT_TERRAIN_PROFILE;
+
+  const relief = elevations.map((value) => {
+    if (!Number.isFinite(value)) return 0;
+    const scaled = (value - min) * TERRAIN_RELIEF_SCALE;
+    return Math.max(0, Math.min(MAX_TERRAIN_RELIEF_SCENE_UNITS, scaled));
+  });
+
+  return { relief, rangeMeters };
+};
+
+/**
+ * Height of the land at a point along the route, in scene units. Interpolates
+ * between samples so 200-segment bank geometry reads smoothly off a profile of
+ * a couple of hundred coordinates.
+ */
+export const getTerrainReliefForProgress = (
+  profile: TerrainProfile | undefined | null,
+  progress: number,
+): number => {
+  const relief = profile?.relief;
+  if (!relief || relief.length === 0) return 0;
+  if (relief.length === 1) return relief[0];
+
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
+  const clampedProgress = Math.max(0, Math.min(1, safeProgress));
+  const lastIndex = relief.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lowerIndex = Math.floor(scaledIndex);
+  const upperIndex = Math.min(lastIndex, lowerIndex + 1);
+  const blend = scaledIndex - lowerIndex;
+
+  return relief[lowerIndex] + (relief[upperIndex] - relief[lowerIndex]) * blend;
+};
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+/** A side's shore from the on-water samples: their median, or open when most see none. */
+const measuredSide = (water: DetectedSample[], side: 'leftShoreMeters' | 'rightShoreMeters') => {
+  const seen = water.map((sample) => sample[side]).filter((value): value is number => value !== null);
+  return seen.length * 2 < water.length ? null : median(seen);
+};
+
+/** A side's land from the on-water samples: the profile most of them found, ties to the first by name. */
+const commonestLand = (water: DetectedSample[], side: 'leftLand' | 'rightLand'): SceneryProfile | undefined => {
+  const counts = new Map<SceneryProfile, number>();
+  for (const sample of water) {
+    const land = sample[side];
+    if (land) counts.set(land, (counts.get(land) ?? 0) + 1);
+  }
+  return [...counts].sort(([a, countA], [b, countB]) => countB - countA || (a < b ? -1 : 1))[0]?.[0];
+};
+
+/** The detection samples that fall in segment `index`; the last segment keeps its end. */
+const samplesIn = (segmentProfiles: RouteSegmentEnrichment[], index: number, samples: DetectedSample[]) => {
+  const { startMeters, endMeters } = segmentProfiles[index];
+  const last = index === segmentProfiles.length - 1;
+  return samples.filter(
+    ({ distanceMeters }) => distanceMeters >= startMeters && (distanceMeters < endMeters || (last && distanceMeters <= endMeters)),
+  );
+};
+
+const mostlyLake = (water: DetectedSample[], lakeIds: ReadonlySet<string>) =>
+  water.filter(({ featureId }) => featureId !== undefined && lakeIds.has(featureId)).length * 2 > water.length;
+
+/** Most route samples on land a lake route keeps for its diagnostics (FR22, NFR3). */
+const OFF_WATER_KEPT = 50;
+
+/**
+ * The samples on land, past the drift tolerance, in segments that are
+ * otherwise on the lake (#493 FR8, D21): where the lake's outline and the
+ * route disagree. Kept so a bad route or bad mapping can be found and fixed
+ * at the source.
+ */
+export const lakeLandSamples = (
+  segmentProfiles: RouteSegmentEnrichment[],
+  samples: DetectedSample[],
+  lakeIds: ReadonlySet<string>,
+): Coordinate[] =>
+  segmentProfiles
+    .flatMap((_, index) => {
+      const here = samplesIn(segmentProfiles, index, samples);
+      return mostlyLake(here.filter(({ kind }) => kind === 'water'), lakeIds)
+        ? here.filter(({ kind }) => kind === 'land').map(({ coordinate }) => coordinate)
+        : [];
+    })
+    .slice(0, OFF_WATER_KEPT);
+
+/**
+ * Puts the measured shore distances on each segment (#493 FR16), and the
+ * land beyond each shore (FR18). The width
+ * becomes the shore-to-shore distance wherever both sides found one; the
+ * guessed width stays where a side is open or nothing was on water (D24).
+ */
+export const applyMeasuredShores = (
+  segmentProfiles: RouteSegmentEnrichment[],
+  samples: DetectedSample[],
+  lakeIds: ReadonlySet<string> = new Set(),
+): RouteSegmentEnrichment[] =>
+  segmentProfiles.map((profile, index) => {
+    const here = samplesIn(segmentProfiles, index, samples);
+    const water = here.filter(({ kind }) => kind === 'water');
+    if (water.length === 0) return profile;
+    const leftShoreMeters = measuredSide(water, 'leftShoreMeters');
+    const rightShoreMeters = measuredSide(water, 'rightShoreMeters');
+    const leftSceneryProfile = commonestLand(water, 'leftLand');
+    const rightSceneryProfile = commonestLand(water, 'rightLand');
+    // D5 a: most of the segment's water is the lake. FR8, D21 ii: a sample on
+    // land past the drift tolerance keeps the ribbon on this segment, so the
+    // boat is never drawn on land.
+    const onLake = mostlyLake(water, lakeIds) && !here.some(({ kind }) => kind === 'land');
+    return {
+      ...profile,
+      ...(onLake && { onLake: true as const }),
+      leftShoreMeters,
+      rightShoreMeters,
+      ...(leftSceneryProfile && { leftSceneryProfile }),
+      ...(rightSceneryProfile && { rightSceneryProfile }),
+      waterWidthMeters:
+        leftShoreMeters !== null && rightShoreMeters !== null
+          ? leftShoreMeters + rightShoreMeters
+          : profile.waterWidthMeters,
+    };
+  });
+
+const LAKE_ROUTE_TYPES: ReadonlySet<WaterBodyType> = new Set(['lake', 'reservoir']);
+
+/**
+ * The lake to draw on a lake or reservoir route (#493 Phase 3, D2 a): the
+ * outlines detection kept, at the median elevation of the route points on the
+ * lake segments (D11 a), or of the whole route if none is marked. A route that
+ * resolved to another type, a route tag over OSM for one, draws no lake.
+ */
+export const lakeSurfaceFor = (
+  waterBodyType: WaterBodyType,
+  polygons: LakePolygon[],
+  coordinates: Coordinate[],
+  elevations: ReadonlyArray<number>,
+  segmentProfiles: RouteSegmentEnrichment[],
+  offWater: Coordinate[] = [],
+): { lakes?: LakeSurface } => {
+  if (!LAKE_ROUTE_TYPES.has(waterBodyType) || polygons.length === 0) return {};
+  const lakeSpans = segmentProfiles.filter((profile) => profile.onLake);
+  let distance = 0;
+  const onLake: number[] = [];
+  coordinates.forEach((coordinate, index) => {
+    if (index > 0) {
+      const previous = coordinates[index - 1];
+      distance += distanceBetweenLatLng(previous.lat, previous.lng, coordinate.lat, coordinate.lng);
+    }
+    const elevation = elevations[index];
+    if (!Number.isFinite(elevation)) return;
+    if (lakeSpans.length === 0 || lakeSpans.some((span) => distance >= span.startMeters && distance <= span.endMeters)) {
+      onLake.push(elevation);
+    }
+  });
+  return {
+    lakes: {
+      polygons,
+      elevationMeters: onLake.length > 0 ? median(onLake) : 0,
+      ...(offWater.length > 0 && { offWater }),
+    },
+  };
+};
+
+/** Where the water ends either side of the route, in scene units from the centreline. */
+export interface WaterEdges {
+  left: number;
+  right: number;
+}
+
+const sideMeters = (profile: RouteSegmentEnrichment, side: 'leftShoreMeters' | 'rightShoreMeters') => {
+  const measured = profile[side];
+  if (measured === undefined) return profile.waterWidthMeters / 2;
+  return measured === null ? SHORE_RAY_LIMIT_METERS : measured;
+};
+
+/**
+ * The water's edge on each side at `progress` (#493 D19 c): at the measured
+ * shore where there is one, out to the ray limit where a side is open, and
+ * half the width either side where nothing was measured. Each side is floored
+ * at half the navigable width, so the blades stay over water however close to
+ * one bank the route runs (#271).
+ */
+export const getWaterEdgesSceneUnitsForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  fallbackWidthMeters: number,
+  progress: number,
+): WaterEdges => {
+  const floor = MIN_NAVIGABLE_WIDTH_METERS / 2;
+  const clamp = (meters: number) =>
+    (Number.isFinite(meters) ? Math.max(meters, floor) : floor) * SCENE_SCALE;
+  if (!segmentProfiles || segmentProfiles.length === 0) {
+    const half = fallbackWidthMeters / 2;
+    return { left: clamp(half), right: clamp(half) };
+  }
+
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const lastIndex = segmentProfiles.length - 1;
+  const scaledIndex = clampedProgress * lastIndex;
+  const lower = segmentProfiles[Math.floor(scaledIndex)];
+  const upper = segmentProfiles[Math.min(lastIndex, Math.floor(scaledIndex) + 1)];
+  const blend = scaledIndex - Math.floor(scaledIndex);
+  const at = (side: 'leftShoreMeters' | 'rightShoreMeters') =>
+    sideMeters(lower, side) + (sideMeters(upper, side) - sideMeters(lower, side)) * blend;
+  return { left: clamp(at('leftShoreMeters')), right: clamp(at('rightShoreMeters')) };
+};
+
+/**
+ * What OSM detection found for the route (#493 FR22), as one telemetry line, so
+ * a course that looks wrong can be reported without a debugger. `null` for
+ * fallback data, which had no detection.
+ */
+export const waterDetectionTelemetry = (
+  enrichment: RouteEnrichmentData | null | undefined,
+): Record<string, unknown> | null => {
+  if (!enrichment || enrichment.source === 'fallback') return null;
+  const polygons = enrichment.lakes?.polygons ?? [];
+  return {
+    waterBodyType: enrichment.waterBodyType,
+    source: enrichment.source,
+    ...enrichment.waterDetection,
+    lakes: polygons.length,
+    islands: polygons.reduce((sum, lake) => sum + lake.inner.length, 0),
+    // FR8: where the route left its lake, so the course or the map can be fixed.
+    ...(enrichment.lakes?.offWater && {
+      offWater: enrichment.lakes.offWater.length,
+      offWaterSamples: enrichment.lakes.offWater,
+    }),
+  };
+};
+
+/**
+ * Whether the route is on its lake at `progress` (#493 Phase 3, D5 a): the
+ * segment nearest that point is marked `onLake`.
+ */
+export const isOnLakeAtProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  progress: number,
+): boolean => {
+  if (!segmentProfiles || segmentProfiles.length === 0) return false;
+  const index = Math.round(Math.max(0, Math.min(1, progress)) * (segmentProfiles.length - 1));
+  return segmentProfiles[index].onLake === true;
+};
+
+/**
+ * Shore to shore at `progress`, in scene units: the two edges added up, so
+ * anything that only needs the width agrees with what is drawn either side.
+ * Floored so the blades stay over water (#271).
+ */
+export const getWaterWidthSceneUnitsForProgress = (
+  segmentProfiles: RouteSegmentEnrichment[] | undefined,
+  fallbackWidthMeters: number,
+  progress: number,
+) => {
+  const { left, right } = getWaterEdgesSceneUnitsForProgress(segmentProfiles, fallbackWidthMeters, progress);
+  return left + right;
+};
+
+const createSegmentProfilesFromFeatures = (
+  route: WaterRoute,
+  elements: OverpassElement[],
+): RouteSegmentEnrichment[] => {
+  const fallback = createFallbackRouteEnrichment(route);
+  const waterFeatures = elements.filter(
+    (element) => inferWaterBodyType(element.tags) !== 'unknown',
+  );
+  const landFeatures = elements.filter(
+    (element) => mapOsmTagsToSceneryProfile(element.tags) !== 'fallback',
+  );
+  const totalDistance = routeTotalDistanceMeters(route.coordinates);
+  const segmentCount = Math.max(1, Math.ceil(totalDistance / ROUTE_SEGMENT_LENGTH_METERS));
+  const segmentProfiles: RouteSegmentEnrichment[] = [];
+
+  let dominantWaterBodyType = fallback.waterBodyType;
+  let dominantWidth = fallback.waterWidthMeters;
+  if (waterFeatures.length > 0) {
+    const tags = waterFeatures[0].tags ?? {};
+    dominantWaterBodyType = inferWaterBodyType(tags);
+    dominantWidth =
+      parseWidthMeters(tags.width) ?? getDefaultWaterWidthMeters(dominantWaterBodyType);
+  }
+
+  for (let index = 0; index < segmentCount; index++) {
+    const startMeters = index * ROUTE_SEGMENT_LENGTH_METERS;
+    const endMeters = Math.min(totalDistance, startMeters + ROUTE_SEGMENT_LENGTH_METERS);
+    const midpoint = interpolateCoordinateAtDistance(
+      route.coordinates,
+      startMeters + (endMeters - startMeters) / 2,
+    );
+    const startCoord = interpolateCoordinateAtDistance(route.coordinates, startMeters);
+    const endCoord = interpolateCoordinateAtDistance(route.coordinates, endMeters);
+    const bearing = calculateBearing(
+      startCoord.lat,
+      startCoord.lng,
+      endCoord.lat,
+      endCoord.lng,
+    );
+    const nearestLandFeature = findNearestFeature(midpoint, landFeatures);
+    const nearestWaterFeature = findNearestFeature(midpoint, waterFeatures);
+    const sceneryProfile = nearestLandFeature
+      ? mapOsmTagsToSceneryProfile(nearestLandFeature.tags)
+      : fallback.segmentProfiles[Math.min(index, fallback.segmentProfiles.length - 1)]
+          .sceneryProfile;
+    const profileConfig = SCENERY_PROFILE_CONFIG[sceneryProfile];
+    const waterBodyType = nearestWaterFeature
+      ? inferWaterBodyType(nearestWaterFeature.tags)
+      : dominantWaterBodyType;
+    const widthMeters = nearestWaterFeature
+      ? parseWidthMeters(nearestWaterFeature.tags?.width) ??
+        getDefaultWaterWidthMeters(waterBodyType)
+      : dominantWidth;
+
+    dominantWaterBodyType = waterBodyType === 'unknown' ? dominantWaterBodyType : waterBodyType;
+    dominantWidth = widthMeters;
+
+    const previousBearing =
+      segmentProfiles[segmentProfiles.length - 1]?.bearing ?? bearing;
+    const bearingDelta =
+      index === 0 ? 0 : normalizeBearingDelta(previousBearing, bearing);
+
+    segmentProfiles.push({
+      index,
+      startMeters,
+      endMeters,
+      sceneryProfile,
+      waterWidthMeters: widthMeters,
+      dragMultiplier: calculateBearingDragModifier(bearingDelta),
+      bearing,
+      bearingDelta,
+      ...profileConfig,
+    });
+  }
+
+  return segmentProfiles;
+};
+
+export { mapOsmTagsToSceneryProfile };
+
+export class RouteEnrichmentService {
+  private readonly fetchImpl: typeof fetch;
+  private readonly storage: Storage | null;
+  private readonly detect: RouteDetectionRunner;
+  private readonly inflight = new Map<string, Promise<RouteEnrichmentData>>();
+
+  constructor(
+    // Forwarded through an arrow, as in rownativeService: a bare `fetch` stored
+    // on the instance is called with the service as its receiver, which
+    // browsers reject with "Illegal invocation" - and the catch below turned
+    // that into fallback data on every route (#493 AC8).
+    fetchImpl: typeof fetch = (input, init) => globalThis.fetch(input, init),
+    storage: Storage | null = defaultStorage(),
+    // #493 D23 b: a worker where the browser has one, inline otherwise.
+    detect: RouteDetectionRunner = createWorkerDetectionRunner(),
+  ) {
+    this.fetchImpl = fetchImpl;
+    this.storage = storage;
+    this.detect = detect;
+    this.pruneOldCacheVersions();
+  }
+
+  /** Drops entries cached under an earlier key version (#493 D9 b). */
+  private pruneOldCacheVersions() {
+    try {
+      if (!this.storage) return;
+      for (let index = this.storage.length - 1; index >= 0; index -= 1) {
+        const key = this.storage.key(index);
+        if (key?.startsWith(ROUTE_ENRICHMENT_CACHE_ROOT) && !key.startsWith(ROUTE_ENRICHMENT_CACHE_PREFIX)) {
+          this.storage.removeItem(key);
+        }
+      }
+    } catch {
+      // Storage that refuses to be listed keeps its old entries; they are never read.
+    }
+  }
+
+  readCached(routeId: string) {
+    return loadCachedRouteEnrichment(routeId, this.storage);
+  }
+
+  clearCache(routeId: string) {
+    this.storage?.removeItem(getRouteEnrichmentCacheKey(routeId));
+  }
+
+  clearAllCache() {
+    if (!this.storage) return;
+
+    for (let index = this.storage.length - 1; index >= 0; index -= 1) {
+      const key = this.storage.key(index);
+      if (key?.startsWith(ROUTE_ENRICHMENT_CACHE_PREFIX)) {
+        this.storage.removeItem(key);
+      }
+    }
+  }
+
+  private async fetchElevations(coordinates: Coordinate[]) {
+    const batches = splitCoordinatesIntoElevationBatches(coordinates);
+    const elevations: Array<number | null> = [];
+
+    for (const [index, batch] of batches.entries()) {
+      debugLog(
+        `[route-enrichment] OpenTopoData batch ${index + 1}/${batches.length} (${batch.length} points)`,
+      );
+
+      const locations = batch
+        .map((coordinate) => `${coordinate.lat},${coordinate.lng}`)
+        .join('|');
+      const response = await this.fetchImpl(
+        `${OPEN_TOPO_DATA_URL}?locations=${encodeURIComponent(locations)}`,
+      );
+      if (!response.ok) {
+        throw new Error(`OpenTopoData request failed with HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as OpenTopoDataResponse;
+      elevations.push(
+        ...(payload.results ?? []).map((result) => result.elevation),
+      );
+    }
+
+    debugLog(
+      `[route-enrichment] received ${elevations.length} elevation points`,
+    );
+
+    if (elevations.length !== coordinates.length) {
+      debugLog(
+        `[route-enrichment] elevation payload mismatch: got ${elevations.length} for ${coordinates.length} coordinates`,
+      );
+    }
+
+    return normalizeElevations(elevations, coordinates.length);
+  }
+
+  private async fetchOverpassElements(coordinates: Coordinate[]) {
+    const query = buildOverpassQuery(coordinates);
+    const response = await this.fetchImpl(OVERPASS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: `data=${encodeURIComponent(query)}`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Overpass request failed with HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as OverpassResponse;
+    return payload.elements ?? [];
+  }
+
+  async enrichRoute(route: WaterRoute): Promise<RouteEnrichmentData> {
+    const cached = this.readCached(route.id);
+    if (cached.data && !cached.stale) {
+      return cached.data;
+    }
+
+    // Real-but-expired data beats the synthetic fallback: without this, a
+    // failed refresh on a flaky connection downgrades the scenery the user is
+    // already looking at to the generic tag-derived profile.
+    const staleCachedData = cached.data;
+
+    const inflightRequest = this.inflight.get(route.id);
+    if (inflightRequest) {
+      return inflightRequest;
+    }
+
+    if (route.coordinates.length === 0) {
+      return createFallbackRouteEnrichment(route);
+    }
+
+    const request = (async () => {
+      let fallback: RouteEnrichmentData | null = null;
+      const getFallback = () => {
+        fallback ??= createFallbackRouteEnrichment(route);
+        return fallback;
+      };
+      try {
+        const [elevations, elements] = await Promise.all([
+          this.fetchElevations(route.coordinates),
+          this.fetchOverpassElements(route.coordinates),
+        ]);
+        const nearElements = elementsNearRoute(route.coordinates, elements);
+        // D3 b then a: what the route is detected on first, then the old
+        // nearest-feature tags, then the route's own tags and name.
+        const detection = await this.detect({
+          coordinates: route.coordinates,
+          elements,
+          coastlineBounds: buildBoundingBox(route.coordinates, SHORE_QUERY_MARGIN_METERS),
+        });
+        const { detected } = detection;
+        const lakeIds = new Set(detection.lakes.map((lake) => lake.featureId));
+        const segmentRanges = createSegmentProfilesFromFeatures(route, nearElements);
+        const segmentProfiles = applyMeasuredShores(segmentRanges, detection.samples, lakeIds);
+        const waterFeatures = nearElements.filter(
+          (element) => inferWaterBodyType(element.tags) !== 'unknown',
+        );
+        const nearestWaterFeature = findNearestFeature(route.coordinates[0], waterFeatures);
+        const waterBodyType =
+          detected.waterBodyType !== 'unknown'
+            ? detected.waterBodyType
+            : nearestWaterFeature
+              ? inferWaterBodyType(nearestWaterFeature.tags)
+              : getFallback().waterBodyType;
+        const resolvedWaterBodyType =
+          waterBodyType === 'unknown' ? getFallback().waterBodyType : waterBodyType;
+        const waterWidthMeters =
+          segmentProfiles[0]?.waterWidthMeters ?? getFallback().waterWidthMeters;
+
+        const buildings = buildingsFromElements(nearElements);
+        const enrichment: RouteEnrichmentData = {
+          routeId: route.id,
+          elevations,
+          segmentProfiles,
+          crossings: findCrossings(route.coordinates, nearElements),
+          ...(buildings.length > 0 ? { buildings } : {}),
+          waterBodyType: resolvedWaterBodyType,
+          waterWidthMeters,
+          ...getWaterAppearance(resolvedWaterBodyType),
+          waterDetection: { shares: detected.shares, ...detection.summary },
+          ...lakeSurfaceFor(
+            resolvedWaterBodyType,
+            detection.lakes,
+            route.coordinates,
+            elevations,
+            segmentProfiles,
+            lakeLandSamples(segmentRanges, detection.samples, lakeIds),
+          ),
+          fetchedAt: Date.now(),
+          source: 'network',
+        };
+        saveCachedRouteEnrichment(route.id, enrichment, this.storage, route.coordinates);
+        return enrichment;
+      } catch {
+        return staleCachedData ?? getFallback();
+      }
+    })().finally(() => {
+      this.inflight.delete(route.id);
+    });
+
+    this.inflight.set(route.id, request);
+    return request;
+  }
+}
+
+export const routeEnrichmentService = new RouteEnrichmentService();

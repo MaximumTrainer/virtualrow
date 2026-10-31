@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../../src/utils/sceneHealth';
+import { describeSceneHealth, CONTEXT_LOST_TEXT } from '../../src/lib/utils/sceneHealth';
 
 /**
  * Fail a spec that is passing while the 3D scene is not there.

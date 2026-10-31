@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IntervalsIcuWorkoutService } from '../services/intervalsIcuWorkoutService';
+import { IntervalsIcuWorkoutService } from '../lib/services/intervalsIcuWorkoutService';
 
 describe('IntervalsIcuWorkoutService', () => {
   const service = new IntervalsIcuWorkoutService();

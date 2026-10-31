@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Concept2BluetoothService } from '../services/bluetoothService';
+import { Concept2BluetoothService } from '../lib/services/bluetoothService';
 
 // Mock the PM5 class from pm5-base
-vi.mock('../vendor/pm5-base.js', () => {
+vi.mock('../lib/vendor/pm5-base.js', () => {
   return {
     default: class MockPM5 {
       device: { name: string } | undefined;

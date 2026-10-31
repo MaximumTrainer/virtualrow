@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { IntervalsIcuActivityService } from '../services/intervalsIcuActivityService';
-import { PROXY_BASE } from '../services/authService';
-import type { WorkoutSession } from '../types/index';
+import { IntervalsIcuActivityService } from '../lib/services/intervalsIcuActivityService';
+import { PROXY_BASE } from '../lib/services/authService';
+import type { WorkoutSession } from '../lib/types/index';
 
 /**
  * Upload tests for issue #221, R3.

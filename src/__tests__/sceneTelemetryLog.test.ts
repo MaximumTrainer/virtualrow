@@ -8,7 +8,7 @@ import {
   recordTelemetry,
   telemetryAsText,
   formatTelemetry,
-} from '../utils/sceneTelemetryLog';
+} from '../lib/utils/sceneTelemetryLog';
 
 /**
  * A record of what the 3D scene was doing, that outlives the thing that broke.

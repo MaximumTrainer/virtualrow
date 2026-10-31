@@ -28,7 +28,7 @@ jobs:
   healthcheck:
     # Forks don't need to run this — the proxy serves this repo's deploys, not
     # a fork's. Matches the shape of contract-upload.yml.
-    if: github.repository == 'MaximumTrainer/virtualrow'
+    if: github.repository == 'maximum-trainer/virtualrow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

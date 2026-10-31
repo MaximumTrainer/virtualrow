@@ -6,7 +6,7 @@
 // unit-tested without the R3F scene.
 // ============================================================================
 
-import { assetUrl } from '../../utils/assetUrl';
+import { assetUrl } from '../../lib/utils/assetUrl';
 
 export type Crew = 'male' | 'female';
 

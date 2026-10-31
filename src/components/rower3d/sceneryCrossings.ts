@@ -6,7 +6,7 @@
 // scene-layer half that turns a kind into an asset (issue #232).
 // ============================================================================
 
-import type { BridgeKind } from '../../utils/bridgeCrossings';
+import type { BridgeKind } from '../../lib/utils/bridgeCrossings';
 import type { SceneryModelId } from './sceneryAssets';
 
 /** One Tier C model per kind — the whole kit, rather than one bridge everywhere. */

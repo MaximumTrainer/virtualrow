@@ -3,7 +3,7 @@ import {
   debugPreferencesStore,
   SHOW_DEMO_CTA_KEY,
   LAKE_OUTLINES_KEY,
-} from '../services/debugPreferencesStore';
+} from '../lib/services/debugPreferencesStore';
 
 /**
  * Static gate on `debugPreferencesStore` (#453, AC3).
@@ -50,13 +50,13 @@ describe('debugPreferencesStore lake outlines (#493)', () => {
     localStorage.clear();
   });
 
-  it('defaults to on: lake routes draw the real lake unless a tester turns it off', () => {
-    expect(debugPreferencesStore.getLakeOutlines()).toBe(true);
+  it('defaults to off, so main shows the ribbon until a tester asks', () => {
+    expect(debugPreferencesStore.getLakeOutlines()).toBe(false);
   });
 
-  it('treats an unexpected value as on, so only an explicit off turns it off', () => {
+  it('treats an unexpected value as off', () => {
     localStorage.setItem(LAKE_OUTLINES_KEY, 'yes-please');
-    expect(debugPreferencesStore.getLakeOutlines()).toBe(true);
+    expect(debugPreferencesStore.getLakeOutlines()).toBe(false);
   });
 
   it('round-trips on and off', () => {
@@ -67,12 +67,12 @@ describe('debugPreferencesStore lake outlines (#493)', () => {
     expect(debugPreferencesStore.getLakeOutlines()).toBe(false);
   });
 
-  it('falls back to on when storage throws', () => {
+  it('falls back to off when storage throws', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    expect(debugPreferencesStore.getLakeOutlines()).toBe(true);
+    expect(debugPreferencesStore.getLakeOutlines()).toBe(false);
     vi.restoreAllMocks();
   });
 });

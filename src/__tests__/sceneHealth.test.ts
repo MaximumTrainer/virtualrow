@@ -4,7 +4,7 @@ import {
   CONTEXT_LOST_TEXT,
   CONTEXT_LOST_MESSAGE,
   CONTEXT_UNRECOVERABLE_MESSAGE,
-} from '../utils/sceneHealth';
+} from '../lib/utils/sceneHealth';
 
 /**
  * Playwright specs were passing while the stage showed

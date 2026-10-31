@@ -6,8 +6,8 @@ import {
   bridgeKindFromTags,
   findCrossings,
   type BridgeKind,
-} from '../utils/bridgeCrossings';
-import type { OverpassElement } from '../services/routeEnrichmentService';
+} from '../lib/utils/bridgeCrossings';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
 
 /** A straight 1 km reach, north-south. */
 const route = Array.from({ length: 21 }, (_, i) => ({ lat: 51.5 + i * 0.0001, lng: -0.9 }));

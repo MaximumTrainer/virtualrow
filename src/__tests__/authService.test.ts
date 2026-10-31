@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateCodeVerifier, generateCodeChallenge, generateState } from '../utils/pkce';
+import { generateCodeVerifier, generateCodeChallenge, generateState } from '../lib/utils/pkce';
 import {
   AuthService,
   PROXY_BASE,
@@ -7,9 +7,9 @@ import {
   classifyExchangeFailure,
   messageForClass,
   RETRYABLE_AUTH_ERROR_CLASSES,
-} from '../services/authService';
-import { crashReporterService } from '../services/crashReporterService';
-import type { CrashPayload } from '../types/crashPayload';
+} from '../lib/services/authService';
+import { crashReporterService } from '../lib/services/crashReporterService';
+import type { CrashPayload } from '../lib/types/crashPayload';
 
 const AUTH_COOKIE_NAME = 'vr_auth_session';
 const AUTH_SESSION_KEY = 'vr_auth_session_key';

@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Coordinate } from '../types/index';
-import type { OverpassElement } from '../services/routeEnrichmentService';
-import { buildWaterMask, type MaskBounds, type MaskFeature } from '../utils/osmWaterMask';
-import { detectRoute, type DetectedSample } from '../utils/shoreDetection';
-import { classifyDetectedRoute, waterTypeOfArea } from '../utils/waterClassification';
+import type { Coordinate } from '../lib/types/index';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
+import { buildWaterMask, type MaskBounds, type MaskFeature } from '../lib/utils/osmWaterMask';
+import { detectRoute, type DetectedSample } from '../lib/utils/shoreDetection';
+import { classifyDetectedRoute, waterTypeOfArea } from '../lib/utils/waterClassification';
 
 const feature = (tags: Record<string, string>, id = 'way/1'): MaskFeature => ({ id, tags, polygons: [] });
 

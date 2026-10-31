@@ -16,13 +16,11 @@
   },
   "include": [
     "playwright",
-    "src/types",
-    "src/utils/sceneHealth.ts",
-    "src/utils/crashEvidence.ts",
-    "src/utils/sceneTelemetryLog.ts",
-    "src/utils/worldScale.ts",
-    "src/components/rower3d/constants.ts",
-    "src/components/rower3d/renderBudget.ts",
-    "src/components/rower3d/strokePose.ts"
+    "src/lib/types",
+    "src/lib/utils/sceneHealth.ts",
+    "src/lib/utils/crashEvidence.ts",
+    "src/lib/utils/sceneTelemetryLog.ts",
+    "src/lib/utils/worldScale.ts",
+    "src/components/rower3d/constants.ts"
   ]
 }

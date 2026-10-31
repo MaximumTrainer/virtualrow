@@ -1,0 +1,269 @@
+name: CI (Svelte + WebGPU)
+
+# #542 AC12 cutover: this is now the CI for `main` (the WebGPU engine is the
+# app). It still gates the epic branch `next/svelte-webgpu` while that branch
+# is wound down. It replaced the React-era `Playwright E2E Tests` workflow
+# (`playwright-e2e-clean.yml`), retired with the React scene at the cutover.
+#   * `preflight` runs lint, build, unit suite, shuffled run, coverage gate.
+#   * `smoke` boots the SvelteKit scaffold.
+#   * `e2e-shards` runs the Playwright specs that pass on SwiftShader today
+#     (the "software-adapter"-safe subset defined in playwright.config.next.ts).
+#   * `webgpu-engine` runs the engine smokes against the shared canvas.
+#   * `gpu-smoke` + `webgpu-engine` run on the self-hosted
+#     `linux-nvidia-gpu-runner` (kill-switch: repo var GPU_RUNNER_DISABLED=true);
+#     see the job comments below.
+#
+# AC2 widens `e2e-shards` as screens stabilise under WebGPU and specs are
+# ported / scene-health is re-pointed at the WebGPU engine.
+
+on:
+  push:
+    branches: [ main, next/svelte-webgpu ]
+  pull_request:
+    branches: [ main, next/svelte-webgpu ]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    uses: ./.github/workflows/npm-preflight.yml
+
+  smoke:
+    name: Scaffold smoke (SvelteKit boots at base path)
+    needs: preflight
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke — boot the scaffold
+        # The config's webServer builds and previews the app at
+        # /virtualrow/app/; this spec asserts the title and base path.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/svelte-scaffold-smoke.spec.ts
+
+  # #542 AC2 — the Playwright e2e suite, restricted to the specs that pass
+  # under SwiftShader on default runners today. See
+  # `playwright/playwright.config.next.ts` for the testIgnore list; the shard
+  # plan is the same measured-time split the main workflow uses, through
+  # `scripts/e2e-shards.mjs`.
+  #
+  # The config is handed in via E2E_SHARDS_CONFIG so the shard planner lists
+  # tests through it (otherwise it still asks `playwright.config.ci.ts`,
+  # which would include specs this branch cannot pass yet).
+  e2e-shards:
+    name: e2e shards ${{ matrix.shard }}/2 (ubuntu, SwiftShader)
+    needs: preflight
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      CI: true
+      E2E_SHARDS_CONFIG: playwright/playwright.config.next.ts
+      # The auth-related specs call `authService.getClientId()` through
+      # `.auth-button--signin`; Vite reads VITE_* at build time. The main
+      # workflow (playwright-e2e-clean.yml) uses the same placeholder.
+      VITE_INTERVALS_CLIENT_ID: playwright-e2e-client
+      # SwiftShader fallback for WebGL contexts the UI still mounts (e.g. the
+      # route detail map's WebGL leaflet / MapLibre layer).
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run shard
+        run: node scripts/e2e-shards.mjs ${{ matrix.shard }}/2 --retries=2
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-branch-playwright-report-shard-${{ matrix.shard }}
+          path: playwright-report
+          retention-days: 7
+
+  # #542 AC6 / D5-b — the dedicated GPU runner (SwiftShader fallback).
+  #
+  # GitHub's default runners rasterise through SwiftShader, which ships no
+  # WebGPU backend, so the hand-written WebGPU engine's real-GPU paths cannot
+  # run on them. This job runs on a GitHub-hosted GPU larger runner when one is
+  # configured and proves it actually has a hardware WebGPU adapter
+  # (scripts/gpu-runner-smoke.mjs). Later phases run the engine's GPU specs here.
+  #
+  # The runner is the self-hosted `linux-nvidia-gpu-runner` registered against
+  # this repo (a real Nvidia GPU). `runs-on` names that label directly so the
+  # job always targets it — the earlier `${{ vars.GPU_RUNNER_LABEL }}`
+  # indirection silently resolved to an empty/mismatched label whenever the repo
+  # variable wasn't set to exactly the runner's label, which is why jobs never
+  # got picked up. Kill-switch: set the repo variable `GPU_RUNNER_DISABLED` to
+  # `true` to skip the GPU jobs entirely (e.g. while the runner is offline) so
+  # the branch never hangs waiting on an absent runner.
+  gpu-smoke:
+    name: GPU runner smoke (real WebGPU adapter present)
+    needs: preflight
+    if: ${{ vars.GPU_RUNNER_DISABLED != 'true' }}
+    runs-on: linux-nvidia-gpu-runner
+    env:
+      CI: true
+      REQUIRE_REAL_GPU: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Install Vulkan runtime for the NVIDIA GPU
+        # The "NVIDIA GPU-Optimized Image for AI and HPC" ships the CUDA
+        # stack but not the Vulkan graphics userspace that Chromium's WebGPU
+        # (Dawn) backend needs on Linux. Install the Vulkan loader + tools and
+        # the NVIDIA Vulkan ICD matching the running driver so
+        # requestAdapter() sees the hardware adapter instead of returning
+        # undefined. Non-fatal on the ICD line so the diagnostic below still
+        # reports what landed.
+        run: |
+          set -x
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools libgl1 libegl1
+          DRV_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1)
+          if [ -n "$DRV_MAJOR" ]; then
+            sudo apt-get install -y --no-install-recommends "libnvidia-gl-$DRV_MAJOR" \
+              || echo "libnvidia-gl-$DRV_MAJOR not available via apt — relying on the image's own ICD"
+          fi
+      # Diagnostic probe — the smoke that follows reports
+      # `navigator.gpu is undefined`, which can come from a missing Vulkan
+      # loader, a missing DRI node, or Chromium gating WebGPU because it
+      # cannot see the hardware. These commands show what the runner image
+      # actually has, so a failure in the next step is actionable instead of
+      # guesswork. All lines are non-fatal so a missing binary never blocks
+      # the real smoke that follows.
+      - name: Diagnose runner GPU + Vulkan + Chromium
+        run: |
+          set +e
+          echo "::group::PCI devices (GPU hardware present?)"
+          # Distinguishes "no GPU attached to this VM SKU" (empty output)
+          # from "GPU present but driver/kernel-module missing" (NVIDIA PCI
+          # device listed). This decides whether the fix is a workflow
+          # change or a runner Size change.
+          lspci -nn 2>&1 | grep -iE "nvidia|vga|3d |display" || echo "(lspci: no NVIDIA/VGA/3D/Display device)"
+          echo "::endgroup::"
+          echo "::group::Kernel + /dev nodes"
+          lsmod 2>&1 | grep -iE "^nvidia|^nouveau" || echo "(no nvidia/nouveau kernel modules loaded)"
+          ls -l /dev/nvidia* 2>&1 || echo "(no /dev/nvidia* nodes)"
+          echo "::endgroup::"
+          echo "::group::nvidia-smi"
+          nvidia-smi || echo "(nvidia-smi missing or GPU not exposed)"
+          echo "::endgroup::"
+          echo "::group::DRI nodes"
+          ls -l /dev/dri 2>&1 || echo "(no /dev/dri)"
+          echo "::endgroup::"
+          echo "::group::Vulkan ICDs"
+          ls /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
+          vulkaninfo --summary 2>&1 | head -60 || echo "(vulkaninfo missing — install vulkan-tools)"
+          echo "::endgroup::"
+          echo "::group::Chromium"
+          CHROME=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
+          echo "path: $CHROME"
+          "$CHROME" --version 2>&1 || true
+          echo "::endgroup::"
+      - name: Prove the runner has a hardware WebGPU adapter
+        run: node scripts/gpu-runner-smoke.mjs
+
+  webgpu-engine:
+    # #550 D8-b: the engine's Playwright smokes, run on the self-hosted
+    # `linux-nvidia-gpu-runner` (same runner as gpu-smoke). Now that a real
+    # WebGPU adapter is reachable there, this targets the runner directly and
+    # reports a real pass/fail instead of the old SwiftShader fallback leg.
+    # Gated by the same `GPU_RUNNER_DISABLED` kill-switch so it skips (rather
+    # than hangs) when the runner is deliberately offline.
+    name: WebGPU engine smoke (#550)
+    needs: preflight
+    if: ${{ vars.GPU_RUNNER_DISABLED != 'true' }}
+    runs-on: linux-nvidia-gpu-runner
+    continue-on-error: false
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Install Vulkan runtime for the NVIDIA GPU
+        # Same as gpu-smoke: the AI/HPC image lacks the Vulkan graphics
+        # userspace Chromium's WebGPU backend needs, so install the loader +
+        # tools + the NVIDIA ICD matching the running driver. Without it the
+        # engine smokes fall back to SwiftShader instead of the real GPU.
+        run: |
+          set -x
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools libgl1 libegl1
+          DRV_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1)
+          if [ -n "$DRV_MAJOR" ]; then
+            sudo apt-get install -y --no-install-recommends "libnvidia-gl-$DRV_MAJOR" \
+              || echo "libnvidia-gl-$DRV_MAJOR not available via apt — relying on the image's own ICD"
+          fi
+      - name: Smoke — attach the engine, draw one frame, read telemetry
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-engine-smoke.spec.ts
+      - name: Smoke — scenery pools + compute cull + drawIndirect (#555)
+        # D7-a / D8-a: scenery runs on the same job as the engine smoke; the
+        # smoke page under /smoke/scenery feeds a canned foliage pool set.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-scenery-smoke.spec.ts
+      - name: Smoke — flora LOD + texture pipeline (#562)
+        # P5-AC4: flora LOD runs on the same job as the engine smoke; the
+        # smoke page under /smoke/flora exercises the solid + sprite passes
+        # and the lazy KTX2/PNG atlas path. SwiftShader is OK since the
+        # decoder currently returns null → PNG fallback.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-flora-smoke.spec.ts
+      - name: Smoke — CSM + flora shadow depth pass (#559)
+        # P4-AC4: shadows run on the same job as the engine smoke; the
+        # smoke page under /smoke/shadows feeds a canned foliage pool
+        # set so the shadow stage has casters.
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-shadows-smoke.spec.ts
+      - name: Ride e2e — boot & row on the engine (#570 AC2 / #584 AC5)
+        # The integrated ride specs: they drive the real /row flow and launch
+        # with real WebGPU (Vulkan), so on a GPU-attached runner they assert the
+        # boat actually moves, the ghost advances, world scale holds, and the
+        # route curve draws. On a runner without a hardware adapter the engine
+        # declines and each spec asserts the well-formed fallback instead of a
+        # silent SwiftShader pass (#542 NFR5).
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-ride-boat-moves.spec.ts playwright/tests/webgpu-ride-ghost.spec.ts playwright/tests/webgpu-ride-world-scale.spec.ts playwright/tests/webgpu-ride-route-loading.spec.ts
+      - name: AC5 ports e2e — context budget, device-lost, post-fx, scene quality (#584 AC5)
+        # The four retired WebGL specs ported to the WebGPU engine: one
+        # adapter + one device and zero WebGL probes; a forced device loss
+        # recovers on the same canvas with the banner; post-fx draws + gpuMs>0
+        # per tier; and a higher tier builds a richer scene than basic. Like
+        # the ride specs they launch with real WebGPU and branch to the
+        # well-formed decline on a runner without a hardware adapter (#542 NFR5).
+        run: npx playwright test --config=playwright/playwright.config.ts --project=default playwright/tests/webgpu-device-budget.spec.ts playwright/tests/webgpu-device-lost-recovery.spec.ts playwright/tests/webgpu-postfx.spec.ts playwright/tests/webgpu-scene-quality-match.spec.ts

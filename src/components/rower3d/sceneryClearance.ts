@@ -15,7 +15,7 @@ import {
   getWaterEdgesSceneUnitsForProgress,
   type RouteEnrichmentData,
   type WaterEdges,
-} from '../../services/routeEnrichmentService';
+} from '../../lib/services/routeEnrichmentService';
 
 /**
  * Metres past the waterline that anything standing on the bank keeps clear.

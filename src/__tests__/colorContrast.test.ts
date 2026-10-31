@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chromaticApart, parseHexColor } from '../utils/colorContrast';
+import { chromaticApart, parseHexColor } from '../lib/utils/colorContrast';
 
 describe('chromaticApart', () => {
   it('is zero for identical samples', () => {

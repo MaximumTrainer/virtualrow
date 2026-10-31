@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WorkoutService } from '../services/workoutService';
+import { WorkoutService } from '../lib/services/workoutService';
 
 describe('WorkoutService heart rate integration', () => {
   it('updates heart rate samples and computes average implicitly', () => {

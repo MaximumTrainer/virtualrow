@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { afterEach } from 'vitest';
 import {
@@ -14,7 +12,7 @@ import {
 import type {
   SceneryProfile,
   WaterBodyType,
-} from '../services/routeEnrichmentService';
+} from '../lib/services/routeEnrichmentService';
 
 const PROFILES: SceneryProfile[] = [
   'forest', 'residential', 'commercial', 'farmland', 'beach', 'wetland', 'fallback',
@@ -179,19 +177,8 @@ describe('collectSceneryPaths', () => {
   });
 });
 
-describe('scenery models are fetched for the route, not on import', () => {
-  it('does not preload a fixed model set when the module loads', () => {
-    // A module-scope useGLTF.preload of the fallback/unknown set was harmless
-    // while the kit was opt-in and the branch was dead. Turning the kit on by
-    // default made it fetch ~18 GLBs on every session, most of which the
-    // Willowbrook track's own profiles never use. The component's
-    // useGLTF(paths) already loads exactly the set the route needs, so there
-    // is nothing left for a preload to warm (review of #232).
-    const source = fs.readFileSync(
-      path.join(process.cwd(), 'src/components/rower3d/sceneryModels.tsx'),
-      'utf-8',
-    );
-
-    expect(source).not.toContain('useGLTF.preload');
-  });
-});
+// #542 AC1 — the "no module-scope `useGLTF.preload`" rule the next block used
+// to pin was a React/three.js contract on the deleted `sceneryModels.tsx`.
+// The WebGPU engine builds its scenery pools lazily per route (see
+// `src/lib/renderer/engine/rideScene.ts`), so there is no module-load fetch
+// to catch any more. Spec removed with the React tree.

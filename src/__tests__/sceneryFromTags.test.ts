@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapOsmTagsToSceneryProfile } from '../utils/sceneryFromTags';
+import { mapOsmTagsToSceneryProfile } from '../lib/utils/sceneryFromTags';
 
 describe('mapOsmTagsToSceneryProfile', () => {
   it('maps land use to a scenery profile', () => {

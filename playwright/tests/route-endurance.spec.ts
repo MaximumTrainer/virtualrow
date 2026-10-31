@@ -4,7 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { useSimServer, releaseSimServer, emitPm5 } from '../utils/sim-server';
 import { expectSceneAlive } from '../utils/scene-health';
-import { describeSceneHealth } from '../../src/utils/sceneHealth';
+import { describeSceneHealth } from '../../src/lib/utils/sceneHealth';
 
 /**
  * Issue #272 - row a route from one end to the other, and see what breaks.

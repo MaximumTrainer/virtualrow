@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { WorkoutProgressController, segmentSpeedFactor } from '../utils/workoutProgress';
-import type { PM5Data, StructuredWorkout, WorkoutSegment } from '../types/index';
+import { WorkoutProgressController, segmentSpeedFactor } from '../lib/utils/workoutProgress';
+import type { PM5Data, StructuredWorkout, WorkoutSegment } from '../lib/types/index';
 
 /**
  * Segment progression, tested against the acceptance criteria of #67 (ported

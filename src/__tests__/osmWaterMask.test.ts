@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OverpassElement } from '../services/routeEnrichmentService';
+import type { OverpassElement } from '../lib/services/routeEnrichmentService';
 import {
   ISLAND_NODE_RADIUS_METERS,
   ISLET_NODE_RADIUS_METERS,
@@ -11,8 +11,8 @@ import {
   pointInPolygon,
   pointInRing,
   polygonsFromElement,
-} from '../utils/osmWaterMask';
-import type { Coordinate } from '../types/index';
+} from '../lib/utils/osmWaterMask';
+import type { Coordinate } from '../lib/types/index';
 
 const square = (lat: number, lng: number, size: number): Coordinate[] => [
   { lat, lng },
