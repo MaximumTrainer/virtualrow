@@ -16,6 +16,7 @@ const basic = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawAutoExposure: false,
 };
 const low = {
   drawBuildings: true,
@@ -30,6 +31,7 @@ const low = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawAutoExposure: false,
 };
 const medium = {
   drawBuildings: true,
@@ -44,6 +46,7 @@ const medium = {
   drawLut: true,
   drawSsao: false,
   drawDof: false,
+  drawAutoExposure: false,
 };
 const high = {
   drawBuildings: true,
@@ -58,6 +61,7 @@ const high = {
   drawLut: true,
   drawSsao: true,
   drawDof: false,
+  drawAutoExposure: true,
 };
 const extraHigh = {
   drawBuildings: true,
@@ -72,6 +76,7 @@ const extraHigh = {
   drawLut: true,
   drawSsao: true,
   drawDof: true,
+  drawAutoExposure: true,
 };
 
 describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
@@ -111,6 +116,15 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
     for (const t of ['medium', 'high', 'extra-high'] as const) {
       expect(tierCapsFor(t).castFloraShadows, t).toBe(true);
       expect(tierCapsFor(t).castSceneryShadows, t).toBe(true);
+    }
+  });
+
+  it('auto-exposure turns on at high and stays on above (#574)', () => {
+    for (const t of ['basic', 'low', 'medium'] as const) {
+      expect(tierCapsFor(t).drawAutoExposure, t).toBe(false);
+    }
+    for (const t of ['high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).drawAutoExposure, t).toBe(true);
     }
   });
 });
