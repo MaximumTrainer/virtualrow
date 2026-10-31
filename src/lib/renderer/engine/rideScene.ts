@@ -32,6 +32,7 @@ import { createBankPass } from '../passes/bank';
 import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
+import { boatTintFromAthlete } from './boatPaint';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -164,6 +165,10 @@ export interface RideSceneOpts {
   route?: unknown;
   getFrame?: () => RideFrame;
   crew?: 'male' | 'female';
+  /** #571 — stable athlete identifier. When supplied, drives the shell
+   *  paint tint via `boatPaint.boatTintFromAthlete`. Omitted / empty =
+   *  the pre-#571 off-white default. */
+  athleteId?: string;
 }
 
 export interface RideSceneHandle {
@@ -750,7 +755,10 @@ export const createRideScene = async (
     mat4Identity(boatBones[i]);
     mat4Identity(ghostBones[i]);
   }
-  const BOAT_TINT = new Float32Array([0.78, 0.78, 0.82, 1.0]);
+  // #571 shell paint: when the shell plumbs an athlete id through,
+  // the hull tint comes from `boatPaint.boatTintFromAthlete`. Falls
+  // back to today's off-white when the id is empty / undefined.
+  const BOAT_TINT = boatTintFromAthlete(opts.athleteId);
   const GHOST_TINT = new Float32Array([0.35, 0.85, 1.0, 0.5]);
 
   const start = now();

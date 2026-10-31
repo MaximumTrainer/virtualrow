@@ -76,6 +76,10 @@ export type RideAttachOpts = {
    * `male` — the GLB the engine shipped with before the seam reached it.
    */
   crew?: 'male' | 'female';
+  /** #571 — stable athlete identifier used to deterministically pick a
+   *  shell paint tint from `boatPaint.BOAT_PAINT_PALETTE`. Omitted =
+   *  the pre-#571 off-white default. */
+  athleteId?: string;
 };
 
 export type RideAttach = (
