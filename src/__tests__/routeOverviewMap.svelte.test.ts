@@ -64,4 +64,41 @@ describe('RouteOverviewMap.svelte', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect.mock.calls[0][0]).toMatchObject({ id: 'uk' });
   });
+
+  it('#505 AC3 — marks dimmed pins with data-dimmed="true", undimmed with "false"', () => {
+    const { container } = render(RouteOverviewMap, {
+      routes: ROUTES,
+      defaultRouteId: null,
+      selectedRouteId: null,
+      dimmedRouteIds: new Set(['au']),
+      onSelect: vi.fn(),
+    });
+
+    const ukPin = container.querySelector('[data-route-id="uk"]');
+    const auPin = container.querySelector('[data-route-id="au"]');
+    expect(ukPin!.getAttribute('data-dimmed')).toBe('false');
+    expect(auPin!.getAttribute('data-dimmed')).toBe('true');
+  });
+
+  it('#505 AC1 — collapses overlapping routes into a route-cluster with its count', () => {
+    // Two routes at the same centroid should merge into one cluster at the
+    // overview's default zoom. The cluster carries its member count via
+    // data-cluster-count, which the Playwright cluster-zoom spec reads.
+    const COLOCATED = [
+      route('a', 'A', 51.5, -1.0),
+      route('b', 'B', 51.5, -1.0),
+    ];
+    const { container } = render(RouteOverviewMap, {
+      routes: COLOCATED,
+      defaultRouteId: null,
+      selectedRouteId: null,
+      onSelect: vi.fn(),
+    });
+
+    const clusters = container.querySelectorAll('[data-testid="route-cluster"]');
+    expect(clusters.length).toBe(1);
+    expect(clusters[0].getAttribute('data-cluster-count')).toBe('2');
+    // Individual pins disappear while the cluster covers them.
+    expect(container.querySelectorAll('[data-testid="route-pin"]').length).toBe(0);
+  });
 });

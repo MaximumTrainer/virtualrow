@@ -102,4 +102,17 @@ describe('RouteDetailOverlay.svelte', () => {
     expect(outline).not.toBeNull();
     expect(outline?.getAttribute('aria-hidden')).toBe('true');
   });
+
+  it('#505 AC7 — shows OpenStreetMap attribution with the copyright link', () => {
+    const { container } = render(RouteDetailOverlay, {
+      route: ROUTE,
+      onClose: vi.fn(),
+      onStartRow: vi.fn(),
+    });
+    const attribution = container.querySelector('[data-testid="route-detail-attribution"]');
+    expect(attribution).not.toBeNull();
+    expect(attribution!.textContent).toContain('OpenStreetMap');
+    const link = attribution!.querySelector('a[href="https://www.openstreetmap.org/copyright"]');
+    expect(link).not.toBeNull();
+  });
 });
