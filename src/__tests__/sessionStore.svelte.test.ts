@@ -200,4 +200,13 @@ describe('SessionStore', () => {
     expect(d.heartRateSimulator.start).not.toHaveBeenCalled();
     expect(d.workoutService.startSession).toHaveBeenCalled();
   });
+
+  it('#472 FR4: starts a loaded workout alongside the demo so the panel paints', () => {
+    const stop = $effect.root(() => {
+      const spy = vi.spyOn(store.currentWorkout, 'start');
+      store.startDemo(route(), true, true);
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+    stop();
+  });
 });
