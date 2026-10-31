@@ -18,6 +18,7 @@ const basic = {
   drawDof: false,
   drawAutoExposure: false,
   drawChromaticAberration: false,
+  drawRainOverlay: false,
 };
 const low = {
   drawBuildings: true,
@@ -34,6 +35,7 @@ const low = {
   drawDof: false,
   drawAutoExposure: false,
   drawChromaticAberration: false,
+  drawRainOverlay: true,
 };
 const medium = {
   drawBuildings: true,
@@ -50,6 +52,7 @@ const medium = {
   drawDof: false,
   drawAutoExposure: false,
   drawChromaticAberration: false,
+  drawRainOverlay: true,
 };
 const high = {
   drawBuildings: true,
@@ -66,6 +69,7 @@ const high = {
   drawDof: false,
   drawAutoExposure: true,
   drawChromaticAberration: true,
+  drawRainOverlay: true,
 };
 const extraHigh = {
   drawBuildings: true,
@@ -82,6 +86,7 @@ const extraHigh = {
   drawDof: true,
   drawAutoExposure: true,
   drawChromaticAberration: true,
+  drawRainOverlay: true,
 };
 
 describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
@@ -111,6 +116,13 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
 
   it('undefined falls back to the default caps', () => {
     expect(tierCapsFor(undefined)).toEqual(tierCapsFor('medium'));
+  });
+
+  it('rain overlay is off on basic, available from low upward (#574)', () => {
+    expect(tierCapsFor('basic').drawRainOverlay).toBe(false);
+    for (const t of ['low', 'medium', 'high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).drawRainOverlay, t).toBe(true);
+    }
   });
 
   it('flora + scenery shadow casts turn on at medium and stay on above (#591-fu P1c)', () => {

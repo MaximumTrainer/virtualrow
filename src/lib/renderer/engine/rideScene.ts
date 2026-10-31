@@ -33,6 +33,7 @@ import { createBoatPass } from '../passes/boat';
 import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
 import { boatTintFromAthlete } from './boatPaint';
+import { createRainOverlayPass } from '../passes/rainOverlay';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -573,6 +574,16 @@ export const createRideScene = async (
   const cloudsPass = tierCaps.drawClouds
     ? createCloudsPass({ device, format, frameUniforms })
     : null;
+  // #574 rain overlay: on only when the tier allows it AND the dev has
+  // flipped `window.__VIRTUALROW_RAIN=true` (so a mobile ride isn't
+  // soaked by default). Follow-up: wire to real weather data.
+  const rainEnabled =
+    tierCaps.drawRainOverlay &&
+    !!(globalThis as unknown as { window?: { __VIRTUALROW_RAIN?: boolean } }).window
+      ?.__VIRTUALROW_RAIN;
+  const rainPass = rainEnabled
+    ? createRainOverlayPass({ device, format, frameUniforms })
+    : null;
 
   const postCaps: PostFxCaps = {
     bloom: tierCaps.drawBloom,
@@ -607,6 +618,7 @@ export const createRideScene = async (
     waterPass,
     boatPass,
     sceneryMeshPass,
+    ...(rainPass ? [rainPass] : []),
     postFx.pass,
   ];
   // #584 AC3: GPU frame-time timer. null on adapters without `timestamp-query`

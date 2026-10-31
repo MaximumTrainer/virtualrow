@@ -47,6 +47,11 @@ export interface BuildingTierCaps {
    *  colour-channel offset. Off below `high`; keep it below ~0.5% of the
    *  frame width so it reads as a lens feel, not a defect. */
   drawChromaticAberration: boolean;
+  /** #574 — procedural rain overlay (screen-space streaks). Opt-in via
+   *  `window.__VIRTUALROW_RAIN=true` even on tiers that allow it; the
+   *  cap just says "the tier can afford the extra fullscreen draw".
+   *  Off on `basic`; on from `low` upward. */
+  drawRainOverlay: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -65,6 +70,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawDof: false,
     drawAutoExposure: false,
     drawChromaticAberration: false,
+    drawRainOverlay: false,
   },
   low: {
     drawBuildings: true,
@@ -81,6 +87,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawDof: false,
     drawAutoExposure: false,
     drawChromaticAberration: false,
+    drawRainOverlay: true,
   },
   medium: {
     drawBuildings: true,
@@ -97,6 +104,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawDof: false,
     drawAutoExposure: false,
     drawChromaticAberration: false,
+    drawRainOverlay: true,
   },
   high: {
     drawBuildings: true,
@@ -113,6 +121,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawDof: false,
     drawAutoExposure: true,
     drawChromaticAberration: true,
+    drawRainOverlay: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -129,6 +138,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawDof: true,
     drawAutoExposure: true,
     drawChromaticAberration: true,
+    drawRainOverlay: true,
   },
 };
 
