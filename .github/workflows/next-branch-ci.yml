@@ -8,10 +8,14 @@ name: CI (Svelte + WebGPU)
 #   * `smoke` boots the SvelteKit scaffold.
 #   * `e2e-shards` runs the Playwright specs that pass on SwiftShader today
 #     (the "software-adapter"-safe subset defined in playwright.config.next.ts).
-#   * `webgpu-engine` runs the engine smokes against the shared canvas.
-#   * `gpu-smoke` + `webgpu-engine` run on the self-hosted
-#     `linux-nvidia-gpu-runner` (kill-switch: repo var GPU_RUNNER_DISABLED=true);
-#     see the job comments below.
+#   * `webgpu-engine` runs the engine smokes against the shared canvas on the
+#     self-hosted `linux-nvidia-gpu-runner` (kill-switch: repo var
+#     `GPU_RUNNER_DISABLED=true`); see the job comment below. The dedicated
+#     `gpu-smoke` adapter-prober that preceded it was retired at the AC12
+#     cutover — the engine smoke covers the real-GPU path end-to-end, and the
+#     prober's `navigator.gpu is undefined` false-reds on fleet VMs still
+#     missing the NVIDIA Vulkan ICD gave noise with no diagnostic signal the
+#     engine job doesn't already carry.
 #
 # AC2 widens `e2e-shards` as screens stabilise under WebGPU and specs are
 # ported / scene-health is re-pointed at the WebGPU engine.
@@ -103,97 +107,6 @@ jobs:
           name: next-branch-playwright-report-shard-${{ matrix.shard }}
           path: playwright-report
           retention-days: 7
-
-  # #542 AC6 / D5-b — the dedicated GPU runner (SwiftShader fallback).
-  #
-  # GitHub's default runners rasterise through SwiftShader, which ships no
-  # WebGPU backend, so the hand-written WebGPU engine's real-GPU paths cannot
-  # run on them. This job runs on a GitHub-hosted GPU larger runner when one is
-  # configured and proves it actually has a hardware WebGPU adapter
-  # (scripts/gpu-runner-smoke.mjs). Later phases run the engine's GPU specs here.
-  #
-  # The runner is the self-hosted `linux-nvidia-gpu-runner` registered against
-  # this repo (a real Nvidia GPU). `runs-on` names that label directly so the
-  # job always targets it — the earlier `${{ vars.GPU_RUNNER_LABEL }}`
-  # indirection silently resolved to an empty/mismatched label whenever the repo
-  # variable wasn't set to exactly the runner's label, which is why jobs never
-  # got picked up. Kill-switch: set the repo variable `GPU_RUNNER_DISABLED` to
-  # `true` to skip the GPU jobs entirely (e.g. while the runner is offline) so
-  # the branch never hangs waiting on an absent runner.
-  gpu-smoke:
-    name: GPU runner smoke (real WebGPU adapter present)
-    needs: preflight
-    if: ${{ vars.GPU_RUNNER_DISABLED != 'true' }}
-    runs-on: linux-nvidia-gpu-runner
-    env:
-      CI: true
-      REQUIRE_REAL_GPU: '1'
-    steps:
-      - uses: actions/checkout@v7
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Install Vulkan runtime for the NVIDIA GPU
-        # The "NVIDIA GPU-Optimized Image for AI and HPC" ships the CUDA
-        # stack but not the Vulkan graphics userspace that Chromium's WebGPU
-        # (Dawn) backend needs on Linux. Install the Vulkan loader + tools and
-        # the NVIDIA Vulkan ICD matching the running driver so
-        # requestAdapter() sees the hardware adapter instead of returning
-        # undefined. Non-fatal on the ICD line so the diagnostic below still
-        # reports what landed.
-        run: |
-          set -x
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libvulkan1 vulkan-tools libgl1 libegl1
-          DRV_MAJOR=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | cut -d. -f1)
-          if [ -n "$DRV_MAJOR" ]; then
-            sudo apt-get install -y --no-install-recommends "libnvidia-gl-$DRV_MAJOR" \
-              || echo "libnvidia-gl-$DRV_MAJOR not available via apt — relying on the image's own ICD"
-          fi
-      # Diagnostic probe — the smoke that follows reports
-      # `navigator.gpu is undefined`, which can come from a missing Vulkan
-      # loader, a missing DRI node, or Chromium gating WebGPU because it
-      # cannot see the hardware. These commands show what the runner image
-      # actually has, so a failure in the next step is actionable instead of
-      # guesswork. All lines are non-fatal so a missing binary never blocks
-      # the real smoke that follows.
-      - name: Diagnose runner GPU + Vulkan + Chromium
-        run: |
-          set +e
-          echo "::group::PCI devices (GPU hardware present?)"
-          # Distinguishes "no GPU attached to this VM SKU" (empty output)
-          # from "GPU present but driver/kernel-module missing" (NVIDIA PCI
-          # device listed). This decides whether the fix is a workflow
-          # change or a runner Size change.
-          lspci -nn 2>&1 | grep -iE "nvidia|vga|3d |display" || echo "(lspci: no NVIDIA/VGA/3D/Display device)"
-          echo "::endgroup::"
-          echo "::group::Kernel + /dev nodes"
-          lsmod 2>&1 | grep -iE "^nvidia|^nouveau" || echo "(no nvidia/nouveau kernel modules loaded)"
-          ls -l /dev/nvidia* 2>&1 || echo "(no /dev/nvidia* nodes)"
-          echo "::endgroup::"
-          echo "::group::nvidia-smi"
-          nvidia-smi || echo "(nvidia-smi missing or GPU not exposed)"
-          echo "::endgroup::"
-          echo "::group::DRI nodes"
-          ls -l /dev/dri 2>&1 || echo "(no /dev/dri)"
-          echo "::endgroup::"
-          echo "::group::Vulkan ICDs"
-          ls /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
-          vulkaninfo --summary 2>&1 | head -60 || echo "(vulkaninfo missing — install vulkan-tools)"
-          echo "::endgroup::"
-          echo "::group::Chromium"
-          CHROME=$(node -e "console.log(require('@playwright/test').chromium.executablePath())")
-          echo "path: $CHROME"
-          "$CHROME" --version 2>&1 || true
-          echo "::endgroup::"
-      - name: Prove the runner has a hardware WebGPU adapter
-        run: node scripts/gpu-runner-smoke.mjs
 
   webgpu-engine:
     # #550 D8-b: the engine's Playwright smokes, run on the self-hosted
