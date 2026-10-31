@@ -52,6 +52,10 @@ export interface BuildingTierCaps {
    *  cap just says "the tier can afford the extra fullscreen draw".
    *  Off on `basic`; on from `low` upward. */
   drawRainOverlay: boolean;
+  /** #571 — hull wake / foam billboards. Off on `basic` (CPU particle
+   *  update is cheap but the extra draw costs an upload per frame); on
+   *  for `low` and up so even a modest tier sees the trail. */
+  drawWakeParticles: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -71,6 +75,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawAutoExposure: false,
     drawChromaticAberration: false,
     drawRainOverlay: false,
+    drawWakeParticles: false,
   },
   low: {
     drawBuildings: true,
@@ -88,6 +93,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawAutoExposure: false,
     drawChromaticAberration: false,
     drawRainOverlay: true,
+    drawWakeParticles: true,
   },
   medium: {
     drawBuildings: true,
@@ -105,6 +111,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawAutoExposure: false,
     drawChromaticAberration: false,
     drawRainOverlay: true,
+    drawWakeParticles: true,
   },
   high: {
     drawBuildings: true,
@@ -122,6 +129,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawAutoExposure: true,
     drawChromaticAberration: true,
     drawRainOverlay: true,
+    drawWakeParticles: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -139,6 +147,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawAutoExposure: true,
     drawChromaticAberration: true,
     drawRainOverlay: true,
+    drawWakeParticles: true,
   },
 };
 

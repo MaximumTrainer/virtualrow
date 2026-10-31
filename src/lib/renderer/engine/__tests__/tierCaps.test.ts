@@ -19,6 +19,7 @@ const basic = {
   drawAutoExposure: false,
   drawChromaticAberration: false,
   drawRainOverlay: false,
+  drawWakeParticles: false,
 };
 const low = {
   drawBuildings: true,
@@ -36,6 +37,7 @@ const low = {
   drawAutoExposure: false,
   drawChromaticAberration: false,
   drawRainOverlay: true,
+  drawWakeParticles: true,
 };
 const medium = {
   drawBuildings: true,
@@ -53,6 +55,7 @@ const medium = {
   drawAutoExposure: false,
   drawChromaticAberration: false,
   drawRainOverlay: true,
+  drawWakeParticles: true,
 };
 const high = {
   drawBuildings: true,
@@ -70,6 +73,7 @@ const high = {
   drawAutoExposure: true,
   drawChromaticAberration: true,
   drawRainOverlay: true,
+  drawWakeParticles: true,
 };
 const extraHigh = {
   drawBuildings: true,
@@ -87,6 +91,7 @@ const extraHigh = {
   drawAutoExposure: true,
   drawChromaticAberration: true,
   drawRainOverlay: true,
+  drawWakeParticles: true,
 };
 
 describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
@@ -151,6 +156,13 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
     }
     for (const t of ['high', 'extra-high'] as const) {
       expect(tierCapsFor(t).drawChromaticAberration, t).toBe(true);
+    }
+  });
+
+  it('wake particles are off on basic but on from low upward (#571)', () => {
+    expect(tierCapsFor('basic').drawWakeParticles).toBe(false);
+    for (const t of ['low', 'medium', 'high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).drawWakeParticles, t).toBe(true);
     }
   });
 });

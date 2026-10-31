@@ -34,6 +34,8 @@ import { createBuildingsPass } from '../passes/buildings';
 import { createCloudsPass } from '../passes/clouds';
 import { boatTintFromAthlete } from './boatPaint';
 import { createRainOverlayPass } from '../passes/rainOverlay';
+import { createWakeParticlesPass } from '../passes/wakeParticles';
+import { createWakeState, updateWake } from './wakeParticles';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -584,6 +586,13 @@ export const createRideScene = async (
   const rainPass = rainEnabled
     ? createRainOverlayPass({ device, format, frameUniforms })
     : null;
+  // #571 — hull wake foam. Shared state lives here; the ride loop below
+  // calls `updateWake` each frame, and the pass uploads the pool to its
+  // storage buffer before drawing.
+  const wakeState = createWakeState();
+  const wakePass = tierCaps.drawWakeParticles
+    ? createWakeParticlesPass({ device, format, frameUniforms, wakeState })
+    : null;
 
   const postCaps: PostFxCaps = {
     bloom: tierCaps.drawBloom,
@@ -619,6 +628,7 @@ export const createRideScene = async (
     boatPass,
     sceneryMeshPass,
     ...(rainPass ? [rainPass] : []),
+    ...(wakePass ? [wakePass] : []),
     postFx.pass,
   ];
   // #584 AC3: GPU frame-time timer. null on adapters without `timestamp-query`
@@ -815,7 +825,9 @@ export const createRideScene = async (
   // the hull glides instead of holding then jumping at each sample boundary
   // (see distanceSmoother.ts). The ghost is already continuous via
   // `ghostDistanceAt(elapsedSeconds)`; this gives the player boat the same.
+  // (#620 replaced the earlier inline smoothedDistance/lastDistSample easing.)
   const distanceSmoother = createDistanceSmoother();
+  let lastWakeTime = 0; // #571 — seconds since start, matches `frame.time` units
 
   const frameOnce = (): void => {
     if (disposed) return;
@@ -842,6 +854,21 @@ export const createRideScene = async (
       : null;
 
     placeBoat(boatPlacement, routeCurve, smoothedFrame, totalDistanceMeters, curveLength, 0);
+    // #571 wake foam: run the CPU particle sim before the pass encodes.
+    // `isMoving` gates on both `isPlaying` AND the holdBoat/finished state
+    // so no spawns happen during countdown or post-finish review.
+    const wakeMoving = !!rideFrame?.isPlaying && !rideFrame.holdBoat && !rideFrame.finished;
+    const wakeDt = Math.max(0, frame.time - lastWakeTime);
+    updateWake(
+      wakeState,
+      boatPlacement.world[0],
+      boatPlacement.world[1],
+      boatPlacement.world[2],
+      boatPlacement.heading,
+      wakeMoving,
+      wakeDt,
+    );
+    lastWakeTime = frame.time;
     // Stream scenery that has come within the look-ahead window as the boat
     // advances; already-loaded / in-flight models are skipped.
     streamScenery(boatPlacement.progress * totalDistanceMeters);
