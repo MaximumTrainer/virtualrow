@@ -36,6 +36,8 @@ import { boatTintFromAthlete } from './boatPaint';
 import { createRainOverlayPass } from '../passes/rainOverlay';
 import { createWakeParticlesPass } from '../passes/wakeParticles';
 import { createWakeState, updateWake } from './wakeParticles';
+import { createOarSplashPass } from '../passes/oarSplashParticles';
+import { createOarSplashState, updateOarSplash } from './oarSplashParticles';
 import { createSkyPass } from '../passes/sky';
 import { createWaterPass } from '../passes/water';
 import { createSceneryMeshPass } from '../passes/sceneryMesh';
@@ -593,6 +595,13 @@ export const createRideScene = async (
   const wakePass = tierCaps.drawWakeParticles
     ? createWakeParticlesPass({ device, format, frameUniforms, wakeState })
     : null;
+  // #571 oar-blade splash: shared CPU state + a billboard pass. The
+  // update loop below detects the catch (phase 0) and finish (phase 0.5)
+  // crossings and bursts particles at both blade tips.
+  const oarSplashState = createOarSplashState();
+  const oarSplashPass = tierCaps.drawOarSplash
+    ? createOarSplashPass({ device, format, frameUniforms, state: oarSplashState })
+    : null;
 
   const postCaps: PostFxCaps = {
     bloom: tierCaps.drawBloom,
@@ -629,6 +638,7 @@ export const createRideScene = async (
     sceneryMeshPass,
     ...(rainPass ? [rainPass] : []),
     ...(wakePass ? [wakePass] : []),
+    ...(oarSplashPass ? [oarSplashPass] : []),
     postFx.pass,
   ];
   // #584 AC3: GPU frame-time timer. null on adapters without `timestamp-query`
@@ -828,6 +838,7 @@ export const createRideScene = async (
   // (#620 replaced the earlier inline smoothedDistance/lastDistSample easing.)
   const distanceSmoother = createDistanceSmoother();
   let lastWakeTime = 0; // #571 — seconds since start, matches `frame.time` units
+  let lastOarSplashTime = 0; // #571 — seconds since start, for the oar-splash sim
 
   const frameOnce = (): void => {
     if (disposed) return;
@@ -883,6 +894,20 @@ export const createRideScene = async (
     );
 
     const phase = strokePhase(rideFrame?.cadence ?? 0, frame.time, rideFrame?.isPlaying ?? false);
+    // #571 oar-blade splash: fire a burst at catch (phase 0 crossing) and
+    // finish (phase 0.5 crossing). `isMoving` matches the wake-pass gate.
+    const oarSplashMoving = !!rideFrame?.isPlaying && !rideFrame.holdBoat && !rideFrame.finished;
+    const oarSplashDt = Math.max(0, frame.time - lastOarSplashTime);
+    updateOarSplash(
+      oarSplashState,
+      boatPlacement.world[0],
+      boatPlacement.world[2],
+      boatPlacement.heading,
+      phase,
+      oarSplashMoving,
+      oarSplashDt,
+    );
+    lastOarSplashTime = frame.time;
     const amp = strokeAmplitude(rideFrame);
     const torsoLean = Math.sin(phase * Math.PI * 2) * 0.35 * amp;
     const armPull = Math.sin(phase * Math.PI * 2 + 0.5) * 0.6 * amp;

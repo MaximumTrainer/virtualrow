@@ -20,6 +20,7 @@ const basic = {
   drawChromaticAberration: false,
   drawRainOverlay: false,
   drawWakeParticles: false,
+  drawOarSplash: false,
 };
 const low = {
   drawBuildings: true,
@@ -38,6 +39,7 @@ const low = {
   drawChromaticAberration: false,
   drawRainOverlay: true,
   drawWakeParticles: true,
+  drawOarSplash: true,
 };
 const medium = {
   drawBuildings: true,
@@ -56,6 +58,7 @@ const medium = {
   drawChromaticAberration: false,
   drawRainOverlay: true,
   drawWakeParticles: true,
+  drawOarSplash: true,
 };
 const high = {
   drawBuildings: true,
@@ -74,6 +77,7 @@ const high = {
   drawChromaticAberration: true,
   drawRainOverlay: true,
   drawWakeParticles: true,
+  drawOarSplash: true,
 };
 const extraHigh = {
   drawBuildings: true,
@@ -92,6 +96,7 @@ const extraHigh = {
   drawChromaticAberration: true,
   drawRainOverlay: true,
   drawWakeParticles: true,
+  drawOarSplash: true,
 };
 
 describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
@@ -127,6 +132,13 @@ describe('tierCaps (P6 D8 + P7 D9 + P8 D8)', () => {
     expect(tierCapsFor('basic').drawRainOverlay).toBe(false);
     for (const t of ['low', 'medium', 'high', 'extra-high'] as const) {
       expect(tierCapsFor(t).drawRainOverlay, t).toBe(true);
+    }
+  });
+
+  it('oar splash is off on basic but on from low upward (#571)', () => {
+    expect(tierCapsFor('basic').drawOarSplash).toBe(false);
+    for (const t of ['low', 'medium', 'high', 'extra-high'] as const) {
+      expect(tierCapsFor(t).drawOarSplash, t).toBe(true);
     }
   });
 

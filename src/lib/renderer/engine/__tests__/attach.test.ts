@@ -75,10 +75,12 @@ describe('attach', () => {
     expect(renderer).not.toBeNull();
     renderer._frameOnce();
     // sky, clouds, bank, buildings, scenery, floraSolid, water, boat,
-    // sceneryMesh, wake (#566 added clouds + buildings on medium+; #570
-    // added boat; #549 scenery slice added sceneryMesh for GLB course
-    // furniture / structures; #571 added wake foam particles).
-    expect(renderer._telemetry.renderStats.draws).toBe(10);
+    // sceneryMesh, wake, oarSplash (#566 added clouds + buildings on medium+;
+    // #570 added boat; #549 scenery slice added sceneryMesh for GLB course
+    // furniture / structures; #571 added wake foam particles + oar-blade
+    // splash, both at low+). Rain overlay is opt-in (default off) so it is
+    // not counted here.
+    expect(renderer._telemetry.renderStats.draws).toBe(11);
     renderer.dispose();
   });
 

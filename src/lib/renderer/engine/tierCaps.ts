@@ -56,6 +56,10 @@ export interface BuildingTierCaps {
    *  update is cheap but the extra draw costs an upload per frame); on
    *  for `low` and up so even a modest tier sees the trail. */
   drawWakeParticles: boolean;
+  /** #571 — oar-blade splash puddles at the catch and finish of each
+   *  stroke. Pairs with the hull wake pass. Off on `basic`, on from
+   *  `low` upward — the sim is tiny (~16 particles per second). */
+  drawOarSplash: boolean;
 }
 
 const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
@@ -76,6 +80,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawChromaticAberration: false,
     drawRainOverlay: false,
     drawWakeParticles: false,
+    drawOarSplash: false,
   },
   low: {
     drawBuildings: true,
@@ -94,6 +99,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawChromaticAberration: false,
     drawRainOverlay: true,
     drawWakeParticles: true,
+    drawOarSplash: true,
   },
   medium: {
     drawBuildings: true,
@@ -112,6 +118,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawChromaticAberration: false,
     drawRainOverlay: true,
     drawWakeParticles: true,
+    drawOarSplash: true,
   },
   high: {
     drawBuildings: true,
@@ -130,6 +137,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawChromaticAberration: true,
     drawRainOverlay: true,
     drawWakeParticles: true,
+    drawOarSplash: true,
   },
   'extra-high': {
     drawBuildings: true,
@@ -148,6 +156,7 @@ const CAPS: Record<PerformanceTier, BuildingTierCaps> = {
     drawChromaticAberration: true,
     drawRainOverlay: true,
     drawWakeParticles: true,
+    drawOarSplash: true,
   },
 };
 
