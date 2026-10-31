@@ -14,7 +14,12 @@ struct Frame {
   _pad1: f32,
   fog: vec4<f32>,
   time: f32,
-  _pad2: vec3<f32>,
+  // #567 "Animated cloud flow": the former `_pad2` slot now carries a 2D
+  // wind vector (wind.x, wind.y). Zero means the clouds don't move; a
+  // non-zero vector scrolls the noise UV with `wind * time`. The uniforms
+  // packer (`packFrameUniforms`) writes it here; other passes still name
+  // this slot `_pad2` and ignore it.
+  wind: vec3<f32>,
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -62,9 +67,11 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
   if (altitude < 0.02) {
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
   }
-  // UV scroll: a slow uniform drift. Future wind source will replace the
-  // constants here (parked in #567 as `animated cloud flow`).
-  let scroll = vec2<f32>(frame.time * 0.012, frame.time * 0.004);
+  // UV scroll driven by `frame.wind.xy * frame.time` (#567 "Animated
+  // cloud flow"). A zero wind leaves the sky static; otherwise the whole
+  // cloud field drifts in that direction at a rate proportional to the
+  // wind magnitude.
+  let scroll = frame.wind.xy * frame.time;
   let uv = in.ndc * vec2<f32>(2.0, 1.0) + scroll;
 
   // Two-octave value noise, lightly ridged.

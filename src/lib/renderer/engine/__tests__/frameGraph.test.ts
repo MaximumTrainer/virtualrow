@@ -47,4 +47,27 @@ describe('frameGraph', () => {
     expect(device.__log.submits).toBe(0);
     graph.dispose();
   });
+
+  it('accepts a FrameUniforms with the optional wind field (#567)', () => {
+    // The wind field was added for the animated cloud flow. Lift it through
+    // the frame-graph plumbing without a type-check hiccup; the pass sees
+    // the same `FrameContext.frame` and can read wind if it wants.
+    const device = makeMockDevice();
+    const seen: Array<FrameUniforms['wind']> = [];
+    const graph = createFrameGraph([
+      {
+        name: 'wind-sniff',
+        encode: (ctx) => {
+          seen.push(ctx.frame.wind);
+        },
+        dispose: () => undefined,
+      },
+    ]);
+    const windy: FrameUniforms = { ...frame(), wind: new Float32Array([0.018, 0.006]) };
+    graph.run(device, {} as GPUTextureView, {} as GPUTextureView, 1, 1, windy);
+    expect(seen.length).toBe(1);
+    expect(seen[0]?.[0]).toBeCloseTo(0.018, 6);
+    expect(seen[0]?.[1]).toBeCloseTo(0.006, 6);
+    graph.dispose();
+  });
 });

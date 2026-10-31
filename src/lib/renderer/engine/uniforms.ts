@@ -187,6 +187,13 @@ export const packFrameUniforms = (
   out[58] = frame.fog[2];
   out[59] = frame.fog[3];
   out[60] = frame.time;
-  // 61,62,63 pad
+  // 61,62,63 pad (vec3 alignment before the trailing vec3 slot).
+  // #567 "Animated cloud flow": wind.xy lands in the trailing vec3 slot
+  // (bytes 256..263). Shaders that still declare it as `_pad2` ignore it;
+  // `clouds.wgsl` renames the field to `wind` and reads it.
+  out[64] = frame.wind?.[0] ?? 0;
+  out[65] = frame.wind?.[1] ?? 0;
+  out[66] = 0;
+  // 67 pad (trailing vec3 rounds the struct up to 272 bytes).
   return out;
 };
