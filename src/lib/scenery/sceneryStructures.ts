@@ -113,6 +113,17 @@ export const courseStructures = (routeMeters?: number): StructureRequest[] => [
   })),
 ];
 
+/**
+ * #567 slice "Landmark GLB chunks" — the three liveried landmarks are
+ * resolved to `StructureRequest`s whenever a route's coordinates pass
+ * within `LANDMARK_RADIUS_METERS` of their canonical lat/lng. The
+ * `rideScene` loader resolves `l-*` ids to `public/assets/scenery/
+ * tier-l/<id>.glb` via `tierFolderFor`, parses via `glbLoader.loadGlb`
+ * (meshopt + mesh-quantization decode, hand-written, no three.js), and
+ * registers the result with the sceneryMesh pass just like a bridge or
+ * boathouse. `landmarkGlb.test.ts` guards the loader → budget → bounds
+ * contract end-to-end.
+ */
 export const landmarkStructures = (coordinates?: Coordinate[] | null): StructureRequest[] => {
   const route = (coordinates ?? []).filter(
     (c) => Number.isFinite(c?.lat) && Number.isFinite(c?.lng),
