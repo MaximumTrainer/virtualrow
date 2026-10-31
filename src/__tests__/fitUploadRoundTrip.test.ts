@@ -3,7 +3,14 @@ import { Decoder, Stream } from '@garmin/fitsdk';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { encodeSession } from '../lib/services/fitEncoderService';
-import { buildRealisticSession } from './__helpers__/fitFixture';
+import {
+  buildGateChainSession,
+  buildLoopRouteSession,
+  buildRealisticSession,
+  GATE_CHAIN_ROUTE,
+  LOOP_ROUTE,
+} from './__helpers__/fitFixture';
+import { cumulativeLengths } from '../lib/utils/polylineGeometry';
 
 /**
  * End-to-end evidence that intervals.icu's own importer will accept the bytes
@@ -21,6 +28,8 @@ import { buildRealisticSession } from './__helpers__/fitFixture';
  */
 
 const FIXTURE_PATH = resolve(__dirname, '__fixtures__/sample-session.fit');
+const LOOP_FIXTURE_PATH = resolve(__dirname, '__fixtures__/loop-route.fit');
+const GATE_CHAIN_FIXTURE_PATH = resolve(__dirname, '__fixtures__/gate-chain.fit');
 
 const UPDATE = process.env.UPDATE_FIT_FIXTURE === '1';
 
@@ -147,6 +156,100 @@ describe('FIT fixture byte-for-byte gate (issue #446, AC2)', () => {
       // compare the payloads with `.equals` to fail loudly on any diff.
       expect(fixture.length).toBe(encoded.length);
       expect(Buffer.from(encoded).equals(fixture)).toBe(true);
+    });
+  }
+});
+
+/**
+ * #466 AC10 — two further fixtures covering the polyline edge cases the
+ * sampler exercises: a closed loop (where lat/lng wraps modulo the loop
+ * length past 1×) and a gate-chain polyline (two vertices, straight line).
+ * Both are regenerable with the same `UPDATE_FIT_FIXTURE=1` env var and
+ * both are validated by `scripts/run-fit-csv-check.mjs` alongside the
+ * realistic session fixture.
+ */
+describe('loop-route FIT fixture (issue #466, AC10 / FR4)', () => {
+  const session = buildLoopRouteSession();
+  const bytes = encodeSession(session);
+  const decoded = decode(bytes);
+
+  it('rows for 1.5× the loop length, so the sampler wraps modulo the loop', () => {
+    const loopMetres = cumulativeLengths(LOOP_ROUTE).at(-1)!;
+    expect(session.distance).toBeGreaterThan(loopMetres);
+    expect(session.distance).toBeLessThan(loopMetres * 2);
+  });
+
+  it('decodes as a valid rowing Activity', () => {
+    expect(decoded.fileIds[0].type).toBe('activity');
+    expect(decoded.sessions[0].sport).toBe('rowing');
+  });
+
+  it('keeps every record position inside the loop route bounding box', () => {
+    const lats = LOOP_ROUTE.map((c) => c.lat);
+    const lngs = LOOP_ROUTE.map((c) => c.lng);
+    const toSemicircles = (degrees: number) => (degrees * 2 ** 31) / 180;
+    const minLat = toSemicircles(Math.min(...lats));
+    const maxLat = toSemicircles(Math.max(...lats));
+    const minLng = toSemicircles(Math.min(...lngs));
+    const maxLng = toSemicircles(Math.max(...lngs));
+    for (const record of decoded.records) {
+      expect(record.positionLat!).toBeGreaterThanOrEqual(minLat - 1);
+      expect(record.positionLat!).toBeLessThanOrEqual(maxLat + 1);
+      expect(record.positionLong!).toBeGreaterThanOrEqual(minLng - 1);
+      expect(record.positionLong!).toBeLessThanOrEqual(maxLng + 1);
+    }
+  });
+
+  if (UPDATE) {
+    it('regenerates the loop-route fixture', () => {
+      writeFileSync(LOOP_FIXTURE_PATH, bytes);
+    });
+  } else {
+    it('matches the checked-in loop-route fixture byte-for-byte', () => {
+      expect(existsSync(LOOP_FIXTURE_PATH)).toBe(true);
+      const fixture = readFileSync(LOOP_FIXTURE_PATH);
+      expect(fixture.length).toBe(bytes.length);
+      expect(Buffer.from(bytes).equals(fixture)).toBe(true);
+    });
+  }
+});
+
+describe('gate-chain FIT fixture (issue #466, AC10 / FR6)', () => {
+  const session = buildGateChainSession();
+  const bytes = encodeSession(session);
+  const decoded = decode(bytes);
+
+  it('decodes as a valid rowing Activity', () => {
+    expect(decoded.fileIds[0].type).toBe('activity');
+    expect(decoded.sessions[0].sport).toBe('rowing');
+  });
+
+  it('keeps every record position inside the gate-chain bounding box', () => {
+    const lats = GATE_CHAIN_ROUTE.map((c) => c.lat);
+    const lngs = GATE_CHAIN_ROUTE.map((c) => c.lng);
+    const toSemicircles = (degrees: number) => (degrees * 2 ** 31) / 180;
+    const minLat = toSemicircles(Math.min(...lats));
+    const maxLat = toSemicircles(Math.max(...lats));
+    const minLng = toSemicircles(Math.min(...lngs));
+    const maxLng = toSemicircles(Math.max(...lngs));
+    for (const record of decoded.records) {
+      expect(record.positionLat!).toBeGreaterThanOrEqual(minLat - 1);
+      expect(record.positionLat!).toBeLessThanOrEqual(maxLat + 1);
+      expect(record.positionLong!).toBeGreaterThanOrEqual(minLng - 1);
+      expect(record.positionLong!).toBeLessThanOrEqual(maxLng + 1);
+    }
+  });
+
+  if (UPDATE) {
+    it('regenerates the gate-chain fixture', () => {
+      writeFileSync(GATE_CHAIN_FIXTURE_PATH, bytes);
+    });
+  } else {
+    it('matches the checked-in gate-chain fixture byte-for-byte', () => {
+      expect(existsSync(GATE_CHAIN_FIXTURE_PATH)).toBe(true);
+      const fixture = readFileSync(GATE_CHAIN_FIXTURE_PATH);
+      expect(fixture.length).toBe(bytes.length);
+      expect(Buffer.from(bytes).equals(fixture)).toBe(true);
     });
   }
 });

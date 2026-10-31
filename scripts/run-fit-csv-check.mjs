@@ -18,8 +18,20 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const JAR = resolve(HERE, '..', 'tools/FitCSVTool.jar');
-const FIXTURE = resolve(HERE, '..', 'src/__tests__/__fixtures__/sample-session.fit');
-const OUT = resolve(HERE, '..', 'tools/sample-session');
+
+/**
+ * Every checked-in `.fit` fixture is run through FitCSVTool. #466 AC10 adds
+ * `loop-route` (a closed loop rowed for 1.5× its length, where the sampler
+ * wraps modulo the loop length) and `gate-chain` (a two-vertex polyline, the
+ * shape a rownative gate-chain route produces) alongside the realistic
+ * `sample-session` fixture, so a change to the encoder that passes the
+ * common-case shape but breaks either edge case fails here too.
+ */
+const FIXTURES = [
+  { name: 'sample-session', path: resolve(HERE, '..', 'src/__tests__/__fixtures__/sample-session.fit') },
+  { name: 'loop-route', path: resolve(HERE, '..', 'src/__tests__/__fixtures__/loop-route.fit') },
+  { name: 'gate-chain', path: resolve(HERE, '..', 'src/__tests__/__fixtures__/gate-chain.fit') },
+];
 
 function hasJava() {
   try {
@@ -39,17 +51,20 @@ if (!hasJava()) {
   process.exit(0);
 }
 
-const result = spawnSync('java', ['-jar', JAR, '-b', FIXTURE, OUT], {
-  encoding: 'utf8',
-});
-
-const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-const offending = combined.split(/\r?\n/).filter((line) => /\b(WARNING|ERROR)\b/.test(line));
-if (result.status !== 0 || offending.length > 0) {
-  console.error('FIT structural gate failed:');
-  if (result.status !== 0) console.error(`  exit code: ${result.status}`);
-  for (const line of offending) console.error(`  ${line}`);
-  process.exit(1);
+let failed = false;
+for (const { name, path } of FIXTURES) {
+  const out = resolve(HERE, '..', `tools/${name}`);
+  const result = spawnSync('java', ['-jar', JAR, '-b', path, out], { encoding: 'utf8' });
+  const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const offending = combined.split(/\r?\n/).filter((line) => /\b(WARNING|ERROR)\b/.test(line));
+  if (result.status !== 0 || offending.length > 0) {
+    console.error(`FIT structural gate failed for ${name}:`);
+    if (result.status !== 0) console.error(`  exit code: ${result.status}`);
+    for (const line of offending) console.error(`  ${line}`);
+    failed = true;
+  } else {
+    console.log(`FIT structural gate passed for ${name}`);
+  }
 }
 
-console.log('FIT structural gate passed');
+process.exit(failed ? 1 : 0);

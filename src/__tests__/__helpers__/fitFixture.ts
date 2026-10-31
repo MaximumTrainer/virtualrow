@@ -7,7 +7,8 @@
 // one intervals.icu's own importer is tested against.
 // ============================================================================
 
-import type { ActivitySample, Split, WorkoutSession } from '../../lib/types/index';
+import type { ActivitySample, Coordinate, Split, WorkoutSession } from '../../lib/types/index';
+import { cumulativeLengths, interpolateAlong } from '../../lib/utils/polylineGeometry';
 
 /**
  * Fixed timestamp for the round-trip fixture (issue #446, AC1).
@@ -125,6 +126,151 @@ export function buildRealisticSession(): WorkoutSession {
     isActive: false,
     heartRateAvg: 148,
     heartRateMax: 168,
+    samples,
+  };
+}
+
+/**
+ * A closed-loop polyline whose last vertex coincides with its first (issue
+ * #466, AC10). Chosen north-east loop is short enough (~1.9 km measured) that
+ * a session can comfortably row 1.5× its length and the sampler's modulo-wrap
+ * can be observed in the FIT trace, but long enough to carry a handful of
+ * laps for the FitCSVTool structural gate.
+ */
+export const LOOP_ROUTE: Coordinate[] = [
+  { lat: 51.5000, lng: -0.9000 },
+  { lat: 51.5050, lng: -0.8950 },
+  { lat: 51.5090, lng: -0.8870 },
+  { lat: 51.5080, lng: -0.8800 },
+  { lat: 51.5040, lng: -0.8830 },
+  { lat: 51.5000, lng: -0.8970 },
+  { lat: 51.5000, lng: -0.9000 },
+];
+
+/**
+ * A two-vertex "gate-chain" polyline (issue #466, AC10). Mirrors the shape a
+ * rownative gate-chain route produces: a straight start→finish line with no
+ * mid-route geometry, exercising the FIT writer against the degenerate but
+ * supported polyline.
+ */
+export const GATE_CHAIN_ROUTE: Coordinate[] = [
+  { lat: 51.5000, lng: -0.9000 },
+  { lat: 51.5080, lng: -0.8700 },
+];
+
+/**
+ * A ~10-minute session rowed over a short closed loop (#466, AC10 / FR4).
+ * The row runs for 1.5× the loop length so lat/lng wraps modulo the loop
+ * length — the trace covers each coordinate on the loop twice, which is
+ * what the sampler's `isClosedLoop` path emits and the file FitCSVTool
+ * must still accept as structurally valid.
+ */
+export function buildLoopRouteSession(): WorkoutSession {
+  const route = LOOP_ROUTE;
+  const cumulative = cumulativeLengths(route);
+  const loopMetres = cumulative[cumulative.length - 1];
+  const totalMetres = Math.round(loopMetres * 1.5); // one and a half laps
+  const speedMps = 4;
+  const totalSeconds = Math.round(totalMetres / speedMps);
+  const lapMetres = 500;
+
+  const samples: ActivitySample[] = Array.from({ length: totalSeconds }, (_, t) => {
+    const distance = t * speedMps;
+    const wrapped = ((distance % loopMetres) + loopMetres) % loopMetres;
+    const { lat, lng } = interpolateAlong(route, wrapped, cumulative);
+    return {
+      t,
+      distance,
+      pace: 125,
+      power: 190,
+      cadence: 24,
+      heartRate: 135 + Math.round(5 * Math.sin(t / 20)),
+      lat,
+      lng,
+    };
+  });
+
+  const splitCount = Math.floor(totalMetres / lapMetres);
+  const splits: Split[] = Array.from({ length: splitCount }, (_, i) => ({
+    distance: (i + 1) * lapMetres,
+    time: ((i + 1) * lapMetres) / speedMps,
+    pace: 125,
+    power: 190,
+    heartRate: 135,
+    timestamp: new Date(FIXTURE_START.getTime() + ((i + 1) * lapMetres * 1000) / speedMps),
+  }));
+
+  return {
+    id: FIXTURE_SESSION_ID,
+    routeId: 'loop-route-fixture',
+    routeName: 'Loop route fixture',
+    startTime: FIXTURE_START,
+    endTime: new Date(FIXTURE_START.getTime() + totalSeconds * 1000),
+    duration: totalSeconds,
+    distance: totalMetres,
+    averagePace: 125,
+    calories: 180,
+    splits,
+    isActive: false,
+    heartRateAvg: 135,
+    heartRateMax: 142,
+    samples,
+  };
+}
+
+/**
+ * A short session rowed over a two-vertex gate-chain polyline (#466, AC10 /
+ * FR6). The sampler still interpolates lat/lng along the straight line
+ * between the gates — the SessionSummary chip tells the user it is schematic
+ * (`AC6`) — and the FIT writer must still emit a structurally valid file.
+ */
+export function buildGateChainSession(): WorkoutSession {
+  const route = GATE_CHAIN_ROUTE;
+  const cumulative = cumulativeLengths(route);
+  const totalMetres = cumulative[cumulative.length - 1];
+  const speedMps = 4;
+  const totalSeconds = Math.round(totalMetres / speedMps);
+  const lapMetres = 500;
+
+  const samples: ActivitySample[] = Array.from({ length: totalSeconds }, (_, t) => {
+    const distance = Math.min(t * speedMps, totalMetres);
+    const { lat, lng } = interpolateAlong(route, distance, cumulative);
+    return {
+      t,
+      distance,
+      pace: 125,
+      power: 185,
+      cadence: 23,
+      heartRate: 130,
+      lat,
+      lng,
+    };
+  });
+
+  const splitCount = Math.max(1, Math.floor(totalMetres / lapMetres));
+  const splits: Split[] = Array.from({ length: splitCount }, (_, i) => ({
+    distance: (i + 1) * lapMetres,
+    time: ((i + 1) * lapMetres) / speedMps,
+    pace: 125,
+    power: 185,
+    heartRate: 130,
+    timestamp: new Date(FIXTURE_START.getTime() + ((i + 1) * lapMetres * 1000) / speedMps),
+  }));
+
+  return {
+    id: FIXTURE_SESSION_ID,
+    routeId: 'gate-chain-fixture',
+    routeName: 'Gate-chain fixture',
+    startTime: FIXTURE_START,
+    endTime: new Date(FIXTURE_START.getTime() + totalSeconds * 1000),
+    duration: totalSeconds,
+    distance: Math.round(totalMetres),
+    averagePace: 125,
+    calories: 110,
+    splits,
+    isActive: false,
+    heartRateAvg: 130,
+    heartRateMax: 134,
     samples,
   };
 }
