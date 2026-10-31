@@ -40,6 +40,7 @@
     "default:shipping-scene-contrast.spec.ts": 600,
     "default:shipping-scene.spec.ts": 192,
     "default:signed-out-test-drive.spec.ts": 96,
+    "default:signed-out-workout-image.spec.ts": 60,
     "default:sim-ports.spec.ts": 6,
     "default:virtualrow.spec.ts": 81,
     "default:world-scale.spec.ts": 37,
