@@ -23,6 +23,13 @@
  * and publishes the `__ROWER3D_POS` / `__ROWER3D_GHOST_METERS` globals the
  * workout specs read. Framework-free so the engine imports it without Svelte.
  */
+/**
+ * The four camera views the rig cycles through on V (#328). Mirrors
+ * `src/lib/renderer/engine/camera.ts`'s `CameraView` without a hard import so
+ * the seam stays framework-free.
+ */
+export type RideCameraView = 'chase' | 'side' | 'bow' | 'high';
+
 export interface RideFrame {
   /** Current split, seconds per 500 m, or null before the first stroke. */
   readonly paceSPer500: number | null;
@@ -44,6 +51,11 @@ export interface RideFrame {
    * discriminated union (pace / recorded) from `components/rower3d/ghost`.
    */
   readonly ghost: unknown;
+  /**
+   * Which camera view the rig uses this frame (#328, restored post-React
+   * cutover). Optional: the engine defaults to chase.
+   */
+  readonly view?: RideCameraView;
 }
 
 /** Options the shell passes the engine when it starts a ride. */

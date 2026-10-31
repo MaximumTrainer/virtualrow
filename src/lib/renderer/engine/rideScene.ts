@@ -1041,7 +1041,13 @@ export const createRideScene = async (
     camTangent[1] = camSample.tangent[1];
     camTangent[2] = camSample.tangent[2];
     cameraTarget(
-      { boat: camBoat, tangent: camTangent, velocityMps: speedMps, view: 'chase', bendSign: 0 },
+      {
+        boat: camBoat,
+        tangent: camTangent,
+        velocityMps: speedMps,
+        view: rideFrame?.view ?? 'chase',
+        bendSign: 0,
+      },
       cameraRig,
     );
     const eye = cameraRig.position;
