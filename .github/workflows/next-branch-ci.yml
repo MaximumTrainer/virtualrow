@@ -1,7 +1,9 @@
-name: Next Branch CI (Svelte + WebGPU)
+name: CI (Svelte + WebGPU)
 
-# #542: CI for the long-lived epic branch `next/svelte-webgpu`. Lighter than
-# the main `Playwright E2E Tests` workflow:
+# #542 AC12 cutover: this is now the CI for `main` (the WebGPU engine is the
+# app). It still gates the epic branch `next/svelte-webgpu` while that branch
+# is wound down. It replaced the React-era `Playwright E2E Tests` workflow
+# (`playwright-e2e-clean.yml`), retired with the React scene at the cutover.
 #   * `preflight` runs lint, build, unit suite, shuffled run, coverage gate.
 #   * `smoke` boots the SvelteKit scaffold.
 #   * `e2e-shards` runs the Playwright specs that pass on SwiftShader today
@@ -16,9 +18,9 @@ name: Next Branch CI (Svelte + WebGPU)
 
 on:
   push:
-    branches: [ next/svelte-webgpu ]
+    branches: [ main, next/svelte-webgpu ]
   pull_request:
-    branches: [ next/svelte-webgpu ]
+    branches: [ main, next/svelte-webgpu ]
 
 permissions:
   contents: read
